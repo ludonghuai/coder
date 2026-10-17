@@ -5651,7 +5651,7 @@ abstract class AppLocalizations {
   /// No description provided for @generalSettingsQueuedMessagesDescription.
   ///
   /// In en, this message translates to:
-  /// **'When a message sent while the agent is still working is taken up. Applies to messages sent after a change; Claude Code only for now.'**
+  /// **'When a message sent while the agent is still working is taken up. Applies to messages sent after a change. Joining the task is Claude Code only for now.'**
   String get generalSettingsQueuedMessagesDescription;
 
   /// Queued messages choice: each waits for the turn running to end, then they run one after another.

@@ -2204,7 +2204,7 @@
   "generalSettingsCommitAttribution": "Commit Attribution",
   "generalSettingsCommitAttributionDescription": "Who the commits and pull requests an agent writes credit. Applies to agents started after a change; Claude Code only for now.",
   "generalSettingsQueuedMessages": "Messages Sent While Working",
-  "generalSettingsQueuedMessagesDescription": "When a message sent while the agent is still working is taken up. Applies to messages sent after a change; Claude Code only for now.",
+  "generalSettingsQueuedMessagesDescription": "When a message sent while the agent is still working is taken up. Applies to messages sent after a change. Joining the task is Claude Code only for now.",
   "generalSettingsQueuedAfterTurn": "After the Current Task",
   "@generalSettingsQueuedAfterTurn": {
     "description": "Queued messages choice: each waits for the turn running to end, then they run one after another."

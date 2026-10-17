@@ -520,20 +520,20 @@ void main() {
     await tester.pump();
 
     final toggle = find.byType(ComposerPermissionSwitch);
-    Color? fill() =>
-        (tester.widget<Container>(find.descendant(
-          of: toggle,
-          matching: find.byType(Container),
-        )).decoration! as BoxDecoration).color;
-    Color? label(String text) => tester
-        .widget<Text>(find.descendant(of: toggle, matching: find.text(text)))
-        .style
-        ?.color;
+    Finder inside(Finder matching) =>
+        find.descendant(of: toggle, matching: matching);
+    final parts = inside(find.byType(AnimatedContainer));
+    AnimatedContainer part(int i) =>
+        tester.widget<AnimatedContainer>(parts.at(i));
+    Color? colorOf(int i) => (part(i).decoration! as BoxDecoration).color;
 
-    // Off: the first option, no fill, the muted foreground; no pill as well.
+    // Off: the knob left, its track colorless; no pill as well.
     expect(toggle, findsOneWidget);
-    expect(label('Ask'), AppColors.textMuted);
-    expect(fill(), isNull);
+    expect(part(0).alignment, Alignment.centerLeft);
+    expect(colorOf(0), Colors.transparent);
+    expect(colorOf(1), AppColors.textMuted);
+    expect(inside(find.byType(Text)), findsNothing);
+    expect(inside(find.byType(Icon)), findsNothing);
     expect(
       find.descendant(
         of: find.byType(ComposerPicker),
@@ -551,8 +551,9 @@ void main() {
       'value': true,
     });
     await tester.pump();
-    expect(label('Auto'), AppColors.text);
-    expect(fill(), themeColors['button.secondaryHoverBackground']);
+    expect(part(0).alignment, Alignment.centerRight);
+    expect(colorOf(0), AppColors.autoTrack);
+    expect(colorOf(1), themeColors['button.foreground']);
 
     // Five (Claude Code) stay the cluster's menu.
     await tester.pumpWidget(const SizedBox());

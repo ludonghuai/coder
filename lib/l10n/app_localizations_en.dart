@@ -3230,7 +3230,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get generalSettingsQueuedMessagesDescription =>
-      'When a message sent while the agent is still working is taken up. Applies to messages sent after a change; Claude Code only for now.';
+      'When a message sent while the agent is still working is taken up. Applies to messages sent after a change. Joining the task is Claude Code only for now.';
 
   @override
   String get generalSettingsQueuedAfterTurn => 'After the Current Task';

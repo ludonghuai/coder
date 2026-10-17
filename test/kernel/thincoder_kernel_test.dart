@@ -214,6 +214,17 @@ Future<_Session> _ready() async {
   return s;
 }
 
+List<String> _prompts(_Session s) => [
+  for (final r in s.agent.requests('session/prompt'))
+    (((r['params'] as Map)['prompt'] as List).single as Map)['text'] as String,
+];
+
+Future<void> _let(_Session s, {bool hold = false}) async {
+  s.agent.release();
+  if (hold) s.agent.hold = Completer<void>();
+  await settle();
+}
+
 /// Keeps what the adapter says it left alone in a log of its own.
 Directory _log() {
   final dir = Directory.systemTemp.createTempSync('thincoder-events');
@@ -278,7 +289,7 @@ void main() {
       expect(s.kernel, isNot(isA<AcceptsImages>()));
       expect(s.kernel, isNot(isA<StartsPlans>()));
       expect(s.kernel, isNot(isA<RunsBackgroundTasks>()));
-      expect(s.kernel, isNot(isA<QueuesMessages>()));
+      expect(s.kernel, isA<QueuesMessages>());
       expect(s.kernel, isNot(isA<RewindsConversation>()));
       expect(s.kernel, isNot(isA<RenamesSession>()));
     });
@@ -1338,6 +1349,165 @@ void main() {
             'a message 30 MB.'],
       );
       expect(s.items<UserMessageItem>().single.images, hasLength(3));
+    });
+  });
+
+  group('thincoder queue', () {
+    /// A kernel on a scripted agent (its turn is one step, held), ready.
+    Future<_Session> ready() async {
+      final s = _Session(
+        make: () => ThincoderMock(
+          turn: const [{'sessionUpdate': 'usage_update', 'used': 1, 'size': 2}],
+        )..hold = Completer<void>(),
+      );
+      addTearDown(s.dispose);
+      s.kernel.prepare();
+      await settle();
+      return s;
+    }
+
+    test('a message sent while it works waits, then goes (T63)', () async {
+      final s = await ready();
+      s.send('one');
+      await settle();
+      s.send('two', id: 'turn-2');
+      await settle();
+      expect(s.agent.requests('session/prompt'), hasLength(1)); // ①
+      expect(s.transcript.queued.single.$1, 'turn-2'); // ②
+      expect(s.transcript.queued.single.$2.queued, isTrue);
+      expect(s.items<UserMessageItem>().map((item) => item.text), ['one']);
+      await _let(s);
+      expect(_prompts(s), ['one', 'two']); // ④
+      expect(s.transcript.queued, isEmpty);
+      expect(s.items<UserMessageItem>().last.queued, isFalse);
+    });
+
+    test('they go one at a time, in the order sent (T64)', () async {
+      final s = await ready();
+      s.send('one');
+      await settle();
+      s.send('two', id: 'turn-2');
+      s.send('three', id: 'turn-3');
+      await settle();
+      expect(s.transcript.queued.map((q) => q.$1), ['turn-2', 'turn-3']);
+      await _let(s, hold: true);
+      expect(_prompts(s), ['one', 'two']);
+      expect(s.transcript.queued.map((q) => q.$1), ['turn-3']);
+      await _let(s, hold: true);
+      expect(_prompts(s), ['one', 'two', 'three']);
+      await _let(s);
+      expect(s.items<UserMessageItem>().map((item) => item.text),
+          ['one', 'two', 'three']);
+    });
+
+    test('a waiting message is taken back, one already sent is not (T65)',
+        () async {
+      final s = await ready();
+      s.send('one');
+      await settle();
+      s.send('two', id: 'turn-2');
+      s.send('three', id: 'turn-3');
+      await settle();
+      final before = s.agent.written.length;
+      expect(await s.kernel.cancelQueued('turn-3'), isTrue);
+      expect(s.transcript.queued.map((q) => q.$1), ['turn-2']);
+      expect(s.events.whereType<ItemRemoved>().map((e) => e.id), ['turn-3']);
+      expect(await s.kernel.cancelQueued('turn-3'), isFalse);
+      expect(await s.kernel.cancelQueued('turn-1'), isFalse); // Already sent.
+      expect(s.agent.written, hasLength(before)); // Nothing on the wire.
+      await _let(s, hold: true);
+      await _let(s);
+      expect(_prompts(s), ['one', 'two']); // turn-3 never goes.
+      s.agent.hold = Completer<void>();
+      s.send('four', id: 'turn-4');
+      await settle();
+      s.send('five', id: 'turn-5');
+      s.send('six', id: 'turn-6');
+      await settle();
+      s.kernel.sendQueuedNow('turn-6');
+      final taken = s.kernel.cancelQueued('turn-6');
+      s.agent.hold = Completer<void>();
+      expect(await taken, isTrue);
+      expect(s.events.whereType<ItemRemoved>().map((e) => e.id),
+          ['turn-3', 'turn-6']);
+      await _let(s);
+      expect(_prompts(s).skip(2), ['four', 'five']); // turn-6 never goes.
+    });
+
+    test('one taken up now goes first, the rest keep order (T66)', () async {
+      final s = await ready();
+      s.send('one');
+      await settle();
+      s.send('two', id: 'turn-2');
+      s.send('three', id: 'turn-3');
+      await settle();
+      s.kernel.sendQueuedNow('turn-3');
+      s.agent.hold = Completer<void>();
+      await settle();
+      expect(s.agent.requests('session/cancel'), hasLength(1)); // ①
+      expect(s.transcript.lastTurnInterrupted, isTrue); // ②
+      expect(_prompts(s), ['one', 'three']); // ③
+      expect(s.transcript.queued.map((q) => q.$1), ['turn-2']); // ⑤
+      await _let(s, hold: true);
+      expect(_prompts(s), ['one', 'three', 'two']); // ④
+      await _let(s);
+      expect(s.items<UserMessageItem>().map((item) => item.text),
+          ['one', 'three', 'two']);
+      s.agent.hold = Completer<void>();
+      s.send('four', id: 'turn-4');
+      await settle();
+      s.send('five', id: 'turn-5');
+      s.send('six', id: 'turn-6');
+      await settle();
+      s.kernel.sendQueuedNow('turn-6');
+      s.kernel.sendQueuedNow('turn-5');
+      s.agent.hold = Completer<void>();
+      await settle();
+      expect(_prompts(s).skip(3), ['four', 'five']);
+      await _let(s, hold: true);
+      expect(_prompts(s).skip(3), ['four', 'five', 'six']);
+      await _let(s);
+    });
+
+    test('what waits goes with the session, a failed send stays (T67)',
+        () async {
+      Future<_Session> waiting() async {
+        final s = await ready();
+        s.send('one');
+        await settle();
+        s.send('two', id: 'turn-2');
+        await settle();
+        return s;
+      }
+
+      final dead = await waiting();
+      dead.agent.crash();
+      await settle();
+      expect(dead.transcript.queued, isEmpty);
+      expect(dead.items<UserMessageItem>().map((item) => item.text), ['one']);
+      expect(dead.events.whereType<ItemRemoved>().map((e) => e.id),
+          ['turn-2']);
+      final restarted = await waiting();
+      restarted.kernel.restart();
+      await settle();
+      expect(restarted.transcript.queued, isEmpty);
+      expect(restarted.items<UserMessageItem>().map((item) => item.text),
+          ['one']);
+      expect(restarted.events.whereType<ItemRemoved>().map((e) => e.id),
+          ['turn-2']);
+      final failed = await waiting();
+      failed.agent.promptError = true;
+      await _let(failed);
+      expect(failed.transcript.queued, isEmpty);
+      expect(failed.items<UserMessageItem>().map((item) => item.text),
+          ['one', 'two']);
+      expect(failed.items<NoticeItem>().where((n) => n.kind == NoticeKind.error),
+          hasLength(1));
+      expect(failed.transcript.lastTurnInterrupted, isTrue);
+      failed.agent.promptError = false;
+      failed.send('three', id: 'turn-3');
+      await settle();
+      expect(_prompts(failed), ['one', 'two', 'three']);
     });
   });
 

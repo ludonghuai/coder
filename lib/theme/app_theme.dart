@@ -156,6 +156,9 @@ abstract final class AppColors {
   /// Claude's terracotta: its spark while it thinks. Not the theme's.
   static const claude = Color(0xFFD97857);
 
+  /// The Auto switch when on — the warm chip the user pointed at (#E2B373).
+  static const autoTrack = Color(0xFFE2B373);
+
   /// `textPreformat.foreground`.
   static Color get inlineCode => _colors['textPreformat.foreground'];
 

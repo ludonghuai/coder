@@ -3099,7 +3099,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get generalSettingsQueuedMessagesDescription =>
-      'Agent 还在工作时发出的消息何时被处理。更改对之后发送的消息生效；目前仅支持 Claude Code。';
+      'Agent 还在工作时发出的消息何时被处理。更改对之后发送的消息生效；「插入当前任务」目前仅支持 Claude Code。';
 
   @override
   String get generalSettingsQueuedAfterTurn => '当前任务完成后依次执行';

@@ -40,7 +40,8 @@ class ThincoderKernel
         SelectsPermission,
         ReportsContext,
         LoadsHistory,
-        AcceptsImageFiles {
+        AcceptsImageFiles,
+        QueuesMessages {
   ThincoderKernel(
     this.descriptor,
     this._context, {
@@ -94,6 +95,10 @@ class ThincoderKernel
   String? _turn;
   DateTime? _turnStarted;
   final Set<String> _sent = {};
+
+  /// Messages sent while a turn runs, in the order sent; [_next] first.
+  final List<KernelTurn> _queue = [];
+  KernelTurn? _next;
 
   /// Asked for while a turn runs: the process goes once it is over.
   bool _releaseWanted = false;
@@ -364,6 +369,12 @@ class ThincoderKernel
     }
     _transport = null;
     _loadingHistory = false;
+    // What waited goes with the session: none of it was sent.
+    for (final turn in [..._queue, ?_next]) {
+      emit(ItemRemoved(nextSeq, turn.id));
+    }
+    _queue.clear();
+    _next = null;
     _events.closePiece();
     // The subagents it ran are gone with it (F11): nothing is left saying
     // it runs for ever.
@@ -426,8 +437,27 @@ class ThincoderKernel
   @override
   void send(KernelTurn turn) {
     if (!_sent.add(turn.id)) return;
-    _beginTurn(turn.id);
-    unawaited(_deliver(turn));
+    _queue.add(turn);
+    // While a turn runs it waits its own: shown in the queue panel, nothing
+    // written or saved of it until then (§18.2-①).
+    if (_turn != null) {
+      emit(ItemUpserted(nextSeq, turn.id,
+          UserMessageItem(text: turn.text, images: turn.images, queued: true)));
+      return;
+    }
+    _drain();
+  }
+
+  /// Starts the message waiting, unless a turn runs: the one taken up next
+  /// ([sendQueuedNow]) or the queue's head. Whether one started.
+  bool _drain() {
+    if (_turn != null) return false;
+    final next = _next ?? (_queue.isEmpty ? null : _queue.removeAt(0));
+    _next = null;
+    if (next == null) return false;
+    _beginTurn(next.id);
+    unawaited(_deliver(next));
+    return true;
   }
 
   Future<void> _deliver(KernelTurn turn) async {
@@ -525,6 +555,9 @@ class ThincoderKernel
             : DateTime.now().difference(started),
       ),
     );
+    // What waits goes first: letting the process go would drop it — the
+    // release asked for stays for the turn after (D53).
+    if (_drain()) return;
     if (_releaseWanted) {
       _releaseWanted = false;
       release();
@@ -547,6 +580,42 @@ class ThincoderKernel
           .request('session/cancel', {'sessionId': _slot})
           .catchError((_) => const <String, Object?>{}),
     );
+  }
+
+  /// Takes back a message still waiting: out of the queue, off the panel.
+  /// One already sent is not taken back ([cancel] stops the turn instead).
+  @override
+  Future<bool> cancelQueued(String turnId) async {
+    if (_next?.id == turnId) {
+      _next = null;
+    } else {
+      final at = _queue.indexWhere((turn) => turn.id == turnId);
+      if (at < 0) return false;
+      _queue.removeAt(at);
+    }
+    emit(ItemRemoved(nextSeq, turnId));
+    return true;
+  }
+
+  /// Takes up the waiting message [turnId] first: the turn running stops
+  /// for it, the rest keep their order.
+  @override
+  void sendQueuedNow(String turnId) {
+    // Already the one taken up next: only the turn running is in the way.
+    if (_next?.id == turnId) {
+      if (_turn != null) cancel();
+      return;
+    }
+    final at = _queue.indexWhere((turn) => turn.id == turnId);
+    if (at < 0) return;
+    final ahead = _next;
+    _next = _queue.removeAt(at);
+    if (ahead != null) _queue.insert(0, ahead);
+    if (_turn == null) {
+      _drain();
+    } else {
+      cancel();
+    }
   }
 
   // --- Approvals --------------------------------------------------------------

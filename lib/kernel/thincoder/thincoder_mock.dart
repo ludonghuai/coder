@@ -69,6 +69,8 @@ class ThincoderMock implements ThincoderTransport {
   /// Answers config writes with `-32602` (T59 / T60).
   final bool configError;
 
+  /// Answers `session/prompt` with `-32603`: a turn that failed (T67③).
+  bool promptError = false;
   String? _level;
 
   /// The agent's hand on the turn: not completed, the script waits after
@@ -403,6 +405,10 @@ class ThincoderMock implements ThincoderTransport {
 
   Future<void> _prompt(Object? id, String sessionId) async {
     if (finished.isCompleted) finished = Completer<void>();
+    if (promptError) {
+      _error(id, -32603, 'the turn failed');
+      return finished.complete();
+    }
     _slot = sessionId;
     _cancelled = false;
     final denied = <String>{};

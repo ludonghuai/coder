@@ -1907,54 +1907,55 @@ class ChatComposerState extends State<ChatComposer>
   }
 }
 
-/// A two-option permission as a switch, filled while the second is on.
+/// A two-option permission as a switch: the knob's side, the track's color.
 class ComposerPermissionSwitch extends StatelessWidget {
   const ComposerPermissionSwitch({
     super.key,
-    required this.permission,
-    required this.title,
+    required this.permission, required this.title,
   });
 
-  /// The options, the one in effect, and how to pick the other (localized).
+  /// The options, the one in effect, and how to pick the other (localized);
+  /// and the title for its tooltip, followed by the pick's description.
   final KernelChoice permission;
-
-  /// What it is, for its tooltip: the pick's description follows it.
   final String title;
 
   @override
   Widget build(BuildContext context) {
-    final selected = permission.selected;
-    final on = selected.id == permission.options[1].id;
-    final next = permission.options.firstWhere((o) => o.id != selected.id);
-    final color = on ? AppColors.text : AppColors.textMuted;
-    final labelStyle = TextStyle(color: color, fontSize: 12);
+    final on = permission.selected.id == permission.options[1].id;
+    final next = permission.options[on ? 0 : 1];
+    final colors = themeColors;
     return IdeHover(
-      message: next.description.isEmpty
-          ? title
-          : '$title · ${next.description}',
+      message: [title, next.description].where((e) => e.isNotEmpty).join(' · '),
       child: HoverBuilder(
         cursor: SystemMouseCursors.click,
-        builder: (context, hovered) => GestureDetector(
-          onTap: () => permission.onSelected(next),
-          child: Container(
-            height: 22,
-            padding: const EdgeInsets.symmetric(horizontal: 6),
-            decoration: BoxDecoration(
-              // Filled while on; the toolbar's hover while off.
-              color: on
-                  ? themeColors['button.secondaryHoverBackground']
-                  : hovered
-                  ? themeColors['toolbar.hoverBackground']
-                  : null,
-              borderRadius: BorderRadius.circular(11),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              spacing: 4,
-              children: [
-                Icon(selected.icon, size: 13, color: color),
-                Text(selected.label, style: labelStyle),
-              ],
+        builder: (context, hovered) => Semantics(
+          toggled: on, label: title,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => permission.onSelected(next),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 140),
+              curve: Curves.easeOut,
+              width: 35, height: 20,
+              margin: const EdgeInsets.symmetric(vertical: 1),
+              padding: const EdgeInsets.all(2),
+              alignment: on ? Alignment.centerRight : Alignment.centerLeft,
+              decoration: BoxDecoration(
+                color: on ? AppColors.autoTrack : hovered
+                    ? colors['toolbar.hoverBackground']
+                    : Colors.transparent,
+                border: on ? null : Border.all(color: AppColors.textFaint),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 140),
+                curve: Curves.easeOut,
+                width: 16, height: 16,
+                decoration: BoxDecoration(
+                  color: on ? colors['button.foreground'] : AppColors.textMuted,
+                  shape: BoxShape.circle,
+                ),
+              ),
             ),
           ),
         ),
