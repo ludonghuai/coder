@@ -120,7 +120,7 @@ class ThincoderLaunch { final String cwd; final String executable; final Map<Str
 | `config_option_update` | `{configOptions: […]}`（全量数组） | `handlers-session.mjs:314-317` |
 | `current_mode_update` | `{currentModeId}` | `:336-339` |
 | `user_message_chunk` | `{content: {…}}`（仅 load 重放） | `bridge.mjs:413` |
-| `session_info_update` | `_meta["thincoder.dev/subagent"]`（子代理信号；翻译 = §15.2）∥ `_meta["thincoder.dev/turn"]`（自动轮边界；翻译 = §19.2） | `bridge.mjs:232` ∥ `acp/suspension.mjs`（批 8 新增） |
+| `session_info_update` | `_meta["thincoder.dev/subagent"]`（子代理信号；翻译 = §15.2）∥ `_meta["thincoder.dev/turn"]`（回合边界 / 窗开关；翻译 = §19.2） | `bridge.mjs:232` ∥ `acp/suspension.mjs`（批 8 新增） |
 
 **反向请求（服务端 → 我方，须回包）**
 
@@ -167,7 +167,7 @@ class ThincoderLaunch { final String cwd; final String executable; final Map<Str
 | `current_mode_update` | 更新模式选择项 + `KernelInfoChanged` |
 | `user_message_chunk`（重放） | 用户项（连续块并入一项，遇其它类型封口）；重放帧不止此类——助手文本 / 工具帧同路还原（§16.1 重放面） |
 | `session_info_update`（子代理 meta） | 子代理卡片 upsert + `TasksReported` 全量重报（§15.2） |
-| `session_info_update`（turn meta） | 自动轮边界：start ⇒ `TurnStarted(unprompted: true)`（用户回合在飞 ⇒ 暂存）；end ⇒ `TurnEnded(interrupted: ok==false)`（暂存位非空 ⇒ 撤暂存、不成轮；`ok` 只认布尔 `false`）（§19.2） |
+| `session_info_update`（turn meta） | 自动轮边界：start ⇒ `TurnStarted(unprompted: true)`（用户回合在飞 ⇒ 暂存）；end ⇒ `TurnEnded(interrupted: ok==false)`（暂存位非空 ⇒ 撤暂存、不成轮；`ok` 只认布尔 `false`）；watch ⇒ `_watching`（释放判据，不成事件）（§19.2） |
 | 其余 / 未知 | 忽略（留痕见 §3.3） |
 
 `tool_call` 按 ACP `kind` 成形的对照（`title` = 工具名，参数在 `rawInput`）：
@@ -297,7 +297,7 @@ class ThincoderLaunch { final String cwd; final String executable; final Map<Str
 | ⑨ | `lib/kernel/mock/mock_kernels.dart:24-32` | 新增 `MockKernels.thincoder`，**不进 `all`** | 测试直用；`all` 不动（D18） |
 | ⑩ | `lib/platform/data_dir.dart:86-87` 注释 | 注册表文件名清单加 `thincoder` | 文档一行；登记表出现新类别 |
 
-（`lib/kernel/claude_code/**` 零改动；`thincoder/**` 在本仓零改动——B1；thincoder 侧的接口例外见 §16.1。）批 4 的改动点见 §15.4（同为最小接线点集）；批 5 的改动面见 §16.4（本仓测试面 + out-of-repo 档）；批 6 见 §17.4（本仓适配层两面 + 宿主 1 档 composer 开关 + 两处测试面）；批 8 见 §19.4（本仓 1 档（kernel）+ 固件 / 测试面；thincoder 侧 = out-of-repo 档）。
+（`lib/kernel/claude_code/**` 零改动；`thincoder/**` 在本仓零改动——B1；thincoder 侧的接口例外见 §16.1。）批 4 的改动点见 §15.4（同为最小接线点集）；批 5 的改动面见 §16.4（本仓测试面 + out-of-repo 档）；批 6 见 §17.4（本仓适配层两面 + 宿主 1 档 composer 开关 + 两处测试面）；批 8 见 §19.4（本仓 2 档（kernel + events）+ 固件 / 测试面；thincoder 侧 = out-of-repo 档）。
 
 **接线点 ⑤ 细则（按内核判定）**
 
@@ -416,7 +416,7 @@ class ThincoderLaunch { final String cwd; final String executable; final Map<Str
 - 真机冒烟（可选、默认 skip）：`-t e2e-thincoder` 起真 CLI 走一遍 A3/A4 的最短路径，照 `dart_test.yaml` 的 e2e 形。
 - 既有测试不回退：`flutter test` 全量；特别关注 `test/kernel_test.dart`、`test/kernel_ui_test.dart`（D18 已避开默认内核面改动）。
 - 队列面（批 7）：§18.7 用例（T63–T67）入 `thincoder_kernel_test.dart`；mock 加一个可变参数 `promptError`（T67③ 的失败面）。**不加固件**：本批不发新帧（还是 `session/prompt` / `session/cancel`），队列顺序由 T63 / T64 用 `requests()` 逐帧钉住；回放虽有发消息动作（`thincoder_fixtures_test.dart:102-106`），加 `queue.ndjson` 只会重复同一断言。既有固件保持绿 = 回归哨兵。
-- 挂起面（批 8）：§19.7 的 T68–T74 入 `thincoder_kernel_test.dart`；固件新增 `digest-turn.ndjson`（`_check` 增 `unprompted` 键），既有 `subagent-digest.ndjson` 不改（旧 CLI 兼容哨兵）；thincoder 侧由 out-of-repo 轮按该仓惯例落单元测试档（`docs/batches/<batch>.test.mjs`）。
+- 挂起面（批 8）：§19.7 的 T68–T76 入 `thincoder_kernel_test.dart`；固件新增 `digest-turn.ndjson`（`_check` 增 `unprompted` 键），既有 `subagent-digest.ndjson` 不改（旧 CLI 兼容哨兵）；thincoder 侧由 out-of-repo 轮按该仓惯例落单元测试档（`docs/batches/<batch>.test.mjs`）。
 - 子代理面（批 4）：§15.7 用例入 `thincoder_kernel_test.dart`；固件新增 `subagent-*.ndjson`（`_shown` 增卡片行与 `tasks` 断言）——「先跑固件」口径不变。
 - 子代理内容面（批 5）：§16.7 用例（T42–T50）入 `thincoder_kernel_test.dart`；固件新增 `subagent-content*.ndjson`（`_check` 增 `agents` 键）——「先跑固件」口径不变。thincoder 侧机制由 out-of-repo 轮的一次性探针钉形（§16.1：该仓测试清单为空，不向空清单塞档）。
 - 选择面（批 6）：§17.7 用例（T51–T62）入 `thincoder_kernel_test.dart`，T61（形态面 widget）入 `test/composer_test.dart`（mock 加 `autoApprove` / `models` / `thinkingLevels` / `configError` 四个可选脚本参数，缺省 = 今天的形状；
@@ -516,7 +516,7 @@ class ThincoderLaunch { final String cwd; final String executable; final Map<Str
 | 18 | 「Approve for this session」名不副实 | **已闭合（桌面侧；批 6）**：面板选 always ⇒ 先答本次，同一回合写 `autoApprove=true` ⇒ 会话级承诺成立（§17.1-④；用户 2026-10-16 21:47 裁定）。服务端 `approve_always` 仍无记忆（`bridge.mjs:57-62`），桌面不再依赖它；残余判定条件见 §17.1-④ 两条（CLI 改名 / 摘掉、按工具会话级放行表） |
 | 19 | 审批开关与档位标签英文占位 | 审批两项（`Ask` / `Auto`）、其 description（开关 tooltip 的第二句）与档位名（`effortLabel`）英文直写；`localizedKernelOption`（`kernel_option_text.dart:8-46`）只认 claude 元组，未知元组原样透出 ⇒ 英文占位接受。同因 = §14-14；补齐窗口 = SDK 就位轮（同轮补 `app_en.arb` / `app_zh.arb` 键 + 生成档重产） |
 | 20 | 模型清单后台推送的落地面 | `refreshModelChoices` 是 fire-and-forget（§17.3-①）：落地时会话已关 / 已被 load·resume 替换 ⇒ 丢弃；`notify` 抛出（管道已断）⇒ 吞掉并记一行日志，不重试、不抛。判据 = 会话在册且同实例（`liveSession(id)?.agent === agent`，`acp.mjs` 的 ctx 包装传入）。判定条件：观察到清单在会话关闭后仍被推送 / 进程因未处理的拒绝退出 ⇒ 复核该判据 |
-| 21 | timer 唤醒轮不在 ACP 面 | 挂起窗不接 `timerFace`（§19.3-①）⇒ 桌面会话里到期的 timer 不在后台自起一轮，等下一个用户回合边界才投递。判定条件：桌面需要 timer 唤醒 ⇒ 接 `timerFace`（`suspension.mjs:173-205` 第四态）+ 边界帧 `kind:"timer"` |
+| 21 | timer 唤醒轮不在 ACP 面 | 挂起窗不接 `timerFace`（§19.3-①），且窗内轮与普通轮都带 `suspDriven:true`（§19.3-②）⇒ 桌面会话里到期的 timer 不在后台自起一轮，也不在工具轮收尾投递（`post-turn.mjs:23`）；到期件留在途（不出列、不丢），交付面为零（§19.8-1）。判定条件：桌面需要 timer 唤醒 ⇒ 接 `timerFace`（`suspension.mjs:173-205` 第四态）+ 边界帧 `kind:"timer"` |
 
 ---
 
@@ -620,7 +620,7 @@ class ThincoderLaunch { final String cwd; final String executable; final Map<Str
 | D23 | `queued` 只进卡片；`async` / `turn` 起进活动条 | 活动条语义 = 「运行中」（计数文案 `stripAgentsRunning`）；排队态由卡片承载。偏离 thincoder TUI（queued 即建 waiting 块）：桌面活动条与 TUI 面板职责不同（前者 = 在跑任务 + 计时） |
 | D24 | `cancelled` ⇒ 移除卡片；`stopped` ⇒ failed 定格 | 对齐 TUI（cancelled 移除块；stopped 冻结） |
 | D25 | `settled` 即 succeeded（不等 `done`） | 「结算完成」= 子代理已完工；`done` 只是消费面归档标记，幂等 |
-| D26 | digest 的回合边界由 CLI 的回合边界帧界定，桌面起 unprompted 回合（§19.2 / D55–D61） | 边界必须来自服务端的确定信号。被否：静默期计时闭合（时序 hack）；被否：首个 chunk 合成回合（无收束信号 ⇒ `isStreaming` 永久为真） |
+| D26 | digest 的回合边界由 CLI 的回合边界帧界定，桌面起 unprompted 回合（§19.2 / D55–D66） | 边界必须来自服务端的确定信号。被否：静默期计时闭合（时序 hack）；被否：首个 chunk 合成回合（无收束信号 ⇒ `isStreaming` 永久为真） |
 | D27 | 未知 state 保 live（不判定结束）＋留痕 | 开集域（E4）；宁可多示在跑，不可隐藏在跑 |
 | D28 | 状态文案英文占位（`queued` / `turn <n>/<max>` / `approval · <tool>`） | 同 §14-14 口径（本机无 `flutter gen-l10n`）；登记 §14-15 |
 | D29 | 计时口径 = 首见起算（含排队时间） | 与 thincoder 面板块同时起算（对齐）；单一时钟，卡片 / 任务同源 |
@@ -1727,7 +1727,7 @@ bool _drain() {
 
 > 需求档 F16（批 8；用户 2026-10-17 01:31 报告：后台评审 / 设计子代理结束后主 agent 停在「现在等评审报告回来」，要用户再问一句才继续）。
 > 一句结论：**挂起驱动进 ACP 会话层**（复用核 `startSuspension`，与终端 / VSC / thincoder 桌面同一台状态机）；子代理结算 ⇒ 主代理**自起一轮**把结果说出来；这轮在桌面呈现为**宿主既有「无提示回合」**（`TurnStarted(unprompted: true)` / `TurnEnded`）——「正在续写」可见、可停止、结束即回「该你了」。
-> 两半：**thincoder 仓** `thincoder-cli/src/acp/` 加挂起窗 + 一条回合边界扩展帧（§19.3；out-of-repo 轮执行）· **本仓**把边界帧翻成既有 unprompted 回合（§19.2；宿主与 UI 零改动）。
+> 两半：**thincoder 仓** `thincoder-cli/src/acp/` 加挂起窗 + 回合边界扩展帧 + 窗开关帧（§19.3；out-of-repo 轮执行）· **本仓**把边界帧翻成既有 unprompted 回合、把窗开关帧翻成释放判据（§19.2；宿主与 UI 零改动）。
 
 **最近先例（对齐 ∥ 偏离及理由）**
 
@@ -1746,13 +1746,15 @@ bool _drain() {
    │ 池仍 live（poolLive(agent)，suspension.mjs:64-72）
    ▼
 ACP 挂起窗（acp/suspension.mjs，本批新增）
+   ├─ 建窗：先发窗开关帧 watch{on:true}（D65——先于本窗任何轮帧）
    ├─ pending 非空 ∥ 有未 drain 的上行 ask ⇒ 自起一轮（autoTurn）
    │     ├─ 起：发回合边界帧 start{kind}
    │     ├─ 注入 pending 结果（beginRun，run-start.mjs:39-65；_daSession=true）
    │     ├─ 模型答话 / 工具卡 → 既有 session/update 帧（agent_message_chunk / tool_call …）
    │     └─ 终：发回合边界帧 end{kind, ok}（try … finally 必发；抛错 ⇒ ok:false）
-   └─ 池空 ⇒ 自然退出（挂起窗关）
+   └─ 池空 ⇒ 自然退出（挂起窗关）：发窗开关帧 watch{on:false}
        桌面：start ⇒ TurnStarted(unprompted: true)；end ⇒ TurnEnded
+              watch ⇒ _watching（窗在 ⇒ 不释放进程；旧 CLI 无此帧 ⇒ 静默期兜底）
 ```
 
 桌面侧用的全是既有事件面：`unprompted` 一位 + `TurnEnded` 一收——**不新造 KernelEvent、不改 UI**（E2）。
@@ -1770,19 +1772,37 @@ ACP 挂起窗（acp/suspension.mjs，本批新增）
 { "sessionId": "<会话 id>",
   "update": { "sessionUpdate": "session_info_update",
     "_meta": { "thincoder.dev/turn": { "phase": "end", "kind": "digest", "ok": true } } } }
+{ "sessionId": "<会话 id>",
+  "update": { "sessionUpdate": "session_info_update",
+    "_meta": { "thincoder.dev/turn": { "phase": "watch", "on": true } } } }
+{ "sessionId": "<会话 id>",
+  "update": { "sessionUpdate": "session_info_update",
+    "_meta": { "thincoder.dev/turn": { "phase": "watch", "on": false } } } }
 ```
 
 | 字段 | 域 | 语义 |
 |---|---|---|
-| `phase` | `"start"` ∥ `"end"` | 自动轮开始 / 结束 |
-| `kind` | string（开集；现发射 `digest` / `upstream`） | 起因（digest = 结果消化；upstream = 子代理在等回复）；桌面只留痕，不分支 |
+| `phase` | `"start"` ∥ `"end"` ∥ `"watch"` | 自动轮开始 / 结束；`watch` = 挂起窗的开关（D65） |
+| `kind` | string（开集；现发射 `digest` / `upstream`；仅 `start` / `end`） | 起因（digest = 结果消化；upstream = 子代理在等回复）；桌面只留痕，不分支 |
+| `on` | boolean（仅 `watch`） | `true` = 挂起窗已开；`false` = 挂起窗已关 |
 | `ok` | 任意（仅 `end`；只有布尔 `false` 有意义） | 该轮正常收尾：`false` = 中断 / 出错；缺省 / 非布尔 / 其它值 = 未中断 |
+
+**窗开关帧（D65；`phase:"watch"`）**
+
+- 发射点 = 挂起窗的建立 / 退出（`acp/suspension.mjs` 的 `createSuspensionWindow`）：`on:true` 在建窗时**先于本窗任何轮帧**发出；`on:false` 在窗 `done` 的收尾 `finally` 发——池空自然退出、`close()`、有轮在飞时的 `cancel()` 中止、窗内异常，四径同达。
+- 先于轮帧的理由：`startSuspension` 的循环在同步段就可能起消化轮（`carrier._pendingAsyncResults` 在建窗时已非空 ⇒ `runTurn` 同步被调用、`start` 帧当场发出），窗帧若放在 `startSuspension` 返回之后发，序就倒了。
+- 建窗失败（`startSuspension` 同步抛错）：已发的 `on:true` 由 `catch` 补一条 `on:false`（配对不悬空），再把异常上抛。
+- 至多一对（同一窗至多一条 `on:true`、一条 `on:false`）；`off` 只在 `on` 之后发。
+- 桌面用途 = `_watching`（释放判据，§19.2「释放规则」）；不造回合、不进 transcript、无可见面。
+- 旧客户端：不认 `watch` ⇒ 忽略即合规（`_meta` 通用条款）。
+- 旧 CLI：无 `watch` ⇒ `_watching` 恒假，释放回到静默期兜底（§19.8-10 / §19.11）。
 
 **命名与取值层（本仓）**
 
 - `_turnKey` = 常量 `"thincoder.dev/turn"`（`thincoder_kernel.dart` 类内 `static const`，与 `thincoder_events.dart:90` 的 `_subagentKey` 同形）。`_notification` 见 `session_info_update` 且 `_meta` 带本键 ⇒ 交 `_turnReport` 处置，不再进 `_events.update`（子代理翻译不读本键；不拦会逐帧落一条「a subagent report to leave alone」E4 日志）。
 - `_turnUnprompted` = 内核侧「本轮是自动轮」位：`_beginTurn(id, unprompted: …)` 写入（用户回合缺省 false）。翻译表里「自动轮在飞 ∥ 用户回合在飞」与「`end` 是否本轮的收尾」都以它判定。
 - `lastTurnUnprompted` = 宿主**既有** `Transcript` 字段（`transcript.dart:63`，由 `TurnStarted.unprompted` 喂，`kernel_event.dart:17` 既有参）——本批不新增、不改宿主；T68 / T73 断言读 `s.transcript.lastTurnUnprompted`（宿主层），不读内核私有位。
+- `_watching` = 挂起窗在线位（D65）：`watch{on:true}` 置真、`watch{on:false}` 置假；`_teardown()` 清假。只这两处清——`prepare()` 不清：窗在不在是服务端事实，视图回来不改变它；`attach()` 是引用计数（`chat_session.dart:302-309`），若每次附加都清位，「离开 → 回来 → 再离开」的同一窗内下一次释放就失去窗开位（§19.8-13）。`on` 非布尔 ⇒ 忽略 + 留痕，**状态不动**（另一条窗帧总会到；不动比猜方向安全）。
 
 - 发射点 = ACP 挂起窗的自动轮执行器：**轮起即发 start、轮收即发 end**（D61）。
 - 只在**自动轮**发；用户回合（`session/prompt`）的边界 = 应答本身，不发。
@@ -1799,6 +1819,7 @@ ACP 挂起窗（acp/suspension.mjs，本批新增）
 | `end` | 自动轮在飞 | `_endTurn(interrupted: ok == false)`；`ok` 非布尔也收轮（D63） |
 | `end` | 用户回合在飞 · 暂存位非空 | **撤暂存** + 留痕（带 kind）：该轮 `end` 已到，不在桌面成轮（D62） |
 | `end` | 无在飞回合 ∥ 用户回合在飞且暂存位空 | 契约外：忽略 + 留痕 |
+| `watch` | — | `_watching = on`（布尔；非布尔 ⇒ 忽略 + 留痕，状态不动）；`on:false` ⇒ 再跑一次释放判定（`_releaseWhenIdle()`） |
 | 其它 `phase` / `_meta` 坏形 | — | 忽略 + 留痕（E4） |
 
 **`ok` 的宽容方向（D63）**：收轮的唯一信号是 `end` 本身，`ok` 只是中断标记。把「`ok` 非布尔」当坏帧忽略 ⇒ 在飞自动轮永不收（永久「正在续写」、队列永不排水），正是本批要消灭的停住态；按未中断收只丢一个中断标记。两个方向的代价不对称 ⇒ 取宽容。CLI 侧 `try … finally` 恒发布尔（§19.3-②），非布尔只可能来自别的写入者。
@@ -1811,7 +1832,7 @@ ACP 挂起窗（acp/suspension.mjs，本批新增）
 
 **插入点（`_endTurn`；D57 的落点）**
 
-暂存的自动轮在 `_endTurn` 里 `emit(TurnEnded)`（`:548-557`）之后、`if (_drain()) return;`（`:560`）之前起：
+暂存的自动轮在 `_endTurn` 里 `emit(TurnEnded)`（`:583-592`）之后、`if (_drain()) return;`（`:602`）之前起：
 
 ```dart
 if (_pendingAuto != null) {
@@ -1822,9 +1843,95 @@ if (_pendingAuto != null) {
 }
 ```
 
-- 先起自动轮 ⇒ 本趟不排水、不释放：`_turn` 已非空（`_drain()` 即便被调到也返回 false；`release()` 的自守卫 `:418-421` 同样只置 `_releaseWanted`）⇒ 队列与释放都等自动轮收尾那次 `_endTurn` 再判（D53 的既有形不变）。
+- 先起自动轮 ⇒ 本趟不排水、不释放：`_turn` 已非空（`_drain()` 即便被调到也返回 false；`release()` 的自守卫 `:417-426` 同样只置 `_releaseWanted`）⇒ 队列与释放都等自动轮收尾那次 `_endTurn` 再判（D53 的既有形不变）。
 - 与 §18.1 的排水同一区间（`emit(TurnEnded)` 后、`_releaseWanted` 前）：有暂存自动轮 ⇒ 起轮并 return；没有 ⇒ `if (_drain()) return;` 照旧。
 - 起轮行的 id = 暂存时的 `auto:<n>`；kind 只留痕（`appEvent`）。
+
+**释放规则（D64 / D65 / D66）：子代理与挂起窗在 ⇒ `release()` / `dispose()` 都要延后**
+
+缺口（2026-10-17 07:03 用户报告「切换对话好像会丢失子代理」）：最后一个视图离开 ⇒ `ChatSession.detach()` 的微任务调 `_kernel.release()`（`chat_session.dart:313-318`）；内核只在 `_turn != null || _starting != null` 时延后（`thincoder_kernel.dart:417-426`）。
+挂起窗内无轮、后台池 live 时 `_turn == null` ⇒ 立即 `_closeSession()` + `_teardown()`（`:427-429`）⇒ 子进程被杀（`thincoder_process_io.dart:186-190` 的 `close()` = kill）⇒ 后台子代理随池清场。
+
+- **谓词（桌面可判）**：`_turn != null || _starting != null || _events.hasLiveSubagents || _watching`。
+- **窗开着本身是确定信号（D65）**：CLI 在窗进 / 出各发一条 `watch` 帧（§19.2「窗开关帧」）⇒ `_watching` 为真期间 `_canClose` 恒假，释放等窗关帧，不再赌时序。只按「有活着的子代理」判是间接的：最后一个子代理 settle 与消化轮 `start` 之间没有卡片可看（`hasLiveSubagents` 已假、`_turn` 还没起），静默期（一个 macrotask）只能盖住这一段——走查第二次缺陷（2026-10-17 08:26 用户「子代理结束的时候我切换了其它窗口项目，就会丢失」）就是帧分批一慢、落在静默期外被触发。
+- **静默期保留（D65）**：旧 CLI 无 `watch` 帧 ⇒ `_watching` 恒假 ⇒ 释放走今天的一个 macrotask 兜底；新 CLI 下静默期照跑（同一段代码），但窗开着时先被 `_watching` 挡住，窗关帧到了才轮得到它——一条路径同时覆盖新旧 CLI。
+- 新增 `ThincoderEvents.hasLiveSubagents` = `_subagents`（`thincoder_events.dart:61`）里有卡片 `status == running`。`queued` / `async` / `turn` / `approval` 都建成 running（`AgentItem` 缺省值，`chat_models.dart:213`）；`settled` / `stopped` / `done` 落 succeeded / failed；`cancelled` 删卡；未知态保持原状（按忙算，保守）。
+- `_tasks` 不参与：queued 不上 strip（`thincoder_events.dart:451-457`），卡片才是全量。
+
+**兑现点（三处）**
+
+1. 轮末既有兑现（`_endTurn` 尾，`thincoder_kernel.dart:600-606`）：`emit(TurnEnded)` → 暂存自动轮 → `_drain()` → 本规则；自动轮收尾同样在此判。
+2. 最后一个子代理离开 running / queued：每条 `session/update` 交 `_events.update` 之后（`_notification`，`:813`）跑一次「`_releaseWanted` 且空闲 ⇒ 起静默期」。
+3. 窗关帧（`_turnReport` 的 `watch{on:false}` 分支）：置假后跑 `_releaseWhenIdle()`——`release()` / `dispose()` 在窗开期间一直没兑现，由这一帧把它放行。
+   静默期 = 一个 macrotask（`Timer.run`），到点仍空闲（无轮 / 无启动 / 无 live 子代理 / 窗不在）⇒ `_closeSession()` + `_teardown()` + idle，即 `release()` 的关闭段。`prepare()`（视图回来）与 `_teardown()` 取消它（`_releaseWanted` 同时清）。
+
+```dart
+bool get _canClose => _turn == null &&
+    _starting == null &&
+    !_events.hasLiveSubagents &&
+    !_watching;
+
+@override
+void release() {
+  if (_disposed) return;
+  if (_transport == null && _starting == null) return;
+  _releaseWanted = true;
+  _releaseWhenIdle();
+}
+
+@override
+void dispose() {
+  if (_disposed) return;
+  _disposed = true;
+  // What waited goes with the session: it was never sent.
+  for (final turn in [..._queue, ?_next]) emit(ItemRemoved(nextSeq, turn.id));
+  _queue.clear();
+  _next = null;
+  _pendingAuto = null;
+  closeEvents(); // the host's surface goes at once (D66)
+  if (_canClose) {
+    _closeSession();
+    _teardown();
+    return;
+  }
+  // Work is still in the process: its turns are saved as they end, so the
+  // session over is not the work cut short — same predicate, same silence
+  // (D66).
+  _releaseWanted = true;
+  _releaseWhenIdle();
+}
+
+void _releaseWhenIdle() {
+  if (!_releaseWanted || !_canClose) return;
+  if (_transport == null && _starting == null) {
+    _releaseWanted = false;
+    return;
+  }
+  _releaseCheck ??= Timer(Duration.zero, () {
+    _releaseCheck = null;
+    if (!_releaseWanted || !_canClose) return;
+    _releaseWanted = false;
+    _closeSession();
+    _teardown();
+    _setHealth(KernelHealth.idle);
+  });
+}
+```
+
+- `_endTurn` 尾：`if (_releaseWanted) { … }` 整段换成 `_releaseWhenIdle();`（`_drain()` 起轮后已 return，不到这里）。
+- `_notification`：`_events.update(update);` 之后加 `_releaseWhenIdle();`；但带 `_turnKey` 的帧在早返回前就被拦下（`:837-842`）——`watch{on:false}` 的放行由 `_turnReport` 的 watch 分支自己跑，不靠本行。
+- 新增字段 `Timer? _releaseCheck`（静默期计时）与 `bool _watching`（窗在线位）；`prepare()`（`:409-418`）取消计时、清 `_releaseWanted`（视图回来 ⇒ 释放作废，下一轮释放按届时状态重判），**不清 `_watching`**（窗状态是服务端事实；`attach()` 引用计数下清位会让「离开 → 回来 → 再离开」丢窗开位——§19.8-13）；`_watching` 只由 `watch{on:false}`（四条退径都发）与 `_teardown()` 清（进程不在则窗也不在）。
+- `_releaseWhenIdle` 同 `release()` 的空手守卫：`_transport == null && _starting == null` ⇒ 清 `_releaseWanted`、不排计时（进程已不在就没得释放）。
+- **`_disposed` 从 `_releaseWhenIdle` 的两个守卫里去掉（D66）**：`dispose()` 也走这条关会话路径（否则延后永远兑现不了）；`release()` 自己的首行 `if (_disposed) return;` 挡住「disposed 之后的释放请求」。
+- **`send()` 首行加 `if (_disposed) return;`**：disposed 后不再入队 / 起轮——`_deliver` 的 disposed 早退（`:506`）会 return 而不收轮，`_turn` 会留在非空，延后收场下将永久挡住关闭。
+- `release()` 因此**恒晚一个 macrotask 关会话**（含空闲释放）；既有用例经 `settle()`（`pumpEventQueue`；`test_api-0.7.12/lib/src/scaffolding/utils.dart:16-19` 逐轮 `Future(…)` = 0ms 计时）泵过 0ms 定时器，断言预期不变——以实现轮实跑为准。
+- `dispose()` 的代价（D66）：对象已 `disposed`（`_ensureStarted` 拒新启动、宿主事件面已关），关闭由 `_releaseCheck` 计时器持有，`stopped` 晚一拍兑现；在飞的轮 / 子代理继续跑完，关闭时 `_setHealth(idle)` 落在已 disposed 的对象上（无监听者，无害）。
+
+**静默期为什么保留（旧 CLI 兜底）**：新 CLI 由窗帧接管（D65）——窗在 ⇒ 不关，窗关帧到了才放行，不再赌时序。旧 CLI 没有窗帧：最后一个子代理 settle 的同一窗唤醒里，消化轮的 `start` 紧随其后（`async-settle.mjs:306` 先发 `⟦ev⟧settled`、`:311` 才唤醒；`acp/suspension.mjs` 的窗循环（`startSuspension` 的 `runTurn` 包装）发 start），settled 那一刻关会话 = 杀进程 ⇒ 消化轮被截、报告丢失（F16 的反面）。一个 macrotask 让同批在飞的帧先落地：`start` 一到 `_turn != null` ⇒ 本次不关，转由兑现点 1 在轮收尾后关；同批覆盖「一轮消化收尾、下一轮已在窗里」（两个子代理先后结算）。新 CLI 下静默期仍跑，但在窗开期间被 `_watching` 先挡住——它退化成「窗关后的一个 macrotask」，不再是判据本身。
+
+- **静默期不造回合边界**：边界仍只由帧界定（D26 的禁忌不变）——它只决定「关会话」的执行时机。
+- **`dispose()` 也按同一判据延后（D66）**：骨架见上，决策见 §19.5 D66。`restart()`（`:420-425`）与 `_launch` 尾的既有兑现（`:202-207`；启动中没有卡片可 live）不动。
+- **代价与边界**（逐条登记 §19.8-10 / -11 / -12 / -13 / -14）：静默期在旧 CLI 上是唯一判据；后台 bash / browser / ssh 任务没有子代理帧 ⇒ 看不见，切走仍按今天释放；切走再切回的卡片 = 终态快照，不重建；`on:false` 帧若丢失（进程仍活着、帧未出线）⇒ `_watching` 停在真、释放不兑现，留到该会话下一次 `_teardown()`（判定条件见 §19.8-13）；`dispose()` 在卡片卡 running 时无上界兜底。
 
 ### 19.3 ACP 挂起窗（thincoder 仓；装配与收束）
 
@@ -1848,6 +1955,7 @@ if (_pendingAuto != null) {
 - 起身时 `agent._sessionAbort = controller`、`agent._sessionSignal = controller.signal`（桌面 `:249-250` 同形）：窗内 spawn 的子代理链到会话信号，中止时逐条 `⟦ev⟧stopped`（§15.2 的定格来源）。
 - `session/cancel` 的射程（D59）：有轮在飞 ⇒ abort（在飞轮 `end{ok:false}` 后退出，池按核 abort 清场）；空闲 ⇒ 零动作（不杀后台池）。
 - `session/close` / load·resume·new 替换旧实例 ⇒ `close()`（无条件 abort）：4 处调用点 `cancel()` 改 `close()`，净 0 行——`handlers-session.mjs:306` / `:367`、`handlers-slots.mjs:95` / `:165`。
+- **窗开关帧（D65）在窗体里发**（`session.mjs` 零改）：建窗即 `watch{on:true}`（先于本窗任何轮帧——`startSuspension` 的循环在同步段就可能起消化轮）；退出在窗 `done` 的 `finally` 发 `watch{on:false}`（四径同达）；建窗失败由 `catch` 补 `on:false` 再上抛（§19.2「窗开关帧」）。
 
 **② 两种轮**
 
@@ -1856,6 +1964,7 @@ if (_pendingAuto != null) {
 | 自动轮 | pending 非空 ∥ 上行 ask | `run(agent, "", digestCallbacks, {signal, autoTurn: true, upstreamTurn: <本轮是上行 ask>, suspDriven: true})` | start / end | 无（无请求） |
 | 用户唤醒轮 | 挂起期 `session/prompt` 到达 | `run(agent, text, callbacks, {signal, suspDriven: true})` | 不发（应答即边界） | 该 prompt 的应答 |
 
+- **普通用户回合（窗外）同带 `suspDriven: true`**（`session.mjs:106-109`：`runNormal` 的 `execTurn(input, { suspDriven: true })`；窗内两型轮由窗包装补同旗，`suspension.mjs:100-102`）：与终端同源（TUI 恒传 `tui/agent-turn.mjs:194`）。不传 ⇒ 用户回合进行中结算的子代理条目被该轮在回合尾收走（核 `run-stages.mjs:283` 的 fallback：直接注入并出池）⇒ 回合尾 `poolLive` 假、不开窗、桌面无自动续轮——F16 症状的最窄实例。影响面：用户回合的工具轮收尾不再注入到期 timer（`post-turn.mjs:23`）；交付面与判定条件见 §19.8-1。
 - `digestCallbacks` = `{...callbacks, onPermissionRequest: undefined}`（D58）；`question` / secret 面本就无（装配期剔除 / 拒件）。
 - **回调缺席时的判决 = 直接拒绝**（D58）：需审批的工具调用不再挂起等面板，按拒绝答复模型；与终端手动档 digest 同判。ACP 桥侧「无回调 ⇒ 拒绝」的真实实现本仓不可读（`unverified`）——out-of-repo 轮先核对该位，W5② 钉住；若实际是放行 ⇒ 停，回主 agent（静默越权不落档）。
 - **自动轮失败**（模型 / 工具 / 注入抛错）：`try … finally { emit(end, ok: false) }` **必发收尾帧**，异常再上抛给窗执行器（窗随核语义收窗；下一次回合尾再进窗）。`end` 若漏发，桌面 `activeTurn` 永不收 ⇒ 永久「正在续写」，正是本批要消灭的停住态。
@@ -1871,10 +1980,10 @@ if (_pendingAuto != null) {
 
 | 事件 | 挂起窗 | 桌面 |
 |---|---|---|
-| 池空 | 自然退出；`finishSuspension(idle)` 注入残余 | 最后一轮 `end` ⇒ `TurnEnded`；卡片已 settled |
-| `session/cancel`（轮在飞） | abort ⇒ 在飞轮 `end{ok:false}` ⇒ 核 abort 清场 | `TurnEnded(interrupted: true)` + 存活子代理的 `stopped` 帧 ⇒ 卡片 failed |
-| `session/close` | `close()` ⇒ 同上 | 会话已关（进程随后退出） |
-| 进程退出 / 管道断 | 随进程消失 | 既有 `_exited`：在飞轮 interrupted + 通知 |
+| 池空 | 自然退出（`watch{on:false}` 随 `done` 的 finally 出线）；`finishSuspension(idle)` 注入残余 | 最后一轮 `end` ⇒ `TurnEnded`；卡片已 settled；窗关帧 ⇒ `_watching` 假 ⇒ 静默期后释放 |
+| `session/cancel`（轮在飞） | abort（`watch{on:false}`）⇒ 在飞轮 `end{ok:false}` ⇒ 核 abort 清场 | `TurnEnded(interrupted: true)` + 存活子代理的 `stopped` 帧 ⇒ 卡片 failed |
+| `session/close` | `close()` ⇒ 同上（`watch{on:false}`；进程若先行退出则帧可能未出线——`_teardown()` 清 `_watching`） | 会话已关（进程随后退出） |
+| 进程退出 / 管道断 | 随进程消失（无窗关帧） | 既有 `_exited`：在飞轮 interrupted + 通知；`_teardown()` 清 `_watching` |
 
 ### 19.4 受影响文件清单（E2 增量；行数 = 2026-10-17 只读实测）
 
@@ -1882,26 +1991,27 @@ if (_pendingAuto != null) {
 
 | # | 坐标 | 改动 | 增量 |
 |---|---|---|---|
-| ㉟ | `lib/kernel/thincoder/thincoder_kernel.dart`（1027） | 回合边界翻译：`_turnKey` · `_autoTurns` / `_turnUnprompted` / `_pendingAuto` · `_beginTurn` 加 `unprompted` 参 · `_endTurn` 起暂存自动轮（`emit(TurnEnded)` 后、`_drain()` 前）· `_notification` 拦截 · `_turnReport` · `_teardown` 清暂存（细见 §19.2） | ≤ +45（⇒ ≤1072）；实交 +43（⇒ 1070）· 修正轮 2 ≤ +12（⇒ ≤1082） |
-| ㊱ | `test/kernel/thincoder_kernel_test.dart`（2303） | T68–T74（§19.7） | ≤ +170（⇒ ≤2473）；实交 +168（⇒ 2471）· 修正轮 2 ≤ +45（⇒ ≤2516） |
+| ㉟ | `lib/kernel/thincoder/thincoder_kernel.dart`（1113） | 回合边界翻译：`_turnKey` · `_autoTurns` / `_turnUnprompted` / `_pendingAuto` · `_beginTurn` 加 `unprompted` 参 · `_endTurn` 起暂存自动轮（`emit(TurnEnded)` 后、`_drain()` 前）· `_notification` 拦截 · `_turnReport` · `_teardown` 清暂存 · 释放延后（D64） · **窗开关帧翻译（`_watching` / `_canClose` / `dispose()` 延后——D65 / D66）**（细见 §19.2） | ≤ +45（⇒ ≤1072）；实交 +43（⇒ 1070）· 修正轮 2 ≤ +12（⇒ ≤1082）· 修正轮 3 ≤ +35（⇒ ≤1114）· **修正轮 4 ≤ +35（⇒ ≤1148）** |
+| ㊱ | `test/kernel/thincoder_kernel_test.dart`（2570） | T68–T76（§19.7） | ≤ +170（⇒ ≤2473）；实交 +168（⇒ 2471）· 修正轮 2 ≤ +45（⇒ ≤2516）· 修正轮 3 ≤ +60（⇒ ≤2576）· **修正轮 4 ≤ +60（⇒ ≤2630）** |
 | ㊲ | `test/fixtures/thincoder/digest-turn.ndjson`（新增） | 新线形场景（start / 文本 / end） | 9 行（原估 ~15） |
 | ㊳ | `test/kernel/thincoder_fixtures_test.dart`（211） | `_check` 增 `unprompted` 键 | +3 |
 | ㊴ | `test/fixtures/thincoder/README.md` | `expect` 键清单补 `unprompted`；一句回合边界说明 | +3（32 → 35；原估 +2） |
-| — | 其余本仓档 | **零改动**：`thincoder_events.dart` · `thincoder_mock.dart` · `chat_session.dart` · `chat_history_view.dart` · `workspace.dart` · `attention_service.dart` · `tips/**` · `l10n/**` | 0 |
+| ㊵ | `lib/kernel/thincoder/thincoder_events.dart`（778） | `hasLiveSubagents` getter（D64：卡片里有无 `status == running`；细见 §19.2） | ≤ +6（⇒ ≤784；仍 <800） |
+| — | 其余本仓档 | **零改动**：`thincoder_mock.dart` · `chat_session.dart`（`detach()` 照旧只调 `release()`——延后在核内） · `chat_history_view.dart` · `workspace.dart` · `attention_service.dart` · `tips/**` · `l10n/**` | 0 |
 
 **thincoder 仓（out-of-repo 轮执行；该仓自己的批次档 + 单元测试随档）**
 
 | # | 坐标 | 改动 | 增量 |
 |---|---|---|---|
-| ① | `thincoder-cli/src/acp/suspension.mjs`（新增） | 挂起窗：输入队 · 自动 / 用户轮分发 · 边界帧 · cancel / close · 残余 | 新增 ~150 |
+| ① | `thincoder-cli/src/acp/suspension.mjs`（新增） | 挂起窗：输入队 · 自动 / 用户轮分发 · 边界帧 · **窗开关帧** · cancel / close · 残余 | 新增 ~150 + 窗开关帧 ~15 |
 | ② | `thincoder-cli/src/acp/session.mjs`（55） | 回合执行器抽 `execTurn`（含 save）· 回合尾进窗 · 挂起期 prompt 路由 · `cancel` / `close` | +65（⇒ ~120） |
 | ③ | `thincoder-cli/src/acp/handlers-session.mjs`（427） | `cancel()` ⇒ `close()` 两处（`:306` new 替换、`:367` close） | 净 0 |
 | ④ | `thincoder-cli/src/acp/handlers-slots.mjs`（226） | `cancel()` ⇒ `close()` 两处（`:95` load、`:165` resume） | 净 0 |
-| ⑤ | `thincoder/docs/cli/design/ACP-CLIENT.md`（641） | 新增 §12.8「回合边界扩展契约」（§19.2 的线上形 + 兼容句）+ §3.2 会话层一句（挂起窗） | +~40 |
+| ⑤ | `thincoder/docs/cli/design/ACP-CLIENT.md`（641） | §12.8「回合边界扩展契约」（§19.2 的线上形 + 兼容句；**含 `watch` 行**）+ §3.2 会话层一句（挂起窗） | +~45 |
 | ⑥ | `thincoder/docs/core/design/AGENT-LOOP-ASYNC-POOL.md` | `:442`「CLI headless / ACP ❌ 不支持」行改「ACP 已支持（ACP-CLIENT §12.8）」 | 1 行 |
 | ⑦ | `thincoder/docs/batches/2026-10-17-acp-suspension.md` + 同名 `.test.mjs` | 该仓批次档（§1–§6）+ 单元测试档（假 run 直驱 `createAcpSession`；该仓惯例 = 测试档随批次档） | 新增 |
 
-- **体量**：`thincoder_kernel.dart` 1070 行在 >800 名单；本批 = 会话面行级新增（+43），不动结构 ⇒ 不触发「先立拆分批」；会话面缝候选（§18.4 所列）**追加** `_turnReport` 一条，触发不变。`session.mjs` 与新增档均 <500 行。测试档 2471 在 >800 名单：只加用例，缝候选沿用 §15.4。
+- **体量**（2026-10-17 修正轮 3 后实测 + 修正轮 4 预估）：`thincoder_kernel.dart` 1113 行（修正轮 4 ≤ +35 ⇒ ≤1148）在 >800 名单；本批 = 会话面行级新增，不动结构 ⇒ 不触发「先立拆分批」；会话面缝候选（§18.4 所列）**追加** `_turnReport` / 释放延后 / 窗开关与 `dispose` 延后三条，触发不变。`thincoder_events.dart` 784（<800，不入名单）。`session.mjs` 与新增档均 <500 行。测试档 2570 在 >800 名单：只加用例，缝候选沿用 §15.4。
 - **out-of-repo 边界**：上述 ①–⑦ 由父侧另起 out-of-repo 轮，在 thincoder 仓写它自己的批次档与测试（本仓只出设计，不写外仓文件）。
 
 ### 19.5 关键决策记录（含被否）
@@ -1917,6 +2027,9 @@ if (_pendingAuto != null) {
 | D61 | 自动轮 start 帧**轮起即发**（eager），不按首个输出帧惰性发 | 三端先例（VSC / 桌面 / TUI 都在轮起发边界帧）；「正在续写」指示从轮起可见；空轮无项可显示，残影只有罕见的未读徽标（§19.8-7）。被否：惰性 start（要在出站面拦首个帧，且早失败时没有任何可见面） |
 | D62 | 暂存中的自动轮在自己的 `end` 到达时**撤暂存**（该轮在桌面不成轮），不起-再-收 | 帧无回合 id，配对只能按状态：挂起窗串行 ⇒ 同一时刻至多一个自动轮，暂存位非空 = 「报过 `start`、还没起」⇒ 同一用户回合里到的 `end` 就是它的收尾。撤暂存不造空轮、不造一对没人看的边界帧，实现面只多一个分支。代价写清：那轮内容仍入 transcript，只是搭在用户回合的分组里、`lastTurnUnprompted` 保持 false。被否：先起后收（用户回合收尾时起一个随即收的 0 项轮）——桌面多一对幽灵边界，`interrupted` 还要按一个早已过去的 `ok` 补标，空回合的未读残影（§19.8-7）从稀有变常规；被否：帧里加回合 id（外仓协议面扩字段，批 8 契约已定形，收益只在这一条罕见错序） |
 | D63 | 自动轮在飞时收到的 `end` **一律收轮**；`ok` 只认布尔 `false`（缺省 / 非布尔 / 其它值 ⇒ 按未中断收） | `end` 是唯一的收轮信号；把 `ok` 坏形当坏帧忽略 ⇒ 在飞轮永不收 = 永久「正在续写」+ 队列永不排水（本批要消灭的停住态）。误判方向取「未中断」：只丢一个中断标记，不丢回合边界。CLI 侧恒发布尔（§19.3-②），非布尔只可能来自别的写入者。被否：`ok` 坏形 ⇒ 忽略整帧（缺口原文，失败态不可恢复）；被否：`ok` 坏形 ⇒ 按中断收（把「不知道」标成「出错」） |
+| D64 | `release()` 的延后判据加上「有活着的子代理」（`_turn != null || _starting != null || _events.hasLiveSubagents`）；关会话在一个 macrotask 的**静默期**后兑现（轮末 + 每帧 + 窗关帧三处） | 后台池 live 期间窗一直开着，卡片 running 是可用且直接的忙相（窗开关帧由 D65 补上后成为主信号）。静默期 = 旧 CLI 的时序兜底：最后一个子代理 settle 的同一窗唤醒里，消化轮 `start` 紧随其后（`async-settle.mjs:306` 先发 settled、`:311` 才唤醒；`acp/suspension.mjs:66-67` 发 start），当场关 = 杀进程 ⇒ 消化轮被截、报告丢失（F16 的反面）。静默期只决定关闭时机，不造回合边界（D26 不变）。被否：最后一个离开即关（丢消化轮）；被否：按卡片终态判「有没有消化轮要来」（窗可能不在 ⇒ 结果留池等下一回合，仍会永等）；被否：秒级长计时（无信号依据，把释放拖成计时行为） |
+| D65 | 挂起窗进 / 出各发一条 `watch` 帧（同一 `_meta` 键，`phase:"watch"` + 布尔 `on`）；`_canClose` 加 `!_watching`；静默期降为旧 CLI 兜底 | 走查第二次缺陷（2026-10-17 08:26 用户：「子代理结束的时候我切换了其它窗口项目，就会丢失」）根因 = 释放靠时序：最后一个子代理 settle 与消化轮 `start` 之间桌面没有卡片可看（`hasLiveSubagents` 已假、`_turn` 还没起），一个 macrotask 的静默期正是这一段；机器 / 帧分批一慢就落在静默期外。窗进 / 出是 CLI 自己确知的事实 ⇒ 变成确定信号，释放不再赌时序。旧 CLI 无此帧 ⇒ `_watching` 恒假，静默期照旧（§19.8-10 / §19.11）。被否：加长静默期（仍是时序，慢机器仍丢，且拖慢所有释放）；被否：桌面轮询窗状态（无请求面）；被否：把窗开关并进 `start` / `end`（有轮才有帧，空窗那段表达不了——正是要判的那段）；被否：按卡片终态推断（D64 已否） |
+| D66 | `dispose()` 也按同一谓词延后收场（同兑现点、同静默期）；`closeEvents()` 立即关 | `dispose()` 今天无条件 `_closeSession()` + `_teardown()`（`thincoder_kernel.dart:467-472`）⇒ 切项目窗口 / 收起会话 = 杀在跑的子代理与窗里的消化轮；会话存档按回合落盘（`session.mjs` 每轮 `save`）⇒ 延后让最后一轮落盘，用户回来还能看到。代价：对象已 `disposed`（`_ensureStarted` 拒新启动、宿主事件面已关）；关闭由计时器持有，`stopped` 晚一拍兑现；`_disposed` 从 `_releaseWhenIdle` 的守卫里去掉，改由 `release()` 自己的首行守卫挡。`closeEvents()` 立即：宿主已取消订阅，`emit` 有 `isClosed` 守卫（`agent_kernel.dart:403`），翻译层（`ThincoderEvents`）不依赖事件流仍继续收帧到进程收场。被否：`dispose()` 照旧立即关（本条缺陷）；被否：dispose 不关、等下次启动再收（进程泄漏、无兑现点） |
 
 ### 19.6 验收对照（回指需求档 F16）
 
@@ -1929,9 +2042,10 @@ if (_pendingAuto != null) {
 | （派生）自动轮可见：运行中 / 可停止 / 结束 | §19.2 + D61–D63 + `cancel()` 既有面 | T68 / T71（② = 失败收尾）/ T73 / T74①②（错序与坏 `ok` 都不造永不收的轮） |
 | （派生）自动轮期间发消息 | §19.7 T70（接 §18 本地队列） | T70 |
 | （派生）收束：关闭 / 取消 / 进程退出 | §19.3-④ | T72 + W3 / W4 / W6（自动轮抛错 ⇒ `end{ok:false}`） |
+| （派生）切走视图 / 切走项目窗口不丢后台子代理 | §19.2「释放规则」（D64 / D65 / D66） | T75①–③（卡片忙 ⇒ 不写 `session/close`）· T76①–③（窗帧 ⇒ 释放确定；旧 CLI 兜底；`dispose()` 延后）· W8（窗进 / 出各一帧） |
 | （派生）旧 CLI 兼容（静默 = 今天） | §19.11 | 既有 `subagent-digest` 固件保持绿（不改）+ 走查 8 |
 
-### 19.7 用例表（T68–T74 本仓；W1–W7 thincoder 仓）
+### 19.7 用例表（T68–T76 本仓；W1–W10 thincoder 仓）
 
 **本仓**（`test/kernel/thincoder_kernel_test.dart`；mock `push` 直推边界帧，零 mock 改动）
 
@@ -1944,8 +2058,10 @@ if (_pendingAuto != null) {
 | T72 | 自动轮中进程死 | `start` → 文本 → `crash()` | `TurnEnded(interrupted: true)` + `notice error` + health failed（既有路径） |
 | T73 | 空自动轮 | `start` → `end{ok:true}` | 零项；`transcript.lastTurnUnprompted == true`；`activeTurn == null`；无幽灵卡片 / 无文本 |
 | T74 | 坏形 / 乱序（E4） | `_meta` 非映射 · `phase` 未知 · 用户回合在飞（暂存位空）时 `end` · 自动轮在飞时第二个 `start` | 忽略 + 各留痕一条；回合状态不变 |
+| T75 | 切走视图时后台还在（D64） | ① push `signal('a', 1, 'queued')` → `release()` → settle；② 续 ① push `signal('a', 1, 'settled')` → settle | ① 零 `session/close`、`health` 仍 ready（queued 也算忙）；② 静默期到点：`session/close` 一条、`health` idle；`await s.kernel.stopped` 兑现 |
+| T76 | 切走项目窗口不丢后台子代理（D65 / D66） | ① 窗开着就等窗关；② 旧 CLI 无窗帧；③ `dispose()` 时有 live 子代理 | 见下「补项」T76①–③ |
 
-**补项（T69② / T71② / T74① / T74②）**
+**补项（T69② / T71② / T74① / T74② / T75② / T75③ / T76①–③）**
 
 | 子项 | 输入 | 期望 |
 |---|---|---|
@@ -1953,6 +2069,11 @@ if (_pendingAuto != null) {
 | T71② | `start` → `end{ok:false}`（非本端 `cancel()` 来源） | 零 `session/cancel`；`TurnEnded(interrupted: true)`、`activeTurn == null`、`transcript.lastTurnInterrupted == true` |
 | T74① | 暂存 + 同回合 `end`（D62） | `hold` 下 `send('one')`；用户回合在飞时 push `start{kind:digest}`，同一回合内再 push `end{ok:true}`；`release` | 桌面只见用户回合一对边界（`TurnStarted` 1 / `TurnEnded` 1）；无 `auto:` 轮、无第二个 `TurnEnded`；`release` 后 `activeTurn == null`、`lastTurnUnprompted == false`；该 `end` 留痕一条；随后 `send('two')` 直接写出 `session/prompt`（无在飞轮挡路） |
 | T74② | `ok` 非布尔（D63） | 两条独立会话：① `start` → `end{ok:"false"}`；② `start` → `end`（键缺席） | 两次都**收轮**：`TurnEnded(interrupted: false)`、`activeTurn == null`、`lastTurnInterrupted == false`；① 另留痕一条 |
+| T75② | 消化轮紧跟着来（D64） | 续「`async` 卡片 + `release()`」（零 close）→ 同一批 push `settled` + `turn('start')` → settle → push `turn('end')` → settle | 静默期到点仍零 close（`activeTurn == 'auto:1'`）；`end` 后的静默期才关：`session/close` 一条、`activeTurn == null` |
+| T75③ | 切回取消延后（D64） | `async` 卡片 + `release()` → `prepare()` → push `settled` → settle | 零 `session/close`、`health` ready（视图回来 ⇒ 释放作废） |
+| T76① | 窗开着就等窗关（D65） | push `watch{on:true}` → push `signal('a', 1, 'async')` → `release()` → settle（零 close）→ push `signal('a', 1, 'settled')` → settle（零 close）→ push `turn start{kind:digest}` → settle（`activeTurn == 'auto:1'`、零 close）→ push `turn end{ok:true}` → settle（零 close，`_watching` 仍真）→ push `watch{on:false}` → settle | 窗开期间零 `session/close`（含卡片已 settled、消化轮未起的空档）；窗关帧后的静默期到点：`session/close` 一条、`health` idle、`stopped` 兑现 |
+| T76② | 旧 CLI 无窗帧 ⇒ 静默期兜底（D65） | 同 T76① 但**不发** `watch` 帧：`async` 卡片 + `release()` → 同批 push `settled` + `turn start` → settle → push `turn end` → settle | 行为 = T75②（静默期让同批帧落地；消化轮在飞 ⇒ 轮末才关）；无窗帧时 `_watching` 恒假 |
+| T76③ | `dispose()` 延后（D66） | push `watch{on:true}` + `signal('a', 1, 'async')` → `dispose()` → settle（零 close；此后 `send` 不入队）→ push `signal('a', 1, 'settled')` + `watch{on:false}` → settle | `dispose()` 不立即 `session/close`；窗关 + 空闲后的静默期到点：`session/close` 一条、`stopped` 兑现；`stopped` 在 dispose 时不兑现 |
 
 **thincoder 仓**（`docs/batches/2026-10-17-acp-suspension.test.mjs`；假 run / 假 agent 直驱 `createAcpSession`）
 
@@ -1965,6 +2086,9 @@ if (_pendingAuto != null) {
 | W5 | 手动档审批剥离与缺席判决 | 假 `autoApprove=false`：① 消化轮收到的 callbacks 无 `onPermissionRequest`；用户轮的有；② 假 agent 在自动轮里对需审批工具发反向请求 ⇒ 判决 = 拒绝（工具不执行），不是放行 |
 | W6 | 自动轮抛错 | 假 run 在自动轮抛错：出站必见 `end{ok:false}`；窗按核语义收窗（无在飞轮残留）；下一次回合尾照常再进窗 |
 | W7 | upstream 轮 | 假池有未 drain 的上行 ask：`run` 以 `upstreamTurn: true` 被调用；答话经核注入面回给等着的子代理（假 agent 断言注入被调用）；出站见 `start` / `end` 两帧 |
+| W8 | 窗开关帧（D65） | ① 建窗时 `_pendingAsyncResults` 非空（消化轮同步起）⇒ 出站第一帧是 `watch{on:true}`，其后的 `start` 在它之后；② 窗自然退出 ⇒ 恰一条 `watch{on:false}`，在最后一个 `end` 之后；③ 轮在飞时 `close()` ⇒ `watch{on:false}` 仍出站（至多一对，不重发） |
+| W9 | 窗内两型轮的 `suspDriven` | 窗内自动轮与用户唤醒轮核收到的 opts 均 `suspDriven === true`（自动轮另带 `autoTurn:true`）；核据此把已结算条目留池给窗消化（`run-stages.mjs:283`），而不是本轮回退自收 |
+| W10 | 普通回合（窗外）的 `suspDriven` | 窗外 `session/prompt` 起的普通回合核收到 `suspDriven === true`、`autoTurn:false`；普通回合不发回合边界帧。留池的核侧语义由 `run-stages.mjs:283` 保证（单测按 opts 断言）——与 TUI 同源（`tui/agent-turn.mjs:194`） |
 
 W 侧判据不变：CLI 的 `end` 恒发布尔 `ok`（成功 = true；抛错 = false，`try … finally`）——D63 的宽容是客户端防御，不进 W 的判据。
 
@@ -1972,15 +2096,21 @@ W 侧判据不变：CLI 的 `end` 恒发布尔 `ok`（成功 = true；抛错 = f
 
 ### 19.8 边界（批 8 不做）与登记（判定条件）
 
-1. **timer 唤醒轮不接**：无 `timerFace`（§19.3-①）。判定条件：桌面需要 timer 唤醒（终端 `pendingTimerDeadline` / `deliverExpiredTimers` 对位）⇒ 接 `timerFace`（`suspension.mjs:173-205` 第四态）并给 `kind:"timer"`。
+1. **timer 唤醒轮不接**：无 `timerFace`（§19.3-①）。窗内轮与普通轮都带 `suspDriven:true`（§19.3-②）后，核在工具轮收尾不再注入到期 timer（`core/agent/post-turn.mjs:23`：`suspDriven && timerWakeEnabled` ⇒ 到期件留在途、零出列）；ACP 无 `timerFace`、无空闲闩 ⇒ 没有交付面，也没有「下一个非驱动的工具轮」可顺延（本批之后 ACP 的每条轮都经 `execTurn` 带旗）。到期件不丢、不出列，直到接 `timerFace`（或 `timerWake` 显式关 ⇒ 核回退面逐字注入）。判定条件：桌面需要 timer 唤醒（终端 `pendingTimerDeadline` / `deliverExpiredTimers` 对位）⇒ 接 `timerFace`（`suspension.mjs:173-205` 第四态）并给 `kind:"timer"`。
 2. **自动轮不请求审批**（D58）。判定条件：产品要「自动轮也能请求审批」⇒ 去掉剥离 + 明确无人应答的兜底（反向请求 5 分钟超时按拒绝）。
 3. **自动轮在重放（session/load）里没有回合边界**：重放只还原消息（`bridge.mjs:402-461`），不合成回合——与今天一致。判定条件：需要在重放里也分组 ⇒ 扩展重放面（另立）。
 4. **取消自动轮 = 停整个后台会话**（D59）：窗 abort 后核清场，存活子代理中止。不做「只停这一轮、后台继续」——核驱动只有会话级 abort；判定条件：核提供回合级 abort 缝。
 5. **自动轮不生成会话标题**：ACP 本就不生成（`ensureSessionTitle` 只在 TUI 面）。
 6. **自动轮的问答面**：`question` 工具装配期已剔除、secret 拒件——自动轮没有问答面（与 2 同源）。
 7. **空自动轮**：起止帧照发（D61），无项可显示；罕见的零输出失败会在侧栏留一个未读徽标而无新内容。判定条件：走查反复观察到「徽标在、没内容」⇒ 宿主侧对空回合抑制未读（宿主改动，另立）。
-8. **旧桌面 + 新 CLI**：两帧进旧翻译层 ⇒ E4 日志（`thincoder_events.dart:429-431` 形），显示零变化——登记；不做版本门（E3）。
+8. **旧桌面 + 新 CLI**：本键的帧（`start` / `end` / `watch`）进旧翻译层 ⇒ E4 日志（`thincoder_events.dart:429-431` 形），显示零变化——登记；不做版本门（E3）。
 9. **进程强杀**：挂起随进程消失；后台 bash 树可能残留（与终端硬退同形）——沿用 §14-12 口径，不新增机制。
+10. **静默期只在旧 CLI 上是唯一判据**（D65）：新 CLI 有窗开关帧 ⇒ 释放由窗关帧确定（§19.2「释放规则」）；旧 CLI 无此帧 ⇒ `_watching` 恒假，仍靠一个 macrotask 让 `settled` 与消化轮 `start` 同批帧落地（`async-settle.mjs:306` → `:311` → 窗循环（`startSuspension` 的 `runTurn` 包装））；`start` 若晚于一个 macrotask 才到（帧分两次读入）⇒ 该轮消化被截。判定条件：旧 CLI 下走查见到「子代理卡片已 settled、对话里没有消化文本」⇒ 要求升级 CLI（能力按帧在场判定，不加版本门）；新 CLI 下同一现象 ⇒ 按窗帧链路复查（窗关帧是否先于最后一条 `end`，W8②）。
+11. **释放延后只覆盖子代理面**：后台 bash / browser / ssh 任务没有 `⟦ev⟧` 帧（`thincoder-core/agent-tools` 三族零发射）⇒ 桌面看不见，切走仍按今天直接释放、随进程消失。判定条件：用户报告「切走丢了后台 bash / 浏览器 / SSH」⇒ 给三族补状态帧，再把谓词扩到它们。
+12. **切走再切回：子代理卡片 = 终态快照，不重建**：释放时 `_teardown` 调 `_events.endSubagents()`（`thincoder_events.dart:504-531`，清 `_subagents` / `_tasks`）；再开是 `session/resume`（`_loaded` 后不再 `session/load` 重放，`thincoder_kernel.dart:256-262`）⇒ 重放只有消息，卡片停在终态、不再随新会话更新。
+    判定条件：产品要求切回后卡片仍可点开 / 看子代理详情 ⇒ 把子代理状态搬进会话存档并在重放面合成卡片（外仓 + 设计另立）。
+13. **`prepare()` 不清 `_watching`（裁定）**：窗在不在是服务端事实，视图回来不改变它；`attach()` 是引用计数（`chat_session.dart:302-309`），`prepare()` 每次附加都会被调到，若在此清位，「离开 → 回来 → 再离开」的同一窗内（窗一直开着、期间没有新帧）下一次 `release()` 就失去 `!_watching` 这一位，退回静默期兜底（与 10 同一段时序）——正是本批要消灭的东西。故 `_watching` 只由 `watch{on:false}`（四条退径都发）与 `_teardown()` 清。代价：`on:false` 帧若丢失（进程仍活着、帧未出线），`_watching` 停在真 ⇒ 桌面判忙、进程不释放，直到该会话下一次 `_teardown()`。判定条件：走查见到「窗早已退出（无子代理、无在飞轮）而桌面仍判忙」⇒ 说明 `on:false` 帧丢了，按 E4 留痕补（帧链路日志），并核 CLI 出站面（W8②）。
+14. **`dispose()` 延后无上界兜底**：谓词与 `release()` 同一套；卡片卡在 running（CLI 已无对应池项、不再发帧）⇒ 进程不释放（今天 dispose 立即杀）。判定条件：走查 / 现场见到「已关闭的会话进程残留」⇒ 给 release / dispose 共享一个上界（秒级计时），或按卡片 `updatedAt` 判超时。
 
 ### 19.9 UI / 交互决定（全部落地，无 open）
 
@@ -1988,6 +2118,8 @@ W 侧判据不变：CLI 的 `end` 恒发布尔 `ok`（成功 = true；抛错 = f
 - 「正在续写」指示 = 既有流式指示（`isStreaming` = `activeTurn != null`，`chat_session.dart:538`）；无新组件、无新文案、无新 l10n 键。
 - 自动轮可停止：composer 停止键 → `cancel()`（`thincoder_kernel.dart:567-583`）⇒ `session/cancel`（§19.3-①）。
 - 自动轮期间可排队发消息：§18 既有面（排水在 `_endTurn`，`:540-565`）。
+- 切走再切回：子代理卡片保留终态（不再更新、不重建——§19.8-12）；会话文本照常（主机 transcript 持有）。释放延后与窗开关帧没有任何新可见面（窗帧只进内核判据 `_watching`，不进 transcript、不留 E4 日志）。
+- `dispose()` 延后：会话关掉后界面不在了，没有新的运行中状态要展示；宿主已取消订阅（`chat_session.dart:1110-1111`），延后期间只影响进程何时退出。
 - 无 open 项。
 
 ### 19.10 真机走查步骤（A 段交付时执行）
@@ -1998,17 +2130,20 @@ W 侧判据不变：CLI 的 `end` 恒发布尔 `ok`（成功 = true；抛错 = f
 4. 验「回来要下一步」：切到别的会话再切回 ⇒ 该会话显示未读（无铃声）；结束态可输入。
 5. 验「正在续写」：自动轮进行中侧栏该会话 = 运行中；输入框可写，发送进队列面板（§18）。
 6. 验「可停止」：自动轮进行中点停止 ⇒ 文本停、轮标中断；后台子代理卡片定格（`stopped`）。
-7. 验收束：自动轮进行中关掉该会话视图 ⇒ 自动轮结束后进程按既有 release 语义释放；重新打开无「永远在跑」的卡片。
-8. 兼容：把 `thincoder.path` 指到旧版（无本批信号）⇒ 与今天一致：结算后文本照常到达、无自动轮、无新提示。
-9. 同场景对照终端：终端里子代理结算后同样自起一轮——两侧消息内容与顺序同形（不要求逐字相同）。
+7. 验收束（视图）：自动轮进行中关掉该会话视图 ⇒ 自动轮结束后进程按既有 release 语义释放；重新打开无「永远在跑」的卡片。
+8. 验收束（项目窗口 / 会话关闭）：子代理 running 时切到其它项目窗口（会话被 `dispose()`），停留到子代理结束再回来 ⇒ **有**消化文本（无窗帧时代会丢）；重新打开无「永远在跑」的卡片。
+9. 兼容：把 `thincoder.path` 指到旧版（无本批信号）⇒ 与今天一致：结算后文本照常到达、无自动轮、无新提示；释放回到静默期兜底（§19.11）。
+10. 同场景对照终端：终端里子代理结算后同样自起一轮——两侧消息内容与顺序同形（不要求逐字相同）。
 
 ### 19.11 兼容（三种组合）
 
 | 组合 | 表现 |
 |---|---|
-| 新 CLI + 新桌面 | 自动轮可见（unprompted）、可停止、结束即「该你了」 |
-| 新 CLI + 旧桌面（批 7） | 两帧被 E4 忽略并记日志；文本照常入 transcript——显示 = 今天（§19.8-8） |
-| 旧 CLI + 新桌面 | 无边界帧 ⇒ 无自动轮；文本照常到达 = 今天（既有 `subagent-digest` 固件即此形的哨兵） |
+| 新 CLI + 新桌面 | 自动轮可见（unprompted）、可停止、结束即「该你了」；窗开关帧让释放不再依赖时序 |
+| 新 CLI + 旧桌面（批 7） | 本键的帧（`start` / `end` / `watch`）被 E4 忽略并记日志；文本照常入 transcript——显示 = 今天（§19.8-8） |
+| 旧 CLI + 新桌面 | 无边界帧 ⇒ 无自动轮；无窗帧 ⇒ `_watching` 恒假，释放回到静默期兜底（§19.8-10）；文本照常到达 = 今天（既有 `subagent-digest` 固件即此形的哨兵） |
+
+- 释放延后（D64 / D65）只看子代理帧与窗帧：旧 CLI 也有子代理帧（F11 起）⇒ 同样延后；旧 CLI 没有挂起窗 ⇒ 延后只是把「有子代理在跑」的会话留到子代理结束，无副作用。
 
 不加版本门（E3）：能力按帧在场判定；`thincoder_locator.dart` 的 `verifiedVersion` 不上调。
 
@@ -2066,4 +2201,8 @@ W 侧判据不变：CLI 的 `end` 恒发布尔 `ok`（成功 = true；抛错 = f
   · §19.1 / §19.3-② 自动轮 `try … finally` 必发 `end{ok:false}` + W6 / T71②（#2）· D58 / §19.3-② / W5 回调缺席判决 = 拒绝（桥侧 `unverified`）（#3）· §19.3-② upstream 返回路 + W7（#4）· §15.3 挂起期发消息加「无在飞回合时」、§19.2 末条改为实际改动（#5）· §5.2 尾改「本仓 1 档（kernel）+ 固件 / 测试面」（#8）
 - 2026-10-17 · 批 8 实现期修正轮 2（两处实现期设计缺口；零代码）：§19.2 暂存位与自己的 `end` 配对（**撤暂存**，该轮在桌面不成轮；暂存位已占的第二个 `start` 不覆盖）+ `ok` 宽容（自动轮在飞时 `end` 一律收轮，只认布尔 `false` = 中断）+ 翻译表与字段域随改 · §19.5 +D62 / D63（含被否）
   · §19.7 T74 行限定「暂存位空」+ 补项 T74① / T74② + W 侧「恒发布尔 `ok`」一句 · §19.6 判据补 T74①② · §3.6 turn meta 行随同步 · §19.4 实交读数回灌（㉟ 1070 / ㊱ 2471 / ㊲ 9 行 / ㊳ +3 / ㊴ +3；体量行同刷）
+- 2026-10-17 · 批 8 实现期修正轮 3（走查暴露的设计缺口：切走视图丢后台子代理；零代码）：§19.2 释放规则（D64：谓词 `_turn ∥ _starting ∥ hasLiveSubagents` · 兑现点 = `_endTurn` 尾 + 最后一个子代理离开后的一个 macrotask 静默期 · 静默期理由与被否）+ 插入点坐标刷为现行 · §19.4 ㉟ / ㊱ 上界 + 新增 ㊵ `thincoder_events.dart`（移出零改动名单）· §19.5 +D64 · §19.6 判据行 · §19.7 +T75①–③ · §19.8-10/-11/-12 边界 · §19.9 切回可见面 · §19.11 旧 CLI 一句 · 体量行按实测刷（kernel 1079 / events 778 / test 2516）
+- 2026-10-17 · 批 8 实现期修正轮 4（走查第二条缺陷：结算那一刻切项目窗口 ⇒ 结果丢；零代码）：§19.2 窗开关帧（`phase:"watch"` + 布尔 `on`；建窗即发、`done` 的 finally 发、建窗失败补发）+ `_watching` / `_canClose` / 三兑现点 + `dispose()` 延后（D66）· §19.1 流程图 · §19.3-① 发射点与 ④ 收束表 · §19.4 上界（㉟ ≤1148 / ㊱ ≤2630）+ CLI ① / ⑤ 增行 · §19.5 D64 改写 + D65 / D66 · §19.6 判据行 · §19.7 +T76①–③ / W8 · §19.8-10 改写 + -13 / -14 · §19.9 / §19.10 步 8 · §19.11 窗帧行 · §3.4 / §3.6 索引 · §9 用例号随改；out-of-repo：`acp/suspension.mjs` 窗帧 + ACP-CLIENT §12.8 `watch` 行
+- 2026-10-17 · 批 8 实现期修正轮 5（上抛 1 裁定：`prepare()` 不清 `_watching`；零代码）：§19.2 字段条与骨架条改「`_watching` 只由 `watch{on:false}`（四条退径都发）与 `_teardown()` 清」，`prepare()` 只清 `_releaseWanted` · §19.8-13 改写为该裁定（`attach()` 引用计数下清位会让「离开 → 回来 → 再离开」丢窗开位；丢 `on:false` 帧的后果与判定条件）· §19.2 代价与边界条随改。
+- 2026-10-17 · 批 8 实现期修正轮 7（普通用户回合也带 `suspDriven:true`；零代码）：§19.3-② 补「普通用户回合（窗外）同带 `suspDriven: true`」条（`session.mjs:106-109`；与 TUI 同源；不传 ⇒ 用户回合内结算的条目被该轮自收、池空不开窗 = F16 最窄漏实例；影响面 = 工具轮收尾不再注入到期 timer）· §19.7 W 表 +W9（窗内两型轮）/ W10（普通回合），抬头改 W1–W10 · §19.8-1 补 timer 交付边界（`post-turn.mjs:23`：无 `timerFace` ⇒ 交付面为零、到期件留在途；判定条件 = 接 `timerFace`）· §14-21 同口径改写。
 
