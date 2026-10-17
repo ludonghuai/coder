@@ -512,7 +512,7 @@ class _ChatScreenState extends State<ChatScreen>
       onOpenFile: open == null
           ? null
           : (change) => open(change, _session.originalOf(change)),
-      onStopTask: _session.stopTask,
+      onStopTask: _session.canStopTasks ? _session.stopTask : null,
       canOpenTask: (task) => task.kind == KernelTaskKind.command
           ? widget.onOpenTerminalTask != null
           : _session.agentOf(task) != null,

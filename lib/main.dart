@@ -39,6 +39,8 @@ import 'kernel/claude_code/claude_path_setting.dart';
 import 'kernel/claude_code/process_transport.dart';
 import 'kernel/commit_attribution.dart';
 import 'kernel/queued_messages.dart';
+import 'kernel/thincoder/thincoder_locator.dart';
+import 'kernel/thincoder/thincoder_process.dart';
 import 'keybindings/keybindings_sync.dart';
 import 'link/link_host.dart';
 import 'keybindings/keymap.dart';
@@ -123,6 +125,7 @@ Future<void> main(List<String> arguments) async {
   unawaited(reapClaudeProcesses());
   unawaited(reapLspProcesses());
   unawaited(reapPtyProcesses());
+  unawaited(reapThincoderProcesses());
   WidgetsFlutterBinding.ensureInitialized();
   if (!kIsWeb) AppEventWatch.start();
   // The Windows app's own logs go beside it.
@@ -154,6 +157,11 @@ Future<void> main(List<String> arguments) async {
     // agent starts.
     ClaudePathSetting.current = () =>
         ClaudePathSetting.parse(files.settings[ClaudePathSetting.settingKey]);
+    // Settings → General → thincoder: the build to run, read as each agent
+    // starts.
+    ThincoderPathSetting.current = () => ThincoderPathSetting.parse(
+      files.settings[ThincoderPathSetting.settingKey],
+    );
     // Settings → Models: the upstreams, kept in settings.json.
     ModelProviders.current = ModelProviders.settings(files.settings);
     // Claude Code's own models as it last listed them: in the picker
@@ -345,6 +353,7 @@ Future<void> main(List<String> arguments) async {
       diagnostics: DiagnosticsUploader.platform(),
       workspace: workspace,
       claudeStatus: localClaudeStatus,
+      thincoderStatus: thincoderStatus,
       link: link,
       customizations: customizations,
     );
@@ -560,6 +569,7 @@ class _BaoCodeAppState extends State<BaoCodeApp> {
       }
       await Future.wait([
         stopClaudeProcesses(),
+        stopThincoderProcesses(),
         RemoteClaudeTransport.stopAll(),
         stopModelProxy(),
         stopLspProcesses(),

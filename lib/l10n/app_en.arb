@@ -6388,13 +6388,14 @@
     "description": "Tooltip and menu title of the branch picker under the chat input of a multi-folder workspace."
   },
   "settingsSectionAccounts": "Accounts",
-  "settingsAccountsKeywords": "GitHub GitLab sign in login token issue pull request merge request",
-  "accountsDescription": "Sign in to GitHub or GitLab to see the state of the issues and pull requests linked in Stash, import issues as stashes, and reply to them once you confirm.",
+  "settingsAccountsKeywords": "GitHub GitLab Gitee sign in login token issue pull request merge request",
+  "accountsDescription": "Sign in to GitHub, GitLab or Gitee to see the state of the issues and pull requests linked in Stash, import issues as stashes, and reply to them once you confirm.",
   "accountsSignedIn": "Signed in",
   "accountsAdd": "Add an account",
-  "accountsKeptLocally": "Tokens are kept in this computer's keychain and are sent only to the GitHub or GitLab they are for. Nothing is posted without your confirmation.",
+  "accountsKeptLocally": "Tokens are kept in this computer's keychain and are sent only to the GitHub, GitLab or Gitee they are for. Nothing is posted without your confirmation.",
   "accountsGitHubHosts": "github.com, or your company's GitHub Enterprise",
   "accountsGitLabHosts": "gitlab.com, or a self-managed GitLab",
+  "accountsGiteeHosts": "gitee.com",
   "accountsSignInBrowser": "Sign in with Browser",
   "accountsSignInToken": "Use a Token…",
   "accountsViaBrowser": "signed in with browser",
@@ -6440,6 +6441,7 @@
   "accountsToken": "Token",
   "accountsTokenGitHubScopes": "A classic token with the repo and read:user scopes, or a fine-grained token with read and write access to issues and pull requests.",
   "accountsTokenGitLabScopes": "A personal access token with the api scope.",
+  "accountsTokenGiteeScopes": "A personal access token with the user_info, projects, issues, pull_requests and notes scopes.",
   "accountsTokenCreate": "Create a Token on {host}",
   "@accountsTokenCreate": {
     "placeholders": {
@@ -6573,7 +6575,7 @@
   },
   "stashImportPaste": "Paste an issue or pull request link",
   "stashImportAdd": "Add",
-  "stashImportNotALink": "Not a GitHub or GitLab issue or pull request link.",
+  "stashImportNotALink": "Not a GitHub, GitLab or Gitee issue or pull request link.",
   "stashImportSignIn": "Sign in to {forge} in Settings → Accounts to list its issues.",
   "@stashImportSignIn": {
     "placeholders": {
@@ -6588,7 +6590,7 @@
   "stashImportAll": "All open",
   "stashImportSearch": "Search",
   "stashImportLoading": "Loading…",
-  "stashImportNoRepos": "No project has a GitHub or GitLab remote. Paste an issue link above.",
+  "stashImportNoRepos": "No project has a GitHub, GitLab or Gitee remote. Paste an issue link above.",
   "stashImportNone": "No open issues here.",
   "stashImportKnown": "in Stash #{id}",
   "@stashImportKnown": {
@@ -6622,7 +6624,7 @@
   "stashWelcomeAgentTitle": "Hand it to an agent",
   "stashWelcomeAgent": "Click Implement in BaoCode, or mention it in a conversation; the conversation and the stash stay linked.",
   "stashWelcomeTrackTitle": "See how it goes",
-  "stashWelcomeTrack": "Cards show their conversations live, and the GitHub and GitLab issues and pull requests they link to stay in sync.",
+  "stashWelcomeTrack": "Cards show their conversations live, and the GitHub, GitLab or Gitee issues and pull requests they link to stay in sync.",
   "stashWelcomeStart": "Get Started",
   "stashWelcomeNoteBody": "Text, screenshots and links all go in, and each one gets a number of its own, like an issue.",
   "stashWelcomeHotkeyTitle": "Set a shortcut to note things down",

@@ -8307,11 +8307,11 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get settingsAccountsKeywords =>
-      'GitHub GitLab 登录 令牌 token issue PR 合并请求';
+      'GitHub GitLab Gitee 登录 令牌 token issue PR 合并请求';
 
   @override
   String get accountsDescription =>
-      '登录 GitHub 或 GitLab 后，Stash 中链接的 issue 和 PR 会显示最新状态，可以把 issue 导入为 Stash，并在你确认后回帖。';
+      '登录 GitHub、GitLab 或 Gitee 后，Stash 中链接的 issue 和 PR 会显示最新状态，可以把 issue 导入为 Stash，并在你确认后回帖。';
 
   @override
   String get accountsSignedIn => '已登录';
@@ -8321,13 +8321,16 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get accountsKeptLocally =>
-      '令牌只保存在本机钥匙串里，只会发给对应的 GitHub 或 GitLab。未经你确认，不会发布任何内容。';
+      '令牌只保存在本机钥匙串里，只会发给对应的 GitHub、GitLab 或 Gitee。未经你确认，不会发布任何内容。';
 
   @override
   String get accountsGitHubHosts => 'github.com，或公司的 GitHub Enterprise';
 
   @override
   String get accountsGitLabHosts => 'gitlab.com，或自建的 GitLab';
+
+  @override
+  String get accountsGiteeHosts => 'gitee.com';
 
   @override
   String get accountsSignInBrowser => '在浏览器中登录';
@@ -8379,6 +8382,10 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get accountsTokenGitLabScopes => '需要勾选 api 范围的个人访问令牌。';
+
+  @override
+  String get accountsTokenGiteeScopes =>
+      '需要勾选 user_info、projects、issues、pull_requests、notes 范围的个人访问令牌。';
 
   @override
   String accountsTokenCreate(String host) {
@@ -8543,7 +8550,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get stashImportAdd => '添加';
 
   @override
-  String get stashImportNotALink => '不是 GitHub 或 GitLab 的 issue / PR 链接。';
+  String get stashImportNotALink => '不是 GitHub、GitLab 或 Gitee 的 issue / PR 链接。';
 
   @override
   String stashImportSignIn(String forge) {
@@ -8570,7 +8577,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get stashImportNoRepos =>
-      '没有项目的 Git 远程在 GitHub 或 GitLab 上，可以在上面粘贴 issue 链接。';
+      '没有项目的 Git 远程在 GitHub、GitLab 或 Gitee 上，可以在上面粘贴 issue 链接。';
 
   @override
   String get stashImportNone => '这里没有打开的 issue。';
@@ -8616,7 +8623,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get stashWelcomeTrack =>
-      '卡片上实时显示对话状态，链接的 GitHub、GitLab issue 和 PR 也会同步状态。';
+      '卡片上实时显示对话状态，链接的 GitHub、GitLab 或 Gitee issue 和 PR 也会同步状态。';
 
   @override
   String get stashWelcomeStart => '开始使用';

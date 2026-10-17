@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:baocode/ide/ide_notifications.dart';
 import 'package:baocode/kernel/commit_attribution.dart';
+import 'package:baocode/kernel/thincoder/thincoder_locator.dart';
 import 'package:baocode/keybindings/import_dialog.dart';
 import 'package:bao_editor/monaco/flutter/keybinding_entry.dart';
 import 'package:baocode/keybindings/keybinding_service.dart';
@@ -54,8 +55,11 @@ void main() {
     await home.delete(recursive: true);
   });
 
-  /// Makes the settings over the data folder, its files as they are now.
-  Future<void> start() async {
+  /// Makes the settings over the data folder, its files as they are now;
+  /// [thincoderStatus] stands in for the machine's own thincoder.
+  Future<void> start({
+    Future<ThincoderStatus> Function()? thincoderStatus,
+  }) async {
     files = SettingsFiles(DataDirectory(data.path));
     await files.load();
     final catalog = KeymapCatalog(
@@ -77,6 +81,7 @@ void main() {
         environment: {'HOME': home.path},
         platform: KeybindingPlatform.mac,
       ),
+      thincoderStatus: thincoderStatus,
     );
   }
 
@@ -370,6 +375,52 @@ void main() {
     await settle(
       tester,
       () => !files.settings.values.containsKey(MainWindow.settingKey),
+    );
+  }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+
+  testWidgets('Settings → General: the thincoder to run, where it stands, '
+      'and the path it is set to', (tester) async {
+    await tester.runAsync(() async {
+      // Where thincoder stands, as main() reads it: the path set, or none.
+      Future<ThincoderStatus> status() async => switch (
+        files.settings[ThincoderPathSetting.settingKey]
+      ) {
+        final String path => ThincoderFound(path, '0.12.74'),
+        _ => const ThincoderMissing(),
+      };
+      await start(thincoderStatus: status);
+    });
+    await pumpApp(tester);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.comma);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+    await tester.pumpAndSettle();
+    expect(find.byType(GeneralSettingsPage), findsOneWidget);
+    expect(find.text('Automatic'), findsOneWidget);
+    expect(find.textContaining('None found yet'), findsOneWidget);
+
+    final field = find.descendant(
+      of: find.bySemanticsLabel('thincoder Path'),
+      matching: find.byType(EditableText),
+    );
+    await tester.ensureVisible(field);
+    await tester.tap(field);
+    await tester.enterText(field, '/opt/thincoder');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await settle(
+      tester,
+      () =>
+          files.settings[ThincoderPathSetting.settingKey] == '/opt/thincoder',
+    );
+    expect(
+      File(files.settings.path).readAsStringSync(),
+      contains('"thincoder.path": "/opt/thincoder"'),
+    );
+    // Read again with the path set: the row says which one it found.
+    await settle(
+      tester,
+      () =>
+          find.text('In use: /opt/thincoder (0.12.74)').evaluate().isNotEmpty,
     );
   }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
 

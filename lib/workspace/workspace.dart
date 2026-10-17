@@ -289,9 +289,13 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
     await (_restoring = _restore());
     var complete = true;
     final listed = <String>{};
+    // What each kernel's own projects() listed, by kernel: one kernel's
+    // projects are not another's, so their folders are kept apart.
+    final covered = <KernelDescriptor, Set<String>>{};
     for (final kernel in kernels) {
       final catalog = kernel.catalog;
       if (catalog == null) continue;
+      final paths = covered[kernel] = <String>{};
       List<ProjectRecord> records;
       try {
         records = await catalog.projects();
@@ -301,6 +305,7 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
       }
       for (final record in records) {
         listed.add(record.path);
+        paths.add(record.path);
         final project = _project(record.path);
         for (final session in record.sessions) {
           _addKept(kernel, project, session);
@@ -311,17 +316,25 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
     for (final workspace in _workspaces.values) {
       _project(workspace.path);
     }
+    var listedOneByOne = false;
     for (final folder in _folders) {
-      if (listed.contains(folder)) continue;
+      final pending = kernels
+          .where((kernel) =>
+              kernel.catalog != null && !covered[kernel]!.contains(folder))
+          .toList();
+      if (pending.isEmpty) continue;
+      listedOneByOne = true;
       final project = _project(folder);
-      // A remote project's sessions are its host's: no catalog lists them
-      // with this machine's, so they are asked for there (not waited for).
-      if (RemoteLocation.isRemote(folder)) unawaited(_listKept(project));
+      // A remote project's sessions are its host's, and a thincoder
+      // project's are its own process's: no catalog lists them with this
+      // machine's, so they are asked for here (not waited for).
+      unawaited(_listKept(project, kernels: pending));
     }
     // Only once all were read: what one failed to list is not gone. Nor
-    // while remote projects' sessions are still to be listed (or cannot
-    // be, their host away): what is kept of those must stay.
-    if (complete && !_folders.any(RemoteLocation.isRemote)) {
+    // while projects listed one by one (a remote host's, a thincoder
+    // project's) are still to be listed (or cannot be, their host away):
+    // what is kept of those must stay.
+    if (complete && !listedOneByOne) {
       _forgetGone(listed);
     }
     _loading = false;
@@ -415,11 +428,14 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
     return project;
   }
 
-  /// Lists the sessions the kernels keep in [project]. Not waited for: to
-  /// find them, Claude Code's are all read, which may take a while.
-  Future<void> _listKept(Project project) async {
+  /// Lists the sessions the kernels keep in [project]: [kernels], all of
+  /// them by default. Not waited for: Claude Code's are all read.
+  Future<void> _listKept(
+    Project project, {
+    List<KernelDescriptor>? kernels,
+  }) async {
     final before = _threads.length;
-    for (final kernel in kernels) {
+    for (final kernel in kernels ?? this.kernels) {
       final List<SessionRecord> sessions;
       try {
         sessions = await kernel.catalog?.sessionsIn(project.path) ?? const [];
@@ -1037,9 +1053,14 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
     notifyListeners();
   }
 
-  /// The kernel a new agent starts with: the last one picked.
+  /// The kernel a new agent starts with: the one the user picked, or the
+  /// first of those on offer.
   KernelDescriptor get preferredKernel => _preferredKernel;
   KernelDescriptor _preferredKernel;
+
+  /// Whether the user ever picked one: a version that offered a single
+  /// kernel kept `kernel` without anyone picking it.
+  bool _kernelChosen = false;
 
   /// The mode, model, context and effort a new agent starts with: the
   /// last ones picked.
@@ -1894,8 +1915,11 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
           if ((key, value) case (final String key, final String value))
             key: value,
     };
+    // A `kernel` kept by a version that offered only one was not picked
+    // by the user; the one they picked is the only one followed.
+    _kernelChosen = kept['kernelChosen'] == true;
     if (kernels.where((k) => k.id == kept['kernel']).firstOrNull
-        case final kernel?) {
+        case final kernel? when _kernelChosen) {
       _preferredKernel = kernel;
     }
     // The file manager was kept as `finder` before it was `folder`.
@@ -2022,6 +2046,7 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
   void _save() => unawaited(
     _store?.write({
       'kernel': _preferredKernel.id,
+      if (_kernelChosen) 'kernelChosen': true,
       'editor': _preferredEditor.name,
       'layout': _layout.name,
       'settings': _settings,
@@ -2193,6 +2218,7 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
       // Picked for this agent: the next new one starts with it too.
       if (before.kernel != snapshot.kernel) {
         _preferredKernel = thread.kernel;
+        _kernelChosen = true;
         changed = true;
       }
       void remember(KernelChoiceKind kind, String? was, String? now) {

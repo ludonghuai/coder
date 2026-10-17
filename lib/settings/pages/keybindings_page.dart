@@ -100,8 +100,9 @@ class KeybindingsSettingsPage extends StatefulWidget {
   /// Opens the import from VS Code or Cursor.
   final VoidCallback? onImport;
 
-  /// A row: the title, and the command's id under it.
-  static const rowHeight = 38.0;
+  /// A row: the title, and the command's id under it. 42: the two lines
+  /// take 40 under Windows' text metrics, with two to spare.
+  static const rowHeight = 42.0;
 
   @override
   State<KeybindingsSettingsPage> createState() =>

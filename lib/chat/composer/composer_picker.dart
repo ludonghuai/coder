@@ -825,8 +825,10 @@ class ComposerPickerState extends State<ComposerPicker> {
   /// Settings open this far from the menu's edge.
   static const _settingsGap = 4.0;
 
+  /// Both lines of a described row (its label, its description below) take
+  /// 44: 40 was two pixels short of what Windows' text metrics need.
   double get _rowHeight =>
-      widget.describes && !widget.descriptionAside ? 40 : 30;
+      widget.describes && !widget.descriptionAside ? 44 : 30;
 
   /// As upstream's action widget, its pickers' menu: in a context menu's
   /// colors ([IdeMenuColors]), as the other dropdowns.

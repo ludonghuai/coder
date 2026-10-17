@@ -16,6 +16,7 @@ class ForgeLogo extends StatelessWidget {
   const ForgeLogo(this.kind, {super.key, this.size = 16, this.color});
 
   static const gitlabAsset = 'assets/branding/gitlab.svg';
+  static const giteeAsset = 'assets/branding/gitee.svg';
 
   final ForgeKind kind;
   final double size;
@@ -31,6 +32,18 @@ class ForgeLogo extends StatelessWidget {
         child: Center(
           child: SvgPicture.asset(
             gitlabAsset,
+            width: size * .875,
+            colorFilter: color == null
+                ? null
+                : ColorFilter.mode(color, BlendMode.srcIn),
+          ),
+        ),
+      ),
+      ForgeKind.gitee => SizedBox.square(
+        dimension: size,
+        child: Center(
+          child: SvgPicture.asset(
+            giteeAsset,
             width: size * .875,
             colorFilter: color == null
                 ? null

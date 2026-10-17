@@ -2183,68 +2183,77 @@ class IdeScmViewState extends State<IdeScmView>
       onContextMenu: (position) =>
           unawaited(_repositoryMenu(git, position, null)),
       tooltip: root,
-      builder: (context, hovered) => Padding(
-        padding: const EdgeInsets.only(left: 8, right: 12),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 22,
-              child: Transform.translate(
-                offset: const Offset(3, 0),
-                child: Icon(
-                  collapsed ? Codicons.chevronRight : Codicons.chevronDown,
-                  size: 16,
-                  color: themeColors['sideBar.foreground'],
-                ),
-              ),
-            ),
-            // The name, then its branch, cut short in turn when there is
-            // no room.
-            Expanded(
-              child: Row(
-                children: [
-                  Flexible(
-                    child: Text(
-                      p.basename(root),
-                      maxLines: 1,
-                      softWrap: false,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                      ),
+      builder: (context, hovered) => LayoutBuilder(
+        builder: (context, constraints) {
+          // Narrow: the actions would overflow the header — they wait in its
+          // menu, and the name keeps the room.
+          final roomy = constraints.maxWidth >= 220;
+          return Padding(
+            padding: const EdgeInsets.only(left: 8, right: 12),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 22,
+                  child: Transform.translate(
+                    offset: const Offset(3, 0),
+                    child: Icon(
+                      collapsed ? Codicons.chevronRight : Codicons.chevronDown,
+                      size: 16,
+                      color: themeColors['sideBar.foreground'],
                     ),
                   ),
-                  if (git.state case final state?)
-                    if (_headLabel(state) case final label?)
-                      Flexible(child: _RepositoryBranch(label)),
+                ),
+                // The name, then its branch, cut short in turn when there is
+                // no room.
+                Expanded(
+                  child: Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          p.basename(root),
+                          maxLines: 1,
+                          softWrap: false,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      if (git.state case final state?)
+                        if (_headLabel(state) case final label?)
+                          Flexible(child: _RepositoryBranch(label)),
+                    ],
+                  ),
+                ),
+                if (roomy) ...[
+                  _InlineAction(
+                    icon: Codicons.check,
+                    tooltip: _withCommitKeys(l10n.scmCommit),
+                    onPressed: () => unawaited(_commit(repo: git)),
+                  ),
+                  _InlineAction(
+                    icon: Codicons.repoFetch,
+                    tooltip: l10n.scmFetch,
+                    onPressed: () => unawaited(_run(git.fetch)),
+                  ),
+                  _InlineAction(
+                    icon: Codicons.refresh,
+                    tooltip: l10n.commonRefresh,
+                    onPressed: () => unawaited(_run(git.refresh)),
+                  ),
+                  _InlineAction(
+                    icon: Codicons.ellipsis,
+                    tooltip: l10n.commonMoreActions,
+                    onPressed: () => unawaited(
+                      _repositoryMenu(git, Offset.zero, _rowEndAnchor(context)),
+                    ),
+                  ),
                 ],
-              ),
+              ],
             ),
-            _InlineAction(
-              icon: Codicons.check,
-              tooltip: _withCommitKeys(l10n.scmCommit),
-              onPressed: () => unawaited(_commit(repo: git)),
-            ),
-            _InlineAction(
-              icon: Codicons.repoFetch,
-              tooltip: l10n.scmFetch,
-              onPressed: () => unawaited(_run(git.fetch)),
-            ),
-            _InlineAction(
-              icon: Codicons.refresh,
-              tooltip: l10n.commonRefresh,
-              onPressed: () => unawaited(_run(git.refresh)),
-            ),
-            _InlineAction(
-              icon: Codicons.ellipsis,
-              tooltip: l10n.commonMoreActions,
-              onPressed: () => unawaited(
-                _repositoryMenu(git, Offset.zero, _rowEndAnchor(context)),
-              ),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -2342,43 +2351,49 @@ class IdeScmViewState extends State<IdeScmView>
           ]),
         ),
       ),
-      builder: (context, hovered) => Padding(
-        padding: EdgeInsets.only(left: indent + 8, right: 12),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 22,
-              child: Transform.translate(
-                offset: const Offset(3, 0),
-                child: Icon(
-                  collapsed ? Codicons.chevronRight : Codicons.chevronDown,
-                  size: 16,
-                  color: themeColors['sideBar.foreground'],
+      builder: (context, hovered) => LayoutBuilder(
+        builder: (context, constraints) {
+          // Narrow: the hover actions would overflow the group row.
+          final roomy = constraints.maxWidth >= 220;
+          return Padding(
+            padding: EdgeInsets.only(left: indent + 8, right: 12),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 22,
+                  child: Transform.translate(
+                    offset: const Offset(3, 0),
+                    child: Icon(
+                      collapsed ? Codicons.chevronRight : Codicons.chevronDown,
+                      size: 16,
+                      color: themeColors['sideBar.foreground'],
+                    ),
+                  ),
                 ),
-              ),
+                Expanded(
+                  child: Text(
+                    group.localizedLabel(context.l10n),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: themeColors['sideBar.foreground'],
+                    ),
+                  ),
+                ),
+                if (roomy && hovered)
+                  for (final action in actions)
+                    _InlineAction(
+                      icon: action.icon,
+                      tooltip: action.label,
+                      onPressed: action.run,
+                    ),
+                const SizedBox(width: 6),
+                IdeTitleBadge(resources.length),
+              ],
             ),
-            Expanded(
-              child: Text(
-                group.localizedLabel(context.l10n),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: themeColors['sideBar.foreground'],
-                ),
-              ),
-            ),
-            if (hovered)
-              for (final action in actions)
-                _InlineAction(
-                  icon: action.icon,
-                  tooltip: action.label,
-                  onPressed: action.run,
-                ),
-            const SizedBox(width: 6),
-            IdeTitleBadge(resources.length),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -2628,39 +2643,50 @@ class IdeScmViewState extends State<IdeScmView>
         _selectForMenu(key);
         unawaited(_showResourceMenu(position, git, state, resource, targets()));
       },
-      builder: (context, hovered) => Padding(
-        padding: EdgeInsets.only(
-          left:
-              indent +
-              (treeDepth == null ? 16 : 8.0 + (treeDepth - 1) * 8 + 22),
-          right: 12,
-        ),
-        child: Row(
-          children: [
-            FileIcon(resource.path),
-            const SizedBox(width: 6),
-            Expanded(
-              child: IdeResourceLabel(
-                name: p.basename(resource.path),
-                description: treeDepth != null || folder == '.' ? null : folder,
-                strikeThrough: resource.status.strikeThrough,
-                letter: resource.status.letter,
-                letterColor: resource.status.color,
-                actions: [
-                  if (hovered ||
-                      ((_selected == key || _isSelected(key)) &&
-                          _listFocus.hasFocus))
-                    for (final action in actions)
-                      _InlineAction(
-                        icon: action.icon,
-                        tooltip: action.label,
-                        onPressed: action.run,
-                      ),
-                ],
-              ),
+      builder: (context, hovered) => LayoutBuilder(
+        builder: (context, constraints) {
+          // In a narrow panel the hover actions would overflow the row — they
+          // are fixed width beside a name that shrinks: below this the row
+          // keeps its name and letter, and the actions wait in its menu.
+          final roomy = constraints.maxWidth >= 220;
+          return Padding(
+            padding: EdgeInsets.only(
+              left:
+                  indent +
+                  (treeDepth == null ? 16 : 8.0 + (treeDepth - 1) * 8 + 22),
+              right: 12,
             ),
-          ],
-        ),
+            child: Row(
+              children: [
+                FileIcon(resource.path),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: IdeResourceLabel(
+                    name: p.basename(resource.path),
+                    description: treeDepth != null || folder == '.'
+                        ? null
+                        : folder,
+                    strikeThrough: resource.status.strikeThrough,
+                    letter: resource.status.letter,
+                    letterColor: resource.status.color,
+                    actions: [
+                      if (roomy &&
+                          (hovered ||
+                              ((_selected == key || _isSelected(key)) &&
+                                  _listFocus.hasFocus)))
+                        for (final action in actions)
+                          _InlineAction(
+                            icon: action.icon,
+                            tooltip: action.label,
+                            onPressed: action.run,
+                          ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
     // A deleted file is not there to put in.

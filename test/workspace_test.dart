@@ -64,6 +64,33 @@ class FakeCatalog implements SessionCatalog {
   Future<void> delete(String id) async => deleted.add(id);
 }
 
+/// The sessions one kernel keeps, listed a directory at a time: nothing is
+/// enumerated as a project (a kernel with no cross-project listing has
+/// this shape — its sessions are only listed where they are asked for).
+class _DirectoryCatalog implements SessionCatalog {
+  _DirectoryCatalog({this.sessions = const [], this.listings});
+
+  final List<SessionRecord> sessions;
+
+  /// The directories it was asked for, in order.
+  final List<String>? listings;
+
+  @override
+  Future<List<ProjectRecord>> projects() async => const [];
+
+  @override
+  Future<List<SessionRecord>> sessionsIn(String cwd) async {
+    listings?.add(cwd);
+    return [
+      for (final session in sessions)
+        if (session.cwd == cwd) session,
+    ];
+  }
+
+  @override
+  Future<void> delete(String id) async {}
+}
+
 final KernelDescriptor claude = KernelDescriptor(
   id: 'claude-code',
   label: 'Claude Code',
@@ -83,13 +110,14 @@ Future<Workspace> pumpLoaded(
   PreferenceStore? preferences,
   PreferenceStore? drafts,
   KernelDescriptor? kernel,
+  List<KernelDescriptor>? kernels,
   AgentTitler? titler,
 }) async {
   tester.view.physicalSize = const Size(1400, 900);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   final workspace = Workspace(
-    kernels: [kernel ?? claude],
+    kernels: kernels ?? [kernel ?? claude],
     preferences: preferences,
     drafts: drafts,
     titler: titler,
@@ -685,8 +713,8 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
   });
 
-  testWidgets('marks are dropped with the sessions gone, not when the '
-      'catalog could not be read', (tester) async {
+  testWidgets('marks stay while sessions are still to be listed, and with a '
+      'catalog that could not be read', (tester) async {
     final store = MemoryPreferenceStore({
       'sidebar': {
         'pinned': [FakeCatalog.kept.id, 'gone'],
@@ -717,12 +745,17 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     await pumpLoaded(tester, preferences: store);
     final sidebar = store.preferences['sidebar'] as Map;
-    expect(sidebar['pinned'], [FakeCatalog.kept.id]);
-    expect(sidebar['archived'], isEmpty);
-    // The catalog lists the name now: it is the CLI's.
-    expect(sidebar['names'], isEmpty);
-    // Listed by the catalog now.
-    expect(sidebar['folders'], ['/tmp/opened']);
+    // One folder is beyond what the catalog lists, so it is still to be
+    // listed one by one; and what is not listed is not gone: nothing is
+    // dropped while a listing is under way (§14-11). The marks of the
+    // sessions not listed stay, and so does the folder.
+    expect(sidebar['pinned'], [FakeCatalog.kept.id, 'gone']);
+    expect(sidebar['archived'], ['gone']);
+    expect(sidebar['names'], {
+      FakeCatalog.kept.id: FakeCatalog.kept.title,
+      'gone': 'x',
+    });
+    expect(sidebar['folders'], ['/tmp/project', '/tmp/opened']);
   });
 
   testWidgets('back in the app, sessions started elsewhere are listed', (
@@ -767,6 +800,57 @@ void main() {
     expect(workspace.threads.length, before + 1);
     ours.stop();
     await tester.pump(const Duration(seconds: 1));
+  });
+
+  testWidgets('a folder one kernel listed is still listed for another', (
+    tester,
+  ) async {
+    final listings = <String>[];
+    late final KernelDescriptor other;
+    other = KernelDescriptor(
+      id: 'other',
+      label: 'Other',
+      icon: Icons.smart_toy_outlined,
+      description: '',
+      catalog: _DirectoryCatalog(
+        listings: listings,
+        sessions: [
+          SessionRecord(
+            id: 'started-elsewhere',
+            title: 'Started in the other agent',
+            updatedAt: DateTime(2026, 9, 28),
+            cwd: '/tmp/project',
+          ),
+        ],
+      ),
+      create: (context) => ClaudeCodeKernel(
+        other,
+        context,
+        start: MockClaudeCodeTransport.start,
+        readHistory: _readHistory,
+      ),
+    );
+    final store = MemoryPreferenceStore({
+      'sidebar': {
+        'folders': ['/tmp/project'],
+      },
+    });
+    final workspace = await pumpLoaded(
+      tester,
+      preferences: store,
+      kernels: [claude, other],
+    );
+    await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+    await tester.pump();
+
+    // The first kernel listed the project; the one that does not enumerate
+    // its projects is asked all the same, and its session is listed: what
+    // one kernel listed is not another's.
+    expect(listings, ['/tmp/project']);
+    expect(
+      workspace.threads.map((thread) => thread.record?.id),
+      containsAll([FakeCatalog.kept.id, 'started-elsewhere']),
+    );
   });
 
   group('the IDE', () {

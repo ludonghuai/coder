@@ -18,9 +18,9 @@ import '../../workspace/editor_launcher.dart' show openExternal;
 import 'model_dialogs.dart';
 import 'settings_widgets.dart';
 
-/// Settings → Accounts: the GitHub and GitLab accounts the stashes' issues
-/// and pull requests are asked of (docs/stash.md), signed in from the
-/// browser or with a token; signed out here.
+/// Settings → Accounts: the GitHub, GitLab and Gitee accounts the stashes'
+/// issues and pull requests are asked of (docs/stash.md), signed in with a
+/// token (a GitHub's or a GitLab's from the browser too); signed out here.
 class AccountsSettingsPage extends StatelessWidget {
   const AccountsSettingsPage({super.key, this.accounts});
 
@@ -62,6 +62,7 @@ class AccountsSettingsPage extends StatelessWidget {
                   description: switch (kind) {
                     ForgeKind.github => l10n.accountsGitHubHosts,
                     ForgeKind.gitlab => l10n.accountsGitLabHosts,
+                    ForgeKind.gitee => l10n.accountsGiteeHosts,
                   },
                   trailing: SettingsButtons(
                     children: [
@@ -160,6 +161,11 @@ Uri forgeRevokePage(ForgeAccount account) =>
         account.host,
         '/-/user_settings/personal_access_tokens',
       ),
+      // Gitee signs in with a token alone: one page for both.
+      (ForgeKind.gitee, _) => Uri.https(
+        account.host,
+        '/profile/personal_access_tokens',
+      ),
     };
 
 /// Where a token for BaoCode is made on [host], what it needs checked.
@@ -173,6 +179,8 @@ Uri forgeNewTokenPage(ForgeKind kind, String host) => switch (kind) {
     '/-/user_settings/personal_access_tokens',
     {'name': 'BaoCode', 'scopes': 'api'},
   ),
+  // Its own page takes no parameters (none are known to it yet).
+  ForgeKind.gitee => Uri.https(host, '/profile/personal_access_tokens'),
 };
 
 TextStyle _text({Color? color, double size = 13}) => TextStyle(
@@ -321,6 +329,7 @@ class _ForgeTokenDialogState extends State<ForgeTokenDialog> {
             Text(switch (kind) {
               ForgeKind.github => l10n.accountsTokenGitHubScopes,
               ForgeKind.gitlab => l10n.accountsTokenGitLabScopes,
+              ForgeKind.gitee => l10n.accountsTokenGiteeScopes,
             }, style: _muted()),
             const SizedBox(height: 8),
             Align(

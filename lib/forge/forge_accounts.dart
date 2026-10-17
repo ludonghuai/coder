@@ -1,9 +1,9 @@
-// The user's accounts on forges (GitHub, GitLab; theirs, or a company's
-// own): signed in from the browser (OAuth's device flow, no secret on
-// this machine but the token) or with a token they made. The tokens are
-// kept in the system's keychain (SecretStore), the rest in the app's
-// global storage. Nothing is written to a forge but what the user
-// confirms (docs/stash.md).
+// The user's accounts on forges (GitHub, GitLab, Gitee; theirs, or a
+// company's own): signed in from the browser (OAuth's device flow, no secret
+// on this machine but the token) or with a token they made. The tokens are
+// kept in the system's keychain (SecretStore), the rest in the app's global
+// storage. Nothing is written to a forge but what the user confirms
+// (docs/stash.md).
 
 import 'dart:async';
 import 'dart:convert';
@@ -23,6 +23,10 @@ const gitlabClientId = '';
 /// requests, private ones too, to read and comment), GitLab's `api`.
 const _githubScopes = 'repo read:user';
 const _gitlabScopes = 'api';
+
+/// Gitee signs in with a token alone: it has no device flow to sign in
+/// from the browser with.
+const _giteeNoDeviceFlow = 'Gitee signs in with a token only.';
 
 /// Where the accounts are kept in the app's global storage (their
 /// tokens are in the keychain).
@@ -201,6 +205,7 @@ class ForgeAccounts extends ChangeNotifier {
       switch (kind) {
         ForgeKind.github => githubClient.isNotEmpty,
         ForgeKind.gitlab => gitlabClient.isNotEmpty,
+        ForgeKind.gitee => false,
       };
 
   static String _secretId(String host) => 'forge.$host';
@@ -221,6 +226,7 @@ class ForgeAccounts extends ChangeNotifier {
         http: http,
         token: token,
       ),
+      ForgeKind.gitee => GiteeApi(host: account.host, http: http, token: token),
     };
   }
 
@@ -281,6 +287,7 @@ class ForgeAccounts extends ChangeNotifier {
     final api = switch (kind) {
       ForgeKind.github => GitHubApi(host: host, http: http, token: access),
       ForgeKind.gitlab => GitLabApi(host: host, http: http, token: access),
+      ForgeKind.gitee => GiteeApi(host: host, http: http, token: access),
     };
     final me = await api.me();
     await _secrets.write(_secretId(host), token.encode());
@@ -328,16 +335,19 @@ class ForgeAccounts extends ChangeNotifier {
       switch (kind) {
         ForgeKind.github => Uri.https(host, '/login/device/code'),
         ForgeKind.gitlab => Uri.https(host, '/oauth/authorize_device'),
+        ForgeKind.gitee => throw const ForgeException(_giteeNoDeviceFlow),
       },
       headers: const {'Accept': 'application/json'},
       form: {
         'client_id': switch (kind) {
           ForgeKind.github => githubClient,
           ForgeKind.gitlab => gitlabClient,
+          ForgeKind.gitee => throw const ForgeException(_giteeNoDeviceFlow),
         },
         'scope': switch (kind) {
           ForgeKind.github => _githubScopes,
           ForgeKind.gitlab => _gitlabScopes,
+          ForgeKind.gitee => throw const ForgeException(_giteeNoDeviceFlow),
         },
       },
     );
@@ -391,12 +401,14 @@ class ForgeAccounts extends ChangeNotifier {
         switch (code.kind) {
           ForgeKind.github => Uri.https(code.host, '/login/oauth/access_token'),
           ForgeKind.gitlab => Uri.https(code.host, '/oauth/token'),
+          ForgeKind.gitee => throw const ForgeException(_giteeNoDeviceFlow),
         },
         headers: const {'Accept': 'application/json'},
         form: {
           'client_id': switch (code.kind) {
             ForgeKind.github => githubClient,
             ForgeKind.gitlab => gitlabClient,
+            ForgeKind.gitee => throw const ForgeException(_giteeNoDeviceFlow),
           },
           'device_code': code.deviceCode,
           'grant_type': 'urn:ietf:params:oauth:grant-type:device_code',

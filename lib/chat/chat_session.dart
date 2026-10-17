@@ -458,7 +458,10 @@ class ChatSession extends ChangeNotifier implements ChatFeed {
     }
   }
 
-  bool get acceptsImages => _kernel is AcceptsImages;
+  /// Whether pictures sent with a message are taken: by the protocol
+  /// ([AcceptsImages]), or as files it is told of ([AcceptsImageFiles]).
+  bool get acceptsImages =>
+      _kernel is AcceptsImages || _kernel is AcceptsImageFiles;
 
   /// What the user would likely send next: offered while the agent waits
   /// for them.
@@ -641,16 +644,16 @@ class ChatSession extends ChangeNotifier implements ChatFeed {
   }
 
   /// Tasks running beside the conversation, gone once they end (their
-  /// outcome stays on their step); null when the kernel runs none.
+  /// outcome stays on their step); null when none runs.
   List<KernelTask>? get tasks {
-    if (_kernel is! RunsBackgroundTasks) return null;
-    return _cached(
+    final running = _cached(
       #tasks,
       () => [
         for (final task in _transcript.tasks)
           if (task.background && task.status == CommandStatus.running) task,
       ],
     );
+    return running.isEmpty ? null : running;
   }
 
   /// Background commands, including completed ones for their output tabs.
@@ -665,6 +668,11 @@ class ChatSession extends ChangeNotifier implements ChatFeed {
   void stopTask(KernelTask task) {
     if (_kernel case final RunsBackgroundTasks kernel) kernel.stopTask(task.id);
   }
+
+  /// Whether the kernel can stop what runs beside the conversation: the
+  /// ones that cannot (thincoder's subagents — F11) show it with no stop
+  /// button.
+  bool get canStopTasks => _kernel is RunsBackgroundTasks;
 
   /// Moves what the item at [index] runs (a command, a subagent) to the
   /// background, so the turn goes on; null unless the kernel reports it

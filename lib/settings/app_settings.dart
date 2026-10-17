@@ -6,6 +6,7 @@ import '../diagnostics/diagnostics_upload.dart';
 import '../forge/forge_accounts.dart';
 import '../customize/customization_store.dart';
 import '../kernel/claude_code/claude_path_setting.dart';
+import '../kernel/thincoder/thincoder_locator.dart';
 import '../keybindings/import_dialog.dart';
 import '../keybindings/keybinding_service.dart';
 import '../keybindings/keybindings_editing.dart';
@@ -56,6 +57,7 @@ class AppSettings {
     this.diagnostics,
     this.workspace,
     this.claudeStatus,
+    this.thincoderStatus,
     this.link,
     this.customizations,
   }) : keybindings = keybindings ?? KeybindingService.instance;
@@ -93,6 +95,10 @@ class AppSettings {
   /// The Claude Code that runs on this machine, for Settings → General;
   /// none under test, where it is not looked for.
   final Future<LocalClaudeStatus?> Function()? claudeStatus;
+
+  /// The thincoder that runs on this machine, for Settings → General; none
+  /// under test, where it is not looked for.
+  final Future<ThincoderStatus> Function()? thincoderStatus;
 
   /// Claude Code's customizations, for Settings → Customize; none where
   /// there are no files (the web), the page made over the default store.
@@ -138,6 +144,7 @@ class AppSettings {
           settings: files?.settings,
           tips: tips,
           claudeStatus: claudeStatus,
+          thincoderStatus: thincoderStatus,
         );
       case SettingsSection.appearance:
         final themes = WorkbenchThemeService.instance;

@@ -260,6 +260,12 @@ abstract interface class RenamesSession {
 /// Takes pictures with a message ([KernelTurn.images]).
 abstract interface class AcceptsImages {}
 
+/// Takes pictures with a message, saved to files the agent is told of
+/// ([KernelTurn.images], which are written where the agent runs and read
+/// from there): for a kernel whose protocol carries none, which would
+/// otherwise have to claim a capability it does not have.
+abstract interface class AcceptsImageFiles {}
+
 /// Reads the conversation it continues ([KernelContext.resume]) before
 /// showing it.
 abstract interface class LoadsHistory {

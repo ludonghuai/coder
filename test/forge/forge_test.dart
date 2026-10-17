@@ -1,52 +1,10 @@
-import 'dart:convert';
-
 import 'package:baocode/forge/forge_accounts.dart';
 import 'package:baocode/forge/forge_api.dart';
 import 'package:baocode/forge/forge_ref.dart';
 import 'package:baocode/models/secret_store.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// Answers requests by method and URL (its path and query), and keeps
-/// them.
-class FakeForgeHttp implements ForgeHttp {
-  final Map<String, Object? Function(FakeRequest request)> routes = {};
-  final List<FakeRequest> requests = [];
-
-  void on(String method, String url, Object? Function(FakeRequest) answer) =>
-      routes['$method $url'] = answer;
-
-  @override
-  Future<ForgeResponse> send(
-    String method,
-    Uri url, {
-    Map<String, String> headers = const {},
-    Object? json,
-    Map<String, String>? form,
-  }) async {
-    final request = FakeRequest(method, url, headers, json, form);
-    requests.add(request);
-    final key = '$method ${url.toString()}';
-    final route =
-        routes[key] ??
-        routes['$method ${url.replace(query: '').toString().replaceAll('?', '')}'];
-    if (route == null)
-      return const ForgeResponse(404, '{"message":"Not Found"}');
-    return switch (route(request)) {
-      final ForgeResponse response => response,
-      final answer => ForgeResponse(200, jsonEncode(answer)),
-    };
-  }
-}
-
-class FakeRequest {
-  FakeRequest(this.method, this.url, this.headers, this.json, this.form);
-
-  final String method;
-  final Uri url;
-  final Map<String, String> headers;
-  final Object? json;
-  final Map<String, String>? form;
-}
+import 'fake_forge_http.dart';
 
 void main() {
   group('ForgeRef', () {
@@ -57,7 +15,7 @@ void main() {
       expect(issue.repo.kind, ForgeKind.github);
       expect(issue.repo.path, 'baocode-dev/baocode');
       expect(issue.kind, ForgeItemKind.issue);
-      expect(issue.number, 92);
+      expect(issue.number, '92');
       expect(issue.fullTag, 'baocode-dev/baocode#92');
 
       final pull = ForgeRef.parse('https://github.com/o/r/pull/7/files')!;
@@ -156,7 +114,7 @@ void main() {
         },
       );
       final item = await api.item(
-        ForgeRef(repo: repo, kind: ForgeItemKind.issue, number: 3),
+        ForgeRef(repo: repo, kind: ForgeItemKind.issue, number: '3'),
       );
       expect(item.title, 'Uploads fail');
       expect(item.state, ForgeState.open);
@@ -191,7 +149,7 @@ void main() {
           },
         );
       final item = await api.item(
-        ForgeRef(repo: repo, kind: ForgeItemKind.pull, number: 7),
+        ForgeRef(repo: repo, kind: ForgeItemKind.pull, number: '7'),
       );
       expect(item.state, ForgeState.open);
       expect(item.checks, ForgeChecks.failure);
@@ -216,7 +174,7 @@ void main() {
           },
         );
       final item = await api.item(
-        ForgeRef(repo: repo, kind: ForgeItemKind.issue, number: 7),
+        ForgeRef(repo: repo, kind: ForgeItemKind.issue, number: '7'),
       );
       expect(item.ref.kind, ForgeItemKind.pull);
       expect(item.state, ForgeState.merged);
@@ -240,7 +198,7 @@ void main() {
         )
         ..on('PATCH', 'https://api.github.com/repos/o/r/issues/3', (_) => {});
       final issues = await api.issues(repo, query: 'upload');
-      expect(issues.single.ref.number, 3);
+      expect(issues.single.ref.number, '3');
       expect(
         http.requests.last.url.queryParameters['q'],
         'repo:o/r is:issue is:open assignee:@me upload',
@@ -308,7 +266,7 @@ void main() {
         },
       );
       final item = await api.item(
-        ForgeRef(repo: repo, kind: ForgeItemKind.pull, number: 12),
+        ForgeRef(repo: repo, kind: ForgeItemKind.pull, number: '12'),
       );
       expect(item.state, ForgeState.draft);
       expect(item.checks, ForgeChecks.pending);

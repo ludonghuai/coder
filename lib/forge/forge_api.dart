@@ -1,6 +1,7 @@
 // What BaoCode asks a forge, signed in as the user (see forge_accounts):
-// GitHub's REST API (api.github.com, a GitHub Enterprise's /api/v3) and
-// GitLab's (/api/v4). Over [ForgeHttp], which tests answer themselves.
+// GitHub's REST API (api.github.com, a GitHub Enterprise's /api/v3),
+// GitLab's (/api/v4) and Gitee's (/api/v5). Over [ForgeHttp], which tests
+// answer themselves.
 
 import 'dart:convert';
 
@@ -314,7 +315,7 @@ class GitHubApi extends ForgeApi {
     ForgeChecks? checks,
     String? branch,
   }) => ForgeItem(
-    ref: ForgeRef(repo: repo, kind: kind, number: json['number'] as int),
+    ref: ForgeRef(repo: repo, kind: kind, number: '${json['number'] as int}'),
     title: json['title'] as String? ?? '',
     state:
         state ??
@@ -452,7 +453,7 @@ class GitLabApi extends ForgeApi {
     ForgeChecks? checks,
     String? branch,
   }) => ForgeItem(
-    ref: ForgeRef(repo: repo, kind: kind, number: json['iid'] as int),
+    ref: ForgeRef(repo: repo, kind: kind, number: '${json['iid'] as int}'),
     title: json['title'] as String? ?? '',
     state:
         state ??
@@ -523,4 +524,184 @@ class GitLabApi extends ForgeApi {
     '${_project(ref.repo)}/issues/${ref.number}',
     json: {'state_event': 'close'},
   );
+}
+
+/// Gitee's REST API (v5).
+class GiteeApi extends ForgeApi {
+  GiteeApi({required super.host, required super.http, required super.token});
+
+  /// How many issues it asks for, and shows: the two open states' newest
+  /// together.
+  static const _shown = 50;
+
+  @override
+  ForgeKind get kind => ForgeKind.gitee;
+
+  @override
+  Uri get _base => Uri.https(host, '/api/v5');
+
+  @override
+  Map<String, String> _headers(String token) => {
+    'Authorization': 'Bearer $token',
+    'Accept': 'application/json',
+  };
+
+  static String _repoPath(ForgeRepo repo) => '/repos/${repo.path}';
+
+  @override
+  Future<ForgeUser> me() async {
+    final json = await _call('GET', '/user') as Map;
+    return ForgeUser(
+      login: json['login'] as String,
+      name: json['name'] as String?,
+    );
+  }
+
+  @override
+  Future<ForgeItem> item(ForgeRef ref) async {
+    if (ref.kind == ForgeItemKind.issue) {
+      final json = await _call(
+        'GET',
+        '${_repoPath(ref.repo)}/issues/${ref.number}',
+      ) as Map;
+      return _item(ref.repo, json);
+    }
+    final json =
+        await _call('GET', '${_repoPath(ref.repo)}/pulls/${ref.number}') as Map;
+    return _item(
+      ref.repo,
+      json,
+      kind: ForgeItemKind.pull,
+      state: json['merged_at'] != null
+          ? ForgeState.merged
+          : json['state'] == 'closed'
+          ? ForgeState.closed
+          : json['draft'] == true
+          ? ForgeState.draft
+          : ForgeState.open,
+      branch: (json['head'] as Map?)?['ref'] as String?,
+    );
+  }
+
+  ForgeItem _item(
+    ForgeRepo repo,
+    Map json, {
+    ForgeItemKind kind = ForgeItemKind.issue,
+    ForgeState? state,
+    String? branch,
+  }) => ForgeItem(
+    ref: ForgeRef(
+      repo: repo,
+      kind: kind,
+      // An issue's number as Gitee writes it (`IKLL6H`); a pull request's
+      // as the number it is.
+      number: switch (json['number']) {
+        final String number => number,
+        final int number => '$number',
+        _ => '',
+      },
+    ),
+    title: json['title'] as String? ?? '',
+    state:
+        state ??
+        switch (json['state']) {
+          // An issue's open state is two: open, or in progress.
+          'open' || 'progressing' => ForgeState.open,
+          'closed' || 'rejected' => ForgeState.closed,
+          _ => ForgeState.open,
+        },
+    body: json['body'] as String? ?? '',
+    author: (json['user'] as Map?)?['login'] as String?,
+    labels: [
+      for (final label in (json['labels'] as List?) ?? const [])
+        if (label is Map)
+          ForgeLabel(
+            label['name'] as String? ?? '',
+            // Gitee's colors come without the `#`.
+            color: switch (label['color']) {
+              final String color when color.isNotEmpty => '#$color',
+              _ => null,
+            },
+          ),
+    ],
+    assignees: _assignees(kind, json),
+    // A pull request's count is not in its detail: none shown.
+    comments: json['comments'] as int? ?? 0,
+    updated: ForgeApi._date(json['updated_at']),
+    branch: branch,
+  );
+
+  /// An issue's one assignee (its `assignee`), or a pull request's (its
+  /// `assignees`); collaborators are no assignees.
+  static List<String> _assignees(ForgeItemKind kind, Map json) {
+    final users = kind == ForgeItemKind.pull
+        ? (json['assignees'] as List?) ?? const []
+        : [json['assignee']];
+    return [
+      for (final user in users)
+        if (user is Map) ?user['login'] as String?,
+    ];
+  }
+
+  @override
+  Future<List<ForgeItem>> issues(
+    ForgeRepo repo, {
+    ForgeIssueFilter filter = ForgeIssueFilter.assigned,
+    String query = '',
+  }) async {
+    // Gitee's own filters take a login, and it writes no `@me`: who it is
+    // is asked once, before anything is listed.
+    final (authority, login) = switch (filter) {
+      ForgeIssueFilter.assigned => ('assignee', (await me()).login),
+      ForgeIssueFilter.created => ('creator', (await me()).login),
+      ForgeIssueFilter.all => (null, null),
+    };
+    Map<String, String> of(String state) => {
+      'state': state,
+      'sort': 'updated',
+      'direction': 'desc',
+      'per_page': '$_shown',
+      if (query.trim().isNotEmpty) 'q': query.trim(),
+      if (authority != null && login != null) authority: login,
+    };
+    // Its open state is two (open and progressing): both, the newest of
+    // each, together.
+    final pages = await Future.wait([
+      for (final state in const ['open', 'progressing'])
+        _call('GET', '${_repoPath(repo)}/issues', query: of(state)),
+    ]);
+    final items = [
+      for (final page in pages)
+        for (final issue in (page as List?) ?? const [])
+          if (issue is Map) _item(repo, issue),
+    ];
+    items.sort(_newestFirst);
+    return items.take(_shown).toList();
+  }
+
+  /// The most recently updated first; one that says no time, last.
+  static int _newestFirst(ForgeItem a, ForgeItem b) {
+    final (left, right) = (a.updated, b.updated);
+    if (left == null) return right == null ? 0 : 1;
+    if (right == null) return -1;
+    return right.compareTo(left);
+  }
+
+  @override
+  Future<void> comment(ForgeRef ref, String body) => _call(
+    'POST',
+    '${_repoPath(ref.repo)}/${ref.kind == ForgeItemKind.pull ? 'pulls' : 'issues'}/${ref.number}/comments',
+    json: {'body': body},
+  );
+
+  @override
+  Future<void> close(ForgeRef ref) {
+    // Gitee closes an issue through its owner's namespace, naming the repo.
+    final parts = ref.repo.path.split('/');
+    return _call(
+      'PATCH',
+      '/repos/${parts.first}/issues/${ref.number}',
+      json: {'repo': parts.last, 'state': 'closed'},
+    );
+  }
 }

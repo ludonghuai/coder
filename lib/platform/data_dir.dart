@@ -83,7 +83,7 @@ class DataDirectory {
   String get storageFile => p.join(stateDir, 'storage.json');
 
   /// Where the child processes of one kind are listed
-  /// (`ChildProcessRegistry`): `claude`, `lsp`, `pty`.
+  /// (`ChildProcessRegistry`): `claude`, `lsp`, `pty`, `thincoder`.
   String processRegistryFile(String name) =>
       p.join(stateDir, '$name-processes.json');
   String get serversDir => p.join(path, 'servers');

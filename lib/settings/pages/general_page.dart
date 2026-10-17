@@ -11,6 +11,7 @@ import '../../ide/ide_notifications.dart' show IdeSeverity;
 import '../../kernel/claude_code/claude_path_setting.dart';
 import '../../kernel/commit_attribution.dart';
 import '../../kernel/queued_messages.dart';
+import '../../kernel/thincoder/thincoder_locator.dart';
 import '../../l10n/l10n.dart';
 import '../../platform/app_platform.dart';
 import '../../platform/context_menu.dart';
@@ -32,7 +33,8 @@ import 'settings_widgets.dart';
 /// agents write credit (`chat.commitAttribution` in settings.json), when a
 /// message sent while the agent works is taken up (`chat.queuedMessages`),
 /// whether the app sends its usage data (`telemetry.telemetryLevel`), the
-/// Claude Code to run (`claudeCode.path`), the `code` shell command, and
+/// Claude Code to run (`claudeCode.path`), the thincoder to run
+/// (`thincoder.path`), the `code` shell command, and
 /// Open with BaoCode in Finder's or Explorer's context menu. A choice is
 /// written at once; the default is not written.
 class GeneralSettingsPage extends StatelessWidget {
@@ -41,6 +43,7 @@ class GeneralSettingsPage extends StatelessWidget {
     this.settings,
     this.tips,
     this.claudeStatus,
+    this.thincoderStatus,
   });
 
   /// settings.json; none under test, where choices are not kept.
@@ -49,6 +52,10 @@ class GeneralSettingsPage extends StatelessWidget {
   /// The Claude Code that runs now ([localClaudeStatus]); none under
   /// test and on the web, where the path is not shown.
   final Future<LocalClaudeStatus?> Function()? claudeStatus;
+
+  /// The thincoder that runs now ([thincoderStatus]); none under test and
+  /// on the web, where the path is not shown.
+  final Future<ThincoderStatus> Function()? thincoderStatus;
 
   /// The feature tips: those not on yet are listed first.
   final FeatureTipsController? tips;
@@ -371,6 +378,22 @@ class GeneralSettingsPage extends StatelessWidget {
                         ),
                       ),
                     ],
+                  ),
+                ],
+              ),
+            if (thincoderStatus case final thincoderStatus? when !kIsWeb)
+              SettingsGroup(
+                title: 'thincoder',
+                children: [
+                  _ThincoderPathSetting(
+                    path: ThincoderPathSetting.parse(
+                      settings?[ThincoderPathSetting.settingKey],
+                    ),
+                    status: thincoderStatus,
+                    onChanged: (path) => _write(
+                      ThincoderPathSetting.settingKey,
+                      path.isEmpty ? null : path,
+                    ),
                   ),
                 ],
               ),
@@ -712,4 +735,62 @@ class _ClaudePathSettingState extends State<_ClaudePathSetting> {
       ),
     );
   }
+}
+
+/// The thincoder to run: the path set (none for the one the PATH finds),
+/// and under it where it stands now, read again as the path changes.
+class _ThincoderPathSetting extends StatefulWidget {
+  const _ThincoderPathSetting({
+    required this.path,
+    required this.status,
+    required this.onChanged,
+  });
+
+  final String? path;
+  final Future<ThincoderStatus> Function() status;
+  final ValueChanged<String> onChanged;
+
+  @override
+  State<_ThincoderPathSetting> createState() => _ThincoderPathSettingState();
+}
+
+class _ThincoderPathSettingState extends State<_ThincoderPathSetting> {
+  late Future<ThincoderStatus> _status = widget.status();
+
+  @override
+  void didUpdateWidget(_ThincoderPathSetting old) {
+    super.didUpdateWidget(old);
+    if (old.path != widget.path) _status = widget.status();
+  }
+
+  @override
+  Widget build(BuildContext context) => SettingsRow(
+    label: 'Path',
+    description: 'Empty: the thincoder on the PATH. A path: that one, '
+        'always. (thincoder.path)',
+    below: [
+      FutureBuilder(
+        future: _status,
+        builder: (context, snapshot) {
+          final status = snapshot.data;
+          if (status == null) return const SizedBox.shrink();
+          return SelectableText(
+            thincoderStatusLine(status),
+            style: status is ThincoderFailed
+                ? SettingsText.path.copyWith(
+                    color: themeColors['errorForeground'],
+                  )
+                : SettingsText.path,
+          );
+        },
+      ),
+    ],
+    trailing: SettingsTextField(
+      value: widget.path ?? '',
+      hint: 'Automatic',
+      semanticLabel: 'thincoder Path',
+      width: 260,
+      onSubmitted: widget.onChanged,
+    ),
+  );
 }

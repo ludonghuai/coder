@@ -11,7 +11,7 @@ import 'package:baocode/stash/stash_threads.dart';
 import 'package:baocode/workspace/workspace.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import '../forge/forge_test.dart' show FakeForgeHttp;
+import '../forge/fake_forge_http.dart';
 
 const issueUrl = 'https://github.com/o/r/issues/3';
 const pullUrl = 'https://github.com/o/r/pull/7';
