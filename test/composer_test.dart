@@ -17,6 +17,9 @@ import 'package:baocode/workspace/window_controls.dart';
 import 'package:baocode/main.dart';
 import 'package:super_sliver_list/super_sliver_list.dart';
 import 'package:baocode/kernel/claude_code/claude_code_kernel.dart';
+import 'package:baocode/kernel/agent_kernel.dart';
+import 'package:baocode/kernel/thincoder/thincoder_kernel.dart';
+import 'package:baocode/kernel/thincoder/thincoder_mock.dart';
 import 'package:baocode/chat/chat_models.dart';
 import 'package:baocode/chat/widgets/edge_fade_mask.dart';
 import 'package:baocode/chat/widgets/live_selectable_text.dart';
@@ -39,6 +42,7 @@ import 'package:baocode/chat/panels/interaction_panel.dart';
 import 'package:baocode/chat/panels/context_usage_panel.dart';
 import 'package:baocode/keybindings/keybinding_service.dart';
 import 'package:baocode/theme/app_theme.dart';
+import 'package:baocode/theme/workbench_theme.dart';
 
 Future<ChatSession> pumpScreen(
   WidgetTester tester, {
@@ -480,6 +484,88 @@ void main() {
     await tester.tap(ring);
     await settleAnimations(tester);
     expect(find.byType(ContextUsagePanel), findsNothing);
+  });
+
+  testWidgets('two approvals are a switch at the end, five a menu (T61)', (
+    tester,
+  ) async {
+    ThincoderMock? agent;
+    late final KernelDescriptor thincoder;
+    thincoder = KernelDescriptor(
+      id: 'thincoder',
+      label: 'thincoder',
+      icon: Icons.terminal_rounded,
+      description: 'Your terminal’s coding agent',
+      create: (context) => ThincoderKernel(
+        thincoder,
+        context,
+        start: (_) async => agent = ThincoderMock(autoApprove: false),
+        launch: ThincoderMock.launch,
+      ),
+    );
+    final session = ChatSession(
+      kernel: thincoder,
+      kernels: [thincoder],
+      historyCount: 0,
+    );
+    addTearDown(session.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildAppTheme(),
+        localizationsDelegates: const [FlutterQuillLocalizations.delegate],
+        home: ChatScreen(session: session),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    final toggle = find.byType(ComposerPermissionSwitch);
+    Color? fill() =>
+        (tester.widget<Container>(find.descendant(
+          of: toggle,
+          matching: find.byType(Container),
+        )).decoration! as BoxDecoration).color;
+    Color? label(String text) => tester
+        .widget<Text>(find.descendant(of: toggle, matching: find.text(text)))
+        .style
+        ?.color;
+
+    // Off: the first option, no fill, the muted foreground; no pill as well.
+    expect(toggle, findsOneWidget);
+    expect(label('Ask'), AppColors.textMuted);
+    expect(fill(), isNull);
+    expect(
+      find.descendant(
+        of: find.byType(ComposerPicker),
+        matching: find.text('Ask'),
+      ),
+      findsNothing,
+    );
+
+    // A press writes the boolean; the switch turns once the agent says so.
+    await tester.tap(toggle);
+    await tester.pump();
+    expect(agent!.requests('session/set_config_option').single['params'], {
+      'sessionId': '1',
+      'configId': 'autoApprove',
+      'value': true,
+    });
+    await tester.pump();
+    expect(label('Auto'), AppColors.text);
+    expect(fill(), themeColors['button.secondaryHoverBackground']);
+
+    // Five (Claude Code) stay the cluster's menu.
+    await tester.pumpWidget(const SizedBox());
+    await pumpScreen(tester);
+    await tester.pump();
+    expect(find.byType(ComposerPermissionSwitch), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byType(ComposerPicker),
+        matching: find.text('Ask for approval'),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('history stays pinned to the bottom as panels open', (

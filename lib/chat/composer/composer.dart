@@ -1781,6 +1781,7 @@ class ChatComposerState extends State<ChatComposer>
     final model = session.models;
     final context = session.context;
     final l10n = this.context.l10n;
+    final hasRing = widget.onToggleContextPanel != null && context != null;
     KernelOption localized(KernelOption option) => localizedKernelOption(
       l10n,
       session.kernel.id,
@@ -1830,7 +1831,8 @@ class ChatComposerState extends State<ChatComposer>
                       ),
                       const SizedBox(width: 2),
                     ],
-                    if (permission != null) ...[
+                    if (permission != null &&
+                        permission.options.length != 2) ...[
                       ComposerPicker(
                         options: [
                           for (final option in permission.options)
@@ -1864,6 +1866,17 @@ class ChatComposerState extends State<ChatComposer>
             ),
           ),
           const SizedBox(width: 8),
+          if (permission != null && permission.options.length == 2) ...[
+            ComposerPermissionSwitch(
+              permission: KernelChoice(
+                options: [for (final o in permission.options) localized(o)],
+                selected: localized(permission.selected),
+                onSelected: permission.onSelected,
+              ),
+              title: l10n.composerApprovalTitle(session.kernel.label),
+            ),
+            if (hasRing) const SizedBox(width: 2),
+          ],
           if ((widget.onToggleContextPanel, context) case (
             final onToggle?,
             final usage?,
@@ -1889,6 +1902,62 @@ class ChatComposerState extends State<ChatComposer>
             onStop: session.stop,
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// A two-option permission as a switch, filled while the second is on.
+class ComposerPermissionSwitch extends StatelessWidget {
+  const ComposerPermissionSwitch({
+    super.key,
+    required this.permission,
+    required this.title,
+  });
+
+  /// The options, the one in effect, and how to pick the other (localized).
+  final KernelChoice permission;
+
+  /// What it is, for its tooltip: the pick's description follows it.
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = permission.selected;
+    final on = selected.id == permission.options[1].id;
+    final next = permission.options.firstWhere((o) => o.id != selected.id);
+    final color = on ? AppColors.text : AppColors.textMuted;
+    final labelStyle = TextStyle(color: color, fontSize: 12);
+    return IdeHover(
+      message: next.description.isEmpty
+          ? title
+          : '$title · ${next.description}',
+      child: HoverBuilder(
+        cursor: SystemMouseCursors.click,
+        builder: (context, hovered) => GestureDetector(
+          onTap: () => permission.onSelected(next),
+          child: Container(
+            height: 22,
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            decoration: BoxDecoration(
+              // Filled while on; the toolbar's hover while off.
+              color: on
+                  ? themeColors['button.secondaryHoverBackground']
+                  : hovered
+                  ? themeColors['toolbar.hoverBackground']
+                  : null,
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              spacing: 4,
+              children: [
+                Icon(selected.icon, size: 13, color: color),
+                Text(selected.label, style: labelStyle),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
