@@ -63,3 +63,12 @@ app.*.map.json
 
 # npm dependencies of the extension host code generators.
 tool/exthost_codegen/node_modules/
+
+# The thincoder CLI's own checkout, cloned beside this repo for the adapter work.
+# It is its own repository with its own history; never commit it from here.
+/thincoder/
+
+# ThinCoder's per-project runtime state (sessions, temp probe scripts); it is
+# machine state, not a deliverable.
+/.thincoder/
+
