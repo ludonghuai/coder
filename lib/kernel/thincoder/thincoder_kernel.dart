@@ -104,8 +104,16 @@ class ThincoderKernel
   final List<KernelTurn> _queue = [];
   KernelTurn? _next;
 
-  /// Asked for while a turn runs: the process goes once it is over.
+  /// Asked for while a turn or a subagent is live: the process goes once
+  /// nothing of either is left (§19.2, D64).
   bool _releaseWanted = false;
+
+  /// The one macrotask a release waits, letting the digest turn that
+  /// follows a subagent's end come in first (D64).
+  Timer? _releaseCheck;
+
+  /// Whether the suspension window is open (D65): the process waits it out.
+  bool _watching = false;
 
   /// Pending approvals: our request id → the agent's request to answer.
   final Map<String, ThincoderRequest> _approvals = {};
@@ -358,6 +366,8 @@ class ThincoderKernel
   }
 
   void _teardown() {
+    _releaseCheck?.cancel();
+    _releaseCheck = null;
     unawaited(_subscription?.cancel());
     _subscription = null;
     _connection?.close();
@@ -380,6 +390,7 @@ class ThincoderKernel
     _queue.clear();
     _next = null;
     _pendingAuto = null;
+    _watching = false;
     _events.closePiece();
     // The subagents it ran are gone with it (F11): nothing is left saying
     // it runs for ever.
@@ -401,7 +412,11 @@ class ThincoderKernel
 
   @override
   void prepare() {
+    // The view is back: a release asked for as it left is called off, and
+    // the macrotask it waited is over with it (D64).
     _releaseWanted = false;
+    _releaseCheck?.cancel();
+    _releaseCheck = null;
     if (_health.status == KernelHealthStatus.failed) return;
     unawaited(_ensureStarted().catchError((_) {}));
   }
@@ -420,27 +435,71 @@ class ThincoderKernel
     if (_transport == null && _starting == null) return;
     // Done with the turn under way, rather than cut short — and with a
     // start still under way too, which [_launch] takes up once it is up.
-    if (_turn != null || _starting != null) {
-      _releaseWanted = true;
+    // A live subagent is one to wait for as well (D64): the suspension
+    // window behind it may still bring a digest turn.
+    _releaseWanted = true;
+    _releaseWhenIdle();
+  }
+
+  /// Nothing under way, no subagent live, no window open: the process can
+  /// go (D64 / D65).
+  bool get _canClose =>
+      _turn == null &&
+      _starting == null &&
+      !_events.hasLiveSubagents &&
+      !_watching;
+
+  /// Takes the release — or the session over (D66) — once [_canClose]: after
+  /// one macrotask of silence, so the digest turn that follows a subagent's
+  /// end comes in first (D64). A frame that brings one keeps the process; the
+  /// turn's end takes it up again.
+  void _releaseWhenIdle() {
+    if (!_releaseWanted || !_canClose) return;
+    // Nothing is up to let go of: nothing to wait for.
+    if (_transport == null && _starting == null) {
+      _releaseWanted = false;
       return;
     }
-    _closeSession();
-    _teardown();
-    _setHealth(KernelHealth.idle);
+    // A zero-duration timer is the macrotask Timer.run makes (§19.2, D64).
+    _releaseCheck ??= Timer(Duration.zero, () {
+      _releaseCheck = null;
+      if (!_releaseWanted || !_canClose) return;
+      _releaseWanted = false;
+      _closeSession();
+      _teardown();
+      _setHealth(KernelHealth.idle);
+    });
   }
 
   @override
   void dispose() {
+    if (_disposed) return;
     _disposed = true;
-    _closeSession();
-    _teardown();
-    closeEvents();
+    for (final turn in [..._queue, ?_next]) {
+      emit(ItemRemoved(nextSeq, turn.id));
+    }
+    _queue.clear();
+    _next = null;
+    _pendingAuto = null;
+    // The panel is gone: what it was asked is answered as cancelled (D66).
+    _resolveApprovals(refuse: true);
+    closeEvents(); // The host's surface goes at once (D66).
+    if (_canClose) {
+      _closeSession();
+      _teardown();
+      return;
+    }
+    // Work is still in the process: its turns are saved as they end, so
+    // this is the session over, not the work cut short (D66).
+    _releaseWanted = true;
+    _releaseWhenIdle();
   }
 
   // --- The conversation -------------------------------------------------------
 
   @override
   void send(KernelTurn turn) {
+    if (_disposed) return;
     if (!_sent.add(turn.id)) return;
     _queue.add(turn);
     // While a turn runs it waits its own: shown in the queue panel, nothing
@@ -541,11 +600,21 @@ class ThincoderKernel
     emit(TurnStarted(nextSeq, id, unprompted: unprompted));
   }
 
-  /// An automatic turn's start or end (§19.2): taken up, held for a
+  /// A turn's start or end, or the window's (§19.2): taken up, held for a
   /// turn's end (D57), taken back before it starts (D62), ended (D63).
   void _turnReport(Object? mark) {
     final report = mark is Map ? mark : null;
     final phase = report?['phase'];
+    if (phase == 'watch') {
+      final on = report?['on'];
+      if (on is bool) {
+        _watching = on;
+        if (!on) _releaseWhenIdle();
+      } else {
+        appEvent('thincoder', 'a watch frame with an on not a boolean: $on');
+      }
+      return;
+    }
     final ok = report?['ok'];
     final pending = _pendingAuto;
     if (phase == 'start' && _turn == null) {
@@ -600,10 +669,7 @@ class ThincoderKernel
     // What waits goes first: letting the process go would drop it — the
     // release asked for stays for the turn after (D53).
     if (_drain()) return;
-    if (_releaseWanted) {
-      _releaseWanted = false;
-      release();
-    }
+    _releaseWhenIdle();
   }
 
   @override
@@ -811,6 +877,9 @@ class ThincoderKernel
       return;
     }
     _events.update(update);
+    // The last subagent may have left with this frame: the release asked
+    // for is taken up after the macrotask it waits (D64).
+    _releaseWhenIdle();
   }
 
   // --- The choices ------------------------------------------------------------

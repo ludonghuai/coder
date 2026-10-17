@@ -60,6 +60,12 @@ class ThincoderEvents {
   /// their cards show, and the strip's rows while they run.
   final Map<String, AgentItem> _subagents = {};
 
+  /// Whether a subagent is still live (D64): its card is running — queued,
+  /// at work, in a turn, or in an approval. The tasks are not the whole of
+  /// it: a queued one has a card and no row.
+  bool get hasLiveSubagents =>
+      _subagents.values.any((card) => card.status == CommandStatus.running);
+
   /// Those of them at work, as the strip has them: a report replaces the
   /// last whole (the form Claude Code's translator takes).
   final Map<String, KernelTask> _tasks = {};

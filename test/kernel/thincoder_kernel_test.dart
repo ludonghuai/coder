@@ -151,11 +151,13 @@ Map<String, Object?> _update(Map<String, Object?> update) => {
   'params': {'sessionId': '1', 'update': update},
 };
 
-/// An automatic turn's boundary, as thincoder reports it (§19.2): the
-/// `session_info_update` variant carrying the `thincoder.dev/turn` meta.
-Map<String, Object?> _turn(String phase, {Object? ok}) => _update({
+/// A turn's start or end, or the window's, as thincoder writes it (§19.2):
+/// the `session_info_update` variant carrying the `thincoder.dev/turn` meta.
+Map<String, Object?> _turn(String phase, {Object? ok, bool? on}) => _update({
   'sessionUpdate': 'session_info_update',
-  '_meta': {'thincoder.dev/turn': {'phase': phase, 'kind': 'digest', 'ok': ?ok}},
+  '_meta': {
+    'thincoder.dev/turn': {'phase': phase, if (phase != 'watch') 'kind': 'digest', 'ok': ?ok, 'on': ?on},
+  },
 });
 
 /// The subagent extension's mark, as thincoder writes it (§16.1).
@@ -2345,6 +2347,117 @@ void main() {
       expect(t.transcript.lastTurnInterrupted, isFalse);
       expect(t.events.whereType<TurnEnded>(), hasLength(1));
       expect(_saidTimes(dir, 'ok not a boolean'), 1);
+    });
+
+    test('a release waits for a subagent still live (T75①)', () async {
+      final s = await _ready();
+      s.agent.push(_signal('a', 1, 'queued'));
+      await settle();
+      s.kernel.release();
+      await settle();
+      // Waiting is work too: the process stays for it (D64).
+      expect(s.agent.requests('session/close'), isEmpty);
+      expect(s.kernel.health.status, KernelHealthStatus.ready);
+      // It settles: the one macrotask of silence passes, then the session
+      // goes.
+      s.agent.push(_signal('a', 1, 'settled'));
+      await settle();
+      expect(s.agent.requests('session/close'), hasLength(1));
+      expect(s.kernel.health.status, KernelHealthStatus.idle);
+      await s.kernel.stopped;
+    });
+
+    test('the digest turn that follows is taken before closing (T75②)',
+        () async {
+      final s = await _ready();
+      s.agent.push(_signal('a', 1, 'async'));
+      await settle();
+      s.kernel.release();
+      await settle();
+      expect(s.agent.requests('session/close'), isEmpty);
+      // The same window's wake: the subagent settles, and its digest turn
+      // starts in the same batch. The turn keeps the process (D64).
+      s.agent.push(_signal('a', 1, 'settled'));
+      s.agent.push(_turn('start'));
+      await settle();
+      expect(s.agent.requests('session/close'), isEmpty);
+      expect(s.transcript.activeTurn, 'auto:1');
+      // The turn's own end takes up the release: one macrotask later.
+      s.agent.push(_turn('end'));
+      await settle();
+      expect(s.agent.requests('session/close'), hasLength(1));
+      expect(s.transcript.activeTurn, isNull);
+      expect(s.kernel.health.status, KernelHealthStatus.idle);
+    });
+
+    test('a view that comes back calls the release off (T75③)', () async {
+      final s = await _ready();
+      s.agent.push(_signal('a', 1, 'async'));
+      await settle();
+      s.kernel.release();
+      await settle();
+      s.kernel.prepare();
+      s.agent.push(_signal('a', 1, 'settled'));
+      await settle();
+      expect(s.agent.requests('session/close'), isEmpty);
+      expect(s.kernel.health.status, KernelHealthStatus.ready);
+    });
+
+    test('a release waits for the window to close (T76①)', () async {
+      final s = await _ready();
+      s.agent.push(_turn('watch', on: true));
+      s.agent.push(_signal('a', 1, 'async'));
+      await settle();
+      s.kernel.release();
+      await settle();
+      // The card settled with no turn up: the window alone holds it (D65).
+      s.agent.push(_signal('a', 1, 'settled'));
+      await settle();
+      expect(s.agent.requests('session/close'), isEmpty);
+      s.agent.push(_turn('start'));
+      await settle();
+      expect(s.transcript.activeTurn, 'auto:1');
+      s.agent.push(_turn('end', ok: true));
+      await settle();
+      expect(s.agent.requests('session/close'), isEmpty);
+      s.agent.push(_turn('watch', on: false));
+      await settle();
+      expect(s.agent.requests('session/close'), hasLength(1));
+      expect(s.kernel.health.status, KernelHealthStatus.idle);
+      await s.kernel.stopped;
+    });
+
+    test('with no window frame the silence still closes it (T76②)', () async {
+      final s = await _ready();
+      s.agent.push(_signal('a', 1, 'async'));
+      await settle();
+      s.kernel.release();
+      s.agent.push(_signal('a', 1, 'settled'));
+      s.agent.push(_turn('start'));
+      await settle();
+      expect(s.transcript.activeTurn, 'auto:1');
+      s.agent.push(_turn('end'));
+      await settle();
+      expect(s.agent.requests('session/close'), hasLength(1));
+      expect(s.kernel.health.status, KernelHealthStatus.idle);
+    });
+
+    test('a dispose waits for the window to close (T76③)', () async {
+      final s = await _ready();
+      s.agent.push(_turn('watch', on: true));
+      s.agent.push(_signal('a', 1, 'async'));
+      await settle();
+      s.kernel.dispose();
+      await settle();
+      expect(s.agent.requests('session/close'), isEmpty);
+      s.send('late'); // Nothing is taken up any more.
+      await settle();
+      expect(_prompts(s), isEmpty);
+      s.agent.push(_signal('a', 1, 'settled'));
+      s.agent.push(_turn('watch', on: false));
+      await settle();
+      expect(s.agent.requests('session/close'), hasLength(1));
+      await s.kernel.stopped;
     });
   });
 
