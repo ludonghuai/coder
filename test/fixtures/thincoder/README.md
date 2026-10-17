@@ -20,7 +20,10 @@ One file is one scenario, one JSON object a line:
   (`test/kernel/thincoder_fixtures_test.dart` prints them one an item),
   `tasks` (the ids of what runs beside the conversation), `agents` (each
   subagent card and what it said of its own, one a line), `health`,
-  `sessionId`, `usage`, `interrupted`, `loading`.
+  `sessionId`, `usage`, `interrupted`, `loading`, `unprompted`.
+
+`unprompted` is whether the last turn ended was one the agent took up on
+its own (`thincoder.dev/turn`, an automatic turn with no user message).
 
 `subagent-content` marks its content and tool frames with the subagent they
 are by; `subagent-content-legacy` (0.12.74's shape) does not.

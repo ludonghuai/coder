@@ -163,6 +163,9 @@ void _check(
   if (expected['interrupted'] case final bool interrupted) {
     expect(transcript.lastTurnInterrupted, interrupted, reason: path);
   }
+  if (expected['unprompted'] case final bool unprompted) {
+    expect(transcript.lastTurnUnprompted, unprompted, reason: path);
+  }
   if (expected['loading'] case final bool loading) {
     expect(kernel.loadingHistory, loading, reason: path);
   }

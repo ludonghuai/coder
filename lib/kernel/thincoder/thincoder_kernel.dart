@@ -91,9 +91,13 @@ class ThincoderKernel
   /// The version the agent reported at the handshake.
   String? _version;
 
-  /// The turn under way: its id, and when it began.
+  /// The turn under way: its id, when it began, whether the agent took it
+  /// up on its own (§19.2); automatic turns, and one held for a turn's end.
   String? _turn;
   DateTime? _turnStarted;
+  bool _turnUnprompted = false;
+  int _autoTurns = 0;
+  ({String id, Object? kind})? _pendingAuto;
   final Set<String> _sent = {};
 
   /// Messages sent while a turn runs, in the order sent; [_next] first.
@@ -375,6 +379,7 @@ class ThincoderKernel
     }
     _queue.clear();
     _next = null;
+    _pendingAuto = null;
     _events.closePiece();
     // The subagents it ran are gone with it (F11): nothing is left saying
     // it runs for ever.
@@ -528,11 +533,40 @@ class ThincoderKernel
     }
   }
 
-  void _beginTurn(String id) {
+  void _beginTurn(String id, {bool unprompted = false}) {
     _events.begin();
     _turn = id;
+    _turnUnprompted = unprompted;
     _turnStarted = DateTime.now();
-    emit(TurnStarted(nextSeq, id));
+    emit(TurnStarted(nextSeq, id, unprompted: unprompted));
+  }
+
+  /// An automatic turn's start or end (§19.2): taken up, held for a
+  /// turn's end (D57), taken back before it starts (D62), ended (D63).
+  void _turnReport(Object? mark) {
+    final report = mark is Map ? mark : null;
+    final phase = report?['phase'];
+    final ok = report?['ok'];
+    final pending = _pendingAuto;
+    if (phase == 'start' && _turn == null) {
+      appEvent('thincoder', 'an automatic turn (${report!['kind']})');
+      _beginTurn('auto:${++_autoTurns}', unprompted: true);
+    } else if (phase == 'start' && !_turnUnprompted && pending == null) {
+      _pendingAuto = (id: 'auto:${++_autoTurns}', kind: report!['kind']);
+    } else if (phase == 'end' && _turn != null && _turnUnprompted) {
+      if (ok != null && ok is! bool) {
+        appEvent('thincoder', 'a turn end with an ok not a boolean: $ok');
+      }
+      _endTurn(interrupted: ok == false);
+    } else if (phase == 'end' && _turn != null && pending != null) {
+      _pendingAuto = null;
+      appEvent(
+        'thincoder',
+        'an automatic turn (${pending.kind}) ended before it was taken up',
+      );
+    } else {
+      appEvent('thincoder', 'a turn report to leave alone: $mark');
+    }
   }
 
   /// Ends the turn under way: its item done, the approvals the agent was
@@ -541,6 +575,7 @@ class ThincoderKernel
     final turn = _turn;
     if (turn == null) return;
     _turn = null;
+    _turnUnprompted = false;
     _events.closePiece();
     _resolveApprovals();
     final started = _turnStarted;
@@ -555,6 +590,13 @@ class ThincoderKernel
             : DateTime.now().difference(started),
       ),
     );
+    // An automatic turn reported while this one ran goes first (D57).
+    if (_pendingAuto case final pending?) {
+      _pendingAuto = null;
+      appEvent('thincoder', 'an automatic turn (${pending.kind})');
+      _beginTurn(pending.id, unprompted: true);
+      return;
+    }
     // What waits goes first: letting the process go would drop it — the
     // release asked for stays for the turn after (D53).
     if (_drain()) return;
@@ -750,6 +792,9 @@ class ThincoderKernel
     );
   }
 
+  /// The automatic turn's mark in a `session_info_update` (§19.2).
+  static const _turnKey = 'thincoder.dev/turn';
+
   void _notification(String method, Map<String, Object?> params) {
     if (method != 'session/update') {
       // E4 留痕: what it says that this adapter does not know.
@@ -758,6 +803,13 @@ class ThincoderKernel
     }
     final update = (params['update'] as Map?)?.cast<String, Object?>();
     if (update == null) return;
+    // A turn boundary's mark is this adapter's, not a subagent's (F16).
+    final meta = update['_meta'];
+    if (update['sessionUpdate'] == 'session_info_update' &&
+        meta is Map && meta.containsKey(_turnKey)) {
+      _turnReport(meta[_turnKey]);
+      return;
+    }
     _events.update(update);
   }
 

@@ -151,6 +151,13 @@ Map<String, Object?> _update(Map<String, Object?> update) => {
   'params': {'sessionId': '1', 'update': update},
 };
 
+/// An automatic turn's boundary, as thincoder reports it (§19.2): the
+/// `session_info_update` variant carrying the `thincoder.dev/turn` meta.
+Map<String, Object?> _turn(String phase, {Object? ok}) => _update({
+  'sessionUpdate': 'session_info_update',
+  '_meta': {'thincoder.dev/turn': {'phase': phase, 'kind': 'digest', 'ok': ?ok}},
+});
+
 /// The subagent extension's mark, as thincoder writes it (§16.1).
 Map<String, Object?> _marked(Object? mark) => {
   'thincoder.dev/subagent': mark,
@@ -2132,6 +2139,212 @@ void main() {
       await settle();
       expect(s.cards, hasLength(1));
       expect(_saidTimes(dir, 'subagent:b#2'), 1);
+    });
+  });
+
+  group('thincoder automatic turns', () {
+    Future<_Session> held() async {
+      final s = _Session(make: () => ThincoderMock()..hold = Completer<void>());
+      addTearDown(s.dispose);
+      s.kernel.prepare();
+      await settle();
+      return s;
+    }
+
+    test('a boundary frame starts a turn the agent took up (T68)', () async {
+      final s = await _ready();
+      s.agent.push(_turn('start'));
+      await settle();
+      expect(s.transcript.activeTurnUnprompted, isTrue);
+      expect(s.events.whereType<TurnStarted>().single.unprompted, isTrue);
+      s.agent.push(_update(_reply('The digest is in: three files.')));
+      s.agent.push(_turn('end'));
+      await settle();
+      expect(s.shown, ['text: The digest is in: three files.']);
+      expect(s.transcript.lastTurnUnprompted, isTrue);
+      expect(s.transcript.lastTurnInterrupted, isFalse);
+      expect(s.transcript.activeTurn, isNull);
+    });
+
+    test('a start with the answer is held for that turn\'s end (T69)',
+        () async {
+      final s = await held();
+      s.send('one');
+      await settle();
+      s.agent.push(_turn('start'));
+      await settle();
+      expect(s.transcript.activeTurn, 'turn-1'); // The user's turn goes on.
+      expect(s.events.whereType<TurnEnded>(), isEmpty);
+      await _let(s);
+      expect(s.events.whereType<TurnEnded>(), hasLength(1));
+      expect(s.events.whereType<TurnStarted>().last.unprompted, isTrue);
+      expect(s.transcript.activeTurn, 'auto:1');
+      s.agent.push(_turn('end'));
+      await settle();
+      expect(s.transcript.activeTurn, isNull);
+      expect(s.transcript.lastTurnUnprompted, isTrue);
+    });
+
+    test('a held start takes the turn before the queue (T69②)', () async {
+      final s = await held();
+      s.send('one');
+      await settle();
+      s.send('two', id: 'turn-2');
+      await settle();
+      s.agent.push(_turn('start'));
+      await settle();
+      await _let(s);
+      expect(_prompts(s), ['one']);
+      expect(s.transcript.activeTurn, 'auto:1');
+      expect(s.transcript.queued.map((q) => q.$1), ['turn-2']);
+      s.agent.push(_turn('end'));
+      await settle();
+      expect(_prompts(s), ['one', 'two']);
+      expect(s.transcript.queued, isEmpty);
+    });
+
+    test('a message sent in an automatic turn waits (T70)', () async {
+      final s = await _ready();
+      s.agent.push(_turn('start'));
+      await settle();
+      s.send('two');
+      await settle();
+      expect(s.transcript.queued.single.$1, 'turn-1');
+      expect(_prompts(s), isEmpty);
+      s.agent.push(_turn('end'));
+      await settle();
+      expect(_prompts(s), ['two']);
+    });
+
+    test('a cancel and a failing end both stop it (T71/T71②)', () async {
+      final s = await _ready();
+      s.agent.push(_turn('start'));
+      await settle();
+      s.kernel.cancel();
+      await settle();
+      expect(s.agent.requests('session/cancel').single['params'], {
+        'sessionId': '1',
+      });
+      s.agent.push(_turn('end', ok: false));
+      await settle();
+      expect(s.transcript.activeTurn, isNull);
+      expect(s.transcript.lastTurnInterrupted, isTrue);
+      // An end that fails on the agent's own word: no cancel of ours.
+      final t = await _ready();
+      t.agent.push(_turn('start'));
+      await settle();
+      t.agent.push(_turn('end', ok: false));
+      await settle();
+      expect(t.agent.requests('session/cancel'), isEmpty);
+      expect(t.transcript.activeTurn, isNull);
+      expect(t.transcript.lastTurnInterrupted, isTrue);
+    });
+
+    test('a process that dies in an automatic turn stops it (T72)',
+        () async {
+      final s = await _ready();
+      s.agent.push(_turn('start'));
+      s.agent.push(_update(_reply('Half an answer')));
+      await settle();
+      s.agent.crash();
+      await settle();
+      expect(s.transcript.activeTurn, isNull);
+      expect(s.transcript.lastTurnInterrupted, isTrue);
+      expect(s.shown.where((line) => line.startsWith('notice error:')),
+          ['notice error: thincoder stopped unexpectedly']);
+      expect(s.kernel.health.status, KernelHealthStatus.failed);
+      await s.kernel.stopped;
+    });
+
+    test('an empty automatic turn is still a turn (T73)', () async {
+      final s = await _ready();
+      s.agent.push(_turn('start'));
+      await settle();
+      s.agent.push(_turn('end'));
+      await settle();
+      expect([...s.shown, ...s.cards], isEmpty);
+      expect([s.transcript.lastTurnUnprompted, s.transcript.activeTurn],
+          [true, null]);
+    });
+
+    test('turn frames out of contract are left alone (T74)', () async {
+      final s = await held();
+      final dir = _log();
+      s.agent.push(
+          _update({'sessionUpdate': 'session_info_update', '_meta': 'no map'}));
+      s.agent.push(_update({
+        'sessionUpdate': 'session_info_update',
+        '_meta': {'thincoder.dev/turn': {'phase': 'sideways'}},
+      }));
+      s.agent.push(_turn('end')); // No turn under way: not its end.
+      await settle();
+      expect(s.transcript.activeTurn, isNull);
+      expect(_saidTimes(dir, 'leave alone'), 3);
+      // A user turn goes on: an end while it runs is not its own.
+      s.send('one');
+      await settle();
+      s.agent.push(_turn('end'));
+      await settle();
+      expect(s.transcript.activeTurn, 'turn-1');
+      expect(s.events.whereType<TurnEnded>(), isEmpty);
+      expect(_saidTimes(dir, 'leave alone'), 4);
+      await _let(s);
+      // An automatic turn under way: no second one starts.
+      s.agent.push(_turn('start'));
+      await settle();
+      s.agent.push(_turn('start'));
+      await settle();
+      expect(s.transcript.activeTurn, 'auto:1');
+      expect(s.events.whereType<TurnStarted>().where((e) => e.unprompted),
+          hasLength(1));
+      expect(_saidTimes(dir, 'leave alone'), 5);
+      s.agent.push(_turn('end'));
+      await settle();
+    });
+
+    test('an end takes a held start back (T74①)', () async {
+      final s = await held();
+      final dir = _log();
+      s.send('one');
+      await settle();
+      s.agent.push(_turn('start'));
+      await settle();
+      s.agent.push(_turn('end', ok: true));
+      await settle();
+      expect(s.transcript.activeTurn, 'turn-1');
+      expect(s.events.whereType<TurnStarted>(), hasLength(1));
+      expect(s.events.whereType<TurnEnded>(), isEmpty);
+      expect(_saidTimes(dir, 'ended before it was taken up'), 1);
+      await _let(s);
+      expect(s.transcript.activeTurn, isNull);
+      expect(s.transcript.lastTurnUnprompted, isFalse);
+      expect(s.events.whereType<TurnEnded>().single.interrupted, isFalse);
+      // Nothing of it is in the way: the next message goes out at once.
+      s.send('two', id: 'turn-2');
+      await settle();
+      expect(_prompts(s), ['one', 'two']);
+    });
+
+    test('an end is taken whatever its ok is (T74②)', () async {
+      final s = await _ready();
+      final dir = _log();
+      s.agent.push(_turn('start'));
+      await settle();
+      s.agent.push(_turn('end', ok: 'false'));
+      await settle();
+      expect(s.transcript.activeTurn, isNull);
+      expect(s.transcript.lastTurnInterrupted, isFalse);
+      expect(_saidTimes(dir, 'ok not a boolean'), 1);
+      // An end with the key absent ends it too, and not as interrupted.
+      final t = await _ready();
+      t.agent.push(_turn('start'));
+      await settle();
+      t.agent.push(_turn('end'));
+      await settle();
+      expect(t.transcript.activeTurn, isNull);
+      expect(t.transcript.lastTurnInterrupted, isFalse);
+      expect(t.events.whereType<TurnEnded>(), hasLength(1));
+      expect(_saidTimes(dir, 'ok not a boolean'), 1);
     });
   });
 
