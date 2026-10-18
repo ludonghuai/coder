@@ -640,7 +640,10 @@ class _TerminalViewState extends State<TerminalView> with TextInputClient {
         color: decoration.color,
         hoverPosition: IdeHoverPosition.right,
         onPressed: () {
-          final box = context.findRenderObject()! as RenderBox;
+          // Gone from the view since the press (scrolled out, the tab closed):
+          // there is no anchor to open the menu at.
+          final box = context.findRenderObject();
+          if (box is! RenderBox || !box.hasSize) return;
           final rect = box.localToGlobal(Offset.zero) & box.size;
           unawaited(_commandMenu(rect, command.command, command.getOutput()));
         },

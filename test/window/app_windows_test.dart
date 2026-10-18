@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui' show AppExitResponse, Rect;
 
 import 'package:flutter/material.dart';
@@ -1478,5 +1479,24 @@ void main() {
     });
     expect(vscode.folderInNewWindow(), isFalse);
     expect(vscode.folderInNewWindow(held: true), isTrue);
+  });
+
+  testWidgets('a close asked for again while one is under way runs it once', (
+    tester,
+  ) async {
+    final harness = _Harness(tester);
+    await harness.start();
+    final chat = harness.windows.chat;
+    final hold = harness.host.holdLeaveFullScreen = Completer<void>();
+    final first = harness.windows.requestClose(chat);
+    // Still on its way out of full screen: the window is not closed yet.
+    await tester.pump();
+    expect(await harness.windows.requestClose(chat), isFalse);
+    hold.complete();
+    expect(await first, isTrue);
+    expect(
+      harness.host.log.where((entry) => entry == 'hide ${chat.viewId}'),
+      hasLength(1),
+    );
   });
 }

@@ -79,6 +79,7 @@ import 'l10n/l10n.dart';
 import 'notifications/attention_host.dart';
 import 'notifications/attention_service.dart';
 import 'notifications/attention_settings.dart';
+import 'platform/event_log.dart';
 import 'platform/local_paths.dart'
     if (dart.library.io) 'platform/local_paths_io.dart';
 import 'platform/open_requests.dart';
@@ -691,6 +692,7 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
         ..removeListener(_tipsChanged);
     }
     _typingTimer?.cancel();
+    _sidePanelRetryTimer?.cancel();
     for (final MapEntry(key: session, value: listener)
         in _turnWatches.entries) {
       session.removeListener(listener);
@@ -3346,6 +3348,10 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
     if (gitFor == null || repositoriesIn == null) return const [];
     final found = _sidePanelFound[location];
     if (found == null) {
+      // A scan that failed would leave the panel saying there is no repository
+      // for the rest of the session, so it is tried again after a pause.
+      final retryAt = _sidePanelRetryAt[location];
+      if (retryAt != null && DateTime.now().isBefore(retryAt)) return const [];
       _sidePanelFound[location] = const [];
       final host = ProjectHost.of(location);
       unawaited(() async {
@@ -3357,10 +3363,29 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
               widget.settings?.files?.settings.values ?? const {},
             ),
           );
-        } catch (_) {
+        } catch (error) {
+          // Tried again in a while (see the wait above), not never; the reason
+          // is logged, the panel has nothing to say it with.
+          appEvent('sidePanel', 'repository scan failed: $error');
+          if (!mounted) return;
+          setState(() {
+            _sidePanelFound.remove(location);
+            _sidePanelRetryAt[location] = DateTime.now().add(
+              const Duration(seconds: 30),
+            );
+          });
+          // The wait alone would leave it to unrelated rebuilds: ask for a
+          // frame of our own when it is up.
+          _sidePanelRetryTimer?.cancel();
+          _sidePanelRetryTimer = Timer(const Duration(seconds: 30), () {
+            if (!mounted) return;
+            setState(() {});
+          });
           return;
         }
-        if (!mounted || paths.isEmpty) return;
+        if (!mounted) return;
+        _sidePanelRetryAt.remove(location);
+        if (paths.isEmpty) return;
         setState(() {
           _sidePanelFound[location] = [
             for (final path in paths)
@@ -3386,6 +3411,13 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
   /// The repositories found in a project's subfolders for its side panel,
   /// by project; empty while being looked for.
   final Map<String, List<(String, IdeGitRepository)>> _sidePanelFound = {};
+
+  /// When a failed scan of a project's subfolders may be tried again, by
+  /// project.
+  final Map<String, DateTime> _sidePanelRetryAt = {};
+
+  /// Asks for the frame that looks again once a failed scan's wait is up.
+  Timer? _sidePanelRetryTimer;
 
   /// The files of [thread]'s project, on its host, and how it spells
   /// their paths.

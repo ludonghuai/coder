@@ -156,6 +156,9 @@ class ChatSession extends ChangeNotifier implements ChatFeed {
   }
 
   void _apply(KernelEvent event) {
+    // A frame may land between `cancel()` and the kernel letting go: there is
+    // then no listener left to tell.
+    if (_disposed) return;
     if (event is KernelInfoChanged || _transcript.apply(event)) {
       _cache.clear();
       _timeQuiet();

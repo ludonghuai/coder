@@ -984,9 +984,13 @@ class ThincoderKernel
   };
 
   Future<void> _setMode(String mode) async {
+    final connection = _connection;
+    final slot = _slot;
+    // Let go of the session (its view left): there is nothing to set it on.
+    if (connection == null || slot == null) return;
     try {
-      await _connection!.request('session/set_mode', {
-        'sessionId': _slot,
+      await connection.request('session/set_mode', {
+        'sessionId': slot,
         'mode': mode,
       });
     } on Object catch (error) {
@@ -995,9 +999,13 @@ class ThincoderKernel
   }
 
   Future<void> _config(String configId, Object? value) async {
+    final connection = _connection;
+    final slot = _slot;
+    // As in [_setMode]: the menu may outlive the session it was opened on.
+    if (connection == null || slot == null) return;
     try {
-      final answer = await _connection!.request('session/set_config_option', {
-        'sessionId': _slot,
+      final answer = await connection.request('session/set_config_option', {
+        'sessionId': slot,
         'configId': configId,
         'value': value,
       });

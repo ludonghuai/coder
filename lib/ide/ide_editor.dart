@@ -2101,41 +2101,46 @@ class IdeEditorState extends State<IdeEditor> {
     WorkbenchColors colors, {
     DiffEditorSide? side,
     ({List<EditorViewZone> zones, List<EditorDecoration> decorations})? agent,
-  }) => EditorSurface(
-    key: _surfaceKey,
-    controller: _nativeController!,
-    focusNode: _focusNode,
-    readOnly: widget.active.readOnly,
-    backgroundColor: colors['editor.background'],
-    selectionColor: colors['editor.selectionBackground'],
-    caretColor: colors['editorCursor.foreground'],
-    theme: EditorViewTheme.fromColors(colors.get),
-    styledLines: _language?.styledLines(_styledLines) ?? _styledLines,
-    decorations: [
-      ...?side?.decorations,
-      ...?agent?.decorations,
-      ...?_language?.decorations,
-      ..._snippetDecorations(_nativeController!, colors),
-      ..._findDecorations,
-      ..._blameDecorations(colors),
-      ..._debugDecorations(),
-    ],
-    // A diff editor's editors fold nothing and have no minimap.
-    viewZones: side?.zones ?? agent?.zones ?? const [],
-    scrollPosition: side?.scrollPosition,
-    folding: side == null,
-    showMinimap: side == null,
-    onKeyEvent: _onEditorKey,
-    keyResolver: widget.keyResolver == null ? null : _resolveTextKey,
-    onHover: _language == null
-        ? null
-        : (offset, _) => _language?.onPointerHover(offset),
-    onContentPointerDown: _language?.onPointerDown,
-    onContextMenu: _showContextMenu,
-    onViewChanged: _viewChanged,
-    contentCursor: _language?.link == null ? null : SystemMouseCursors.click,
-    style: _editorStyle(colors),
-  );
+  }) {
+    // The document may be let go between a diff's build and this call.
+    final controller = _nativeController;
+    if (controller == null) return const SizedBox.expand();
+    return EditorSurface(
+      key: _surfaceKey,
+      controller: controller,
+      focusNode: _focusNode,
+      readOnly: widget.active.readOnly,
+      backgroundColor: colors['editor.background'],
+      selectionColor: colors['editor.selectionBackground'],
+      caretColor: colors['editorCursor.foreground'],
+      theme: EditorViewTheme.fromColors(colors.get),
+      styledLines: _language?.styledLines(_styledLines) ?? _styledLines,
+      decorations: [
+        ...?side?.decorations,
+        ...?agent?.decorations,
+        ...?_language?.decorations,
+        ..._snippetDecorations(controller, colors),
+        ..._findDecorations,
+        ..._blameDecorations(colors),
+        ..._debugDecorations(),
+      ],
+      // A diff editor's editors fold nothing and have no minimap.
+      viewZones: side?.zones ?? agent?.zones ?? const [],
+      scrollPosition: side?.scrollPosition,
+      folding: side == null,
+      showMinimap: side == null,
+      onKeyEvent: _onEditorKey,
+      keyResolver: widget.keyResolver == null ? null : _resolveTextKey,
+      onHover: _language == null
+          ? null
+          : (offset, _) => _language?.onPointerHover(offset),
+      onContentPointerDown: _language?.onPointerDown,
+      onContextMenu: _showContextMenu,
+      onViewChanged: _viewChanged,
+      contentCursor: _language?.link == null ? null : SystemMouseCursors.click,
+      style: _editorStyle(colors),
+    );
+  }
 
   /// [_blame]'s lines, each after its end (`GitBlameEditorDecoration`).
   List<EditorDecoration> _blameDecorations(WorkbenchColors colors) {

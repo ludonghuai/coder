@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/widgets.dart';
@@ -91,8 +92,12 @@ class FakeWindowHost extends WindowHost {
   /// The windows in full screen.
   final Set<int> fullScreen = {};
 
+  /// Held by a test to keep a close waiting where it leaves full screen.
+  Completer<void>? holdLeaveFullScreen;
+
   @override
   Future<bool> leaveFullScreen(int viewId) async {
+    if (holdLeaveFullScreen case final hold?) await hold.future;
     if (!fullScreen.remove(viewId)) return false;
     log.add('leaveFullScreen $viewId');
     return true;

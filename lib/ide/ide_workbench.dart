@@ -2860,17 +2860,24 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
   /// over the workbench, a menu in the overlay, or an input method
   /// composing text keeps its keys.
   KeyEventResult _onLateKey(KeyEvent event) {
-    if (identical(event, _offeredKey) || !widget.visible || !mounted) {
-      return KeyEventResult.ignored;
-    }
-    final focus = FocusManager.instance.primaryFocus;
-    if (focus == null ||
-        !(focus.ancestors.contains(_workbenchFocus) ||
-            _workbenchFocus.ancestors.contains(focus)) ||
-        !(ModalRoute.isCurrentOf(context) ?? true)) {
+    if (identical(event, _offeredKey) || !_holdsKeys()) {
       return KeyEventResult.ignored;
     }
     return _onWorkbenchKey(_workbenchFocus, event);
+  }
+
+  /// Whether a key pressed now is this workbench's to take: the window is
+  /// the one in front (its focus holds the primary focus, its route the current
+  /// one), so a key pressed in another window goes there.
+  bool _holdsKeys() {
+    if (!mounted || !widget.visible) return false;
+    final focus = FocusManager.instance.primaryFocus;
+    if (focus == null) return false;
+    if (!(focus.ancestors.contains(_workbenchFocus) ||
+        _workbenchFocus.ancestors.contains(focus))) {
+      return false;
+    }
+    return ModalRoute.isCurrentOf(context) ?? true;
   }
 
   /// The key after a first chord, before the focus sees it: upstream's
@@ -2880,6 +2887,12 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
     if (chord == null ||
         event is KeyUpEvent ||
         _modifierKeys.contains(event.logicalKey)) {
+      return KeyEventResult.ignored;
+    }
+    // A key pressed in another window goes there: this one's chord would
+    // otherwise run its command with the other window's keys.
+    if (!_holdsKeys()) {
+      _leaveChordMode();
       return KeyEventResult.ignored;
     }
     _resolveChord(chord, event);
@@ -2898,6 +2911,7 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
     _chordChecker = Timer.periodic(const Duration(milliseconds: 500), (timer) {
       final state = WidgetsBinding.instance.lifecycleState;
       if ((state != null && state != AppLifecycleState.resumed) ||
+          !_holdsKeys() ||
           timer.tick * 500 > 5000) {
         _leaveChordMode();
       }

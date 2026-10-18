@@ -994,17 +994,21 @@ class AppWindows extends ChangeNotifier implements WindowHostEvents {
   /// closed.
   Future<bool> requestClose(AppWindow window, {bool byKeyboard = false}) async {
     if (!_started) return false;
-    if (window.isChat) {
-      await _hideChat();
-      return true;
-    }
-    if (window.isAgent) {
-      if (!_agents.contains(window)) return false;
-      await _remove(window);
-      return true;
-    }
-    if (!_ide.contains(window) || !_closing.add(window)) return false;
+    // One close at a time: a second ⌘W (or the system's close beside it) while
+    // this one is still leaving full screen would run the same side effects
+    // again; false says it is already on its way.
+    if (!_closing.add(window)) return false;
     try {
+      if (window.isChat) {
+        await _hideChat();
+        return true;
+      }
+      if (window.isAgent) {
+        if (!_agents.contains(window)) return false;
+        await _remove(window);
+        return true;
+      }
+      if (!_ide.contains(window)) return false;
       final settings = _settings();
       final delegate = window.delegate;
       final context = delegate?.windowContext;
@@ -1046,6 +1050,20 @@ class AppWindows extends ChangeNotifier implements WindowHostEvents {
   }
 
   Future<void> _remove(AppWindow window) async {
+    if (!_removing.add(window)) return;
+    try {
+      await _removeOnce(window);
+    } finally {
+      _removing.remove(window);
+    }
+  }
+
+  /// The windows whose [_remove] is under way. Taking one out of [_agents]
+  /// waits for full screen to be left, so an agent change heard meanwhile still
+  /// finds it there; without this it would close the same window again.
+  final Set<AppWindow> _removing = {};
+
+  Future<void> _removeOnce(AppWindow window) async {
     // Out of full screen first, still drawn (see WindowHost.leaveFullScreen);
     // then back to the window it covered.
     final wasFullScreen = await host.leaveFullScreen(window.viewId);

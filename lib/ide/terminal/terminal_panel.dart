@@ -407,7 +407,9 @@ class _SingleTabState extends State<_SingleTab> {
   bool _open = false;
 
   void _menu(BuildContext context) {
-    final box = context.findRenderObject()! as RenderBox;
+    // A tab may leave the view between the press and this call.
+    final box = context.findRenderObject();
+    if (box is! RenderBox || !box.hasSize) return;
     unawaited(
       showIdeMenu(
         context,
