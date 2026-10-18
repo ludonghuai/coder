@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:markdown/markdown.dart' as md;
 import 'package:path/path.dart' as p;
 
@@ -73,10 +76,29 @@ class _MarkdownViewState extends State<MarkdownView> {
   Widget? _built;
   Object? _builtFrom;
 
+  /// The text parsed last, and when: a reply streaming in is parsed at most
+  /// once every [_throttle], as long as its words only grow on the text
+  /// parsed. Another message in its place parses at once.
+  String? _parsed;
+  Duration? _parsedAt;
+  Timer? _pendingParse;
+
+  static const _throttle = Duration(milliseconds: 50);
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     _built = null;
+    _parsed = null;
+    _parsedAt = null;
+    _pendingParse?.cancel();
+    _pendingParse = null;
+  }
+
+  @override
+  void dispose() {
+    _pendingParse?.cancel();
+    super.dispose();
   }
 
   @override
@@ -88,7 +110,29 @@ class _MarkdownViewState extends State<MarkdownView> {
       WorkbenchThemeScope.restyles,
     );
     if (_built case final built? when from == _builtFrom) return built;
+    // The words only grew on the ones before them (a reply streaming in):
+    // parse the newest once the last parse is [_throttle] old, and once
+    // more when they stop. Another message in its place parses at once.
+    final now = SchedulerBinding.instance.currentFrameTimeStamp;
+    if (_built != null && _parsed != null && _parsedAt != null) {
+      final parsed = _parsed!;
+      final parsedAt = _parsedAt!;
+      if (widget.data.length > parsed.length &&
+          widget.data.startsWith(parsed) &&
+          now - parsedAt < _throttle) {
+        _pendingParse?.cancel();
+        _pendingParse = Timer(_throttle - (now - parsedAt), () {
+          _pendingParse = null;
+          if (mounted) setState(() {});
+        });
+        return _built!;
+      }
+    }
+    _pendingParse?.cancel();
+    _pendingParse = null;
     _builtFrom = from;
+    _parsed = widget.data;
+    _parsedAt = now;
     return _built = _build(context);
   }
 

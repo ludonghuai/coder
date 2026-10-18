@@ -1,5 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:markdown/markdown.dart' as md;
@@ -393,5 +395,110 @@ void main() {
         matches(RegExp(r'^Analysis\s+Why\s+Then\s*$')),
       );
     });
+  });
+
+  testWidgets('a frame timestamp advances with the time pumped', (
+    tester,
+  ) async {
+    final tick = ValueNotifier(0);
+    addTearDown(tick.dispose);
+    final stamps = <Duration>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ListenableBuilder(
+            listenable: tick,
+            builder: (context, _) {
+              stamps.add(SchedulerBinding.instance.currentFrameTimeStamp);
+              return Text('${tick.value}');
+            },
+          ),
+        ),
+      ),
+    );
+    for (var i = 0; i < 7; i++) {
+      tick.value++;
+      await tester.pump(const Duration(milliseconds: 8));
+    }
+    debugPrint('C1 clock advance=${stamps.last - stamps.first}');
+    expect(
+      stamps.last - stamps.first,
+      greaterThanOrEqualTo(const Duration(milliseconds: 50)),
+    );
+  });
+
+  testWidgets('another message in its place parses at once, not throttled', (
+    tester,
+  ) async {
+    final text = ValueNotifier('Alpha, the first words.');
+    addTearDown(text.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: ListenableBuilder(
+              listenable: text,
+              builder: (context, _) => MarkdownView(text.value),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    // Not grown on what was parsed: shown in the same frame.
+    text.value = 'Beta, wholly other words.';
+    await tester.pump(const Duration(milliseconds: 8));
+    final shown = tester
+        .widget<MarkdownBlocks>(find.byType(MarkdownBlocks))
+        .nodes
+        .map((node) => node.textContent)
+        .join(' ');
+    expect(shown, contains('Beta'));
+    expect(shown, isNot(contains('Alpha')));
+  });
+
+  testWidgets('a reply streamed in parses at most every 50ms, and at the end '
+      'as it would once', (tester) async {
+    final text = ValueNotifier('Start. ');
+    addTearDown(text.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: ListenableBuilder(
+              listenable: text,
+              builder: (context, _) => MarkdownView(text.value),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    var parses = 0;
+    debugOnRebuildDirtyWidget = (element, _) {
+      if (element.widget is MarkdownBlocks) parses++;
+    };
+    addTearDown(() => debugOnRebuildDirtyWidget = null);
+    final buffer = StringBuffer('Start. ');
+    for (var i = 0; i < 200; i++) {
+      buffer.write('word$i $i${'x' * 32} ');
+      text.value = buffer.toString();
+      await tester.pump(const Duration(milliseconds: 8));
+    }
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pumpAndSettle();
+    final blocks = tester.widget<MarkdownBlocks>(find.byType(MarkdownBlocks));
+    final once = MarkdownView.document(tags: true)
+        .parse(text.value)
+        .map((node) => node.textContent)
+        .toList();
+    final terminal = listEquals(
+      blocks.nodes.map((node) => node.textContent).toList(),
+      once,
+    );
+    debugPrint('C1 parses=$parses C2 terminal=$terminal');
+    expect(parses, lessThanOrEqualTo(34));
+    expect(parses, greaterThanOrEqualTo(5));
+    expect(terminal, isTrue);
   });
 }

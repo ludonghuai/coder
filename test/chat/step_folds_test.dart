@@ -371,4 +371,131 @@ void main() {
     expect(const TurnUsage(outputTokens: 300).totalTokens, 300);
     expect(const TurnUsage(costUsd: 0.1).totalTokens, isNull);
   });
+
+  group('extending as items come', () {
+    /// What a fold stands for, to compare one with another.
+    (StepFoldKind, int, int, Duration?)? key(StepFold? fold) =>
+        fold == null ? null : (fold.kind, fold.start, fold.end, fold.worked);
+
+    /// Where a thought is shown: the start of its run, if it runs with
+    /// another.
+    int shownRow(List<ChatItem> items, int index) {
+      if (items[index] is! ThinkingItem) return index;
+      var start = index;
+      while (start > 0 && items[start - 1] is ThinkingItem) {
+        start--;
+      }
+      var end = index;
+      while (end + 1 < items.length && items[end + 1] is ThinkingItem) {
+        end++;
+      }
+      return end > start ? start : index;
+    }
+
+    void expectSame(
+      StepFolds incremental,
+      StepFolds full,
+      List<ChatItem> items,
+    ) {
+      expect(incremental.count, items.length);
+      for (var i = 0; i < items.length; i++) {
+        expect(incremental.rowOf(i), shownRow(items, i));
+        expect(key(incremental.stepsAt(i)), key(full.stepsAt(i)));
+        expect(key(incremental.workAt(i)), key(full.workAt(i)));
+        expect(incremental.turnEndingAt(i), full.turnEndingAt(i));
+        for (final open in <Set<StepFoldKind>>[
+          const {},
+          const {StepFoldKind.work},
+          const {StepFoldKind.steps},
+          const {StepFoldKind.work, StepFoldKind.steps},
+        ]) {
+          final a = incremental.rowAt(i, items[i], open.contains);
+          final b = full.rowAt(i, items[i], open.contains);
+          expect(key(a.work), key(b.work), reason: 'work at $i');
+          expect(key(a.steps), key(b.steps), reason: 'steps at $i');
+          expect(a.item, b.item, reason: 'item at $i');
+        }
+        final a = incremental.shownAt(i, items[i]);
+        final b = full.shownAt(i, items[i]);
+        switch (a) {
+          case ThinkingItem():
+            expect((b as ThinkingItem).text, a.text, reason: 'shown at $i');
+          default:
+            expect(identical(a, b), isTrue, reason: 'shown at $i');
+        }
+      }
+    }
+
+    final script = <ChatItem>[
+      UserMessageItem(text: 'Fix it', worked: const Duration(seconds: 65)),
+      const ThinkingItem(text: 'One.', tokens: 1, seconds: 2),
+      const ThinkingItem(text: 'Two.', tokens: 1, seconds: 2),
+      const ThinkingItem(text: 'Three.', tokens: 1, seconds: 2),
+      _read,
+      _grep,
+      _words,
+      _edit,
+      _read,
+      const PlanItem(path: '/p/plan.md', round: 1, status: PlanStatus.sentBack),
+      _read,
+      const PlanItem(path: '/p/plan.md', round: 2, status: PlanStatus.approved),
+      _read,
+      _grep,
+      _answer,
+      UserMessageItem(text: 'Again', worked: const Duration(seconds: 30)),
+      const ThinkingItem(text: 'Again one.', tokens: 1, seconds: 1),
+      const ToolCallItem(kind: ToolKind.listDir, target: 'lib'),
+      _read,
+      _answer,
+      const LiveStatusItem('Planning next move', visible: false),
+    ];
+
+    test('extend matches of at every index, as the history grows', () {
+      final items = <ChatItem>[];
+      final growing = {
+        for (final live in [false, true]) live: _fold(items, live: live),
+      };
+      for (final item in script) {
+        items.add(item);
+        for (final live in [false, true]) {
+          final incremental = growing[live]!
+            ..extend(items.length, (i) => items[i], live: live);
+          expectSame(incremental, _fold(items, live: live), items);
+        }
+      }
+    });
+
+    test('a turn ending recomputes its last turn', () {
+      final items = <ChatItem>[_prompt(), _read, _grep, _words, _answer];
+      final incremental = _fold(items, live: true)
+        ..extend(items.length, (i) => items[i], live: false);
+      expectSame(incremental, _fold(items), items);
+    });
+
+    test('a turn ending reads again what it changed in place', () {
+      final items = <ChatItem>[_prompt(null), _read, _grep, _words, _answer];
+      final incremental = _fold(items, live: true);
+      // Same count, other items: the prompt takes the time it worked, and
+      // the answer takes the status row's place.
+      items[0] = _prompt(const Duration(seconds: 9));
+      items[4] = const AssistantTextItem('It was the needle.');
+      incremental.extend(items.length, (i) => items[i], live: false);
+      expectSame(incremental, _fold(items), items);
+    });
+
+    test('refreshTail shows the words a merged thought took in', () {
+      final items = <ChatItem>[
+        _prompt(null),
+        const ThinkingItem(text: 'A', tokens: 1, seconds: 1),
+        const ThinkingItem(text: 'B', tokens: 1, seconds: 1),
+      ];
+      final folds = _fold(items);
+      expect((folds.shownAt(1, items[1]) as ThinkingItem).text, 'A\n\nB');
+      const longer = ThinkingItem(text: 'B more', tokens: 2, seconds: 1);
+      items[2] = longer;
+      folds.refreshTail(2, longer);
+      expect((folds.shownAt(1, items[1]) as ThinkingItem).text, 'A\n\nB more');
+      expect(folds.rowOf(2), 1);
+    });
+  });
 }

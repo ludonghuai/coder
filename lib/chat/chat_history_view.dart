@@ -101,6 +101,23 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
 
   StepFolds _folds = StepFolds.none;
 
+  /// What the feed's tail was, as last seen: a text delta grows it alone,
+  /// and only the row it shows in rebuilds.
+  ({
+    int count,
+    bool streaming,
+    bool unprompted,
+    bool editing,
+    int prepended,
+    int tail,
+    Type kind,
+    int length,
+  })?
+  _tailSeen;
+
+  /// Ticks when the live row's text grew: only its [_LiveItem] listens.
+  final ValueNotifier<int> _liveTick = ValueNotifier(0);
+
   /// Folds the user opened (true) or closed (false); others are closed.
   final Map<(StepFoldKind, int), bool> _foldOpen = {};
 
@@ -113,11 +130,71 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
   /// Whether a turn was under way, as last seen: to tell when it ends.
   bool _wasLive = false;
 
-  void _refold() => _folds = StepFolds.of(
-    _feed.itemCount,
-    _feed.itemAt,
-    live: _feed.isStreaming,
-  );
+  void _refold({bool grow = false}) {
+    final count = _feed.itemCount;
+    if (grow && count >= _folds.count) {
+      _folds.extend(count, _feed.itemAt, live: _feed.isStreaming);
+      return;
+    }
+    _folds = StepFolds.of(count, _feed.itemAt, live: _feed.isStreaming);
+  }
+
+  /// Takes what the feed's tail is now, toward telling a text delta alone.
+  void _watchTail() => _tailSeen = _tailNow();
+
+  /// What the feed's tail is now: the little a text delta changes.
+  ({
+    int count,
+    bool streaming,
+    bool unprompted,
+    bool editing,
+    int prepended,
+    int tail,
+    Type kind,
+    int length,
+  })
+  _tailNow() {
+    final count = _feed.itemCount;
+    final tail = _contentCount - 1;
+    final item = tail >= 0 ? _feed.itemAt(tail) : null;
+    return (
+      count: count,
+      streaming: _feed.isStreaming,
+      unprompted: _feed.isUnprompted,
+      editing: _feed.editing != null,
+      prepended: _session?.prependedCount ?? 0,
+      tail: tail,
+      kind: item.runtimeType,
+      length: switch (item) {
+        AssistantTextItem(:final text) => text.length,
+        ThinkingItem(:final text) => text.length,
+        _ => 0,
+      },
+    );
+  }
+
+  /// Whether the only change is words grown on the tail's content item: the
+  /// one a single row shows.
+  bool _tailGrew() {
+    final seen = _tailSeen;
+    final now = _tailNow();
+    return seen != null &&
+        now.count == seen.count &&
+        now.streaming &&
+        seen.streaming &&
+        // Nothing is being edited: a full path is due then.
+        !now.editing &&
+        !seen.editing &&
+        now.unprompted == seen.unprompted &&
+        now.prepended == seen.prepended &&
+        now.tail == seen.tail &&
+        now.kind == seen.kind &&
+        now.length > seen.length;
+  }
+
+  /// The row showing the text streamed in, if a turn is under way: thoughts
+  /// merged into one show in the first's row.
+  int get _liveRow => _feed.isStreaming ? _folds.rowOf(_contentCount - 1) : -1;
 
   bool _isFoldOpen(StepFold fold) =>
       _foldOpen[fold.key] ??
@@ -454,6 +531,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
     _prependedSeen = _session?.prependedCount ?? 0;
     _refold();
     _seeItems();
+    _watchTail();
     _resumeEditing();
   }
 
@@ -487,8 +565,11 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
       _foldOpen.clear();
       _unfoldedTurns.clear();
       _wasLive = widget.feed.isStreaming;
+      _imagesCache = null;
+      _imagesKey = null;
       _refold();
       _seeItems();
+      _watchTail();
       _resumeEditing();
     }
   }
@@ -563,6 +644,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
     _handoff.dispose();
     _selectionDelegate.dispose();
     _listController.dispose();
+    _liveTick.dispose();
     _scrollController.dispose();
     _selectionFocusNode.dispose();
     super.dispose();
@@ -1172,7 +1254,23 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
   }
 
   void _handleSessionChanged() {
+    final liveChanged = _feed.isStreaming != _wasLive;
     final prepended = _session?.prependedCount ?? 0;
+    // Words grew on the tail alone: besides the data, only the row that
+    // shows them changes.
+    if (_tailGrew()) {
+      final tail = _contentCount - 1;
+      _folds.refreshTail(tail, _feed.itemAt(tail));
+      _liveTick.value++;
+      _wasLive = _feed.isStreaming;
+      _prependedSeen = prepended;
+      _watchTail();
+      return;
+    }
+    // Anything else may replace any item: pictures are collected anew when
+    // next asked for.
+    _imagesCache = null;
+    _imagesKey = null;
     final moved = prepended - _prependedSeen;
     _prependedSeen = prepended;
     if (moved > 0) _shiftIndexes(moved);
@@ -1182,7 +1280,9 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
     // A turn the agent took up on its own (a background task's report)
     // leaves the user reading where they are, the turns they read open.
     final sent = _feed.isStreaming && !_feed.isUnprompted;
-    _refold();
+    final count = _feed.itemCount;
+    final grew = count >= _folds.count && (count > _folds.count || liveChanged);
+    _refold(grow: moved == 0 && grew);
     // Once folded: what of them is hidden takes no room.
     if (moved > 0) {
       if (_keepAbove(moved)) {
@@ -1212,6 +1312,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
     _itemsCame();
     _scheduleStickyUpdate();
     setState(() {});
+    _watchTail();
     _wantEarlier();
   }
 
@@ -2118,9 +2219,35 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
     );
   }
 
-  /// Every picture the chat's tools returned, in order.
-  List<ChatImage> _images() =>
-      foldImages([for (var i = 0; i < _feed.itemCount; i++) _feed.itemAt(i)]);
+  /// Every picture the chat's tools returned, as last collected, and what
+  /// they were collected from: dropped on any change but a text delta's,
+  /// which keeps it (the tail's pictures cannot differ).
+  List<ChatImage>? _imagesCache;
+
+  /// What the cache was collected from: the count, and the last content item
+  /// as it was. A hit compares the count alone: every other change drops the
+  /// cache, so the count tells it is the same conversation, and comparing
+  /// the item too would read it on every hit.
+  (int, ChatItem?)? _imagesKey;
+
+  /// Every picture the chat's tools returned, in order. Collected when
+  /// asked for, and kept until the conversation changes. A hit reads no
+  /// item: dropped on every other change, the count tells it is the same.
+  List<ChatImage> _images() {
+    if (_imagesCache case final cached?
+        when _imagesKey?.$1 == _feed.itemCount) {
+      return cached;
+    }
+    final count = _feed.itemCount;
+    final images = foldImages([
+      for (var i = 0; i < count; i++) _feed.itemAt(i),
+    ]);
+    _imagesKey = (
+      count,
+      _contentCount > 0 ? _feed.itemAt(_contentCount - 1) : null,
+    );
+    return _imagesCache = images;
+  }
 
   Widget _buildHistory(BuildContext context) {
     final outerBars = ScrollbarTheme.of(context);
@@ -2233,7 +2360,12 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
                                               : _row(
                                                   index,
                                                   gap: _gapBefore(index),
-                                                  child: _buildItem(index),
+                                                  child: _LiveItem(
+                                                    revision: _liveTick,
+                                                    live: index == _liveRow,
+                                                    build: () =>
+                                                        _buildItem(index),
+                                                  ),
                                                 ),
                                         ),
                                       ),
@@ -2919,6 +3051,58 @@ class _ChatSelectionDelegate extends StaticSelectionContainerDelegate {
         ? null
         : SelectedContent(plainText: buffer.toString());
   }
+}
+
+/// The row that shows text being streamed in: only it listens for the
+/// text's revisions, and only it rebuilds as they come.
+class _LiveItem extends StatefulWidget {
+  const _LiveItem({
+    required this.revision,
+    required this.live,
+    required this.build,
+  });
+
+  /// Ticks as the text grows.
+  final ValueListenable<int> revision;
+
+  /// Whether this row shows the text streamed in now.
+  final bool live;
+
+  /// The row, built again on each revision.
+  final Widget Function() build;
+
+  @override
+  State<_LiveItem> createState() => _LiveItemState();
+}
+
+class _LiveItemState extends State<_LiveItem> {
+  @override
+  void initState() {
+    super.initState();
+    if (widget.live) widget.revision.addListener(_rebuilt);
+  }
+
+  @override
+  void didUpdateWidget(_LiveItem oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.live == widget.live &&
+        oldWidget.revision == widget.revision) {
+      return;
+    }
+    if (oldWidget.live) oldWidget.revision.removeListener(_rebuilt);
+    if (widget.live) widget.revision.addListener(_rebuilt);
+  }
+
+  @override
+  void dispose() {
+    if (widget.live) widget.revision.removeListener(_rebuilt);
+    super.dispose();
+  }
+
+  void _rebuilt() => setState(() {});
+
+  @override
+  Widget build(BuildContext context) => widget.build();
 }
 
 /// Paints [child] at the offset [top] gives, read at paint time: after

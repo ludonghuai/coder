@@ -50,14 +50,17 @@ class StepFolds {
   );
 
   /// Nothing folded.
+  ///
+  /// Shared: it is where a view starts, before its first fold. Never grown
+  /// in place — [extend] would grow every view holding it.
   static final none = StepFolds._(
-    const [],
-    const [],
+    <StepFold?>[],
+    <StepFold?>[],
     null,
-    const {},
-    const [],
-    const {},
-    const [],
+    <int, int>{},
+    <ChatItem>[],
+    <int, int>{},
+    <int?>[],
   );
 
   /// Folds the [count] items given by [itemAt]. While [live], the last turn
@@ -67,103 +70,16 @@ class StepFolds {
     ChatItem Function(int index) itemAt, {
     required bool live,
   }) {
-    final items = [for (var i = 0; i < count; i++) itemAt(i)];
-    final steps = List<StepFold?>.filled(count, null);
-    final work = List<StepFold?>.filled(count, null);
-    final turnEnds = <int, int>{};
-    final thoughtRuns = <int, int>{};
-    final thoughtOf = List<int?>.filled(count, null);
-
-    for (var start = 0; start < count;) {
-      if (items[start] is! ThinkingItem) {
-        start++;
-        continue;
-      }
-      var end = start + 1;
-      while (end < count && items[end] is ThinkingItem) {
-        end++;
-      }
-      if (end - start >= 2) {
-        thoughtRuns[start] = end;
-        thoughtOf.fillRange(start + 1, end, start);
-      }
-      start = end;
-    }
-
-    for (var start = 0; start < count;) {
-      if (!isQuickStep(items[start])) {
-        start++;
-        continue;
-      }
-      var end = start;
-      var actions = 0;
-      while (end < count && isQuickStep(items[end])) {
-        if (items[end] is! ThinkingItem) actions++;
-        end++;
-      }
-      if (actions >= 2) {
-        final fold = StepFold(StepFoldKind.steps, start, end);
-        steps.fillRange(start, end, fold);
-      }
-      start = end;
-    }
-
-    final prompts = [
-      for (var i = 0; i < count; i++)
-        if (items[i] case UserMessageItem(queued: false)) i,
-    ];
-    for (var t = 0; t < prompts.length; t++) {
-      // The turn under way, and any queued after it, are not done.
-      if (live && t == prompts.length - 1) break;
-      final prompt = prompts[t];
-      final worked = (items[prompt] as UserMessageItem).worked;
-      if (worked == null) continue;
-      var last = t + 1 < prompts.length ? prompts[t + 1] - 1 : count - 1;
-      while (last > prompt && items[last] is UserMessageItem) {
-        last--;
-      }
-      // Ending in thoughts, it ends at the row they show in.
-      if (last > prompt) turnEnds[thoughtOf[last] ?? last] = prompt;
-      if (last <= prompt || items[last] is! AssistantTextItem) continue;
-      // The answer: the words after its last step, thoughts among them.
-      var answer = last;
-      for (var i = last; i > prompt; i--) {
-        if (items[i] is AssistantTextItem) {
-          answer = i;
-        } else if (items[i] is! ThinkingItem) {
-          break;
-        }
-      }
-      // A plan's card stands out of it: the work folded is what came
-      // after the last (carrying it out, once approved); the planning
-      // before stays as it is.
-      var start = prompt + 1;
-      for (var i = answer - 1; i > prompt; i--) {
-        if (items[i] is PlanItem) {
-          start = i + 1;
-          break;
-        }
-      }
-      final shown = items
-          .sublist(start, answer)
-          .where((item) => item is! ThinkingItem)
-          .length;
-      if (shown < 2) continue;
-      final fold = StepFold(StepFoldKind.work, start, answer, worked: worked);
-      work.fillRange(start, answer, fold);
-    }
-
-    var liveEnd = count;
-    if (count > 0 && items[count - 1] is LiveStatusItem) liveEnd--;
-    return StepFolds._(
-      steps,
-      work,
-      live ? liveEnd : null,
-      turnEnds,
-      items,
-      thoughtRuns,
-      thoughtOf,
+    final folds = StepFolds._(
+      List<StepFold?>.filled(count, null, growable: true),
+      List<StepFold?>.filled(count, null, growable: true),
+      null,
+      <int, int>{},
+      [for (var i = 0; i < count; i++) itemAt(i)],
+      <int, int>{},
+      List<int?>.filled(count, null, growable: true),
     );
+    return folds.._rescan(0, live: live);
   }
 
   final List<StepFold?> _steps;
@@ -175,6 +91,169 @@ class StepFolds {
 
   /// For each thought shown in an earlier one's row, where that run starts.
   final List<int?> _thoughtOf;
+
+  /// How many items it holds.
+  int get count => _items.length;
+
+  /// Where item [index] shows: the start of the run of thoughts it is one
+  /// with, else itself.
+  int rowOf(int index) => index >= 0 && index < _thoughtOf.length
+      ? _thoughtOf[index] ?? index
+      : index;
+
+  /// Folds [count] items, [itemAt] giving them all, on from [this] as it
+  /// was for the items before them: the last turn is read again, the
+  /// history before stands as it was. Grows it in place, and returns it.
+  StepFolds extend(
+    int count,
+    ChatItem Function(int index) itemAt, {
+    required bool live,
+  }) {
+    assert(count >= _items.length, 'extend grows; it never cuts');
+    if (count > _items.length) {
+      _items.addAll([for (var i = _items.length; i < count; i++) itemAt(i)]);
+      _steps.length = count;
+      _work.length = count;
+      _thoughtOf.length = count;
+    }
+    final from = _tailFrom(itemAt, count);
+    // A turn that was under way and has just ended (a prompt came after
+    // it) folds now: it too is scanned again.
+    final liveFrom = _liveStart;
+    final start = liveFrom != null && liveFrom < from ? liveFrom : from;
+    // What a turn ending changes may sit in place: its prompt's time, its
+    // status row's place taken by the answer. Read again, not kept.
+    for (var i = start; i < count; i++) {
+      _items[i] = itemAt(i);
+    }
+    _steps.fillRange(start, count, null);
+    _work.fillRange(start, count, null);
+    _thoughtOf.fillRange(start, count, null);
+    _thoughtRuns.removeWhere((run, _) => run >= start);
+    _merged.removeWhere((run, _) => run >= start);
+    _turnEnds.removeWhere((_, prompt) => prompt >= start);
+    _rescan(start, live: live);
+    return this;
+  }
+
+  /// Item [index] from now on is [item] (it grew): what the run of thoughts
+  /// it is in shows is made again, with its new words.
+  void refreshTail(int index, ChatItem item) {
+    if (index < 0 || index >= _items.length) return;
+    _items[index] = item;
+    _merged.remove(rowOf(index));
+  }
+
+  /// The first item the last turn reaches back to: its prompt, or the start
+  /// of a run of thoughts or steps the history ends in.
+  int _tailFrom(ChatItem Function(int index) itemAt, int count) {
+    var prompt = 0;
+    for (var i = count - 1; i >= 0; i--) {
+      if (itemAt(i) case UserMessageItem(queued: false)) {
+        prompt = i;
+        break;
+      }
+    }
+    var thoughts = count;
+    while (thoughts > 0 && itemAt(thoughts - 1) is ThinkingItem) {
+      thoughts--;
+    }
+    var steps = count;
+    while (steps > 0 && isQuickStep(itemAt(steps - 1))) {
+      steps--;
+    }
+    final first = prompt < thoughts ? prompt : thoughts;
+    return first < steps ? first : steps;
+  }
+
+  /// Scans the items from [from] on as [of] scans them all: the runs of
+  /// thoughts and steps, and the turns' work.
+  void _rescan(int from, {required bool live}) {
+    final count = _items.length;
+    for (var start = from; start < count;) {
+      if (_items[start] is! ThinkingItem) {
+        start++;
+        continue;
+      }
+      var end = start + 1;
+      while (end < count && _items[end] is ThinkingItem) {
+        end++;
+      }
+      if (end - start >= 2) {
+        _thoughtRuns[start] = end;
+        _thoughtOf.fillRange(start + 1, end, start);
+      }
+      start = end;
+    }
+
+    for (var start = from; start < count;) {
+      if (!isQuickStep(_items[start])) {
+        start++;
+        continue;
+      }
+      var end = start;
+      var actions = 0;
+      while (end < count && isQuickStep(_items[end])) {
+        if (_items[end] is! ThinkingItem) actions++;
+        end++;
+      }
+      if (actions >= 2) {
+        final fold = StepFold(StepFoldKind.steps, start, end);
+        _steps.fillRange(start, end, fold);
+      }
+      start = end;
+    }
+
+    final prompts = [
+      for (var i = from; i < count; i++)
+        if (_items[i] case UserMessageItem(queued: false)) i,
+    ];
+    for (var t = 0; t < prompts.length; t++) {
+      // The turn under way, and any queued after it, are not done.
+      if (live && t == prompts.length - 1) break;
+      final prompt = prompts[t];
+      final worked = (_items[prompt] as UserMessageItem).worked;
+      if (worked == null) continue;
+      var last = t + 1 < prompts.length ? prompts[t + 1] - 1 : count - 1;
+      while (last > prompt && _items[last] is UserMessageItem) {
+        last--;
+      }
+      // Ending in thoughts, it ends at the row they show in.
+      if (last > prompt) _turnEnds[_thoughtOf[last] ?? last] = prompt;
+      if (last <= prompt || _items[last] is! AssistantTextItem) continue;
+      // The answer: the words after its last step, thoughts among them.
+      var answer = last;
+      for (var i = last; i > prompt; i--) {
+        if (_items[i] is AssistantTextItem) {
+          answer = i;
+        } else if (_items[i] is! ThinkingItem) {
+          break;
+        }
+      }
+      // A plan's card stands out of it: the work folded is what came
+      // after the last (carrying it out, once approved); the planning
+      // before stays as it is.
+      var start = prompt + 1;
+      for (var i = answer - 1; i > prompt; i--) {
+        if (_items[i] is PlanItem) {
+          start = i + 1;
+          break;
+        }
+      }
+      final shown = _items
+          .sublist(start, answer)
+          .where((item) => item is! ThinkingItem)
+          .length;
+      if (shown < 2) continue;
+      final fold = StepFold(StepFoldKind.work, start, answer, worked: worked);
+      _work.fillRange(start, answer, fold);
+    }
+
+    var liveEnd = count;
+    if (count > 0 && _items[count - 1] is LiveStatusItem) liveEnd--;
+    _liveEnd = live ? liveEnd : null;
+    _liveStart = live && prompts.isNotEmpty ? prompts.last : null;
+  }
 
   /// The runs of thoughts as one, as asked for.
   final Map<int, ThinkingItem> _merged = {};
@@ -208,7 +287,11 @@ class StepFolds {
 
   /// Where the live turn's items end (before its status row); null when
   /// no turn is under way.
-  final int? _liveEnd;
+  int? _liveEnd;
+
+  /// The prompt of the turn under way, while one is: the turn to scan again
+  /// when it ends.
+  int? _liveStart;
 
   /// The run of steps item [index] is in, if folded.
   StepFold? stepsAt(int index) => index < _steps.length ? _steps[index] : null;
