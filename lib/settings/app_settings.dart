@@ -26,6 +26,7 @@ import '../workspace/workspace.dart';
 import 'app_locale.dart';
 import 'pages/accounts_page.dart';
 import 'pages/appearance_page.dart';
+import 'pages/browser_page.dart';
 import 'pages/customize_page.dart';
 import 'pages/data_dir_page.dart';
 import 'pages/general_page.dart';
@@ -136,6 +137,13 @@ class AppSettings {
     ];
   }
 
+  /// What the settings dialog says above every page: the browser's
+  /// debugging history grown large.
+  Widget buildNotice(
+    BuildContext context,
+    void Function(SettingsSection section) open,
+  ) => BrowserHistoryNotice(open: () => open(SettingsSection.browser));
+
   /// [section]'s page of the settings dialog.
   Widget buildPage(BuildContext context, SettingsSection section) {
     switch (section) {
@@ -169,6 +177,8 @@ class AppSettings {
             children: const [],
           ),
         };
+      case SettingsSection.browser:
+        return BrowserSettingsPage(settings: files?.settings);
       case SettingsSection.notifications:
         return NotificationsSettingsPage(settings: files?.settings);
       case SettingsSection.stash:

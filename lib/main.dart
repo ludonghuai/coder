@@ -11,6 +11,8 @@ import 'package:bao_editor/textmate/textmate_syntax.dart';
 
 import 'package:bao_editor/monaco/flutter/language_assets.dart';
 
+import 'browser/browser_bridge.dart';
+import 'browser/browser_tools.dart' show BrowserHistory;
 import 'chat/composer/composer_files.dart' show ComposerFile, pastedAsPicture;
 import 'chat/chat_width.dart';
 import 'chat/user_message_style.dart';
@@ -38,6 +40,8 @@ import 'kernel/claude_code/claude_onboarding.dart';
 import 'kernel/claude_code/claude_path_setting.dart';
 import 'kernel/claude_code/process_transport.dart';
 import 'kernel/commit_attribution.dart';
+import 'kernel/prompt_suggestions.dart';
+import 'chat/composer/composer_polish.dart' show ComposerPolishSetting;
 import 'kernel/queued_messages.dart';
 import 'kernel/thincoder/thincoder_locator.dart';
 import 'kernel/thincoder/thincoder_process.dart';
@@ -72,7 +76,9 @@ import 'sidebar/sidebar_times.dart';
 import 'telemetry/telemetry_platform.dart';
 import 'stash/stash_editor.dart' show StashEditor;
 import 'forge/forge_accounts.dart';
-import 'forge/forge_io_stub.dart' if (dart.library.io) 'forge/forge_io.dart' show IoForgeHttp;
+import 'forge/forge_io_stub.dart'
+    if (dart.library.io) 'forge/forge_io.dart'
+    show IoForgeHttp;
 import 'stash/stash_controller.dart';
 import 'stash/stash_forge.dart';
 import 'stash/stash_disk.dart';
@@ -153,6 +159,14 @@ Future<void> main(List<String> arguments) async {
     // Read as each message is sent.
     QueuedMessages.current = () =>
         QueuedMessages.parse(files.settings[QueuedMessages.settingKey]);
+    // Read as each agent starts, and as each message is sent.
+    PromptSuggestions.current = () =>
+        PromptSuggestions.enabled(files.settings[PromptSuggestions.settingKey]);
+    // The composer's Polish button, shown or not as it changes.
+    ComposerPolishSetting.current = () => ComposerPolishSetting.enabled(
+      files.settings[ComposerPolishSetting.settingKey],
+    );
+    ComposerPolishSetting.changes = files.settings;
     // Settings → General → Claude Code: the build to run, read as each
     // agent starts.
     ClaudePathSetting.current = () =>
@@ -199,6 +213,16 @@ Future<void> main(List<String> arguments) async {
     SidebarTimes.follow(
       files.settings,
       () => files.settings[SidebarTimes.settingKey],
+    );
+    // Settings → Browser: whether the agents may use the user's browsers.
+    BrowserBridge.instance.follow(
+      files.settings,
+      () => files.settings[BrowserBridge.settingKey],
+    );
+    // Settings → Browser: whether the history keeps bodies and steps too.
+    BrowserHistory.instance.follow(
+      files.settings,
+      () => files.settings[BrowserHistory.detailedKey],
     );
     // Settings → Appearance: the code's font, size and ligatures, and the
     // window's text size.
@@ -441,9 +465,8 @@ UpdateController? _startUpdates(SettingsFiles files) {
   );
 }
 
-/// The app's usage data (lib/telemetry/): once a UTC day it is in front,
-/// as settings.json's `telemetry.telemetryLevel` allows. None in a debug
-/// build, or with `DO_NOT_TRACK` set.
+/// The app's usage data (lib/telemetry/): once a UTC day it is in front.
+/// None in a debug build.
 void _startTelemetry(SettingsFiles files) {
   final platform = platformTelemetry();
   if (platform == null) return;
@@ -457,9 +480,6 @@ void _startTelemetry(SettingsFiles files) {
     arch: platform.arch,
     sender: platform.sender,
     url: platform.url,
-    enabled: () =>
-        TelemetrySetting.enabled(files.settings[TelemetrySetting.settingKey]),
-    settingsChanges: files.settings,
     store: GlobalTelemetryStore(files.storage),
     inFront: inFront,
   )..start();

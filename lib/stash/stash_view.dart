@@ -8,6 +8,7 @@ import 'package:flutter/rendering.dart'
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
+import '../base/smooth_scroll.dart';
 import '../chat/composer/composer_files.dart';
 import '../chat/widgets/hover_builder.dart';
 import '../chat/widgets/scroll_edge_fade.dart';
@@ -125,7 +126,7 @@ class StashViewState extends State<StashView>
   };
 
   /// The cards' scrolling, to bring one into view ([reveal]).
-  final _scroll = ScrollController();
+  final _scroll = SmoothScrollController();
 
   /// Each card's, once built: where it is, to scroll to.
   final Map<int, GlobalKey> _cardKeys = {};
@@ -167,6 +168,7 @@ class StashViewState extends State<StashView>
     super.initState();
     _open = widget.initial;
     _lastShown = widget.initial;
+    _restoreFilters();
     _shown.addListener(_shownChanged);
     _query.addListener(() => setState(() {}));
     _controller.addListener(_changed);
@@ -279,6 +281,28 @@ class StashViewState extends State<StashView>
     );
   }
 
+  /// The stash just made with New, whose text has the keyboard as it
+  /// shows.
+  int? _writing;
+
+  /// New: a stash written in here, beside the cards, at once (the panel is
+  /// the shortcut's, over other apps); of the project shown, if one is.
+  Future<void> _new() async {
+    final id = await _controller.draft(project: _singleProject);
+    if (!mounted) return;
+    setState(() {
+      _writing = id;
+      _open = id;
+      _picked.clear();
+    });
+  }
+
+  /// The project the page shows, when it shows one alone.
+  String? get _singleProject =>
+      _projects.length == 1 && _projects.single.isNotEmpty
+      ? _projects.single
+      : null;
+
   /// Imports issues as stashes (see [showStashImportDialog]): about the
   /// project shown, if one is; the stash shown when it is one.
   Future<void> _import() async {
@@ -287,14 +311,39 @@ class StashViewState extends State<StashView>
     final notes = await showStashImportDialog(
       context,
       forge: forge,
-      project: _projects.length == 1 && _projects.single.isNotEmpty
-          ? _projects.single
-          : null,
+      project: _singleProject,
     );
     if (notes != null && notes.length == 1 && mounted) show(notes.single.id);
   }
 
   // --- What shows ---------------------------------------------------------------
+
+  /// The filters as last picked ([_filter]), the page's own without.
+  void _restoreFilters() {
+    final kept = _controller.filters;
+    if (kept == null) return;
+    _time = _Time.values.asNameMap()[kept['time']] ?? _Time.all;
+    if (kept['projects'] case final List<Object?> projects) {
+      _projects.addAll(projects.whereType<String>());
+    }
+    if (kept['statuses'] case final List<Object?> statuses) {
+      final byName = StashStatus.values.asNameMap();
+      _statuses
+        ..clear()
+        ..addAll([for (final name in statuses) ?byName[name]]);
+    }
+  }
+
+  /// Changes the filters as the user picks them, kept for the next time
+  /// the page shows; not those widened to show a stash ([reveal]).
+  void _filter(VoidCallback change) {
+    setState(change);
+    _controller.filters = {
+      'time': _time.name,
+      'projects': [..._projects],
+      'statuses': [for (final status in _statuses) status.name],
+    };
+  }
 
   bool _timeOk(StashNote note, DateTime now) {
     final today = DateTime(now.year, now.month, now.day);
@@ -507,6 +556,7 @@ class StashViewState extends State<StashView>
                     key: ValueKey(id ?? open.id),
                     controller: _controller,
                     id: id ?? open.id,
+                    autofocus: (id ?? open.id) == _writing,
                     onOpenAgent: widget.onOpenAgent,
                     onOpenLink: _openLink,
                     onClose: () => setState(() => _open = null),
@@ -714,7 +764,7 @@ class StashViewState extends State<StashView>
             SidebarIconButton(
               icon: Codicons.add,
               tooltip: l10n.stashNewTooltip,
-              onTap: () => unawaited(_controller.present()),
+              onTap: () => unawaited(_new()),
             ),
             if (_controller.forge != null)
               SidebarIconButton(
@@ -920,7 +970,6 @@ class StashViewState extends State<StashView>
             projectName: _projectName(note.project),
             onTap: () => _tap(note),
             onMenu: (position) => unawaited(_cardMenu(note, position)),
-            onOpenThread: widget.onOpenAgent,
           );
         },
       ),
@@ -950,7 +999,7 @@ class StashViewState extends State<StashView>
             for (final status in StashStatus.values)
               if (_statuses.contains(status)) stashStatusLabel(l10n, status),
           ].join(l10n.stashFilterJoiner);
-    void toggle<T>(Set<T> set, T value) => setState(() {
+    void toggle<T>(Set<T> set, T value) => _filter(() {
       if (!set.remove(value)) set.add(value);
     });
     return Wrap(
@@ -972,7 +1021,7 @@ class StashViewState extends State<StashView>
                 IdeMenuAction(
                   label,
                   checked: _time == time,
-                  onSelected: () => setState(() => _time = time),
+                  onSelected: () => _filter(() => _time = time),
                 ),
             ]),
           ),
@@ -987,7 +1036,7 @@ class StashViewState extends State<StashView>
               IdeMenuAction(
                 l10n.stashFilterAnyProject,
                 checkedNow: () => _projects.isEmpty,
-                onSelected: () => setState(_projects.clear),
+                onSelected: () => _filter(_projects.clear),
               ),
               const IdeMenuSeparator(),
               IdeMenuAction(
@@ -1018,7 +1067,7 @@ class StashViewState extends State<StashView>
                 checkedNow: () =>
                     _statuses.isEmpty ||
                     _statuses.length == StashStatus.values.length,
-                onSelected: () => setState(_statuses.clear),
+                onSelected: () => _filter(_statuses.clear),
               ),
               const IdeMenuSeparator(),
               for (final status in StashStatus.values)
@@ -1027,7 +1076,7 @@ class StashViewState extends State<StashView>
                   keepOpen: true,
                   checkedNow: () =>
                       _statuses.isEmpty || _statuses.contains(status),
-                  onSelected: () => setState(() {
+                  onSelected: () => _filter(() {
                     // From all: all but it.
                     if (_statuses.isEmpty) {
                       _statuses.addAll(StashStatus.values);
@@ -1313,10 +1362,14 @@ class StashDetail extends StatefulWidget {
     this.onOpenAgent,
     this.onOpenLink,
     this.onClose,
+    this.autofocus = false,
   });
 
   final StashController controller;
   final int id;
+
+  /// Whether its text has the keyboard as it shows (one just made).
+  final bool autofocus;
 
   /// Shows a conversation it is carried out in; none where there is none
   /// to show it in.
@@ -1636,6 +1689,7 @@ class _StashDetailState extends State<StashDetail> with _StashActions {
             store: _controller.store,
             id: note.id,
             create: (body) async => note.id,
+            autofocus: widget.autofocus,
             refs: _controller.refs(_openLink),
             placeholder: context.l10n.stashPlaceholder,
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
@@ -1674,7 +1728,6 @@ class _StashCard extends StatelessWidget {
     required this.projectName,
     required this.onTap,
     required this.onMenu,
-    this.onOpenThread,
   });
 
   final StashNote note;
@@ -1687,9 +1740,6 @@ class _StashCard extends StatelessWidget {
   final String? projectName;
   final VoidCallback onTap;
   final ValueChanged<Offset> onMenu;
-
-  /// Opens the conversation its [StashThreadChip] shows.
-  final ValueChanged<AgentThread>? onOpenThread;
 
   @override
   Widget build(BuildContext context) {
@@ -1731,11 +1781,7 @@ class _StashCard extends StatelessWidget {
                 // Worked on: where, in place of its text (its title says
                 // what it is).
                 child: note.threads.isNotEmpty
-                    ? StashThreadChip(
-                        controller: store,
-                        note: note,
-                        onOpen: onOpenThread,
-                      )
+                    ? StashThreadChip(controller: store, note: note)
                     : Text(
                         note.summary,
                         maxLines: 3,

@@ -1384,6 +1384,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get cmdToggleSidePanel => '切换侧栏';
 
   @override
+  String get cmdToggleSidePanelPosition => '切换侧栏位置';
+
+  @override
   String get cmdSidePanelChanges => '显示智能体变更';
 
   @override
@@ -1400,6 +1403,161 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get sidePanelTerminal => '终端';
+
+  @override
+  String get sidePanelBrowser => '浏览器';
+
+  @override
+  String get browserNotConnected =>
+      '没有连接浏览器。在 Chrome（或 Edge、Brave、Arc）中添加 BaoCode 扩展后，agent 就能使用你共享给它的标签页。';
+
+  @override
+  String get browserNoSharedTab =>
+      '还没有共享的标签页。让 agent 打开网页，或在浏览器工具栏点 BaoCode 按钮共享当前标签页。';
+
+  @override
+  String get browserOtherApp => '另一个 BaoCode 已连接浏览器。';
+
+  @override
+  String get browserSharedTabs => '共享的标签页';
+
+  @override
+  String get browserReload => '重新加载';
+
+  @override
+  String get browserShowInBrowser => '在浏览器中显示';
+
+  @override
+  String get browserDetached => '浏览器已停止让 BaoCode 查看这个标签页。';
+
+  @override
+  String get browserReconnect => '重新连接';
+
+  @override
+  String get browserShowInPanel => '在侧边栏查看';
+
+  @override
+  String get browserWatchTitle => '正在看你在浏览器里操作';
+
+  @override
+  String get browserWatchHint =>
+      '请在浏览器的 BaoCode 标签页里操作。完成后点这里的“完成”，或点浏览器工具栏上的 BaoCode 按钮。';
+
+  @override
+  String browserWatchSteps(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '已记录 $count 步',
+      zero: '还没有记录',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get browserWatchCancel => '取消';
+
+  @override
+  String get browserWatchDone => '完成';
+
+  @override
+  String browserWatchedStep(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'click': '点击',
+      'input': '填写',
+      'key': '按下',
+      'submit': '提交',
+      'navigate': '前往',
+      'closed': '关闭了标签页',
+      'other': '操作',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get browserTraceReveal => '在访达中显示 trace 文件（拖进 DevTools 的性能面板可以细看）';
+
+  @override
+  String browserStepDone(String action) {
+    String _temp0 = intl.Intl.selectLogic(action, {
+      'tabs': '已列出标签页',
+      'open': '已打开',
+      'navigate': '已前往',
+      'back': '已后退',
+      'forward': '已前进',
+      'reload': '已重新加载',
+      'snapshot': '已读取页面',
+      'screenshot': '已截图',
+      'click': '已点击',
+      'type': '已输入',
+      'press': '已按下',
+      'scroll': '已滚动',
+      'evaluate': '已运行',
+      'close': '已关闭标签页',
+      'console': '已查看控制台',
+      'network': '已查看请求',
+      'request': '已查看请求',
+      'performance': '已分析性能',
+      'recordStart': '已开始录制性能',
+      'recordStop': '已分析性能',
+      'emulate': '已模拟',
+      'watch': '已看完你的操作',
+      'act': '已执行',
+      'inspect': '已检查元素',
+      'sources': '已查看源码',
+      'breakpoints': '已设置断点',
+      'debugger': '已调试',
+      'intercept': '已拦截请求',
+      'storage': '已查看站点数据',
+      'dialog': '已应答弹窗',
+      'coverage': '已统计覆盖率',
+      'memory': '已分析内存',
+      'history': '已查看调试记录',
+      'other': '已使用浏览器',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String browserStepRunning(String action) {
+    String _temp0 = intl.Intl.selectLogic(action, {
+      'tabs': '正在列出标签页',
+      'open': '正在打开',
+      'navigate': '正在前往',
+      'back': '正在后退',
+      'forward': '正在前进',
+      'reload': '正在重新加载',
+      'snapshot': '正在读取页面',
+      'screenshot': '正在截图',
+      'click': '正在点击',
+      'type': '正在输入',
+      'press': '正在按下',
+      'scroll': '正在滚动',
+      'evaluate': '正在运行',
+      'close': '正在关闭标签页',
+      'console': '正在查看控制台',
+      'network': '正在查看请求',
+      'request': '正在查看请求',
+      'performance': '正在分析性能',
+      'recordStart': '正在开始录制性能',
+      'recordStop': '正在分析性能',
+      'emulate': '正在模拟',
+      'watch': '正在看你操作',
+      'act': '正在执行',
+      'inspect': '正在检查元素',
+      'sources': '正在查看源码',
+      'breakpoints': '正在设置断点',
+      'debugger': '正在调试',
+      'intercept': '正在拦截请求',
+      'storage': '正在查看站点数据',
+      'dialog': '正在应答弹窗',
+      'coverage': '正在统计覆盖率',
+      'memory': '正在分析内存',
+      'history': '正在查看调试记录',
+      'other': '正在使用浏览器',
+    });
+    return '$_temp0';
+  }
 
   @override
   String get sidePanelPlan => '计划';
@@ -1427,6 +1585,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get sidePanelHide => '隐藏侧栏';
+
+  @override
+  String get sidePanelMoveLeft => '移到对话左侧';
+
+  @override
+  String get sidePanelMoveRight => '移到对话右侧';
 
   @override
   String get sidePanelChanges => '变更';
@@ -2074,6 +2238,33 @@ class AppLocalizationsZh extends AppLocalizations {
   String get toolUsed => '已使用';
 
   @override
+  String get toolGeneratingImage => '正在生成图片';
+
+  @override
+  String get toolGeneratedImage => '已生成图片';
+
+  @override
+  String get toolImageFailed => '图片未生成';
+
+  @override
+  String get toolImageWaiting => '生成图片';
+
+  @override
+  String get imagePickTitle => '选择用来生成的模型';
+
+  @override
+  String get imagePickGenerate => '生成';
+
+  @override
+  String get imagePickDecline => '不生成';
+
+  @override
+  String get imageSetDefault => '设为默认';
+
+  @override
+  String get imageDefaultSet => '已设为默认图片模型';
+
+  @override
   String get toolProposingGoal => '正在提议目标';
 
   @override
@@ -2213,6 +2404,16 @@ class AppLocalizationsZh extends AppLocalizations {
       count,
       locale: localeName,
       other: '运行 $count 条命令',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String stepsBrowsed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '操作浏览器 $count 次',
     );
     return '$_temp0';
   }
@@ -2466,6 +2667,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get agentKeepFile => '保留当前';
 
   @override
+  String get agentUndoFile => '撤销当前';
+
+  @override
+  String get agentPreviousChange => '上一处更改';
+
+  @override
+  String get agentNextChange => '下一处更改';
+
+  @override
+  String get agentMoreActions => '更多操作';
+
+  @override
   String get stripChangeAdded => '新增';
 
   @override
@@ -2478,10 +2691,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get stripChangeConflict => '智能体改完后这个文件又被改过，无法自动撤销智能体的改动。请手动处理后再保留。';
 
   @override
-  String get stripChangeShared => '同一时间还有别的智能体在这个项目里工作，这处改动可能有一部分是它的。';
-
-  @override
-  String get stripChangeUntracked => '不在项目快照中（被忽略、文件过大或在项目之外）：只能保留，无法撤销。';
+  String get stripChangeUntracked => '不知道改动前的内容（智能体没有提供、文件过大或在项目之外）：只能保留，无法撤销。';
 
   @override
   String get stripChangesDiff => '智能体改动';
@@ -3005,6 +3215,11 @@ class AppLocalizationsZh extends AppLocalizations {
   String get explorerPreparingTransfer => '正在准备文件…';
 
   @override
+  String composerCopyToHostFailed(String error) {
+    return '无法把文件复制到远程主机：$error';
+  }
+
+  @override
   String get explorerNewFile => '新建文件...';
 
   @override
@@ -3108,11 +3323,11 @@ class AppLocalizationsZh extends AppLocalizations {
   String get generalSettingsQueuedDuringTurn => '插入当前任务';
 
   @override
-  String get generalSettingsTelemetry => '发送使用数据';
+  String get generalSettingsPromptSuggestions => '建议下一条提示';
 
   @override
-  String get generalSettingsTelemetryDescription =>
-      '每天使用 BaoCode 时，发送一次随机的安装 ID、版本号以及系统和处理器类型，让我们知道有多少人在用、有多少人会回来。不包含任何关于你、你的代码或你在 BaoCode 中所做之事的信息（telemetry.telemetryLevel）。';
+  String get generalSettingsPromptSuggestionsDescription =>
+      '每轮结束后在输入框里给出灰色的下一条消息建议，按 Tab 采用。每条建议都会带着整段对话额外请求一次模型，关掉可以节省 token。从下一条消息起生效；目前仅支持 Claude Code。';
 
   @override
   String generalSettingsCommitAttributionLabel(String name) {
@@ -6205,6 +6420,38 @@ class AppLocalizationsZh extends AppLocalizations {
   String get modelsNoImages => '不支持图片';
 
   @override
+  String get modelsKind => '用途';
+
+  @override
+  String get modelsKindChat => '对话';
+
+  @override
+  String get modelsKindImage => '图片生成（Images API）';
+
+  @override
+  String get modelsKindImageChat => '图片生成（对话接口）';
+
+  @override
+  String get modelsKindDescription =>
+      '图片模型不出现在模型选择器里：agent 通过 generate_image 工具用它们生成图片。';
+
+  @override
+  String get modelsImageBadge => '图片';
+
+  @override
+  String get modelsImage => '图片生成模型';
+
+  @override
+  String get modelsImageDescription =>
+      'agent 生成图片（generate_image 工具）时用的模型，除非你让它换一个；选「每次询问」时在对话里选。图片模型在上游的模型列表里启用。';
+
+  @override
+  String get modelsImageFirst => '每次询问';
+
+  @override
+  String get modelsImageNone => '未启用图片模型';
+
+  @override
   String get modelsSave => '保存';
 
   @override
@@ -6217,7 +6464,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get modelsSwitchDetail =>
-      'Claude Code 会在新上游上重启，并用 --resume 接续当前对话。历史记录会原样发给新模型，部分上游首次处理会较慢。';
+      'Claude Code 会在新上游上重启，并用 --resume 接续当前对话。历史记录会原样发给新模型，部分上游首次处理会较慢。如果还有回复在进行，发送下一条消息时会先停止它。';
 
   @override
   String get modelsSwitchConfirm => '切换';
@@ -7865,6 +8112,28 @@ class AppLocalizationsZh extends AppLocalizations {
   String get stashPolishHint => '让 AI 把选中的文字理顺，保持你的原意，不加结构';
 
   @override
+  String get composerPolish => '润色';
+
+  @override
+  String get composerPolishing => '润色中…';
+
+  @override
+  String get composerPolishHint =>
+      '润色：用辅助模型把消息改得更清楚，保留你的意思和口吻；图片、文件、代码和链接原样不动，可撤销';
+
+  @override
+  String composerPolishFailed(String error) {
+    return '润色失败：$error';
+  }
+
+  @override
+  String get generalSettingsComposerPolish => '润色按钮';
+
+  @override
+  String get generalSettingsComposerPolishDescription =>
+      '在输入框里显示润色按钮，发送前用辅助模型把写的内容改得更清楚';
+
+  @override
   String stashPolishFailed(String error) {
     return '没能润色：$error';
   }
@@ -8648,4 +8917,184 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get stashWelcomeHotkeyLater => '也可以之后在 设置 → Stash 中设置。';
+
+  @override
+  String get settingsSectionBrowser => '浏览器';
+
+  @override
+  String get settingsBrowserKeywords =>
+      '浏览器 chrome 扩展 插件 网页 标签页 edge brave arc';
+
+  @override
+  String get browserSettingsDescription =>
+      '让 agent 用你自己的浏览器，沿用你的登录状态：在你共享给它的标签页里打开网页、读取内容、点击和输入。它的每一步操作都能在侧边栏里看到。';
+
+  @override
+  String get browserSettingsMacOSOnly => '浏览器功能目前只支持 macOS。';
+
+  @override
+  String get browserSettingsEnabled => '允许 agent 使用浏览器';
+
+  @override
+  String get browserSettingsEnabledDescription =>
+      '关闭后 agent 不再有浏览器工具，扩展也会断开连接。';
+
+  @override
+  String get browserSettingsStatus => '状态';
+
+  @override
+  String get browserSettingsNotInstalled => '还没有浏览器连接过';
+
+  @override
+  String get browserSettingsNotInstalledDescription =>
+      '用下方任一方式安装扩展，之后打开浏览器就会自动连接。';
+
+  @override
+  String get browserSettingsNotRunning => '浏览器未连接';
+
+  @override
+  String get browserSettingsNotRunningDescription =>
+      '打开装有 BaoCode 扩展的浏览器，会自动连接。';
+
+  @override
+  String browserSettingsConnected(String browser) {
+    return '$browser 已连接';
+  }
+
+  @override
+  String browserSettingsIncompatible(String browser) {
+    return '$browser 的扩展版本不匹配';
+  }
+
+  @override
+  String browserSettingsExtensionVersion(String version) {
+    return '扩展版本 $version';
+  }
+
+  @override
+  String get browserSettingsExtensionOld =>
+      '扩展版本太旧，需要更新。商店版会自动更新，也可以在 chrome://extensions 里点「更新」；手动安装的请重新下载 zip，覆盖原来的文件夹后点刷新。';
+
+  @override
+  String get browserSettingsAppOld => '扩展比当前的 BaoCode 新，请更新 BaoCode。';
+
+  @override
+  String get browserSettingsInstall => '安装扩展';
+
+  @override
+  String get browserSettingsStore => 'Chrome 应用商店';
+
+  @override
+  String get browserSettingsStoreDescription =>
+      '推荐。会自动更新，Chrome、Edge、Brave、Arc 等 Chromium 内核的浏览器都能装。';
+
+  @override
+  String get browserSettingsStoreOpen => '打开商店';
+
+  @override
+  String get browserSettingsUnpacked => '手动安装（开发者模式）';
+
+  @override
+  String get browserSettingsUnpackedDescription =>
+      '下载后解压到一个固定的文件夹（之后不要删）。在 chrome://extensions 打开右上角的「开发者模式」，点「加载已解压的扩展程序」，选中这个文件夹。不会自动更新。';
+
+  @override
+  String get browserSettingsUnpackedDownload => '下载 zip';
+
+  @override
+  String get browserSettingsOpen => '浏览器设置';
+
+  @override
+  String get browserHistoryTitle => '调试记录';
+
+  @override
+  String get browserHistoryDescription =>
+      '共享给 BaoCode 的标签页里打开过的页面、发出的请求、控制台的错误和警告会一直记下来，不用专门录制。你说“刚才保存时报错了”这类话时，agent 会自己翻看。记录只存在这台电脑上，不保存 Cookie 和令牌。';
+
+  @override
+  String get browserHistoryDetailed => '详细记录';
+
+  @override
+  String get browserHistoryDetailedDescription =>
+      '另外记下请求体和响应体、你的操作（点击和输入，不含密码）以及全部控制台日志，占用空间更多。';
+
+  @override
+  String browserHistorySize(String size) {
+    return '已占用 $size';
+  }
+
+  @override
+  String get browserHistoryClear => '清理';
+
+  @override
+  String get browserHistoryClearConfirm => '清理全部调试记录？';
+
+  @override
+  String get browserHistoryClearDetail => '已记下的页面、请求和控制台日志都会被删除，无法恢复。';
+
+  @override
+  String browserHistoryTooLarge(String size) {
+    return '浏览器调试记录已占用 $size';
+  }
+
+  @override
+  String get browserHistoryTooLargeDetail => '可以直接清理，也可以去 设置 → 浏览器 查看。';
+
+  @override
+  String get browserHistoryOpenSettings => '浏览器设置';
+
+  @override
+  String get browserWelcomeTitle => 'agent 现在能用你的浏览器了';
+
+  @override
+  String get browserWelcomeLead =>
+      '装上 BaoCode 扩展，agent 就能在你自己的 Chrome 里打开网页、阅读、点击和输入，带着你的登录状态。';
+
+  @override
+  String get browserWelcomeSharedTitle => '只用你共享的标签页';
+
+  @override
+  String get browserWelcomeShared => '它只在黄色的「BaoCode」标签页分组里工作，其他标签页仍然只属于你。';
+
+  @override
+  String get browserWelcomeWatchTitle => '看着它操作';
+
+  @override
+  String get browserWelcomeWatch => '侧边栏实时显示它正在用的网页，你随时可以接手。';
+
+  @override
+  String get browserWelcomeShowTitle => '演示一遍就会';
+
+  @override
+  String get browserWelcomeShow => '让 agent 看着，你在浏览器里自己操作一遍，它就能看到你的每一步。';
+
+  @override
+  String get browserWelcomeInstallTitle => '安装扩展';
+
+  @override
+  String get browserWelcomeInstall =>
+      'Chrome、Edge、Brave、Arc 都能用。装好后会自动连接，这里会变成绿色。';
+
+  @override
+  String get browserWelcomeTurnedOff => '浏览器功能已在 设置 → 浏览器 中关闭。';
+
+  @override
+  String browserWelcomeConnected(String browser) {
+    return '$browser 已连接';
+  }
+
+  @override
+  String get browserWelcomeTry => '试试对 agent 说：「打开 baocode.dev 看看下载页」。';
+
+  @override
+  String get browserWelcomeUnpacked => '开发者模式 zip';
+
+  @override
+  String get browserWelcomeDone => '知道了';
+
+  @override
+  String get cmdBrowserWelcome => '连接浏览器...';
+
+  @override
+  String get cmdStashWelcome => '认识 Stash...';
 }

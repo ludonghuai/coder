@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 
 import '../../chat/chat_models.dart';
 import '../../chat/composer/paste_store.dart';
+import '../../chat/composer/remote_drops.dart';
 import '../../models/launch_environment.dart';
 import '../../models/model_icons.dart';
 import '../../models/model_provider.dart';
@@ -20,6 +21,7 @@ import '../agent_kernel.dart';
 import '../commit_attribution.dart';
 import '../kernel_event.dart';
 import '../kernel_types.dart';
+import '../prompt_suggestions.dart';
 import '../transcript.dart';
 import '../queued_messages.dart';
 import 'claude_code_transport.dart';
@@ -360,6 +362,11 @@ class ClaudeCodeKernel
   /// at start, so another is taken up by a restart (see [_applyWindow]).
   int? _launchedWindow;
 
+  /// Whether the process was started to suggest the next prompt
+  /// ([PromptSuggestions]): taken only at start, so a change is taken up by
+  /// a restart (see [_applyWindow]).
+  bool _launchedSuggestions = true;
+
   /// The context window, as the CLI reports it: the smaller of the
   /// model's and [_window].
   int _contextWindow = 200000;
@@ -468,6 +475,7 @@ class ClaudeCodeKernel
       final workspace = _workspace;
       _launchedProvider = _providerKey;
       _launchedWindow = _autocompact;
+      _launchedSuggestions = PromptSuggestions.current();
       final sdkServers = ClaudeSdkTools.servers;
       final transport = await _start(
         ClaudeLaunch(
@@ -483,11 +491,15 @@ class ClaudeCodeKernel
               : null,
           thinking: custom != null && direct && effort == 'none' ? false : null,
           autocompact: _autocompact,
+          promptSuggestions: _launchedSuggestions,
           attribution: CommitAttribution.current(),
           env: env,
           directories: workspace?.folders ?? const [],
           // Long pastes are kept on this machine: only its agent reads them.
-          readable: [if (!RemoteLocation.isRemote(_cwd)) ?PasteStore.directory],
+          // A remote one's reads the files of this machine's copied there.
+          readable: RemoteLocation.isRemote(_cwd)
+              ? RemoteDrops.folders
+              : [?PasteStore.directory],
           instructions: workspace?.instructions,
           models: switch (custom) {
             (final provider, _) => _requestedModels(provider),
@@ -504,7 +516,7 @@ class ClaudeCodeKernel
       _subscription = transport.messages.listen(_receive);
       _applyInitialize(
         await control.request('initialize', {
-          'promptSuggestions': true,
+          'promptSuggestions': _launchedSuggestions,
           if (sdkServers.isNotEmpty) 'sdkMcpServers': sdkServers,
         }),
       );
@@ -678,6 +690,8 @@ class ClaudeCodeKernel
   /// compacts where it was told at start, whatever it is told after. Done
   /// only as a message is sent, so a pick leaves the conversation be.
   ///
+  /// So is the prompt suggestions' setting turned on or off since.
+  ///
   /// So is another provider, or one whose setup changed: the session goes
   /// on, resumed, on it. That even with tasks at work in the background
   /// (a server it started), which end with the process: the user agreed
@@ -685,7 +699,11 @@ class ClaudeCodeKernel
   void _applyWindow() {
     if (!_running) return;
     final otherProvider = _providerKey != _launchedProvider;
-    if (!otherProvider && _autocompact == _launchedWindow) return;
+    if (!otherProvider &&
+        _autocompact == _launchedWindow &&
+        PromptSuggestions.current() == _launchedSuggestions) {
+      return;
+    }
     if (otherProvider ? _working : _busy) return;
     _teardown();
     _translator.endTasks();
@@ -698,6 +716,7 @@ class ClaudeCodeKernel
     _goalRetry?.cancel();
     _providers.removeListener(_providersChanged);
     _live.remove(this);
+    _cancelSdkCalls();
     _teardown();
     closeEvents();
   }
@@ -734,7 +753,31 @@ class ClaudeCodeKernel
       }
     }
     _sent[turn.id] = turn;
+    if (_turn != null && _running && _providerKey != _launchedProvider) {
+      // Another upstream picked while a turn runs (one retrying a provider
+      // out of its usage, say): the message is for it, not for the process
+      // on the one before, behind that turn. The turn stops, and the process
+      // with it (as the switch's confirmation says it restarts); the
+      // messages queued go again after, on the new one.
+      final queued = [..._queued];
+      cancel();
+      _queued.clear();
+      _held.clear();
+      _teardown();
+      _translator.endTasks();
+      _setHealth(KernelHealth.idle);
+      for (final id in [...queued, turn.id]) {
+        if (_sent[id] case final queuedTurn?) _submit(queuedTurn);
+      }
+      return;
+    }
+    _submit(turn);
+  }
+
+  /// Starts a turn with [turn], or queues it behind the one running.
+  void _submit(KernelTurn turn) {
     final busy = _turn != null;
+    final hold = busy && _holds;
     if (busy) {
       _queued.add(turn.id);
     } else {
@@ -753,8 +796,42 @@ class ClaudeCodeKernel
         UserMessageItem(text: turn.text, queued: busy, images: turn.images),
       ),
     );
-    // Taken now: the message may wait for the CLI to start.
+    // Taken now, as the message was sent.
     final ask = _work == 'ask';
+    if (hold) {
+      _held[turn.id] = ask;
+    } else {
+      _write(turn, ask: ask);
+    }
+  }
+
+  /// Queued messages not given to the CLI yet, with whether each was sent
+  /// to be answered only ([_askNote]). The CLI takes up all it queued as one
+  /// turn: one of them waits there at a time (see [_holds]), the rest here.
+  final Map<String, bool> _held = {};
+
+  /// Whether a message queued now waits in [_held]: while another waits in
+  /// the CLI, unless messages join the turn running (then all wait there,
+  /// but for one sent now, to be taken up alone).
+  bool get _holds {
+    final waiting = _queued.where((id) => !_held.containsKey(id));
+    return waiting.any((id) => _sent[id]?.now ?? false) ||
+        (waiting.isNotEmpty &&
+            QueuedMessages.current() == QueuedMessages.afterTurn);
+  }
+
+  /// Gives the CLI the messages held for it, as far as [_holds] lets it: one
+  /// waiting there was taken up, or taken back.
+  void _release() {
+    while (_held.isNotEmpty && !_holds) {
+      final MapEntry(key: id, value: ask) = _held.entries.first;
+      _held.remove(id);
+      if (_sent[id] case final turn?) _write(turn, ask: ask);
+    }
+  }
+
+  void _write(KernelTurn turn, {required bool ask}) {
+    // The message may wait for the CLI to start.
     final askEnded = _inAsk && !ask;
     _inAsk = ask;
     _whenReady((transport) {
@@ -818,6 +895,7 @@ class ClaudeCodeKernel
     final turn = _turn;
     if (turn == null) return;
     _turn = null;
+    if (interrupted) _cancelSdkCalls();
     worked ??= switch (_turnStarted) {
       final started? => DateTime.now().difference(started),
       null => null,
@@ -856,9 +934,25 @@ class ClaudeCodeKernel
     _endTurn(interrupted: true);
   }
 
+  /// Completes as the turn's calls of the app's own tools are given up
+  /// (see [ClaudeSdkCall.cancelled]): a turn stopped, the session ended.
+  var _sdkCallsCancelled = Completer<void>();
+
+  void _cancelSdkCalls() {
+    final cancelled = _sdkCallsCancelled;
+    _sdkCallsCancelled = Completer<void>();
+    cancelled.complete();
+  }
+
   @override
   Future<bool> cancelQueued(String turnId) async {
-    if (!_queued.contains(turnId) || !_running) return false;
+    if (!_queued.contains(turnId)) return false;
+    if (_held.remove(turnId) != null) {
+      _queued.remove(turnId);
+      emit(ItemRemoved(nextSeq, turnId));
+      return true;
+    }
+    if (!_running) return false;
     try {
       final response = await _control!.request('cancel_async_message', {
         'message_uuid': turnId,
@@ -870,26 +964,36 @@ class ClaudeCodeKernel
     // The CLI tells of it as cancelled before it answers: then already
     // taken out (see _lifecycle).
     if (_queued.remove(turnId)) emit(ItemRemoved(nextSeq, turnId));
+    _release();
     return true;
   }
 
   @override
   void sendQueuedNow(String turnId) {
     if (!_queued.contains(turnId) || !_running) return;
-    final ahead = _queued.takeWhile((id) => id != turnId).toList();
-    // Next anyway: only the turn running is in the way.
-    if (ahead.isEmpty) {
+    final others = [
+      for (final id in _queued)
+        if (id != turnId) id,
+    ];
+    // The only one in the CLI, the others held: next anyway, only the turn
+    // running is in the way.
+    if (!_held.containsKey(turnId) && others.every(_held.containsKey)) {
       cancel();
       return;
     }
-    // The CLI runs what it queued in the order sent: those ahead are taken
-    // back, and sent again after it.
+    // The CLI takes up all it queued as one turn, in the order sent: the
+    // others are taken back too, and sent again after it, held until it is
+    // taken up. Those held first, for none to be given the CLI meanwhile.
+    final order = [turnId, ...others];
     unawaited(() async {
-      final taken = [
-        for (final id in [turnId, ...ahead])
+      final taken = {
+        for (final id in [
+          ...order.where(_held.containsKey),
+          ...order.where((id) => !_held.containsKey(id)),
+        ])
           if (await cancelQueued(id)) id,
-      ];
-      for (final id in taken) {
+      };
+      for (final id in order.where(taken.contains)) {
         final turn = _sent[id]!;
         send(
           KernelTurn(
@@ -1492,7 +1596,11 @@ class ClaudeCodeKernel
         _lifecycle(message);
       case 'prompt_suggestion':
         final suggestion = (message['suggestion'] as String?)?.trim();
-        if (_turn == null && _queued.isEmpty && suggestion != _suggestion) {
+        // One turned off since the process started is not offered.
+        if (_turn == null &&
+            _queued.isEmpty &&
+            suggestion != _suggestion &&
+            PromptSuggestions.current()) {
           _suggestion = suggestion == null || suggestion.isEmpty
               ? null
               : suggestion;
@@ -1530,7 +1638,11 @@ class ClaudeCodeKernel
     }
     final response = await ClaudeSdkTools.handle(
       message,
-      ClaudeSdkCall(cwd: _cwd, sessionId: _sessionId),
+      ClaudeSdkCall(
+        cwd: _cwd,
+        sessionId: _sessionId,
+        cancelled: _sdkCallsCancelled.future,
+      ),
     );
     _control?.respond(id, {'mcp_response': response});
   }
@@ -1595,8 +1707,10 @@ class ClaudeCodeKernel
             !_stoppedTurns.contains(id)) {
           _beginTurn(id);
         }
+        _release();
       case 'cancelled':
         if (_queued.remove(id)) emit(ItemRemoved(nextSeq, id));
+        _release();
     }
   }
 
@@ -2082,6 +2196,7 @@ class ClaudeCodeKernel
       emit(ItemRemoved(nextSeq, id));
     }
     _queued.clear();
+    _held.clear();
     _translator.endTasks();
     if (_disposed) return;
     if (code == 0 && wasReady) {
@@ -2502,19 +2617,18 @@ class ClaudeCodeKernel
   /// Each name [provider]'s models are asked for by, with each effort
   /// through the proxy.
   static List<String> _requestedModels(ModelProvider provider) => {
-    for (final info in provider.models)
-      if (info.enabled) ...[
-        requestedModel(provider, info),
-        if (provider.protocol.proxied)
-          for (final effort in info.effortLevels)
-            requestedModel(provider, info, effort: effort),
-        if (provider.protocol == ProviderProtocol.openaiResponses ||
-            provider.protocol == ProviderProtocol.codex) ...[
-          requestedModel(provider, info, fast: true),
-          for (final effort in info.effortLevels)
-            requestedModel(provider, info, effort: effort, fast: true),
-        ],
+    for (final info in provider.enabledModels) ...[
+      requestedModel(provider, info),
+      if (provider.protocol.proxied)
+        for (final effort in info.effortLevels)
+          requestedModel(provider, info, effort: effort),
+      if (provider.protocol == ProviderProtocol.openaiResponses ||
+          provider.protocol == ProviderProtocol.codex) ...[
+        requestedModel(provider, info, fast: true),
+        for (final effort in info.effortLevels)
+          requestedModel(provider, info, effort: effort, fast: true),
       ],
+    ],
   }.toList();
 
   /// The efforts Claude Code itself takes (`--effort`, `effortLevel`).

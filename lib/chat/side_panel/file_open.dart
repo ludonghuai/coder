@@ -30,6 +30,7 @@ class FileOpenRequest {
     this.local = false,
     this.readOnly = false,
     this.preview = false,
+    this.agentChange = false,
   });
 
   /// Absolute, on the project's host (on this machine when [local]).
@@ -53,6 +54,11 @@ class FileOpenRequest {
 
   /// Its changes rather than its text, where they are known.
   final bool diff;
+
+  /// The agent's change pending in the file, shown in its text (each part
+  /// to keep or undo) rather than as its changes: scrolled to, the part at
+  /// [range] (else the first), the lines not marked.
+  final bool agentChange;
 
   /// The change [diff] shows, when the session lists it.
   final FileChange? change;
@@ -79,6 +85,7 @@ class FileOpenRequest {
     local: local,
     readOnly: readOnly,
     preview: preview,
+    agentChange: agentChange,
   );
 
   @override
@@ -86,7 +93,7 @@ class FileOpenRequest {
       'FileOpenRequest($path${range == null ? '' : ', $range'}'
       '${diff ? ', diff' : ''}${plan ? ', plan' : ''}'
       '${local ? ', local' : ''}${readOnly ? ', read-only' : ''}'
-      '${preview ? ', preview' : ''})';
+      '${preview ? ', preview' : ''}${agentChange ? ', agent change' : ''})';
 }
 
 /// Where a chat's files open (the agent window's side panel, the IDE's
@@ -101,9 +108,14 @@ class FileLinkTarget {
     this.roots,
     this.inPanel = false,
     this.openInIde,
+    this.showBrowserTab,
   });
 
   final ValueChanged<FileOpenRequest> open;
+
+  /// Shows a tab of the user's browser (its id, as the agents' tools have
+  /// it) beside the conversation: on the side panel's browser page.
+  final ValueChanged<int>? showBrowserTab;
 
   /// Whether [open] shows them in the side panel (the agent window's).
   final bool inPanel;
@@ -227,8 +239,12 @@ class FileOpenScope extends InheritedWidget {
     this.sizeOf,
     this.inPanel = false,
     this.onOpenInIde,
+    this.onShowBrowserTab,
     required super.child,
   });
+
+  /// See [FileLinkTarget.showBrowserTab].
+  final ValueChanged<int>? onShowBrowserTab;
 
   /// See [FileLinkTarget.inPanel].
   final bool inPanel;
@@ -396,8 +412,7 @@ class FileOpenScope extends InheritedWidget {
   /// What a click on [path] opens it with outside the app (see
   /// [FileViews.openerOf]): only a file on this machine; null to open it in
   /// the app.
-  FileOpener? openerOf(String path) =>
-      local ? FileViews.openerOf(path) : null;
+  FileOpener? openerOf(String path) => local ? FileViews.openerOf(path) : null;
 
   static const _imageTypes = {
     '.png': 'image/png',
@@ -476,9 +491,8 @@ class FileOpenScope extends InheritedWidget {
 
   /// The right click's menu of the file at [path] (absolute), [open]
   /// opening it (in the side panel, or the IDE: see [inPanel]); in the
-  /// IDE too ([onOpenInIde]). An image shows enlarged over [context]'s
-  /// window (unless it is [previewing]), not in the side panel, and
-  /// copies.
+  /// IDE too ([onOpenInIde]). An image also shows enlarged over
+  /// [context]'s window (unless it is [previewing]), and copies.
   FileLinkMenu menuFor(
     String path,
     VoidCallback open, {
@@ -491,7 +505,7 @@ class FileOpenScope extends InheritedWidget {
       root: root,
       paths: paths,
       local: local,
-      onOpen: image && inPanel ? null : open,
+      onOpen: open,
       inPanel: inPanel,
       onOpenInIde: switch (onOpenInIde) {
         final inIde? => () => inIde(FileOpenRequest(path)),

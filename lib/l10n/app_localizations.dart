@@ -2792,6 +2792,12 @@ abstract class AppLocalizations {
   /// **'Toggle Side Panel'**
   String get cmdToggleSidePanel;
 
+  /// No description provided for @cmdToggleSidePanelPosition.
+  ///
+  /// In en, this message translates to:
+  /// **'Toggle Side Panel Position'**
+  String get cmdToggleSidePanelPosition;
+
   /// No description provided for @cmdSidePanelChanges.
   ///
   /// In en, this message translates to:
@@ -2827,6 +2833,120 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Terminal'**
   String get sidePanelTerminal;
+
+  /// The side panel's browser page, there once the browser plugin is installed.
+  ///
+  /// In en, this message translates to:
+  /// **'Browser'**
+  String get sidePanelBrowser;
+
+  /// No description provided for @browserNotConnected.
+  ///
+  /// In en, this message translates to:
+  /// **'No browser is connected. Add BaoCode\'s extension to Chrome (or Edge, Brave, Arc) and agents can use the tabs you share with them.'**
+  String get browserNotConnected;
+
+  /// No description provided for @browserNoSharedTab.
+  ///
+  /// In en, this message translates to:
+  /// **'No tab is shared yet. Ask an agent to open a page, or click BaoCode in the browser toolbar to share the tab in front.'**
+  String get browserNoSharedTab;
+
+  /// No description provided for @browserOtherApp.
+  ///
+  /// In en, this message translates to:
+  /// **'Another BaoCode is connected to the browser.'**
+  String get browserOtherApp;
+
+  /// No description provided for @browserSharedTabs.
+  ///
+  /// In en, this message translates to:
+  /// **'Shared Tabs'**
+  String get browserSharedTabs;
+
+  /// No description provided for @browserReload.
+  ///
+  /// In en, this message translates to:
+  /// **'Reload'**
+  String get browserReload;
+
+  /// No description provided for @browserShowInBrowser.
+  ///
+  /// In en, this message translates to:
+  /// **'Show in Browser'**
+  String get browserShowInBrowser;
+
+  /// No description provided for @browserDetached.
+  ///
+  /// In en, this message translates to:
+  /// **'The browser stopped letting BaoCode see this tab.'**
+  String get browserDetached;
+
+  /// No description provided for @browserReconnect.
+  ///
+  /// In en, this message translates to:
+  /// **'Reconnect'**
+  String get browserReconnect;
+
+  /// No description provided for @browserShowInPanel.
+  ///
+  /// In en, this message translates to:
+  /// **'Show in Side Panel'**
+  String get browserShowInPanel;
+
+  /// The card in the conversation while an agent watches the user do something in their browser (browser_watch), recording it.
+  ///
+  /// In en, this message translates to:
+  /// **'Watching you in the browser'**
+  String get browserWatchTitle;
+
+  /// No description provided for @browserWatchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Do it in the BaoCode tab of your browser. When you\'re done, click Done here or the BaoCode button in the browser\'s toolbar.'**
+  String get browserWatchHint;
+
+  /// No description provided for @browserWatchSteps.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{Nothing recorded yet} =1{1 step recorded} other{{count} steps recorded}}'**
+  String browserWatchSteps(int count);
+
+  /// No description provided for @browserWatchCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get browserWatchCancel;
+
+  /// No description provided for @browserWatchDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get browserWatchDone;
+
+  /// A step the user took while watched, by its kind; what it was on follows (an element, a URL).
+  ///
+  /// In en, this message translates to:
+  /// **'{kind, select, click{Clicked} input{Set} key{Pressed} submit{Submitted} navigate{Went to} closed{Closed the tab} other{Did}}'**
+  String browserWatchedStep(String kind);
+
+  /// No description provided for @browserTraceReveal.
+  ///
+  /// In en, this message translates to:
+  /// **'Show the trace in Finder (drop it into DevTools\' Performance panel to look closer)'**
+  String get browserTraceReveal;
+
+  /// A browser step's verb once done, by the browser tool it called; what it did it on follows (a URL, an element's name).
+  ///
+  /// In en, this message translates to:
+  /// **'{action, select, tabs{Listed tabs} open{Opened} navigate{Went to} back{Went back} forward{Went forward} reload{Reloaded} snapshot{Read the page} screenshot{Took a screenshot} click{Clicked} type{Typed} press{Pressed} scroll{Scrolled} evaluate{Ran} close{Closed the tab} console{Read the console} network{Listed requests} request{Read the request} performance{Profiled} recordStart{Started profiling} recordStop{Profiled} emulate{Emulated} watch{Watched you} act{Acted} inspect{Inspected} sources{Read the sources} breakpoints{Set breakpoints} debugger{Debugged} intercept{Intercepted requests} storage{Read site data} dialog{Answered the dialog} coverage{Measured coverage} memory{Measured memory} history{Read the debugging history} other{Used the browser}}'**
+  String browserStepDone(String action);
+
+  /// A browser step's verb while it runs (see browserStepDone).
+  ///
+  /// In en, this message translates to:
+  /// **'{action, select, tabs{Listing tabs} open{Opening} navigate{Going to} back{Going back} forward{Going forward} reload{Reloading} snapshot{Reading the page} screenshot{Taking a screenshot} click{Clicking} type{Typing} press{Pressing} scroll{Scrolling} evaluate{Running} close{Closing the tab} console{Reading the console} network{Listing requests} request{Reading the request} performance{Profiling} recordStart{Starting to profile} recordStop{Profiling} emulate{Emulating} watch{Watching you} act{Acting} inspect{Inspecting} sources{Reading the sources} breakpoints{Setting breakpoints} debugger{Debugging} intercept{Intercepting requests} storage{Reading site data} dialog{Answering the dialog} coverage{Measuring coverage} memory{Measuring memory} history{Reading the debugging history} other{Using the browser}}'**
+  String browserStepRunning(String action);
 
   /// The side panel's plan page: the plan the agent wrote in plan mode, shown while there is one.
   ///
@@ -2881,6 +3001,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Hide side panel'**
   String get sidePanelHide;
+
+  /// No description provided for @sidePanelMoveLeft.
+  ///
+  /// In en, this message translates to:
+  /// **'Move to the Left of the Conversation'**
+  String get sidePanelMoveLeft;
+
+  /// No description provided for @sidePanelMoveRight.
+  ///
+  /// In en, this message translates to:
+  /// **'Move to the Right of the Conversation'**
+  String get sidePanelMoveRight;
 
   /// The side panel's tab listing the files the agent changed.
   ///
@@ -4040,6 +4172,60 @@ abstract class AppLocalizations {
   /// **'Used'**
   String get toolUsed;
 
+  /// No description provided for @toolGeneratingImage.
+  ///
+  /// In en, this message translates to:
+  /// **'Generating image'**
+  String get toolGeneratingImage;
+
+  /// No description provided for @toolGeneratedImage.
+  ///
+  /// In en, this message translates to:
+  /// **'Generated image'**
+  String get toolGeneratedImage;
+
+  /// No description provided for @toolImageFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Image not generated'**
+  String get toolImageFailed;
+
+  /// No description provided for @toolImageWaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'Generate image'**
+  String get toolImageWaiting;
+
+  /// No description provided for @imagePickTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick the model to generate it with'**
+  String get imagePickTitle;
+
+  /// No description provided for @imagePickGenerate.
+  ///
+  /// In en, this message translates to:
+  /// **'Generate'**
+  String get imagePickGenerate;
+
+  /// No description provided for @imagePickDecline.
+  ///
+  /// In en, this message translates to:
+  /// **'Skip'**
+  String get imagePickDecline;
+
+  /// No description provided for @imageSetDefault.
+  ///
+  /// In en, this message translates to:
+  /// **'Set as default'**
+  String get imageSetDefault;
+
+  /// No description provided for @imageDefaultSet.
+  ///
+  /// In en, this message translates to:
+  /// **'Set as default image model'**
+  String get imageDefaultSet;
+
   /// No description provided for @toolProposingGoal.
   ///
   /// In en, this message translates to:
@@ -4213,6 +4399,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count, plural, =1{ran 1 command} other{ran {count} commands}}'**
   String stepsRan(int count);
+
+  /// No description provided for @stepsBrowsed.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{took 1 step in the browser} other{took {count} steps in the browser}}'**
+  String stepsBrowsed(int count);
 
   /// No description provided for @stepsUsed.
   ///
@@ -4598,6 +4790,30 @@ abstract class AppLocalizations {
   /// **'Keep file'**
   String get agentKeepFile;
 
+  /// Over the editor's tabs while its file has an agent's change pending: puts the whole file back as it was before the agent changed it.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo file'**
+  String get agentUndoFile;
+
+  /// No description provided for @agentPreviousChange.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous change'**
+  String get agentPreviousChange;
+
+  /// No description provided for @agentNextChange.
+  ///
+  /// In en, this message translates to:
+  /// **'Next change'**
+  String get agentNextChange;
+
+  /// No description provided for @agentMoreActions.
+  ///
+  /// In en, this message translates to:
+  /// **'More actions'**
+  String get agentMoreActions;
+
   /// No description provided for @stripChangeAdded.
   ///
   /// In en, this message translates to:
@@ -4622,16 +4838,10 @@ abstract class AppLocalizations {
   /// **'Changed again since the agent left it, so Undo could not take the agent\'s change out. Undo it by hand, then keep it.'**
   String get stripChangeConflict;
 
-  /// Tooltip of a changed file seen while another agent worked in the same project.
-  ///
-  /// In en, this message translates to:
-  /// **'Another agent was working in this project at the same time: some of this change may be its.'**
-  String get stripChangeShared;
-
   /// No description provided for @stripChangeUntracked.
   ///
   /// In en, this message translates to:
-  /// **'Not in the project\'s snapshots (ignored, too large, or outside the project): it can be kept, not undone.'**
+  /// **'What it was before is not known (the agent did not tell, it is too large, or outside the project): it can be kept, not undone.'**
   String get stripChangeUntracked;
 
   /// Label of the diff editor comparing a file before the agent changed it with the file now.
@@ -5468,6 +5678,12 @@ abstract class AppLocalizations {
   /// **'Preparing files...'**
   String get explorerPreparingTransfer;
 
+  /// Files of this computer put in a remote project's composer could not be copied to its host, for its agent to read.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t copy the files to the remote host: {error}'**
+  String composerCopyToHostFailed(String error);
+
   /// No description provided for @explorerNewFile.
   ///
   /// In en, this message translates to:
@@ -5666,17 +5882,17 @@ abstract class AppLocalizations {
   /// **'Join the Current Task'**
   String get generalSettingsQueuedDuringTurn;
 
-  /// No description provided for @generalSettingsTelemetry.
+  /// Settings → General switch: whether Claude Code suggests the next prompt in the composer after each turn.
   ///
   /// In en, this message translates to:
-  /// **'Send Usage Data'**
-  String get generalSettingsTelemetry;
+  /// **'Suggest Next Prompt'**
+  String get generalSettingsPromptSuggestions;
 
-  /// No description provided for @generalSettingsTelemetryDescription.
+  /// No description provided for @generalSettingsPromptSuggestionsDescription.
   ///
   /// In en, this message translates to:
-  /// **'Once a day BaoCode is used, it sends a random install ID, its version, and your system and processor type, so we can tell how many people use it and come back. Nothing about you, your code, or what you do in BaoCode (telemetry.telemetryLevel).'**
-  String get generalSettingsTelemetryDescription;
+  /// **'After each turn, a greyed-out suggestion for your next message, taken with Tab. Each one is an extra request with the whole conversation; turn it off to save tokens. Applies from the next message; Claude Code only.'**
+  String get generalSettingsPromptSuggestionsDescription;
 
   /// The commit attribution dropdown, as read out: its setting and the choice in effect.
   ///
@@ -10917,6 +11133,66 @@ abstract class AppLocalizations {
   /// **'Does not take images'**
   String get modelsNoImages;
 
+  /// No description provided for @modelsKind.
+  ///
+  /// In en, this message translates to:
+  /// **'Used for'**
+  String get modelsKind;
+
+  /// No description provided for @modelsKindChat.
+  ///
+  /// In en, this message translates to:
+  /// **'Conversations'**
+  String get modelsKindChat;
+
+  /// No description provided for @modelsKindImage.
+  ///
+  /// In en, this message translates to:
+  /// **'Image generation (Images API)'**
+  String get modelsKindImage;
+
+  /// No description provided for @modelsKindImageChat.
+  ///
+  /// In en, this message translates to:
+  /// **'Image generation (in a conversation)'**
+  String get modelsKindImageChat;
+
+  /// No description provided for @modelsKindDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Image models are not offered in the model picker: agents make pictures with them through the generate_image tool.'**
+  String get modelsKindDescription;
+
+  /// No description provided for @modelsImageBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Image'**
+  String get modelsImageBadge;
+
+  /// No description provided for @modelsImage.
+  ///
+  /// In en, this message translates to:
+  /// **'Image model'**
+  String get modelsImage;
+
+  /// No description provided for @modelsImageDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'What agents make pictures with (the generate_image tool), unless you ask them for another; asked each time, you pick it in the conversation. Turn on image models in an upstream\'s list.'**
+  String get modelsImageDescription;
+
+  /// No description provided for @modelsImageFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask each time'**
+  String get modelsImageFirst;
+
+  /// No description provided for @modelsImageNone.
+  ///
+  /// In en, this message translates to:
+  /// **'None turned on'**
+  String get modelsImageNone;
+
   /// No description provided for @modelsSave.
   ///
   /// In en, this message translates to:
@@ -10938,7 +11214,7 @@ abstract class AppLocalizations {
   /// No description provided for @modelsSwitchDetail.
   ///
   /// In en, this message translates to:
-  /// **'Claude Code restarts on the other upstream and resumes this conversation (--resume). Its history is sent to the new model as it is; some upstreams take it slower the first time.'**
+  /// **'Claude Code restarts on the other upstream and resumes this conversation (--resume). Its history is sent to the new model as it is; some upstreams take it slower the first time. A reply still running stops when you send the next message.'**
   String get modelsSwitchDetail;
 
   /// No description provided for @modelsSwitchConfirm.
@@ -13725,6 +14001,42 @@ abstract class AppLocalizations {
   /// **'Has AI make the selection clearer, in your words, without adding structure'**
   String get stashPolishHint;
 
+  /// No description provided for @composerPolish.
+  ///
+  /// In en, this message translates to:
+  /// **'Polish'**
+  String get composerPolish;
+
+  /// No description provided for @composerPolishing.
+  ///
+  /// In en, this message translates to:
+  /// **'Polishing…'**
+  String get composerPolishing;
+
+  /// No description provided for @composerPolishHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Polish: the auxiliary model makes the message clearer, in your words; pictures, files, code and links stay as they are; Undo takes it back'**
+  String get composerPolishHint;
+
+  /// No description provided for @composerPolishFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not polish: {error}'**
+  String composerPolishFailed(String error);
+
+  /// No description provided for @generalSettingsComposerPolish.
+  ///
+  /// In en, this message translates to:
+  /// **'Polish button'**
+  String get generalSettingsComposerPolish;
+
+  /// No description provided for @generalSettingsComposerPolishDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'A button in the message box that has the auxiliary model make what you wrote clearer before you send it'**
+  String get generalSettingsComposerPolishDescription;
+
   /// No description provided for @stashPolishFailed.
   ///
   /// In en, this message translates to:
@@ -15092,6 +15404,318 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'You can also set it later in Settings → Stash.'**
   String get stashWelcomeHotkeyLater;
+
+  /// No description provided for @settingsSectionBrowser.
+  ///
+  /// In en, this message translates to:
+  /// **'Browser'**
+  String get settingsSectionBrowser;
+
+  /// No description provided for @settingsBrowserKeywords.
+  ///
+  /// In en, this message translates to:
+  /// **'chrome extension edge brave arc web page tab agent'**
+  String get settingsBrowserKeywords;
+
+  /// No description provided for @browserSettingsDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Let agents use your own browser, signed in as you: open pages, read them, click and type in the tabs you share with them. You can watch every step in the side panel.'**
+  String get browserSettingsDescription;
+
+  /// No description provided for @browserSettingsMacOSOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'The browser is available on macOS only for now.'**
+  String get browserSettingsMacOSOnly;
+
+  /// No description provided for @browserSettingsEnabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Let Agents Use the Browser'**
+  String get browserSettingsEnabled;
+
+  /// No description provided for @browserSettingsEnabledDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'When off, agents have no browser tools and the extension disconnects.'**
+  String get browserSettingsEnabledDescription;
+
+  /// No description provided for @browserSettingsStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get browserSettingsStatus;
+
+  /// No description provided for @browserSettingsNotInstalled.
+  ///
+  /// In en, this message translates to:
+  /// **'No browser has connected yet'**
+  String get browserSettingsNotInstalled;
+
+  /// No description provided for @browserSettingsNotInstalledDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Install the extension either way below, then open the browser: it connects automatically.'**
+  String get browserSettingsNotInstalledDescription;
+
+  /// No description provided for @browserSettingsNotRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'No browser connected'**
+  String get browserSettingsNotRunning;
+
+  /// No description provided for @browserSettingsNotRunningDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Open a browser with BaoCode\'s extension: it connects automatically.'**
+  String get browserSettingsNotRunningDescription;
+
+  /// A browser connected, by its name (Google Chrome, Microsoft Edge…).
+  ///
+  /// In en, this message translates to:
+  /// **'{browser} connected'**
+  String browserSettingsConnected(String browser);
+
+  /// A browser connected whose extension BaoCode cannot use: one too old, or newer than the app.
+  ///
+  /// In en, this message translates to:
+  /// **'{browser}: extension version doesn\'t match'**
+  String browserSettingsIncompatible(String browser);
+
+  /// The version of BaoCode's extension in a connected browser.
+  ///
+  /// In en, this message translates to:
+  /// **'Extension {version}'**
+  String browserSettingsExtensionVersion(String version);
+
+  /// No description provided for @browserSettingsExtensionOld.
+  ///
+  /// In en, this message translates to:
+  /// **'The extension is out of date. From the store, it updates automatically, or click Update in chrome://extensions; installed manually, download the zip again, replace the folder\'s contents and click reload.'**
+  String get browserSettingsExtensionOld;
+
+  /// No description provided for @browserSettingsAppOld.
+  ///
+  /// In en, this message translates to:
+  /// **'The extension is newer than this BaoCode. Update BaoCode.'**
+  String get browserSettingsAppOld;
+
+  /// No description provided for @browserSettingsInstall.
+  ///
+  /// In en, this message translates to:
+  /// **'Get the Extension'**
+  String get browserSettingsInstall;
+
+  /// No description provided for @browserSettingsStore.
+  ///
+  /// In en, this message translates to:
+  /// **'Chrome Web Store'**
+  String get browserSettingsStore;
+
+  /// No description provided for @browserSettingsStoreDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Recommended. Updates automatically; works in Chrome, Edge, Brave, Arc and other Chromium browsers.'**
+  String get browserSettingsStoreDescription;
+
+  /// No description provided for @browserSettingsStoreOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Store'**
+  String get browserSettingsStoreOpen;
+
+  /// No description provided for @browserSettingsUnpacked.
+  ///
+  /// In en, this message translates to:
+  /// **'Install Manually (Developer Mode)'**
+  String get browserSettingsUnpacked;
+
+  /// No description provided for @browserSettingsUnpackedDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Unzip it into a folder you\'ll keep. In chrome://extensions, turn on Developer mode at the top right, click Load unpacked and choose the folder. It doesn\'t update automatically.'**
+  String get browserSettingsUnpackedDescription;
+
+  /// No description provided for @browserSettingsUnpackedDownload.
+  ///
+  /// In en, this message translates to:
+  /// **'Download Zip'**
+  String get browserSettingsUnpackedDownload;
+
+  /// No description provided for @browserSettingsOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Browser Settings'**
+  String get browserSettingsOpen;
+
+  /// No description provided for @browserHistoryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Debugging history'**
+  String get browserHistoryTitle;
+
+  /// No description provided for @browserHistoryDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'What the tabs shared with BaoCode do is kept as it happens, no recording needed: the pages, the requests, console errors and warnings. Agents look back at it when you ask (“it failed when I saved”). Kept on this computer; cookies and tokens are not.'**
+  String get browserHistoryDescription;
+
+  /// No description provided for @browserHistoryDetailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Detailed history'**
+  String get browserHistoryDetailed;
+
+  /// No description provided for @browserHistoryDetailedDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Also keeps the request and response bodies, what you do (clicks and typing, never passwords) and every console message. Takes more space.'**
+  String get browserHistoryDetailedDescription;
+
+  /// No description provided for @browserHistorySize.
+  ///
+  /// In en, this message translates to:
+  /// **'Using {size}'**
+  String browserHistorySize(String size);
+
+  /// No description provided for @browserHistoryClear.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get browserHistoryClear;
+
+  /// No description provided for @browserHistoryClearConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear the debugging history?'**
+  String get browserHistoryClearConfirm;
+
+  /// No description provided for @browserHistoryClearDetail.
+  ///
+  /// In en, this message translates to:
+  /// **'The pages, requests and console messages kept are deleted. This cannot be undone.'**
+  String get browserHistoryClearDetail;
+
+  /// No description provided for @browserHistoryTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'The browser\'s debugging history takes {size}'**
+  String browserHistoryTooLarge(String size);
+
+  /// No description provided for @browserHistoryTooLargeDetail.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear it, or look at it in Settings → Browser.'**
+  String get browserHistoryTooLargeDetail;
+
+  /// No description provided for @browserHistoryOpenSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Browser settings'**
+  String get browserHistoryOpenSettings;
+
+  /// No description provided for @browserWelcomeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Agents can use your browser now'**
+  String get browserWelcomeTitle;
+
+  /// No description provided for @browserWelcomeLead.
+  ///
+  /// In en, this message translates to:
+  /// **'With BaoCode\'s extension, agents open pages, read them, click and type in your own Chrome, signed in as you are.'**
+  String get browserWelcomeLead;
+
+  /// No description provided for @browserWelcomeSharedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Only the tabs you share'**
+  String get browserWelcomeSharedTitle;
+
+  /// No description provided for @browserWelcomeShared.
+  ///
+  /// In en, this message translates to:
+  /// **'They work in the yellow BaoCode tab group alone; your other tabs stay yours.'**
+  String get browserWelcomeShared;
+
+  /// No description provided for @browserWelcomeWatchTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Watch it work'**
+  String get browserWelcomeWatchTitle;
+
+  /// No description provided for @browserWelcomeWatch.
+  ///
+  /// In en, this message translates to:
+  /// **'The side panel shows the page live as the agent uses it. Take over any time.'**
+  String get browserWelcomeWatch;
+
+  /// No description provided for @browserWelcomeShowTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Show it once'**
+  String get browserWelcomeShowTitle;
+
+  /// No description provided for @browserWelcomeShow.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask an agent to watch, do it yourself in the browser, and it sees each step you took.'**
+  String get browserWelcomeShow;
+
+  /// No description provided for @browserWelcomeInstallTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Add the extension'**
+  String get browserWelcomeInstallTitle;
+
+  /// No description provided for @browserWelcomeInstall.
+  ///
+  /// In en, this message translates to:
+  /// **'For Chrome, Edge, Brave and Arc. It connects by itself, and this turns green.'**
+  String get browserWelcomeInstall;
+
+  /// No description provided for @browserWelcomeTurnedOff.
+  ///
+  /// In en, this message translates to:
+  /// **'The browser is turned off in Settings → Browser.'**
+  String get browserWelcomeTurnedOff;
+
+  /// The welcome's step once a browser connected, by its name.
+  ///
+  /// In en, this message translates to:
+  /// **'{browser} is connected'**
+  String browserWelcomeConnected(String browser);
+
+  /// No description provided for @browserWelcomeTry.
+  ///
+  /// In en, this message translates to:
+  /// **'Try telling an agent: “Open baocode.dev and look at the download page.”'**
+  String get browserWelcomeTry;
+
+  /// No description provided for @browserWelcomeUnpacked.
+  ///
+  /// In en, this message translates to:
+  /// **'Developer Mode Zip'**
+  String get browserWelcomeUnpacked;
+
+  /// No description provided for @browserWelcomeDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Got It'**
+  String get browserWelcomeDone;
+
+  /// No description provided for @cmdBrowserWelcome.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect Your Browser...'**
+  String get cmdBrowserWelcome;
+
+  /// No description provided for @cmdStashWelcome.
+  ///
+  /// In en, this message translates to:
+  /// **'Meet Stash...'**
+  String get cmdStashWelcome;
 }
 
 class _AppLocalizationsDelegate

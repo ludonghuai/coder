@@ -95,6 +95,23 @@ class StashController extends ChangeNotifier {
     );
   }
 
+  static const filtersKey = 'stash.filters';
+
+  /// The Stash page's filters, as last picked (its time, projects and
+  /// statuses, by name; see StashView); null for its own.
+  Map<String, Object?>? get filters =>
+      _filters ?? storage?.get<Map<String, Object?>>(filtersKey);
+  Map<String, Object?>? _filters;
+
+  set filters(Map<String, Object?>? filters) {
+    _filters = filters;
+    unawaited(
+      storage
+          ?.set(filtersKey, filters)
+          .catchError((Object error) => debugPrint('$error')),
+    );
+  }
+
   static const welcomedKey = 'stash.welcomed';
 
   /// Whether the Stash page has said what it is (the first time it shows,
@@ -346,6 +363,19 @@ class StashController extends ChangeNotifier {
     _presentation++;
     notifyListeners();
     if (edited != null) _suggestSoon(edited);
+  }
+
+  /// A new stash to write in on the Stash page, beside the cards: the
+  /// draft there is, else one made; of [project], if given. Its id.
+  Future<int> draft({String? project}) async {
+    await store.load();
+    final id =
+        _draft()?.id ?? (await store.create(source: StashSource.none)).id;
+    if (project != null) {
+      // Not written in for this: still the draft, if left blank.
+      await store.update(id, (note) => note.project = project, touch: false);
+    }
+    return id;
   }
 
   /// The stash the panel shows, made (with [body]) if it was not yet.

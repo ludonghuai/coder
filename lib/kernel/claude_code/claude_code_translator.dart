@@ -5,6 +5,7 @@ import '../../chat/chat_models.dart';
 import '../kernel_event.dart';
 import '../kernel_types.dart';
 import 'claude_goal.dart';
+import 'claude_sdk_tools.dart';
 
 /// Translates Claude Code's conversation messages (stream-json output, or
 /// the lines of a kept session) into [KernelEvent]s: text, thoughts, tool
@@ -781,7 +782,13 @@ class ClaudeTranslator {
   ) {
     final known = _tools[id];
     // The streamed start has no input yet; the whole message fills it in.
-    final tool = _Tool(name, input, known?.parent ?? parent, known?.startedAt);
+    final tool = _Tool(
+      id,
+      name,
+      input,
+      known?.parent ?? parent,
+      known?.startedAt,
+    );
     _tools[id] = tool;
     if (tool.parent == null && _isPlanCall(name, input)) {
       return _planCall(id, name, input);
@@ -856,7 +863,13 @@ class ClaudeTranslator {
     );
   }
 
-  ChatItem _toolItem(_Tool tool, _Outcome outcome, {String? output}) {
+  ChatItem _toolItem(
+    _Tool tool,
+    _Outcome outcome, {
+    String? output,
+    List<ImageAttachment> images = const [],
+    List<String> imageFiles = const [],
+  }) {
     final input = tool.input;
     final status = switch (outcome) {
       _Outcome.running => ToolStatus.running,
@@ -870,6 +883,31 @@ class ClaudeTranslator {
     String? path(String key) => _string(input[key]);
     String base(String? path) => path == null ? '' : path.split('/').last;
     final name = tool.name;
+    // The app's own, shown as it says.
+    if (ClaudeSdkTools.called(name) case ClaudeSdkTool(
+      :final name,
+      :final kind?,
+      :final summary,
+      :final files,
+    )) {
+      final said = _string(input['description'])?.trim() ?? '';
+      return ToolCallItem(
+        kind: kind,
+        tool: name,
+        callId: tool.id,
+        input: input,
+        // Said by the agent, it is the line, whole.
+        label: said.isEmpty ? null : '',
+        target: said.isNotEmpty ? said : summary?.call(input, output) ?? '',
+        status: status,
+        output: output,
+        images: images,
+        imageFiles: switch ((files, output)) {
+          (final files?, final output?) => files(output),
+          _ => imageFiles,
+        },
+      );
+    }
     if (name.startsWith('mcp__')) {
       final parts = name.split('__');
       return ToolCallItem(
@@ -880,6 +918,8 @@ class ClaudeTranslator {
         target: _summary(input),
         status: status,
         output: output,
+        images: images,
+        imageFiles: imageFiles,
       );
     }
     return switch (name) {
@@ -893,6 +933,9 @@ class ClaudeTranslator {
         },
         status: status,
         output: outcome == _Outcome.done ? null : output,
+        // An image file, as the agent saw it.
+        images: images,
+        imageFiles: imageFiles,
       ),
       'Grep' => ToolCallItem(
         kind: ToolKind.grep,
@@ -1040,6 +1083,8 @@ class ClaudeTranslator {
         target: _summary(input),
         status: status,
         output: output,
+        images: images,
+        imageFiles: imageFiles,
       ),
     };
   }
@@ -1175,6 +1220,8 @@ class ClaudeTranslator {
         tool,
         outcome,
         output: outcome == _Outcome.done ? _short(text) : _tail(text),
+        images: _resultImages(block['content']),
+        imageFiles: _savedImages(block['content']),
       ),
       parent: tool.parent,
     );
@@ -1262,16 +1309,32 @@ class ClaudeTranslator {
       ),
       parent: tool.parent,
     );
-    if (!replaying && tool.parent == null) {
+    // A subagent's too: what it edits is in the review as the agent's.
+    if (!replaying) {
       emit(
         FileEdited(
           nextSeq(),
           FileChange(path: path, added: added, removed: removed),
           turnId: turnId,
+          original: _original(result),
         ),
       );
     }
     return true;
+  }
+
+  /// What an edit's file was before, as its result tells: a file written
+  /// anew was not there, one edited is in `originalFile`.
+  static FileOriginal? _original(Map<String, Object?> result) {
+    if (result['type'] == 'create') return const OriginalText(null);
+    if (_string(result['originalFile']) case final text?) {
+      return OriginalText(text);
+    }
+    // An Edit that made the file.
+    if (result.containsKey('originalFile') && result['oldString'] == '') {
+      return const OriginalText(null);
+    }
+    return null;
   }
 
   static const _maxDiffLines = 400;
@@ -1463,10 +1526,7 @@ class ClaudeTranslator {
           _tasks[taskId] = task.copyWith(summary: summary);
           _reportTasks();
         }
-        final toolUseId = _agentCard(
-          taskId,
-          message['tool_use_id'] as String?,
-        );
+        final toolUseId = _agentCard(taskId, message['tool_use_id'] as String?);
         final agent = toolUseId == null ? null : _agents[toolUseId];
         if (agent != null) {
           agent.item = agent.item.copyWith(
@@ -1676,10 +1736,51 @@ class ClaudeTranslator {
     final String text => text,
     final List<Object?> blocks => [
       for (final block in blocks)
-        if (_map(block)['text'] case final String text) text,
+        if (_map(block)['text'] case final String text)
+          ?_withoutImageSaved(text),
     ].join('\n'),
     _ => '',
   };
+
+  /// [text] without the lines where the CLI says it saved a picture a tool
+  /// returned (`[Image: source: /…/tool-results/….png]`, for the agent):
+  /// the picture shows. Null when that is all it says.
+  static String? _withoutImageSaved(String text) {
+    if (!text.contains('[Image: source: ')) return text;
+    final lines = text.split('\n').where((line) => !_imageSaved.hasMatch(line));
+    return lines.isEmpty ? null : lines.join('\n');
+  }
+
+  static final _imageSaved = RegExp(r'^\s*\[Image: source: ([^\]\n]*)\]\s*$');
+
+  /// Where the CLI saved the pictures in a tool's result (see
+  /// [_withoutImageSaved]).
+  static List<String> _savedImages(Object? content) => [
+    if (content is List)
+      for (final block in content.map(_map))
+        if (block['text'] case final String text
+            when text.contains('[Image: source: '))
+          for (final line in text.split('\n'))
+            if (_imageSaved.firstMatch(line)?[1]?.trim() case final path?
+                when path.isNotEmpty)
+              path,
+  ];
+
+  /// The pictures in a tool's result: as the CLI has them (an MCP tool's
+  /// made image blocks), or as the tool gave them.
+  static List<ImageAttachment> _resultImages(Object? content) => [
+    if (content is List)
+      for (final block in content.map(_map))
+        if (block['type'] == 'image')
+          ?_image(switch (block['source']) {
+            final Map<Object?, Object?> source => source.cast(),
+            _ => {
+              'type': 'base64',
+              'data': block['data'],
+              'media_type': block['mimeType'],
+            },
+          }),
+  ];
 
   static String _summary(Map<String, Object?> input) {
     for (final value in input.values) {
@@ -1755,9 +1856,11 @@ class ClaudeTranslator {
 enum _Outcome { running, done, failed, denied }
 
 class _Tool {
-  _Tool(this.name, this.input, this.parent, DateTime? startedAt)
+  _Tool(this.id, this.name, this.input, this.parent, DateTime? startedAt)
     : startedAt = startedAt ?? DateTime.now();
 
+  /// Its tool use's.
+  final String id;
   final String name;
   final Map<String, Object?> input;
 

@@ -32,12 +32,18 @@ import 'composer_files.dart';
 import 'composer_images.dart';
 import 'composer_mock_data.dart';
 import 'composer_picker.dart';
+import 'composer_polish.dart';
 import 'pickers_row.dart';
 import 'session_model_picker.dart';
 import 'kernel_option_text.dart';
 import 'file_drop.dart';
 import 'suggestion_menu.dart';
 import '../../ide/ide_hover.dart';
+import '../../ide/ide_spinning.dart';
+import '../../theme/codicons.dart';
+import '../../ide/file_service.dart' show IdeFileService;
+import '../../ide/ide_notifications.dart';
+import 'remote_drops.dart';
 
 /// An open query: a /command's, the slash starting the message, or a
 /// mention's (an @ starting a word: a file, a folder or a conversation);
@@ -90,6 +96,7 @@ class ChatComposer extends StatefulWidget {
     this.tapRegionGroupId,
     this.draft,
     this.openEditor,
+    this.hostFiles,
   });
 
   final ChatSession session;
@@ -115,6 +122,11 @@ class ChatComposer extends StatefulWidget {
 
   /// The file open in the editor beside the chat (see [ChatSession.send]).
   final OpenEditor? Function()? openEditor;
+
+  /// A remote project's host's files, where files of this machine's put
+  /// in (let go from another app, pasted, picked) are copied first, for its
+  /// agent to read (see [RemoteDrops]); null for a local project.
+  final IdeFileService? hostFiles;
 
   @override
   State<ChatComposer> createState() => ChatComposerState();
@@ -148,6 +160,9 @@ class ChatComposerState extends State<ChatComposer>
   final GlobalKey<ComposerPickerState> _modelPickerKey = GlobalKey();
 
   bool _hasContent = false;
+
+  /// Polish asked, its answer awaited (see [_polish]).
+  bool _polishing = false;
 
   /// Every image put in, by number, kept until sent: the text's references
   /// pick which go (see [_images]), so one taken out and brought back by
@@ -265,7 +280,7 @@ class ChatComposerState extends State<ChatComposer>
     final files = await WindowControls.readPasteboardFiles();
     if (!mounted) return false;
     if (files.isNotEmpty) {
-      await insertFiles(files);
+      await insertFiles(files, here: true);
       return true;
     }
     final text = (await Clipboard.getData(Clipboard.kTextPlain))?.text;
@@ -359,6 +374,7 @@ class ChatComposerState extends State<ChatComposer>
     _controller.addListener(_handleEditorChanged);
     _focusNode.addListener(_handleFocusChanged);
     widget.draft?.addListener(_handleDraftChanged);
+    ComposerPolishSetting.changes?.addListener(_handleSettingsChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _focusNode.requestFocus();
@@ -376,9 +392,15 @@ class ChatComposerState extends State<ChatComposer>
     }
   }
 
+  /// Settings → General's Polish button, turned on or off.
+  void _handleSettingsChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
     widget.draft?.removeListener(_handleDraftChanged);
+    ComposerPolishSetting.changes?.removeListener(_handleSettingsChanged);
     FloatingRegistry.closePopover(_menuOwner);
     _clickWindow?.cancel();
     _controller.dispose();
@@ -449,8 +471,15 @@ class ChatComposerState extends State<ChatComposer>
 
   /// Puts [files] in at [at] (in place of the selection when null), in
   /// their order: each a tag of its path, from the project's root when it
-  /// is in it, or, for an image the conversation takes, the image.
-  Future<void> insertFiles(List<ComposerFile> files, {int? at}) async {
+  /// is in it, or, for an image the conversation takes, the image. [here],
+  /// they are this machine's: a remote project's agent is given copies on
+  /// its host ([ChatComposer.hostFiles]), those that could not be copied
+  /// left out.
+  Future<void> insertFiles(
+    List<ComposerFile> files, {
+    int? at,
+    bool here = false,
+  }) async {
     if (files.isEmpty) return;
     var images = <ImageAttachment?>[for (final _ in files) null];
     if (widget.session.acceptsImages) {
@@ -464,17 +493,80 @@ class ChatComposerState extends State<ChatComposer>
       );
     }
     if (!mounted) return;
+    // The pictures go with the message as they are; the rest are copied.
+    final List<ComposerFile?> paths = [
+      for (final (index, file) in files.indexed)
+        images[index] == null ? file : null,
+    ];
+    if (here && widget.hostFiles != null && paths.nonNulls.isNotEmpty) {
+      final copies = await _copyToHost(paths.nonNulls.toList());
+      if (!mounted) return;
+      final copied = copies?.iterator;
+      for (var i = 0; i < paths.length; i++) {
+        if (paths[i] == null) continue;
+        paths[i] = copied != null && copied.moveNext() ? copied.current : null;
+      }
+    }
     final root = widget.session.root;
     _insertTags([
       for (final (index, file) in files.indexed)
         if (images[index] case final image?)
           ComposerImageEmbed.of(image.number!)
-        else
+        else if (paths[index] case final path?)
           ComposerTokenEmbed.file(
-            displayPath(file.path, root),
+            displayPath(path.path, root),
             directory: file.directory,
           ),
     ], at: at);
+  }
+
+  /// [files], this machine's, copied onto the remote project's host, how
+  /// far told in a notification once it takes a moment; null when they
+  /// could not be, as a notification says.
+  Future<List<ComposerFile>?> _copyToHost(List<ComposerFile> files) async {
+    final notifications = IdeNotificationsScope.maybeOf(context);
+    final l10n = context.l10n;
+    var done = 0;
+    var total = files.length;
+    IdeNotification? shown;
+    IdeNotificationProgress progress() =>
+        IdeNotificationProgress(done.toDouble(), total: total.toDouble());
+    final timer = notifications == null
+        ? null
+        : Timer(const Duration(milliseconds: 300), () {
+            shown = notifications.notify(
+              IdeSeverity.info,
+              l10n.explorerUploading(done, total),
+              progress: progress(),
+              sticky: true,
+            );
+          });
+    try {
+      return await RemoteDrops.copy(
+        widget.hostFiles!,
+        files,
+        onProgress: (worked, of) {
+          done = worked;
+          total = of;
+          if (shown case final shown?) {
+            notifications!.update(
+              shown,
+              message: l10n.explorerUploading(done, total),
+              progress: progress(),
+            );
+          }
+        },
+      );
+    } on Object catch (error) {
+      notifications?.notify(
+        IdeSeverity.error,
+        l10n.composerCopyToHostFailed('$error'),
+      );
+      return null;
+    } finally {
+      timer?.cancel();
+      if (shown case final shown?) notifications!.close(shown);
+    }
   }
 
   /// [text]'s `@paths` of pictures that go in as such ([pastedAsPicture]:
@@ -601,9 +693,15 @@ class ChatComposerState extends State<ChatComposer>
 
   // --- Editor state --------------------------------------------------------
 
+  /// An input method is composing text: a composition not empty. A macOS
+  /// one may leave an empty one (its letters deleted, or after a commit)
+  /// until its next: not composing, as Quill draws it, or the keys (Tab,
+  /// Enter) went to Quill (#143).
   bool get _isComposing {
     final state = _editorKey.currentState;
-    return state is QuillRawEditorState && state.composingRange.value.isValid;
+    if (state is! QuillRawEditorState) return false;
+    final range = state.composingRange.value;
+    return range.isValid && !range.isCollapsed;
   }
 
   void _handleFocusChanged() {
@@ -1053,7 +1151,7 @@ class ChatComposerState extends State<ChatComposer>
   Future<void> _attachContext() async {
     final files = await WindowControls.pickFiles();
     if (!mounted) return;
-    await insertFiles(files);
+    await insertFiles(files, here: true);
     _focusNode.requestFocus();
   }
 
@@ -1177,12 +1275,22 @@ class ChatComposerState extends State<ChatComposer>
   @override
   void fileDragLeave() => _hideGhost();
 
+  /// From another app: this machine's files.
   @override
-  void fileDrop(Offset position, List<ComposerFile> files) {
+  void fileDrop(Offset position, List<ComposerFile> files) =>
+      _dropFiles(position, files, here: true);
+
+  /// [files] let go at [position]; [here], this machine's (else the
+  /// project's, dragged from the IDE).
+  void _dropFiles(
+    Offset position,
+    List<ComposerFile> files, {
+    required bool here,
+  }) {
     if (!mounted) return;
     final at = _ghostAt ?? _dropOffset(position);
     _hideGhost();
-    unawaited(insertFiles(files, at: at));
+    unawaited(insertFiles(files, at: at, here: here));
   }
 
   // --- Prompt history ------------------------------------------------------
@@ -1267,6 +1375,62 @@ class ChatComposerState extends State<ChatComposer>
     } else {
       _historyAt = at;
       _historyShown = _controller.document.toPlainText();
+    }
+  }
+
+  // --- Polish --------------------------------------------------------------
+
+  /// The text as the model is given it to polish (see [composerPolishText]).
+  ComposerPolishText _polishText() {
+    final document = _controller.document;
+    return composerPolishText(
+      document.toDelta().slice(0, math.max(0, document.length - 1)),
+    );
+  }
+
+  /// Has the auxiliary model polish the text, its tags, images, code and
+  /// links kept as they are; put in its place as one change (⌘Z takes it
+  /// back), unless the text changed meanwhile. Why not, in a notification.
+  Future<void> _polish() async {
+    if (_polishing) return;
+    final asked = _polishText();
+    if (!asked.hasWords) return;
+    final before = _controller.document.toDelta();
+    final notifications = IdeNotificationsScope.maybeOf(context);
+    final l10n = context.l10n;
+    setState(() => _polishing = true);
+    try {
+      final Delta polished;
+      try {
+        polished = await polishComposerText(
+          asked,
+          model: widget.session.selected(KernelChoiceKind.model),
+          location: widget.session.kernelContext.cwd,
+        );
+      } on ComposerPolishException catch (error) {
+        notifications?.notify(
+          IdeSeverity.error,
+          l10n.composerPolishFailed(error.message ?? l10n.stashAiNoAnswer),
+        );
+        return;
+      }
+      if (!mounted || _controller.document.toDelta() != before) return;
+      final length = polished.toList().fold(
+        0,
+        (sum, op) => sum + (op.length ?? 0),
+      );
+      // One change of its own to undo: not merged with what was typed just
+      // before it, nor with what is typed next.
+      final history = _controller.document.history..lastRecorded = 0;
+      _controller.compose(
+        (Delta()..delete(_controller.document.length - 1)).concat(polished),
+        TextSelection.collapsed(offset: length),
+        ChangeSource.local,
+      );
+      history.lastRecorded = 0;
+      _focusNode.requestFocus();
+    } finally {
+      if (mounted) setState(() => _polishing = false);
     }
   }
 
@@ -1385,7 +1549,7 @@ class ChatComposerState extends State<ChatComposer>
             onMove: (details) => _showGhost(details.offset, details.data.files),
             onLeave: (_) => _hideGhost(),
             onAcceptWithDetails: (details) =>
-                fileDrop(details.offset, details.data.files),
+                _dropFiles(details.offset, details.data.files, here: false),
             builder: (context, candidates, rejected) => _buildBox(
               focused: focused || _ghostAt != null || stashes.isNotEmpty,
             ),
@@ -1875,6 +2039,14 @@ class ChatComposerState extends State<ChatComposer>
               ),
               title: l10n.composerApprovalTitle(session.kernel.label),
             ),
+            const SizedBox(width: 2),
+          ],
+          if (ComposerPolishSetting.current()) ...[
+            _PolishButton(
+              busy: _polishing,
+              enabled: _polishing || _polishText().hasWords,
+              onTap: () => unawaited(_polish()),
+            ),
             if (hasRing) const SizedBox(width: 2),
           ],
           if ((widget.onToggleContextPanel, context) case (
@@ -1957,6 +2129,56 @@ class ComposerPermissionSwitch extends StatelessWidget {
                 ),
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Polish (see [ChatComposerState._polish]): a sparkle, spinning while the
+/// model answers; faint with no words to polish.
+class _PolishButton extends StatelessWidget {
+  const _PolishButton({
+    required this.busy,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final bool busy;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final colors = themeColors;
+    final active = enabled && !busy;
+    final icon = Icon(
+      busy ? Codicons.loading : Codicons.sparkle,
+      size: 14,
+      color: enabled ? colors['icon.foreground'] : AppColors.textFaint,
+    );
+    return IdeHover(
+      message: busy ? l10n.composerPolishing : l10n.composerPolishHint,
+      child: HoverBuilder(
+        cursor: active ? SystemMouseCursors.click : SystemMouseCursors.basic,
+        builder: (context, hovered) => GestureDetector(
+          // Keeps the editor's focus.
+          onTapDown: (_) {},
+          onTap: active ? onTap : null,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 120),
+            width: 23,
+            height: 22,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: active && hovered
+                  ? colors['toolbar.hoverBackground']
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(5),
+            ),
+            child: busy ? IdeSpinning(icon) : icon,
           ),
         ),
       ),

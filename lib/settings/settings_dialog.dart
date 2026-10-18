@@ -4,6 +4,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../base/smooth_scroll.dart';
 import '../ide/ide_color_theme_picker.dart' show ideSelectColorThemeCommandId;
 import '../keybindings/default_keybindings.dart' show openKeybindingsCommandId;
 import '../keybindings/key_chord.dart';
@@ -27,6 +28,7 @@ enum SettingsSection {
   models,
   network,
   mobile,
+  browser,
   notifications,
   stash,
   accounts,
@@ -45,6 +47,7 @@ enum SettingsCategory {
     SettingsSection.models,
     SettingsSection.network,
     SettingsSection.mobile,
+    SettingsSection.browser,
     SettingsSection.notifications,
     SettingsSection.stash,
     SettingsSection.accounts,
@@ -82,6 +85,13 @@ typedef SettingsPageBuilder = Widget Function(
   SettingsSection section,
 );
 
+/// Builds what the dialog says above every page (a store grown large):
+/// [open] goes to a section.
+typedef SettingsNoticeBuilder = Widget Function(
+  BuildContext context,
+  void Function(SettingsSection section) open,
+);
+
 /// Opens the settings, the same in the chat and the IDE: a modal dialog,
 /// its pages listed at the left, [section] shown first. Completes when it
 /// closes.
@@ -89,6 +99,7 @@ Future<void> showSettingsDialog(
   BuildContext context, {
   SettingsSection section = SettingsSection.general,
   required SettingsPageBuilder pageBuilder,
+  SettingsNoticeBuilder? noticeBuilder,
 }) => showGeneralDialog<void>(
   context: context,
   barrierLabel: 'Dismiss',
@@ -96,8 +107,11 @@ Future<void> showSettingsDialog(
   transitionDuration: const Duration(milliseconds: 120),
   transitionBuilder: (context, animation, _, child) =>
       FadeTransition(opacity: animation, child: child),
-  pageBuilder: (context, _, _) =>
-      SettingsDialog(section: section, pageBuilder: pageBuilder),
+  pageBuilder: (context, _, _) => SettingsDialog(
+    section: section,
+    pageBuilder: pageBuilder,
+    noticeBuilder: noticeBuilder,
+  ),
 );
 
 /// What [showSettingsDialog] shows, over the whole window: the pages
@@ -112,10 +126,12 @@ class SettingsDialog extends StatefulWidget {
     super.key,
     this.section = SettingsSection.general,
     required this.pageBuilder,
+    this.noticeBuilder,
   });
 
   final SettingsSection section;
   final SettingsPageBuilder pageBuilder;
+  final SettingsNoticeBuilder? noticeBuilder;
 
   /// The pages' list: at first, and the least and most it is dragged to.
   static const navWidth = 240.0;
@@ -220,6 +236,7 @@ class SettingsDialogState extends State<SettingsDialog> {
     SettingsSection.models => Codicons.sparkle,
     SettingsSection.network => Codicons.radioTower,
     SettingsSection.mobile => Codicons.deviceMobile,
+    SettingsSection.browser => Codicons.globe,
     SettingsSection.notifications => Codicons.bell,
     SettingsSection.stash => Codicons.note,
     SettingsSection.accounts => Codicons.account,
@@ -246,6 +263,7 @@ class SettingsDialogState extends State<SettingsDialog> {
       SettingsSection.models => l10n.settingsSectionModels,
       SettingsSection.network => l10n.settingsSectionNetwork,
       SettingsSection.mobile => l10n.settingsSectionMobile,
+      SettingsSection.browser => l10n.settingsSectionBrowser,
       SettingsSection.notifications => l10n.settingsSectionNotifications,
       SettingsSection.stash => l10n.settingsSectionStash,
       SettingsSection.accounts => l10n.settingsSectionAccounts,
@@ -263,6 +281,7 @@ class SettingsDialogState extends State<SettingsDialog> {
         SettingsSection.appearance => context.l10n.settingsAppearanceKeywords,
         SettingsSection.network => context.l10n.settingsNetworkKeywords,
         SettingsSection.mobile => context.l10n.settingsMobileKeywords,
+        SettingsSection.browser => context.l10n.settingsBrowserKeywords,
         SettingsSection.customize => context.l10n.settingsCustomizeKeywords,
         SettingsSection.accounts => context.l10n.settingsAccountsKeywords,
         _ => '',
@@ -425,6 +444,8 @@ class SettingsDialogState extends State<SettingsDialog> {
                   : null,
             ),
           ),
+        if (widget.noticeBuilder case final notice?)
+          notice(context, (section) => setState(() => _section = section)),
         Expanded(
           child: KeyedSubtree(
             key: ValueKey(_section),
@@ -704,24 +725,27 @@ class SettingsDialogState extends State<SettingsDialog> {
           ),
         ),
         Expanded(
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-            children: [
-              for (final (i, sections) in groups.indexed) ...[
-                // Groups apart, as Cursor's: by room, not headings.
-                if (i > 0) const SizedBox(height: 14),
-                for (final section in sections)
-                  _NavItem(
-                    icon: icon(section),
-                    label: label(context, section),
-                    selected: section == _section,
-                    onTap: () {
-                      show(section);
-                      _closeDrawer();
-                    },
-                  ),
+          child: SmoothScrolling(
+            builder: (context, controller) => ListView(
+              controller: controller,
+              padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+              children: [
+                for (final (i, sections) in groups.indexed) ...[
+                  // Groups apart, as Cursor's: by room, not headings.
+                  if (i > 0) const SizedBox(height: 14),
+                  for (final section in sections)
+                    _NavItem(
+                      icon: icon(section),
+                      label: label(context, section),
+                      selected: section == _section,
+                      onTap: () {
+                        show(section);
+                        _closeDrawer();
+                      },
+                    ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ],

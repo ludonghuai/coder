@@ -272,6 +272,58 @@ void main() {
     await unmount(tester);
   });
 
+  testWidgets('New writes a stash here, its text with the keyboard; a '
+      'draft left blank gone on with (#147)', (tester) async {
+    final newButton = find.byWidgetPredicate(
+      (widget) =>
+          widget is SidebarIconButton &&
+          widget.tooltip == englishLocalizations.stashNewTooltip,
+    );
+    Future<void> tapNew() async {
+      await tester.tap(newButton);
+      for (var i = 0; i < 5; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)),
+        );
+        await tester.pump();
+      }
+      await tester.pumpAndSettle();
+    }
+
+    await pumpView(tester);
+    await tapNew();
+    final draft = store.notes.single;
+    expect(draft.isDraft, isTrue);
+    expect(tester.widget<StashDetail>(find.byType(StashDetail)).id, draft.id);
+    // Typed in at once: the keyboard in its text.
+    final focused = FocusManager.instance.primaryFocus?.context;
+    expect(
+      find.descendant(
+        of: find.byType(StashNoteEditor),
+        matching: find.byElementPredicate((element) => element == focused),
+      ),
+      findsOneWidget,
+    );
+    expect(tester.testTextInput.hasAnyClients, isTrue);
+    await unmount(tester);
+
+    // Left blank, the next New goes on with it, made no other.
+    final blank = (await tester.runAsync(() => store.create()))!;
+    await pumpView(tester);
+    await tapNew();
+    expect(store.notes, hasLength(2));
+    expect(tester.widget<StashDetail>(find.byType(StashDetail)).id, blank.id);
+    await unmount(tester);
+
+    // Of the project the page shows alone, still a draft.
+    final id = (await tester.runAsync(
+      () => controller.draft(project: '/p/app'),
+    ))!;
+    expect(id, blank.id);
+    expect(store.byId(id)!.project, '/p/app');
+    expect(store.byId(id)!.isDraft, isTrue);
+  });
+
   testWidgets('the line between the cards and the stash drags, the width '
       'kept; a double click puts it back', (tester) async {
     final note = await tester.runAsync(() => store.create(body: 'something'));
@@ -299,9 +351,7 @@ void main() {
   });
 
   testWidgets('cards by their number, the newest first; those done hidden '
-      'at first; statuses and projects picked several at once', (
-    tester,
-  ) async {
+      'at first; statuses and projects picked several at once', (tester) async {
     final ids = (await tester.runAsync(() async {
       final ids = <int>[];
       for (final (title, project) in [
@@ -358,12 +408,21 @@ void main() {
     expect(card('Alpha'), findsNothing);
     expect(card('Beta'), findsOneWidget);
 
-    // Shown from elsewhere: the filters let it be seen.
+    // Kept for the next time the page shows.
+    await unmount(tester);
+    await pumpView(tester);
+    expect(find.text('2 projects'), findsOneWidget);
+    expect(find.text('Any status'), findsOneWidget);
+    expect(card('Alpha'), findsNothing);
+    expect(card('Beta'), findsOneWidget);
+
+    // Shown from elsewhere: the filters let it be seen, those picked kept.
     tester.state<StashViewState>(find.byType(StashView)).show(ids[0]);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
     expect(card('Alpha'), findsOneWidget);
     expect(find.text('Any project'), findsOneWidget);
+    expect(controller.filters?['projects'], hasLength(2));
     await unmount(tester);
   });
 
@@ -418,7 +477,7 @@ void main() {
   });
 
   testWidgets('the card shows the conversation it was last worked on in, '
-      'what its agent said, a click away; the detail lists them all', (
+      'what its agent said; the detail lists them all, a click away', (
     tester,
   ) async {
     // Its agents' kernels started in the test's time.
@@ -471,11 +530,9 @@ void main() {
     // In place of its text (its title stays).
     expect(find.text('Uploads fail'), findsOneWidget);
     expect(find.text('They should retry on 503'), findsNothing);
+    // A click on it is the card's: the stash opens, not the conversation.
     await tester.tap(chip);
-    expect(opened, thread);
-
-    opened = null;
-    await tester.tap(find.text('Uploads fail'));
+    expect(opened, isNull);
     // Sliding in.
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));

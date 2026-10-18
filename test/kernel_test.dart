@@ -508,6 +508,93 @@ void main() {
       expect(transcript.edits, hasLength(3));
     });
 
+    test("an edit tells what its file was before, a subagent's too", () {
+      final events = <KernelEvent>[];
+      var seq = 0;
+      final translator = ClaudeTranslator(
+        emit: events.add,
+        nextSeq: () => ++seq,
+      );
+      void edit(
+        String id,
+        String name,
+        Map<String, Object?> result, {
+        String? parent,
+      }) {
+        translator
+          ..translate({
+            'type': 'assistant',
+            'parent_tool_use_id': parent,
+            'message': {
+              'id': 'msg-$id',
+              'role': 'assistant',
+              'content': [
+                {
+                  'type': 'tool_use',
+                  'id': id,
+                  'name': name,
+                  'input': {'file_path': result['filePath']},
+                },
+              ],
+            },
+          })
+          ..translate({
+            'type': 'user',
+            'parent_tool_use_id': parent,
+            'message': {
+              'role': 'user',
+              'content': [
+                {'type': 'tool_result', 'tool_use_id': id, 'content': 'ok'},
+              ],
+            },
+            'tool_use_result': {
+              ...result,
+              'structuredPatch': [
+                {
+                  'oldStart': 1,
+                  'oldLines': 1,
+                  'newStart': 1,
+                  'newLines': 1,
+                  'lines': ['-a', '+b'],
+                },
+              ],
+            },
+          });
+      }
+
+      edit('e1', 'Edit', {
+        'filePath': '/p/a.txt',
+        'oldString': 'a',
+        'originalFile': 'a\n',
+      });
+      edit('w1', 'Write', {
+        'type': 'create',
+        'filePath': '/p/new.txt',
+        'content': 'b\n',
+        'originalFile': null,
+      });
+      edit('e2', 'Edit', {
+        'filePath': '/p/sub.txt',
+        'oldString': 'a',
+        'originalFile': 'a\n',
+      }, parent: 'agent-1');
+      edit('e3', 'Edit', {'filePath': '/p/untold.txt', 'oldString': 'a'});
+      final edits = {
+        for (final event in events.whereType<FileEdited>())
+          event.change.path: event.original,
+      };
+      expect(edits.keys, [
+        '/p/a.txt',
+        '/p/new.txt',
+        '/p/sub.txt',
+        '/p/untold.txt',
+      ]);
+      expect((edits['/p/a.txt']! as OriginalText).text, 'a\n');
+      expect((edits['/p/new.txt']! as OriginalText).text, isNull);
+      expect((edits['/p/sub.txt']! as OriginalText).text, 'a\n');
+      expect(edits['/p/untold.txt'], isNull);
+    });
+
     test('each round of planning is one card; a plan sent back gives way '
         'to the next', () {
       final transcript = Transcript();
@@ -1139,6 +1226,11 @@ void main() {
         ]);
         // Only the message that starts it says so.
         kernel.send(const KernelTurn(id: 'u3', text: 'And test it'));
+        cli.push({
+          'type': 'command_lifecycle',
+          'command_uuid': 'u2',
+          'state': 'started',
+        });
         await pumpEventQueue();
         expect((cli.users.last['message'] as Map)['content'], [
           {'type': 'text', 'text': 'And test it'},
@@ -1453,14 +1545,17 @@ void main() {
       kernel
         ..send(const KernelTurn(id: 'u1', text: 'first'))
         ..send(const KernelTurn(id: 'u2', text: 'second'))
-        ..send(const KernelTurn(id: 'u3', text: 'third'));
+        ..send(const KernelTurn(id: 'u3', text: 'third'))
+        ..send(const KernelTurn(id: 'u4', text: 'fourth'));
       await pumpEventQueue();
-      expect(cli.users.map((m) => m['uuid']), ['u1', 'u2', 'u3']);
+      // One waits in the CLI at a time: it takes up all it queued as one
+      // turn.
+      expect(cli.users.map((m) => m['uuid']), ['u1', 'u2']);
       // Each after the turn before it, not folded into it.
       expect(cli.users.map((m) => m['priority']), everyElement('later'));
       List<String> queued() => [for (final (id, _) in transcript.queued) id];
       // Waiting apart, not in the conversation yet.
-      expect(queued(), ['u2', 'u3']);
+      expect(queued(), ['u2', 'u3', 'u4']);
       expect(transcript.indexOf('u2'), isNull);
       cli.push({
         'type': 'assistant',
@@ -1474,9 +1569,10 @@ void main() {
       });
       await pumpEventQueue();
 
-      expect(await kernel.cancelQueued('u3'), isTrue);
-      expect(cli.requests('cancel_async_message').single['message_uuid'], 'u3');
-      expect(queued(), ['u2']);
+      // Not given the CLI yet: taken back here.
+      expect(await kernel.cancelQueued('u4'), isTrue);
+      expect(cli.requests('cancel_async_message'), isEmpty);
+      expect(queued(), ['u2', 'u3']);
 
       cli
         ..push({'type': 'result', 'subtype': 'success', 'is_error': false})
@@ -1486,11 +1582,17 @@ void main() {
           'state': 'started',
         });
       await pumpEventQueue();
-      expect(queued(), isEmpty);
+      expect(queued(), ['u3']);
+      // The next given the CLI once the one before it is taken up.
+      expect(cli.users.map((m) => m['uuid']), ['u1', 'u2', 'u3']);
       // Taken up: after what the turn before it said while it waited.
       expect(transcript.indexOf('u2'), 2);
       expect(transcript.length, 3);
       expect(transcript.activeTurn, 'u2');
+
+      expect(await kernel.cancelQueued('u3'), isTrue);
+      expect(cli.requests('cancel_async_message').single['message_uuid'], 'u3');
+      expect(queued(), isEmpty);
 
       kernel
         ..cancel()
@@ -1533,11 +1635,13 @@ void main() {
         ..send(const KernelTurn(id: 'u3', text: 'third'));
       await pumpEventQueue();
 
-      // The next anyway: only the turn running is stopped.
+      // The next anyway, the one after it held: only the turn running is
+      // stopped, and it is taken up alone.
       kernel.sendQueuedNow('u2');
       await pumpEventQueue();
       expect(cli.requests('interrupt'), hasLength(1));
       expect(cli.requests('cancel_async_message'), isEmpty);
+      expect(cli.users.map((m) => m['uuid']), ['u1', 'u2']);
 
       cli.push({
         'type': 'command_lifecycle',
@@ -1545,21 +1649,24 @@ void main() {
         'state': 'started',
       });
       await pumpEventQueue();
+      expect(cli.users.map((m) => m['uuid']), ['u1', 'u2', 'u3']);
       kernel.send(const KernelTurn(id: 'u4', text: 'fourth'));
       await pumpEventQueue();
       kernel.sendQueuedNow('u4');
       await pumpEventQueue();
+      // Held, it is taken back here; the one in the CLI there.
       expect(
         cli.requests('cancel_async_message').map((r) => r['message_uuid']),
-        ['u4', 'u3'],
+        ['u3'],
       );
-      // Sent again, in its new place: it first, the turn stopped for it.
-      expect(cli.users.skip(4).map((m) => (m['message'] as Map)['content']), [
+      // Sent again, in its new place: it first, the turn stopped for it,
+      // the other held until it is taken up.
+      List<Object?> contents() => [
+        for (final m in cli.users.skip(3)) (m['message'] as Map)['content'],
+      ];
+      expect(contents(), [
         [
           {'type': 'text', 'text': 'fourth'},
-        ],
-        [
-          {'type': 'text', 'text': 'third'},
         ],
       ]);
       expect(cli.requests('interrupt'), hasLength(2));
@@ -1567,6 +1674,22 @@ void main() {
         [for (final (_, item) in transcript.queued) item.text],
         ['fourth', 'third'],
       );
+
+      cli.push({
+        'type': 'command_lifecycle',
+        'command_uuid': cli.users.last['uuid'],
+        'state': 'started',
+      });
+      await pumpEventQueue();
+      expect(contents(), [
+        [
+          {'type': 'text', 'text': 'fourth'},
+        ],
+        [
+          {'type': 'text', 'text': 'third'},
+        ],
+      ]);
+      expect([for (final (_, item) in transcript.queued) item.text], ['third']);
       kernel.dispose();
     });
 
@@ -2165,48 +2288,51 @@ void main() {
           if (item is UserMessageItem) item.text,
       ];
 
-      test('replays the first page, and the earlier ones go before it', () async {
-        final asked = <(int, String?)>[];
-        final kernel = open((session, {required turns, before}) async {
-          asked.add((turns, before));
-          return before == null
-              ? ClaudeHistoryPage([
-                  prompt('u3'),
-                  answer('u3', 300),
-                  prompt('u4'),
-                  answer('u4', 400),
-                ], earlier: 'u3')
-              : ClaudeHistoryPage([
-                  prompt('u1'),
-                  answer('u1', 100),
-                  prompt('u2'),
-                  answer('u2', 200),
-                ]);
-        });
-        final transcript = Transcript();
-        kernel.events.listen(transcript.apply);
-        await pumpEventQueue();
-        expect(asked, [(10, null)]);
-        expect(prompts(transcript), ['u3', 'u4']);
-        expect(kernel.hasEarlierHistory, isTrue);
-        expect(transcript.stats!.cache!.conversation.written, 700);
-        final lastSeq = transcript.lastSeq;
+      test(
+        'replays the first page, and the earlier ones go before it',
+        () async {
+          final asked = <(int, String?)>[];
+          final kernel = open((session, {required turns, before}) async {
+            asked.add((turns, before));
+            return before == null
+                ? ClaudeHistoryPage([
+                    prompt('u3'),
+                    answer('u3', 300),
+                    prompt('u4'),
+                    answer('u4', 400),
+                  ], earlier: 'u3')
+                : ClaudeHistoryPage([
+                    prompt('u1'),
+                    answer('u1', 100),
+                    prompt('u2'),
+                    answer('u2', 200),
+                  ]);
+          });
+          final transcript = Transcript();
+          kernel.events.listen(transcript.apply);
+          await pumpEventQueue();
+          expect(asked, [(10, null)]);
+          expect(prompts(transcript), ['u3', 'u4']);
+          expect(kernel.hasEarlierHistory, isTrue);
+          expect(transcript.stats!.cache!.conversation.written, 700);
+          final lastSeq = transcript.lastSeq;
 
-        await kernel.loadEarlier();
-        await pumpEventQueue();
-        expect(asked.last, (20, 'u3'));
-        expect(prompts(transcript), ['u1', 'u2', 'u3', 'u4']);
-        expect(transcript.lastSeq, greaterThan(lastSeq));
-        expect(kernel.hasEarlierHistory, isFalse);
-        expect(kernel.loadingEarlier, isFalse);
-        // Counted once each, not again for the page read later.
-        expect(transcript.stats!.cache!.conversation.written, 1000);
+          await kernel.loadEarlier();
+          await pumpEventQueue();
+          expect(asked.last, (20, 'u3'));
+          expect(prompts(transcript), ['u1', 'u2', 'u3', 'u4']);
+          expect(transcript.lastSeq, greaterThan(lastSeq));
+          expect(kernel.hasEarlierHistory, isFalse);
+          expect(kernel.loadingEarlier, isFalse);
+          // Counted once each, not again for the page read later.
+          expect(transcript.stats!.cache!.conversation.written, 1000);
 
-        // Nothing before: nothing is read.
-        await kernel.loadEarlier();
-        expect(asked, hasLength(2));
-        kernel.dispose();
-      });
+          // Nothing before: nothing is read.
+          await kernel.loadEarlier();
+          expect(asked, hasLength(2));
+          kernel.dispose();
+        },
+      );
 
       test('asked again while it is read, it is the same reading', () async {
         final read = Completer<ClaudeHistoryPage>();
@@ -2988,6 +3114,12 @@ void main() {
       expect(modesSent(), ['plan', 'acceptEdits', 'acceptEdits']);
       kernel.send(const KernelTurn(id: 'u2', text: 'fix it'));
       kernel.send(const KernelTurn(id: 'u3', text: 'and test it'));
+      // Given the CLI once the one before it is taken up.
+      cli.push({
+        'type': 'command_lifecycle',
+        'command_uuid': 'u2',
+        'state': 'started',
+      });
       await pumpEventQueue();
       expect(notes(1), [contains('left Ask mode')]);
       expect(notes(2), isEmpty);
@@ -4729,8 +4861,44 @@ exec /usr/bin/env "\$@"
         'turn': {'id': 'st1', 'status': 'completed'},
       });
       expect(events.last, isA<TurnEnded>());
-      final edited = events.whereType<FileEdited>().single.change;
-      expect((edited.path, edited.added, edited.removed), ('lib/a.dart', 1, 1));
+      final edited = events.whereType<FileEdited>().single;
+      expect(
+        (edited.change.path, edited.change.added, edited.change.removed),
+        ('lib/a.dart', 1, 1),
+      );
+      // What it was, by the patch taken back out.
+      expect(
+        (edited.original! as OriginalByPatch).diff,
+        '@@ -3 +3 @@\n a\n-b\n+c',
+      );
+    });
+
+    test('a file added or deleted tells what it was', () async {
+      kernel.send(const KernelTurn(id: 't1', text: 'hi'));
+      await pumpEventQueue();
+      notify('item/completed', {
+        'item': {
+          'type': 'fileChange',
+          'id': 'f',
+          'changes': [
+            {
+              'path': 'new.txt',
+              'kind': {'type': 'add'},
+              'diff': 'new\n',
+            },
+            {
+              'path': 'old.txt',
+              'kind': {'type': 'delete'},
+              'diff': 'old\n',
+            },
+          ],
+        },
+      });
+      final originals = [
+        for (final event in events.whereType<FileEdited>())
+          (event.original! as OriginalText).text,
+      ];
+      expect(originals, [null, 'old\n']);
     });
 
     test('a command running when the turn stops shows as failed', () async {

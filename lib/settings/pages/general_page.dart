@@ -10,13 +10,14 @@ import '../../ide/ide_menu.dart';
 import '../../ide/ide_notifications.dart' show IdeSeverity;
 import '../../kernel/claude_code/claude_path_setting.dart';
 import '../../kernel/commit_attribution.dart';
+import '../../kernel/prompt_suggestions.dart';
+import '../../chat/composer/composer_polish.dart' show ComposerPolishSetting;
 import '../../kernel/queued_messages.dart';
 import '../../kernel/thincoder/thincoder_locator.dart';
 import '../../l10n/l10n.dart';
 import '../../platform/app_platform.dart';
 import '../../platform/context_menu.dart';
 import '../../platform/shell_command.dart';
-import '../../telemetry/telemetry_service.dart' show TelemetrySetting;
 import '../../theme/workbench_theme.dart' show themeColors;
 import '../../tips/feature_tips_controller.dart';
 import '../../tips/feature_tips_view.dart';
@@ -32,11 +33,13 @@ import 'settings_widgets.dart';
 /// come back and close (`window.*`), who the commits and pull requests
 /// agents write credit (`chat.commitAttribution` in settings.json), when a
 /// message sent while the agent works is taken up (`chat.queuedMessages`),
-/// whether the app sends its usage data (`telemetry.telemetryLevel`), the
+/// whether the app sends its usage data (`telemetry.telemetryLevel`), whether
+/// the next prompt is suggested after each turn (`chat.promptSuggestions`),
+/// whether the composer has its Polish button (`chat.composer.polish`), the
 /// Claude Code to run (`claudeCode.path`), the thincoder to run
-/// (`thincoder.path`), the `code` shell command, and
-/// Open with BaoCode in Finder's or Explorer's context menu. A choice is
-/// written at once; the default is not written.
+/// (`thincoder.path`), the `code` shell command, and Open with BaoCode in
+/// Finder's or Explorer's context menu. A choice is written at once; the
+/// default is not written.
 class GeneralSettingsPage extends StatelessWidget {
   const GeneralSettingsPage({
     super.key,
@@ -349,14 +352,25 @@ class GeneralSettingsPage extends StatelessWidget {
                   },
                 ),
                 SettingsSwitchRow(
-                  label: l10n.generalSettingsTelemetry,
-                  description: l10n.generalSettingsTelemetryDescription,
-                  value: TelemetrySetting.enabled(
-                    settings?[TelemetrySetting.settingKey],
+                  label: l10n.generalSettingsPromptSuggestions,
+                  description: l10n.generalSettingsPromptSuggestionsDescription,
+                  value: PromptSuggestions.enabled(
+                    settings?[PromptSuggestions.settingKey],
                   ),
                   onChanged: (on) => _write(
-                    TelemetrySetting.settingKey,
-                    on ? null : TelemetrySetting.off,
+                    PromptSuggestions.settingKey,
+                    on ? null : PromptSuggestions.off,
+                  ),
+                ),
+                SettingsSwitchRow(
+                  label: l10n.generalSettingsComposerPolish,
+                  description: l10n.generalSettingsComposerPolishDescription,
+                  value: ComposerPolishSetting.enabled(
+                    settings?[ComposerPolishSetting.settingKey],
+                  ),
+                  onChanged: (on) => _write(
+                    ComposerPolishSetting.settingKey,
+                    on ? null : ComposerPolishSetting.off,
                   ),
                 ),
               ],
@@ -408,7 +422,8 @@ class GeneralSettingsPage extends StatelessWidget {
                   children: [
                     SettingsSwitchRow(
                       label: l10n.generalSettingsAutoOpenChanges,
-                      description: l10n.generalSettingsAutoOpenChangesDescription,
+                      description:
+                          l10n.generalSettingsAutoOpenChangesDescription,
                       value: IdeAgentChanges.enabledBy(
                         settings?[IdeAgentChanges.enabledSetting],
                       ),

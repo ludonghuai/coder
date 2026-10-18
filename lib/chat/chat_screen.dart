@@ -641,6 +641,7 @@ class _ChatScreenState extends State<ChatScreen>
             sizeOf: links.sizeOf,
             inPanel: links.inPanel,
             onOpenInIde: links.openInIde,
+            onShowBrowserTab: links.showBrowserTab,
             roots: links.roots?.call() ?? const [],
             seen: _session.filesSeen,
             local: switch (_session.kernelContext.cwd) {
@@ -891,6 +892,12 @@ class _ChatScreenState extends State<ChatScreen>
           session: _session,
           draft: _session.draft,
           openEditor: widget.openEditor,
+          // A remote project's: this machine's files are copied there.
+          hostFiles: switch (_session.kernelContext.cwd) {
+            final cwd? when RemoteLocation.isRemote(cwd) =>
+              widget.fileMentions?.files,
+            _ => null,
+          },
           contextPanelOpen: _contextPanelOpen,
           onToggleContextPanel: _toggleContextPanel,
         ),

@@ -167,6 +167,13 @@ enum ToolKind {
 
   /// A goal proposed for the session (its condition the item's output).
   goal,
+
+  /// Something done in the user's browser (see lib/browser): its [tool]
+  /// says what.
+  browser,
+
+  /// Pictures an image model made (see lib/images): shown as they come.
+  image,
   other,
 }
 
@@ -182,6 +189,11 @@ class ToolCallItem extends ChatItem {
     this.label,
     this.status = ToolStatus.succeeded,
     this.output,
+    this.tool,
+    this.callId,
+    this.input = const {},
+    this.images = const [],
+    this.imageFiles = const [],
   });
 
   final ToolKind kind;
@@ -200,6 +212,25 @@ class ToolCallItem extends ChatItem {
 
   /// What it returned, shown on demand.
   final String? output;
+
+  /// The tool's own name (an MCP tool's, without its server's), for a
+  /// kind each of whose tools shows its own way.
+  final String? tool;
+
+  /// Its tool use's id, for one of the app's own tools (see
+  /// claude_sdk_tools.dart): what the call under way is known by, to answer
+  /// what it asks of the user.
+  final String? callId;
+
+  /// What it was called with, for those.
+  final Map<String, Object?> input;
+
+  /// The pictures it returned (a screenshot, say).
+  final List<ImageAttachment> images;
+
+  /// Where they were saved (absolute, on the project's host), as the CLI
+  /// told the agent: files of the session, which its text may link to.
+  final List<String> imageFiles;
 }
 
 /// A subagent at work: its own conversation, one card in the history that
@@ -479,6 +510,26 @@ class LiveStatusItem extends ChatItem {
 
 enum FileChangeKind { added, modified, deleted }
 
+/// What a file was before an edit, as the agent tells it: what Undo puts
+/// back.
+sealed class FileOriginal {
+  const FileOriginal();
+}
+
+/// Its text; null where there was no file.
+final class OriginalText extends FileOriginal {
+  const OriginalText(this.text);
+
+  final String? text;
+}
+
+/// The edit as a unified diff: taken back out of the file as it left it.
+final class OriginalByPatch extends FileOriginal {
+  const OriginalByPatch(this.diff);
+
+  final String diff;
+}
+
 /// A file an agent changed, with its line counts.
 class FileChange {
   const FileChange({
@@ -488,7 +539,6 @@ class FileChange {
     this.kind = FileChangeKind.modified,
     this.binary = false,
     this.tracked = true,
-    this.shared = false,
     this.conflict = false,
   });
 
@@ -500,13 +550,9 @@ class FileChange {
   /// No line counts: a binary file.
   final bool binary;
 
-  /// Whether it is in the project's snapshots, to be undone; not when it
-  /// is ignored, too large, or outside the project.
+  /// Whether what it was before is known, to be undone; not when the
+  /// agent did not tell, or it is too large or outside the project.
   final bool tracked;
-
-  /// Another agent was at work in the project at the same time: some of
-  /// it may be theirs.
-  final bool shared;
 
   /// It changed again since the agent left it, and Undo could not carry
   /// that over.
