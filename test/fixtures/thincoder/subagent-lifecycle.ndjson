@@ -1,0 +1,21 @@
+{"fixture": "subagent-lifecycle", "cwd": "/project"}
+{"client": {"jsonrpc": "2.0", "id": "c1", "method": "initialize", "params": {"protocolVersion": 1, "clientCapabilities": {}}}}
+{"server": {"jsonrpc": "2.0", "id": "c1", "result": {"protocolVersion": 1, "agentCapabilities": {"loadSession": true, "sessionCapabilities": {"list": {}, "resume": {}, "delete": {}, "close": {}}}, "authMethods": [], "agentInfo": {"name": "thincoder", "version": "0.12.74"}}}}
+{"client": {"jsonrpc": "2.0", "id": "c2", "method": "session/new", "params": {"cwd": "/project", "mcpServers": []}}}
+{"server": {"jsonrpc": "2.0", "id": "c2", "result": {"sessionId": "1", "configOptions": [{"id": "mode", "name": "Mode", "type": "select", "currentValue": "normal", "options": [{"value": "normal", "name": "Normal"}, {"value": "plan", "name": "Plan"}]}]}}}
+{"turn": "spawn one and wait for it"}
+{"client": {"jsonrpc": "2.0", "id": "c3", "method": "session/prompt", "params": {"sessionId": "1", "prompt": [{"type": "text", "text": "spawn one and wait for it"}]}}}
+{"server": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "1", "update": {"sessionUpdate": "session_info_update", "_meta": {"thincoder.dev/subagent": {"role": "eng-coder", "id": 2, "state": "queued", "progress": {"position": 1}, "detail": "waiting for a slot"}}}}}}
+{"server": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "1", "update": {"sessionUpdate": "agent_message_chunk", "content": {"type": "text", "text": "Spawned one."}}}}}
+{"expect": {"items": ["user: spawn one and wait for it", "agent running: eng-coder#2 · queued · waiting for a slot", "text: Spawned one."], "tasks": []}}
+{"server": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "1", "update": {"sessionUpdate": "session_info_update", "_meta": {"thincoder.dev/subagent": {"role": "eng-coder", "id": 2, "state": "async"}}}}}}
+{"expect": {"tasks": ["subagent:eng-coder#2"], "items": ["user: spawn one and wait for it", "agent running: eng-coder#2", "text: Spawned one."]}}
+{"server": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "1", "update": {"sessionUpdate": "session_info_update", "_meta": {"thincoder.dev/subagent": {"role": "eng-coder", "id": 2, "state": "turn", "progress": {"turn": 1, "maxTurns": 100}}}}}}}
+{"expect": {"tasks": ["subagent:eng-coder#2"], "items": ["user: spawn one and wait for it", "agent running: eng-coder#2 · turn 1/100", "text: Spawned one."]}}
+{"server": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "1", "update": {"sessionUpdate": "session_info_update", "_meta": {"thincoder.dev/subagent": {"role": "eng-coder", "id": 2, "state": "approval", "progress": {"turn": 2, "maxTurns": 100}, "detail": "Bash"}}}}}}
+{"server": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "1", "update": {"sessionUpdate": "session_info_update", "_meta": {"thincoder.dev/subagent": {"role": "eng-coder", "id": 2, "state": "approval"}}}}}}
+{"expect": {"tasks": ["subagent:eng-coder#2"], "items": ["user: spawn one and wait for it", "agent running: eng-coder#2 · approval", "text: Spawned one."]}}
+{"server": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "1", "update": {"sessionUpdate": "session_info_update", "_meta": {"thincoder.dev/subagent": {"role": "eng-coder", "id": 2, "state": "settled"}}}}}}
+{"server": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "1", "update": {"sessionUpdate": "session_info_update", "_meta": {"thincoder.dev/subagent": {"role": "eng-coder", "id": 2, "state": "done"}}}}}}
+{"server": {"jsonrpc": "2.0", "id": "c3", "result": {"stopReason": "end_turn"}}}
+{"expect": {"items": ["user: spawn one and wait for it", "agent succeeded: eng-coder#2", "text: Spawned one."], "tasks": [], "health": "ready"}}

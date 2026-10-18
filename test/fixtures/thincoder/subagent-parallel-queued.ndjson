@@ -1,0 +1,15 @@
+{"fixture": "subagent-parallel-queued", "cwd": "/project"}
+{"client": {"jsonrpc": "2.0", "id": "c1", "method": "initialize", "params": {"protocolVersion": 1, "clientCapabilities": {}}}}
+{"server": {"jsonrpc": "2.0", "id": "c1", "result": {"protocolVersion": 1, "agentCapabilities": {"loadSession": true, "sessionCapabilities": {"list": {}, "resume": {}, "delete": {}, "close": {}}}, "authMethods": [], "agentInfo": {"name": "thincoder", "version": "0.12.74"}}}}
+{"client": {"jsonrpc": "2.0", "id": "c2", "method": "session/new", "params": {"cwd": "/project", "mcpServers": []}}}
+{"server": {"jsonrpc": "2.0", "id": "c2", "result": {"sessionId": "1"}}}
+{"turn": "spawn five"}
+{"client": {"jsonrpc": "2.0", "id": "c3", "method": "session/prompt", "params": {"sessionId": "1", "prompt": [{"type": "text", "text": "spawn five"}]}}}
+{"server": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "1", "update": {"sessionUpdate": "session_info_update", "_meta": {"thincoder.dev/subagent": {"role": "eng-coder", "id": 1, "state": "async"}}}}}}
+{"server": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "1", "update": {"sessionUpdate": "session_info_update", "_meta": {"thincoder.dev/subagent": {"role": "eng-coder", "id": 2, "state": "async"}}}}}}
+{"server": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "1", "update": {"sessionUpdate": "session_info_update", "_meta": {"thincoder.dev/subagent": {"role": "explore", "id": 3, "state": "async"}}}}}}
+{"server": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "1", "update": {"sessionUpdate": "session_info_update", "_meta": {"thincoder.dev/subagent": {"role": "advisor", "id": 4, "state": "async"}}}}}}
+{"server": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "1", "update": {"sessionUpdate": "session_info_update", "_meta": {"thincoder.dev/subagent": {"role": "eng-coder", "id": 5, "state": "queued", "progress": {"position": 1}, "detail": "no slot free"}}}}}}
+{"expect": {"tasks": ["subagent:eng-coder#1", "subagent:eng-coder#2", "subagent:explore#3", "subagent:advisor#4"], "items": ["user: spawn five", "agent running: eng-coder#1", "agent running: eng-coder#2", "agent running: explore#3", "agent running: advisor#4", "agent running: eng-coder#5 · queued · no slot free"]}}
+{"server": {"jsonrpc": "2.0", "id": "c3", "result": {"stopReason": "end_turn"}}}
+{"expect": {"tasks": ["subagent:eng-coder#1", "subagent:eng-coder#2", "subagent:explore#3", "subagent:advisor#4"], "health": "ready"}}

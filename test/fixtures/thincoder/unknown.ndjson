@@ -1,0 +1,15 @@
+{"fixture": "unknown", "cwd": "/project"}
+{"client": {"jsonrpc": "2.0", "id": "c1", "method": "initialize", "params": {"protocolVersion": 1, "clientCapabilities": {}}}}
+{"server": {"jsonrpc": "2.0", "id": "c1", "result": {"protocolVersion": 1, "agentCapabilities": {"loadSession": true, "sessionCapabilities": {"list": {}, "resume": {}, "delete": {}, "close": {}}}, "authMethods": [], "agentInfo": {"name": "thincoder", "version": "0.12.74"}}}}
+{"client": {"jsonrpc": "2.0", "id": "c2", "method": "session/new", "params": {"cwd": "/project", "mcpServers": []}}}
+{"server": {"jsonrpc": "2.0", "id": "c2", "result": {"sessionId": "1", "configOptions": [{"id": "mode", "name": "Mode", "type": "select", "currentValue": "normal", "options": [{"value": "normal", "name": "Normal"}, {"value": "plan", "name": "Plan"}]}]}}}
+{"server": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "1", "update": {"sessionUpdate": "something_new", "x": 1}}}}
+{"server": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "1", "update": {"sessionUpdate": "session_info_update", "_meta": {"title": "From the terminal"}}}}}
+{"server": {"jsonrpc": "2.0", "method": "ledger/changed", "params": {"cwd": "/project"}}}
+{"server": {"jsonrpc": "2.0", "id": "rpc-7", "method": "fs/read_text_file", "params": {"sessionId": "1", "path": "/project/lib/a.dart"}}}
+{"client": {"jsonrpc": "2.0", "id": "rpc-7", "error": {"code": -32601, "message": "Method not found"}}}
+{"turn": "still there?"}
+{"client": {"jsonrpc": "2.0", "id": "c3", "method": "session/prompt", "params": {"sessionId": "1", "prompt": [{"type": "text", "text": "still there?"}]}}}
+{"server": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "1", "update": {"sessionUpdate": "agent_message_chunk", "content": {"type": "text", "text": "Yes."}}}}}
+{"server": {"jsonrpc": "2.0", "id": "c3", "result": {"stopReason": "end_turn"}}}
+{"expect": {"items": ["user: still there?", "text: Yes."], "health": "ready"}}

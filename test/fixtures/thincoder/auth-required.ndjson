@@ -1,0 +1,6 @@
+{"fixture": "auth-required", "cwd": "/project"}
+{"client": {"jsonrpc": "2.0", "id": "c1", "method": "initialize", "params": {"protocolVersion": 1, "clientCapabilities": {}}}}
+{"server": {"jsonrpc": "2.0", "id": "c1", "result": {"protocolVersion": 1, "agentCapabilities": {"loadSession": true, "sessionCapabilities": {"list": {}, "resume": {}, "delete": {}, "close": {}}}, "authMethods": [], "agentInfo": {"name": "thincoder", "version": "0.12.74"}}}}
+{"client": {"jsonrpc": "2.0", "id": "c2", "method": "session/new", "params": {"cwd": "/project", "mcpServers": []}}}
+{"server": {"jsonrpc": "2.0", "id": "c2", "error": {"code": -32000, "message": "no provider API key configured — set providers[].apiKey in ~/.thincoder/config.json, or run \"thincoder acp --login\""}}}
+{"expect": {"health": "failed"}}
