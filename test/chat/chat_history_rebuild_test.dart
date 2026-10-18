@@ -421,6 +421,80 @@ void main() {
       contains('Second, longer.'),
     );
   });
+
+  testWidgets('a steadied thought rebuilt the shell once, its words each '
+      'frame', (tester) async {
+    // A thought open as it streams is steadied (see Steadiness): wanted, it
+    // shows once it has been for 300ms, and that answer rebuilds the shell
+    // once. The words meanwhile rebuild their row alone: the increment's
+    // own path. Bubble style, as in the replay: sticky re-evaluates which
+    // message sticks as rows move, a shell rebuild of its own.
+    UserMessageStyle.current.value = UserMessageStyle.bubble;
+    addTearDown(() => UserMessageStyle.current.value = UserMessageStyle.sticky);
+    tester.view.physicalSize = const Size(1000, 700);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final items = <ChatItem>[
+      const UserMessageItem(text: 'Look'),
+      const ThinkingItem(text: 'Hm. ', tokens: 1),
+    ];
+    final feed = _Feed(items)..streaming = true;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildAppTheme(),
+        home: Scaffold(body: ChatHistoryView(feed: feed)),
+      ),
+    );
+    // Not pumpAndSettle: its 100ms steps would pass the 300ms mark unseen.
+    await tester.pump();
+    var tally = <String, int>{};
+    debugOnRebuildDirtyWidget = (element, _) {
+      if (_rebuiltType(element.widget) case final name?) {
+        tally[name] = (tally[name] ?? 0) + 1;
+      }
+    };
+    addTearDown(() => debugOnRebuildDirtyWidget = null);
+    const shells = [
+      'findRow',
+      'superList',
+      'selection',
+      'column',
+      'images',
+      'scrollbar',
+    ];
+    final shellFrames = <int>[];
+    final itemFrames = <int>[];
+    final text = StringBuffer('Hm. ');
+    for (var i = 0; i < 120; i++) {
+      tally = {};
+      text.write('thinking');
+      items[1] = ThinkingItem(text: text.toString(), tokens: 1);
+      feed.notifyListeners();
+      await tester.pump(const Duration(milliseconds: 8));
+      shellFrames.add(
+        shells.fold(0, (all, name) => all + (tally[name] ?? 0)),
+      );
+      itemFrames.add(tally['item'] ?? 0);
+    }
+    debugPrint('A4 shells=$shellFrames item=$itemFrames');
+    // Down: what shows is steadied on the view's timers, cancelled with it.
+    await tester.pumpWidget(const SizedBox());
+    // The steady tick alone reaches the shell, once: 300ms at 8ms a frame.
+    final tickFrames = [
+      for (var i = 0; i < shellFrames.length; i++)
+        if (shellFrames[i] > 0) i,
+    ];
+    expect(tickFrames, hasLength(1));
+    final tick = tickFrames.single;
+    expect(tick, inInclusiveRange(36, 39));
+    expect(itemFrames[tick], greaterThanOrEqualTo(1));
+    // Every other frame: the shell stays, and the one row rebuilt.
+    for (var i = 0; i < shellFrames.length; i++) {
+      if (i == tick) continue;
+      expect(shellFrames[i], 0, reason: 'frame $i');
+      expect(itemFrames[i], 1, reason: 'frame $i');
+    }
+  });
 }
 
 /// Whether every increment rebuilt the same as its counterpart.

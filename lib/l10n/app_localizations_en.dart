@@ -2542,7 +2542,14 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get turnSpeedHint => 'Output speed';
+  String get turnSpeedHint => 'Average output speed';
+
+  @override
+  String get turnOutputTokensHint => 'Written so far this turn';
+
+  @override
+  String get turnSpeedLiveHint =>
+      'Output speed, sampled over the last 2 seconds';
 
   @override
   String get turnDurationHint => 'Time this turn took';
@@ -2632,7 +2639,64 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get activityMusings =>
-      'Pondering\nNoodling\nPercolating\nCogitating\nSimmering\nMarinating\nTinkering\nGrokking\nMulling it over\nConnecting the dots\nChasing a hunch\nBrewing a plan\nHatching a plan\nWeighing the options\nUntangling threads\nHerding tokens\nSummoning context\nReticulating splines\nAsking the rubber duck\nReading the tea leaves\nSketching on a napkin\nDoodling in the margins\nSquinting at the diff\nCounting parentheses\nBefriending the compiler\nNegotiating with types\nWrangling edge cases\nTracing the stack\nFlipping through the docs\nSpelunking the codebase\nLining up the ducks\nShaking the magic 8-ball\nWarming up the neurons\nFolding thoughts\nTuning the vibes\nBinding the monad\nLifting into the monad\nAsking the oracle\nStirring the pot\nPolishing the plan';
+      'Pondering\nNoodling\nPercolating\nCogitating\nSimmering\nMarinating\nTinkering\nGrokking\nMulling it over\nConnecting the dots\nChasing a hunch\nBrewing a plan\nHatching a plan\nWeighing the options\nUntangling threads\nHerding tokens\nSummoning context\nAsking the rubber duck\nReading the tea leaves\nSketching on a napkin\nDoodling in the margins\nSquinting at the diff\nCounting parentheses\nBefriending the compiler\nNegotiating with types\nWrangling edge cases\nTracing the stack\nFlipping through the docs\nSpelunking the codebase\nLining up the ducks\nShaking the magic 8-ball\nWarming up the neurons\nFolding thoughts\nBinding the monad\nAsking the oracle\nStirring the pot\nPolishing the plan';
+
+  @override
+  String activityMusingsCommand(String name) {
+    return 'Squinting at $name\'s output\nDigesting what $name said\nPicking through $name\'s output\nNodding along to $name';
+  }
+
+  @override
+  String activityMusingsCommandFailed(String name) {
+    return 'Staring down $name\'s error\nAsking $name what went wrong\nUntangling $name\'s complaint\nConsoling $name';
+  }
+
+  @override
+  String activityMusingsRead(String name) {
+    return 'Leafing through $name\nGetting to know $name\nPulling threads in $name\nReading between the lines of $name';
+  }
+
+  @override
+  String activityMusingsEdit(String name) {
+    return 'Admiring the new $name\nDouble-checking $name\nHoping $name still compiles\nGiving $name a once-over';
+  }
+
+  @override
+  String activityMusingsSearch(String name) {
+    return 'Panning $name results for gold\nSifting through $name matches\nFollowing $name leads';
+  }
+
+  @override
+  String activityMusingsFolder(String name) {
+    return 'Poking around $name\nTaking roll call in $name\nSizing up $name';
+  }
+
+  @override
+  String activityMusingsWeb(String name) {
+    return 'Taking notes from $name\nDigesting $name';
+  }
+
+  @override
+  String activityMusingsAgent(String name) {
+    return 'Debriefing $name\nGrading $name\'s homework\nGoing over $name\'s findings';
+  }
+
+  @override
+  String activityMusingsMcp(String name) {
+    return 'Unwrapping $name\'s reply\nSeeing what $name sent back';
+  }
+
+  @override
+  String get activityMusingsBrowser =>
+      'Peering at the page\nSquinting at the screenshot';
+
+  @override
+  String get activityMusingsImage =>
+      'Admiring the fresh picture\nNitpicking the new image';
+
+  @override
+  String get activityMusingsDenied =>
+      'Finding another way\nTaking the scenic route';
 
   @override
   String get composerCommands => 'Commands';
@@ -3442,6 +3506,19 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get generalSettingsCommitAttributionDescription =>
       'Who the commits and pull requests an agent writes credit. Applies to agents started after a change; Claude Code only for now.';
+
+  @override
+  String get generalSettingsClaudeCore => 'Core';
+
+  @override
+  String get generalSettingsClaudeCoreDescription =>
+      'Claude Code CLI: Anthropic\'s own program, with this machine\'s sign-in and setup; pick it to use a Claude subscription. Built-in: comes with BaoCode, and uses only the models added in Settings → Models. The CLI is the default when Claude Code is installed here, the built-in core otherwise. Changes apply to new sessions.';
+
+  @override
+  String get generalSettingsClaudeCoreBuiltin => 'Built-in';
+
+  @override
+  String get generalSettingsClaudeCoreCli => 'Claude Code CLI';
 
   @override
   String get generalSettingsQueuedMessages => 'Messages Sent While Working';
@@ -5744,7 +5821,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get claudePathSettingDescription =>
-      'Empty: the newest of the Claude Code installed on this machine and the one BaoCode downloaded (downloaded the first time there is none). A path: that one, always, e.g. one you built. (claudeCode.path)';
+      'Empty: the newest Claude Code on this machine, downloaded if there is none. A path: always that one, e.g. one you built. (claudeCode.path)';
 
   @override
   String get claudePathSettingHint => 'Automatic';
@@ -7282,6 +7359,24 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String appearanceSettingsUserMessageStyleLabel(String style) {
     return 'Your messages: $style';
+  }
+
+  @override
+  String get appearanceSettingsReplyScroll => 'As a Reply Comes';
+
+  @override
+  String get appearanceSettingsReplyScrollDescription =>
+      'Where the conversation stays as the reply to your message is written: at its end, following it; or at its start, your message at the top, for you to read on from there. Scrolled to the end, it follows again.';
+
+  @override
+  String get appearanceSettingsReplyScrollFollow => 'Automatic';
+
+  @override
+  String get appearanceSettingsReplyScrollStart => 'Stay at its start';
+
+  @override
+  String appearanceSettingsReplyScrollLabel(String choice) {
+    return 'As a reply comes: $choice';
   }
 
   @override
@@ -9441,8 +9536,8 @@ class AppLocalizationsEn extends AppLocalizations {
       'Let agents use your own browser, signed in as you: open pages, read them, click and type in the tabs you share with them. You can watch every step in the side panel.';
 
   @override
-  String get browserSettingsMacOSOnly =>
-      'The browser is available on macOS only for now.';
+  String get browserSettingsUnsupported =>
+      'The browser is available on macOS and Windows only for now.';
 
   @override
   String get browserSettingsEnabled => 'Let Agents Use the Browser';

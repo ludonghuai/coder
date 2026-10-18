@@ -15,6 +15,7 @@ import 'browser/browser_bridge.dart';
 import 'browser/browser_tools.dart' show BrowserHistory;
 import 'chat/composer/composer_files.dart' show ComposerFile, pastedAsPicture;
 import 'chat/chat_width.dart';
+import 'chat/reply_scroll.dart';
 import 'chat/user_message_style.dart';
 import 'chat/widgets/chat_minimap.dart';
 import 'chat/widgets/pixel_loader.dart';
@@ -36,9 +37,13 @@ import 'icons/icon_library.dart';
 import 'icons/icon_storage.dart';
 import 'icons/site_icons.dart';
 import 'kernel/claude_code/claude_code_kernel.dart';
+import 'kernel/claude_code/claude_core_setting.dart';
 import 'kernel/claude_code/claude_onboarding.dart';
 import 'kernel/claude_code/claude_path_setting.dart';
 import 'kernel/claude_code/process_transport.dart';
+import 'kernel/claude_code/turn_stats_stub.dart'
+    if (dart.library.io) 'kernel/claude_code/turn_stats_io.dart'
+    show turnStatsIn;
 import 'kernel/commit_attribution.dart';
 import 'kernel/prompt_suggestions.dart';
 import 'chat/composer/composer_polish.dart' show ComposerPolishSetting;
@@ -171,6 +176,13 @@ Future<void> main(List<String> arguments) async {
     // agent starts.
     ClaudePathSetting.current = () =>
         ClaudePathSetting.parse(files.settings[ClaudePathSetting.settingKey]);
+    // Settings → General → Claude Code: the core sessions run on (BaoCode's
+    // own, or the CLI), read as each agent starts. Unset, the CLI where it
+    // is installed: looked for on the app's PATH, then the shell's.
+    ClaudeCore.cliInstalled = localClaudeInstalled;
+    unawaited(lookForLocalClaude());
+    ClaudeCore.current = () =>
+        ClaudeCore.parse(files.settings[ClaudeCore.settingKey]);
     // Settings → General → thincoder: the build to run, read as each agent
     // starts.
     ThincoderPathSetting.current = () => ThincoderPathSetting.parse(
@@ -181,6 +193,11 @@ Future<void> main(List<String> arguments) async {
     // Claude Code's own models as it last listed them: in the picker
     // before a session on them starts.
     ClaudeCodeKernel.modelCache = files.storage;
+    // What each turn took and spent, for its footer when the session is
+    // opened again: in the data folder, a file per session.
+    ClaudeCodeKernel.turnStats = turnStatsIn(
+      p.join(DataDirectory.current.path, 'turn-stats'),
+    );
     // The upstreams' sites' icons, for those that show no other: in the
     // cache, fetched as soon as one is added.
     SiteIcons.current = SiteIcons(
@@ -203,6 +220,11 @@ Future<void> main(List<String> arguments) async {
     UserMessageStyle.follow(
       files.settings,
       () => files.settings[UserMessageStyle.settingKey],
+    );
+    // Settings → Appearance: where a conversation stays as a reply comes.
+    ReplyScroll.keep(
+      files.settings,
+      () => files.settings[ReplyScroll.settingKey],
     );
     // Settings → Appearance: whether the conversation has a minimap, how
     // opaque its glass is and how much it stretches.

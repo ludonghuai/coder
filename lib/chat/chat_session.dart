@@ -606,15 +606,21 @@ class ChatSession extends ChangeNotifier implements ChatFeed {
   ChatItem itemAt(int index) {
     if (index < _transcript.length) return _transcript.itemAt(index);
     // Waiting on its model unless its kernel says otherwise.
+    final output = _transcript.output;
     return switch (_transcript.activity?.kind) {
       KernelActivityKind.compacting => LiveStatusItem(
         'Compacting conversation',
         visible: _statusVisible,
+        output: output,
+        startedAt: _transcript.turnStartedAt,
       ),
       _ => LiveStatusItem(
         'Planning next move',
         whimsical: true,
         visible: _statusVisible,
+        output: output,
+        startedAt: _transcript.turnStartedAt,
+        cue: MusingCue.after(_last),
       ),
     };
   }

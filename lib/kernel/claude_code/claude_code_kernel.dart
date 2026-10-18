@@ -29,6 +29,7 @@ import 'claude_code_translator.dart';
 import 'claude_elicitation.dart';
 import 'claude_goal.dart';
 import 'claude_sdk_tools.dart';
+import 'turn_stats.dart';
 import 'control_channel.dart';
 
 /// Reads a kept session: its conversation lines, oldest first, along the
@@ -294,6 +295,23 @@ class ClaudeCodeKernel
   static GlobalStorage? _modelCache;
   static const modelCacheKey = 'claudeCode.models';
 
+  /// Where what each turn took and spent is kept (main.dart sets it), for
+  /// its footer to show again when the session is opened later; none
+  /// kept when null. This machine's sessions only.
+  static TurnStats? turnStats;
+
+  /// [turnStats] for this session's history: none for a remote one's.
+  TurnStats? get _turnStats => _remoteHost == null ? turnStats : null;
+
+  /// What the kept session's turns took and spent, by prompt.
+  Future<Map<String, TurnRecord>> _keptTurns(SessionRecord session) async {
+    try {
+      return await _turnStats?.read(session.id) ?? const {};
+    } on Object {
+      return const {};
+    }
+  }
+
   /// The models [modelCache] kept, as the CLI listed them.
   static List<_ModelInfo> _keptModels() => [
     for (final raw
@@ -319,8 +337,18 @@ class ClaudeCodeKernel
   }
 
   /// The model asked for, as the CLI names it (e.g. `opus[1m]`), or a
-  /// provider's ([modelRef]).
-  String? _model;
+  /// provider's ([modelRef]). BaoCode's own core has no model of its own:
+  /// on it, one of no upstream is the first upstream's model.
+  String? get _model {
+    final picked = _pickedModel;
+    if (_providers.builtinAvailable || _providers.resolve(picked) != null) {
+      return picked;
+    }
+    return _providers.firstModel;
+  }
+
+  set _model(String? model) => _pickedModel = model;
+  String? _pickedModel;
 
   /// What the process was started on: [_providerKey] then. A provider
   /// is taken up only at start, so another is by a restart (see
@@ -426,7 +454,12 @@ class ClaudeCodeKernel
   Future<void> _ensureStarted() {
     if (_disposed) return Future.error(StateError('disposed'));
     if (_running) return Future.value();
-    return _starting ??= _launch().whenComplete(() => _starting = null);
+    return _starting ??= _launch().whenComplete(() {
+      _starting = null;
+      // Out of view while it started: freed now, unless a message sent
+      // meanwhile has it at work.
+      if (_releaseWanted) release();
+    });
   }
 
   Future<void> _launch() async {
@@ -545,7 +578,11 @@ class ClaudeCodeKernel
       _tell('file_suggestions', {'query': ''});
       if (_pendingTitle case final title?) {
         _pendingTitle = null;
-        rename(title);
+        // Waited on: a process freed as soon as it is ready (out of view
+        // by then) would end before it took the title.
+        await control
+            .request('rename_session', {'title': title, 'source': 'host'})
+            .catchError((_) => const <String, Object?>{});
       }
       unawaited(_refreshContext());
     } on ClaudeUnavailable catch (error) {
@@ -672,15 +709,16 @@ class ClaudeCodeKernel
       _permissions.isNotEmpty ||
       _starting != null;
 
-  /// Frees the process now if idle, else once the CLI says it is (one
-  /// that does not say keeps it until asked again).
+  /// Frees the process now if idle, else once it has started or the CLI
+  /// says it is idle (one that does not say keeps it until asked again).
   @override
   void release() {
-    if (_transport == null) return;
     if (_busy) {
       _releaseWanted = true;
       return;
     }
+    _releaseWanted = false;
+    if (_transport == null) return;
     _teardown();
     _setHealth(KernelHealth.idle);
   }
@@ -914,6 +952,11 @@ class ClaudeCodeKernel
       emit(InteractionResolved(nextSeq, id));
     }
     _permissions.clear();
+    if (!interrupted && worked != null) {
+      if ((_turnStats, _sessionId) case (final stats?, final session?)) {
+        stats.write(session, turn, (worked: worked, usage: usage));
+      }
+    }
     emit(
       TurnEnded(
         nextSeq,
@@ -2273,10 +2316,15 @@ class ClaudeCodeKernel
     // Read in the constructor, before anyone listens: seen when asked.
     _loadingHistory = true;
     try {
+      // Read alongside; never fails.
+      final keptTurns = _keptTurns(session);
       final page = await read(session, turns: _firstTurns);
+      final kept = await keptTurns;
       _earlier = page.earlier;
       _readInTurn = _beginsInTurn(page);
-      _translator.replaying = true;
+      _translator
+        ..replaying = true
+        ..keptTurns = kept;
       var counted = false;
       for (final line in page.entries) {
         if (line['type'] == 'assistant') counted |= _countRequest(line);
@@ -2293,7 +2341,9 @@ class ClaudeCodeKernel
         ),
       );
     } finally {
-      _translator.replaying = false;
+      _translator
+        ..replaying = false
+        ..keptTurns = const {};
       _loadingHistory = false;
       if (!_disposed) emitInfoChanged();
     }
@@ -2311,20 +2361,22 @@ class ClaudeCodeKernel
   Future<void> _readEarlier() async {
     emitInfoChanged();
     try {
+      final keptTurns = _keptTurns(_context.resume!);
       final page = await _pager!(
         _context.resume!,
         turns: _earlierTurns,
         before: _earlier,
       );
+      final kept = await keptTurns;
       if (_disposed) return;
       // Told apart from the live one: it only gathers the items, and its
       // events never reach the stream.
       var seq = 0;
       final items = Transcript();
-      final translator = ClaudeTranslator(
-        emit: items.apply,
-        nextSeq: () => ++seq,
-      )..replaying = true;
+      final translator =
+          ClaudeTranslator(emit: items.apply, nextSeq: () => ++seq)
+            ..replaying = true
+            ..keptTurns = kept;
       var counted = false;
       for (final line in page.entries) {
         if (line['type'] == 'assistant') counted |= _countRequest(line);
@@ -2678,8 +2730,9 @@ class ClaudeCodeKernel
     options: () {
       final providers = _providers.enabled;
       return [
-        // Shown unless turned off in Settings → Models.
-        if (!_providers.builtinHidden)
+        // Shown unless turned off in Settings → Models; never on BaoCode's
+        // own core, which runs on the upstreams alone.
+        if (_providers.builtinOffered)
           if (_models.isEmpty)
             // Its models not known (it is not logged in, or no session has
             // started on it yet): picking this starts one, which lists them.
@@ -2728,6 +2781,8 @@ class ClaudeCodeKernel
     },
     selected: () {
       if (_custom != null) return _model;
+      // BaoCode's own core with no upstream: none to run on.
+      if (!_providers.builtinAvailable) return null;
       return switch (_currentModel?.value) {
         final value? => _baseOf(value),
         null => _models.isEmpty ? 'default' : null,

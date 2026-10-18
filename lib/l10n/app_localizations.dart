@@ -4457,8 +4457,20 @@ abstract class AppLocalizations {
   /// No description provided for @turnSpeedHint.
   ///
   /// In en, this message translates to:
-  /// **'Output speed'**
+  /// **'Average output speed'**
   String get turnSpeedHint;
+
+  /// No description provided for @turnOutputTokensHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Written so far this turn'**
+  String get turnOutputTokensHint;
+
+  /// No description provided for @turnSpeedLiveHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Output speed, sampled over the last 2 seconds'**
+  String get turnSpeedLiveHint;
 
   /// No description provided for @turnDurationHint.
   ///
@@ -4607,8 +4619,80 @@ abstract class AppLocalizations {
   /// What the agent 'does' while the model has yet to answer: whimsical phrases, one per line, shown one at a time with dots after them. Any number of lines.
   ///
   /// In en, this message translates to:
-  /// **'Pondering\nNoodling\nPercolating\nCogitating\nSimmering\nMarinating\nTinkering\nGrokking\nMulling it over\nConnecting the dots\nChasing a hunch\nBrewing a plan\nHatching a plan\nWeighing the options\nUntangling threads\nHerding tokens\nSummoning context\nReticulating splines\nAsking the rubber duck\nReading the tea leaves\nSketching on a napkin\nDoodling in the margins\nSquinting at the diff\nCounting parentheses\nBefriending the compiler\nNegotiating with types\nWrangling edge cases\nTracing the stack\nFlipping through the docs\nSpelunking the codebase\nLining up the ducks\nShaking the magic 8-ball\nWarming up the neurons\nFolding thoughts\nTuning the vibes\nBinding the monad\nLifting into the monad\nAsking the oracle\nStirring the pot\nPolishing the plan'**
+  /// **'Pondering\nNoodling\nPercolating\nCogitating\nSimmering\nMarinating\nTinkering\nGrokking\nMulling it over\nConnecting the dots\nChasing a hunch\nBrewing a plan\nHatching a plan\nWeighing the options\nUntangling threads\nHerding tokens\nSummoning context\nAsking the rubber duck\nReading the tea leaves\nSketching on a napkin\nDoodling in the margins\nSquinting at the diff\nCounting parentheses\nBefriending the compiler\nNegotiating with types\nWrangling edge cases\nTracing the stack\nFlipping through the docs\nSpelunking the codebase\nLining up the ducks\nShaking the magic 8-ball\nWarming up the neurons\nFolding thoughts\nBinding the monad\nAsking the oracle\nStirring the pot\nPolishing the plan'**
   String get activityMusings;
+
+  /// Musings, as activityMusings, after a command it ran: {name} is the command, e.g. "flutter test". One per line, any number of lines.
+  ///
+  /// In en, this message translates to:
+  /// **'Squinting at {name}\'s output\nDigesting what {name} said\nPicking through {name}\'s output\nNodding along to {name}'**
+  String activityMusingsCommand(String name);
+
+  /// Musings, as activityMusings, after a command it ran that failed: {name} is the command, e.g. "flutter test". One per line, any number of lines.
+  ///
+  /// In en, this message translates to:
+  /// **'Staring down {name}\'s error\nAsking {name} what went wrong\nUntangling {name}\'s complaint\nConsoling {name}'**
+  String activityMusingsCommandFailed(String name);
+
+  /// Musings, as activityMusings, after a file it read: {name} is the file name. One per line, any number of lines.
+  ///
+  /// In en, this message translates to:
+  /// **'Leafing through {name}\nGetting to know {name}\nPulling threads in {name}\nReading between the lines of {name}'**
+  String activityMusingsRead(String name);
+
+  /// Musings, as activityMusings, after a file it changed: {name} is the file name. One per line, any number of lines.
+  ///
+  /// In en, this message translates to:
+  /// **'Admiring the new {name}\nDouble-checking {name}\nHoping {name} still compiles\nGiving {name} a once-over'**
+  String activityMusingsEdit(String name);
+
+  /// Musings, as activityMusings, after a search it made: {name} is how many matches, e.g. "12". One per line, any number of lines.
+  ///
+  /// In en, this message translates to:
+  /// **'Panning {name} results for gold\nSifting through {name} matches\nFollowing {name} leads'**
+  String activityMusingsSearch(String name);
+
+  /// Musings, as activityMusings, after a folder it listed: {name} is the folder name. One per line, any number of lines.
+  ///
+  /// In en, this message translates to:
+  /// **'Poking around {name}\nTaking roll call in {name}\nSizing up {name}'**
+  String activityMusingsFolder(String name);
+
+  /// Musings, as activityMusings, after a page it fetched: {name} is the site, e.g. "dart.dev". One per line, any number of lines.
+  ///
+  /// In en, this message translates to:
+  /// **'Taking notes from {name}\nDigesting {name}'**
+  String activityMusingsWeb(String name);
+
+  /// Musings, as activityMusings, after a subagent that reported back: {name} is the subagent's type, e.g. "Explore". One per line, any number of lines.
+  ///
+  /// In en, this message translates to:
+  /// **'Debriefing {name}\nGrading {name}\'s homework\nGoing over {name}\'s findings'**
+  String activityMusingsAgent(String name);
+
+  /// Musings, as activityMusings, after an MCP tool it called: {name} is the MCP tool's name. One per line, any number of lines.
+  ///
+  /// In en, this message translates to:
+  /// **'Unwrapping {name}\'s reply\nSeeing what {name} sent back'**
+  String activityMusingsMcp(String name);
+
+  /// Musings, as activityMusings, after something it did in the browser. One per line, any number of lines.
+  ///
+  /// In en, this message translates to:
+  /// **'Peering at the page\nSquinting at the screenshot'**
+  String get activityMusingsBrowser;
+
+  /// Musings, as activityMusings, after a picture it generated. One per line, any number of lines.
+  ///
+  /// In en, this message translates to:
+  /// **'Admiring the fresh picture\nNitpicking the new image'**
+  String get activityMusingsImage;
+
+  /// Musings, as activityMusings, after a tool call the user denied. One per line, any number of lines.
+  ///
+  /// In en, this message translates to:
+  /// **'Finding another way\nTaking the scenic route'**
+  String get activityMusingsDenied;
 
   /// Suggestion menu title.
   ///
@@ -5857,6 +5941,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Who the commits and pull requests an agent writes credit. Applies to agents started after a change; Claude Code only for now.'**
   String get generalSettingsCommitAttributionDescription;
+
+  /// Settings → General → Claude Code row: what runs Claude Code sessions, BaoCode's built-in core (written in Dart) or the Claude Code CLI.
+  ///
+  /// In en, this message translates to:
+  /// **'Core'**
+  String get generalSettingsClaudeCore;
+
+  /// No description provided for @generalSettingsClaudeCoreDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Claude Code CLI: Anthropic\'s own program, with this machine\'s sign-in and setup; pick it to use a Claude subscription. Built-in: comes with BaoCode, and uses only the models added in Settings → Models. The CLI is the default when Claude Code is installed here, the built-in core otherwise. Changes apply to new sessions.'**
+  String get generalSettingsClaudeCoreDescription;
+
+  /// Claude Code core choice: BaoCode's own agent core, written in Dart and run inside the app.
+  ///
+  /// In en, this message translates to:
+  /// **'Built-in'**
+  String get generalSettingsClaudeCoreBuiltin;
+
+  /// Claude Code core choice: Anthropic's Claude Code command-line program, run as a process.
+  ///
+  /// In en, this message translates to:
+  /// **'Claude Code CLI'**
+  String get generalSettingsClaudeCoreCli;
 
   /// No description provided for @generalSettingsQueuedMessages.
   ///
@@ -9276,7 +9384,7 @@ abstract class AppLocalizations {
   /// No description provided for @claudePathSettingDescription.
   ///
   /// In en, this message translates to:
-  /// **'Empty: the newest of the Claude Code installed on this machine and the one BaoCode downloaded (downloaded the first time there is none). A path: that one, always, e.g. one you built. (claudeCode.path)'**
+  /// **'Empty: the newest Claude Code on this machine, downloaded if there is none. A path: always that one, e.g. one you built. (claudeCode.path)'**
   String get claudePathSettingDescription;
 
   /// No description provided for @claudePathSettingHint.
@@ -11852,6 +11960,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Your messages: {style}'**
   String appearanceSettingsUserMessageStyleLabel(String style);
+
+  /// No description provided for @appearanceSettingsReplyScroll.
+  ///
+  /// In en, this message translates to:
+  /// **'As a Reply Comes'**
+  String get appearanceSettingsReplyScroll;
+
+  /// No description provided for @appearanceSettingsReplyScrollDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Where the conversation stays as the reply to your message is written: at its end, following it; or at its start, your message at the top, for you to read on from there. Scrolled to the end, it follows again.'**
+  String get appearanceSettingsReplyScrollDescription;
+
+  /// No description provided for @appearanceSettingsReplyScrollFollow.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic'**
+  String get appearanceSettingsReplyScrollFollow;
+
+  /// No description provided for @appearanceSettingsReplyScrollStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Stay at its start'**
+  String get appearanceSettingsReplyScrollStart;
+
+  /// No description provided for @appearanceSettingsReplyScrollLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'As a reply comes: {choice}'**
+  String appearanceSettingsReplyScrollLabel(String choice);
 
   /// No description provided for @appearanceSettingsMinimap.
   ///
@@ -15423,11 +15561,11 @@ abstract class AppLocalizations {
   /// **'Let agents use your own browser, signed in as you: open pages, read them, click and type in the tabs you share with them. You can watch every step in the side panel.'**
   String get browserSettingsDescription;
 
-  /// No description provided for @browserSettingsMacOSOnly.
+  /// No description provided for @browserSettingsUnsupported.
   ///
   /// In en, this message translates to:
-  /// **'The browser is available on macOS only for now.'**
-  String get browserSettingsMacOSOnly;
+  /// **'The browser is available on macOS and Windows only for now.'**
+  String get browserSettingsUnsupported;
 
   /// No description provided for @browserSettingsEnabled.
   ///

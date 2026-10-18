@@ -144,7 +144,7 @@ void refreshTail(int index, ChatItem item);     // 更新折叠副本里的该�
 
 **稳定点**：`from = min(最后一条非排队 UserMessageItem 的下标, 末尾思绪连跑起点, 末尾快步骤连跑起点)`。`[0, from)` 的数组 / 映射原样复用；`[from, count)` 用与全量相同的三段扫描重算。理由（即 §2.3 的先例注释）：追加只会在尾部接上连跑、或给最后一回合补内容；`UserMessageItem` 不是快步骤，连跑不跨提示词。
 
-**实施偏差（§12-1）**：`[from, count)` 不是「只 append 新条目」——`extend` 先用 `_tailFrom(itemAt, count)` 求稳定点，再用 `itemAt` 重读 `start..count` 后 `_rescan`。回合结束时同下标条目会原地替换（提示词补 `worked`、状态行位置换成答案），只 append 会让 `fold_view_test` 两条既有用例红。代价 = 8 读/增量（与历史长度无关，20 / 200 两跑相同）。
+**实施偏差（§12-1）**：`[from, count)` 不是「只 append 新条目」——`extend` 先用 `_tailFrom(itemAt, count)` 求稳定点，再用 `itemAt` 重读 `start..count` 后 `_rescan`。回合结束时同下标条目会原地替换（提示词补 `worked`、状态行位置换成答案），只 append 会让 `fold_view_test` 两条既有用例红。代价 = 全路径增量时重读该回合（读次数 ≈ 该回合条目数，与历史总长无关）；A1 里的增量读数属快路径，与 `extend` 无关（§12-1）。
 
 **算法**（与 `StepFolds.of` 同一套条件，只是起点不同）：
 
@@ -367,7 +367,9 @@ extend(count, itemAt, live):
 - **原设计**：`[0, from)` 原样复用，`[from, count)` 只 append 新条目后按三段扫描重算。
 - **实际做法**：`_tailFrom(itemAt, count)` 用 feed 求稳定点，再用 `itemAt` 重读 `start..count` 后 `_rescan`（`step_folds.dart:104-141`；`of → _rescan(0)` 与 `extend → _rescan(from)` 共用同一扫描，`:72`、`:171` 起）。
 - **理由**：回合结束时同下标条目会被原地替换（提示词补 `worked`、状态行位置换成答案），只 append 会保留旧实例，`fold_view_test` 两条既有用例红。
-- **代价 / 读数**：每增量重读最后一回合，实测 8 读/增量，与历史长度无关（B1① 20 / 200 两跑逐次相等）。
+- **代价（`extend`）**：只在全路径增量里发生（条数增长 / 回合起止，调用点 `chat_history_view.dart:1402`）：重读最后一回合，读次数 ≈ 该回合条目数，与历史总长无关。
+- **读数（A1 的每增量 10 读）**：快路径逐帧重建那一行的读（`refreshTail` + 重建行），与 `extend` 无关；合并上游 1.3.0 后行构建另多 `_rowAt` / `_liveFooter` 各一读（`chat_history_view.dart:2022` / `:2024`，不在冲突块内、未改上游）。
+  判据：A1 的增量是尾条 `AssistantTextItem` 变长，witness 成立 ⇒ 走快路径；条数不变、无回合起止 ⇒ `grow` 恒 false ⇒ `extend` 在 A1 里不可达。20 / 200 两跑逐次相等 ⇒ 与历史长度无关。
 
 ### 12-2 `extend` 的防御性断言（§3.4）
 
@@ -394,8 +396,32 @@ extend(count, itemAt, live):
 
 ---
 
-## 变更记录
+## 13 合并上游 1.3.0 的补记
 
-- 2026-10-17 · 首版（F1–F3 + N1 设计：快路径判据 / `_LiveItem` / 折叠增量 / 图片缓存 / markdown 节流 / 量法与基线流程）。
-- 2026-10-17 · v2：设计评审第 1 轮 15 条落档（liveRow 合并思绪 / A3 拆数据层与终态 / extend 同 feed 与原地语义 / 图片基线更正 / 读数先打印后断言 / MarkdownView 共享面 / 前缀条件 / 走查进验收 / 拆档预案 / 832 与四个 / 计数补三项 / 计时前置用例 / 文档地图备注）。
-- 2026-10-17 · v3：实施偏差记档（§12：`extend` 重读最后一回合 / `assert` 与共享单例 / A1 bubble 口径 / 图片键只比 `itemCount`）；§4 表改实测（3541 / 435 / 875 / 433 / 501 / 504，四项超限记档）；§6.1-A1 补测量口径；机制结论未改。
+合并上游 1.3.0 后，本档的机制多了两个成员：`_liveStart`（回合起点的条目下标）与 `Steadiness`（行「该不该显示」的稳态判定）。§3.1–§3.6 的机制结论不变；本节记它们与既有口径的关系。
+
+### 13-1 `_liveStart` 与 `_liveRow` 的分工
+
+- `_liveStart`：**条目下标**（feed 坐标）。`_refold` 每次重算：从 `itemCount-1` 反向找最后一条 `UserMessageItem(queued: false)`，取其 +1；没有提示词时为 null。`_isLive(index)` = `index >= _liveStart`。
+- 消费者：`_rowAt` 的稳态门（`chat_history_view.dart:254`）、`_isExpanded` 的稳态门（`:734`）、`_replyStart()`（`:1351` 取它 −1 当提示词下标）。
+- `_liveRow`：**行下标**（折叠坐标）。getter 现算：`_feed.isStreaming ? _folds.rowOf(_contentCount - 1) : -1`；只决定哪一行挂 `_LiveItem` 听 `_liveTick`（增量重建，§3.1–§3.2）。
+- **两者不互推**：`_liveStart` 只由 feed 扫描派生，`_liveRow` 只由 `_folds.rowOf` / `_contentCount` 派生，不共享中间量、不互相赋值。口径不同是故意的：前者用 `itemCount`（含末尾 `LiveStatusItem`）覆盖整个回合，后者用 `_contentCount`（排除状态行）落在显示文字的行上。
+
+### 13-2 稳态 tick 可致一帧外壳重建
+
+`Steadiness`（`lib/chat/steadiness.dart:13-77`）的成熟 / 保持计时器到点后走 `onChange → if (mounted) setState(() {})`（`chat_history_view.dart:225-229`）——即一帧外壳重建。它**不属增量路径**（触发者是计时器，不是文字增量；增量本身不 `setState`），但增量帧若恰好落在 tick 帧上，A1 的六类外壳计数在该帧非 0。
+
+**A1 回放不建条目，所以 A1 仍须严格 0**：`_rowAt` 只在 `_isLive(index) && isQuickStep(item)` 时问 `_steady`（`:254`）；`_isExpanded` 只在 `item is ThinkingItem` 时问（`:734`）。`_plainTextOf`（`:332`/`:340`）与 `_minimapRow`（`:2151`）只经这两道门进 `_steady`，不新增入口；A1 回放的唯一条目是 `AssistantTextItem` ⇒ 两道门都提前返回 ⇒ 零条目、零计时器、零 tick。
+
+### 13-3 A4：区分「增量路径本身」与「稳态 tick」
+
+- 用例 **A4**（`test/chat/chat_history_rebuild_test.dart`）：一条非排队 `UserMessageItem` + 一条 streaming `ThinkingItem`（`seconds` 省略），**bubble** 消息样式；`pumpWidget` → `pump()` → 120 ×（尾条 `ThinkingItem` 追加固定字数 → `notifyListeners()` → `pump(8ms)`），逐帧计六类外壳。
+- 判据：非 0 外壳帧数 **== 1**，该帧下标 ∈ [36, 39]（300ms 成熟，±1 帧），其余帧 0 且 `ChatItemView` == 1；末尾卸载让 `_steady.dispose()` 取消未决计时器。
+- 为什么需要它：只测 A1 全 0 无法排除「统计没看见 tick」；**A1 全 0 + A4 恰 1 帧**合起来才证明「外壳 0」是增量路径的属性。
+- 为什么写死 bubble：sticky 下布局引起的粘顶重算会在第 72 个增量多一帧外壳重建（§6.1-A1 的测量口径），A4 的「== 1」会被它破坏。
+
+### 13-4 A1 口径不变
+
+§6.1-A1 与 §12-3 的口径照旧：bubble 样式、每段 `notifyListeners()` + `pump(8ms)`、无额外 settle 帧，六类外壳严格 0。合并不放宽、不引入新读数；A1 变红时先查回放 feed 是否被改出 live 快步骤 / streaming 思绪，再查快路径是否被绕开，按缺陷报，不改读数。
+
+**读数**：A1 的每增量读数为 10（20 / 200 两跑逐次相等）；其中行构建的 `_rowAt` / `_liveFooter` 各一读属上游（`chat_history_view.dart:2022` / `:2024`，不在冲突块内、未改上游），不计入 `extend` 的代价，也不改变本口径（六类外壳仍严格 0）。
