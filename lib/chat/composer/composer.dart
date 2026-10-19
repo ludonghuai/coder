@@ -283,7 +283,7 @@ class ChatComposerState extends State<ChatComposer>
       await insertFiles(files, here: true);
       return true;
     }
-    final text = (await Clipboard.getData(Clipboard.kTextPlain))?.text;
+    final text = await WindowControls.readPasteboardText();
     if (!mounted) return false;
     if (text != null && !raw) {
       if (CopiedCode.matching(text) case final code?) {
@@ -2012,7 +2012,8 @@ class ChatComposerState extends State<ChatComposer>
                       ),
                       const SizedBox(width: 2),
                     ],
-                    if (model != null)
+                    // With none to pick, one to set up.
+                    if (model != null || session.health.noModel)
                       SessionModelPicker(
                         session: session,
                         pickerKey: _modelPickerKey,
