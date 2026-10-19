@@ -382,24 +382,13 @@ class GeneralSettingsPage extends StatelessWidget {
                   ),
                 ),
                 SettingsSwitchRow(
-                  label: l10n.generalSettingsLiveTurnTime,
-                  description: l10n.generalSettingsLiveTurnTimeDescription,
+                  label: l10n.generalSettingsLiveTurnStats,
+                  description: l10n.generalSettingsLiveTurnStatsDescription,
                   value: LiveTurnStatsSetting.enabled(
-                    settings?[LiveTurnStatsSetting.timeKey],
+                    settings?[LiveTurnStatsSetting.settingKey],
                   ),
                   onChanged: (on) => _write(
-                    LiveTurnStatsSetting.timeKey,
-                    on ? null : LiveTurnStatsSetting.off,
-                  ),
-                ),
-                SettingsSwitchRow(
-                  label: l10n.generalSettingsLiveTurnSpeed,
-                  description: l10n.generalSettingsLiveTurnSpeedDescription,
-                  value: LiveTurnStatsSetting.enabled(
-                    settings?[LiveTurnStatsSetting.speedKey],
-                  ),
-                  onChanged: (on) => _write(
-                    LiveTurnStatsSetting.speedKey,
+                    LiveTurnStatsSetting.settingKey,
                     on ? null : LiveTurnStatsSetting.off,
                   ),
                 ),

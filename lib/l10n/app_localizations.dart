@@ -2930,11 +2930,11 @@ abstract class AppLocalizations {
   /// **'{kind, select, click{Clicked} input{Set} key{Pressed} submit{Submitted} navigate{Went to} closed{Closed the tab} other{Did}}'**
   String browserWatchedStep(String kind);
 
-  /// No description provided for @browserTraceReveal.
+  /// {app} is the system's file manager, as the system names it (Finder, File Explorer).
   ///
   /// In en, this message translates to:
-  /// **'Show the trace in Finder (drop it into DevTools\' Performance panel to look closer)'**
-  String get browserTraceReveal;
+  /// **'Show the trace in {app} (drop it into DevTools\' Performance panel to look closer)'**
+  String browserTraceReveal(String app);
 
   /// A browser step's verb once done, by the browser tool it called; what it did it on follows (a URL, an element's name).
   ///
@@ -3865,6 +3865,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'File Explorer'**
   String get workspaceFileExplorer;
+
+  /// The Linux desktop's file manager, which has no one name.
+  ///
+  /// In en, this message translates to:
+  /// **'File Manager'**
+  String get workspaceFileManager;
 
   /// The macOS Terminal app, as macOS names it.
   ///
@@ -8649,6 +8655,12 @@ abstract class AppLocalizations {
   /// **'Reveal in File Explorer'**
   String get dataDirRevealInFileExplorer;
 
+  /// No description provided for @dataDirRevealInFileManager.
+  ///
+  /// In en, this message translates to:
+  /// **'Reveal in File Manager'**
+  String get dataDirRevealInFileManager;
+
   /// No description provided for @dataDirChecking.
   ///
   /// In en, this message translates to:
@@ -12198,7 +12210,7 @@ abstract class AppLocalizations {
   /// No description provided for @generalSettingsContextMenuExplorer.
   ///
   /// In en, this message translates to:
-  /// **'Explorer Context Menu'**
+  /// **'File Explorer Context Menu'**
   String get generalSettingsContextMenuExplorer;
 
   /// No description provided for @generalSettingsContextMenuDescription.
@@ -14181,29 +14193,17 @@ abstract class AppLocalizations {
   /// **'A button in the message box that has the auxiliary model make what you wrote clearer before you send it'**
   String get generalSettingsComposerPolishDescription;
 
-  /// No description provided for @generalSettingsLiveTurnTime.
+  /// No description provided for @generalSettingsLiveTurnStats.
   ///
   /// In en, this message translates to:
-  /// **'Running Time'**
-  String get generalSettingsLiveTurnTime;
+  /// **'Live Speed and Time'**
+  String get generalSettingsLiveTurnStats;
 
-  /// No description provided for @generalSettingsLiveTurnTimeDescription.
+  /// No description provided for @generalSettingsLiveTurnStatsDescription.
   ///
   /// In en, this message translates to:
-  /// **'While the agent works, how long the turn has taken so far, counting up under the reply. The figures under a finished turn always show.'**
-  String get generalSettingsLiveTurnTimeDescription;
-
-  /// No description provided for @generalSettingsLiveTurnSpeed.
-  ///
-  /// In en, this message translates to:
-  /// **'Running Speed'**
-  String get generalSettingsLiveTurnSpeed;
-
-  /// No description provided for @generalSettingsLiveTurnSpeedDescription.
-  ///
-  /// In en, this message translates to:
-  /// **'While the agent works, how fast the model writes (tok/s), changing under the reply. The figures under a finished turn always show.'**
-  String get generalSettingsLiveTurnSpeedDescription;
+  /// **'While the agent works, a line under the reply with how long the turn has taken, how fast the model writes and the tokens so far, changing as it goes. The figures under a finished turn always show.'**
+  String get generalSettingsLiveTurnStatsDescription;
 
   /// No description provided for @stashPolishFailed.
   ///
@@ -14504,12 +14504,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Dismiss'**
   String get stashDismiss;
-
-  /// No description provided for @stashReveal.
-  ///
-  /// In en, this message translates to:
-  /// **'Show in Finder'**
-  String get stashReveal;
 
   /// No description provided for @stashDelete.
   ///
@@ -16005,11 +15999,125 @@ abstract class AppLocalizations {
   /// **'Edit'**
   String get remoteEditServer;
 
+  /// No description provided for @settingsSectionSsh.
+  ///
+  /// In en, this message translates to:
+  /// **'SSH Servers'**
+  String get settingsSectionSsh;
+
+  /// No description provided for @settingsSshKeywords.
+  ///
+  /// In en, this message translates to:
+  /// **'ssh remote server host jump bastion key password core'**
+  String get settingsSshKeywords;
+
+  /// No description provided for @sshSettingsDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'The servers remote projects connect to: their address, how they sign in, a jump host, and the core each runs.'**
+  String get sshSettingsDescription;
+
+  /// No description provided for @sshSettingsServers.
+  ///
+  /// In en, this message translates to:
+  /// **'Servers'**
+  String get sshSettingsServers;
+
+  /// No description provided for @sshSettingsServersDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Those added in the app, and the hosts the sidebar has.'**
+  String get sshSettingsServersDescription;
+
+  /// No description provided for @sshSettingsNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No servers yet'**
+  String get sshSettingsNone;
+
+  /// No description provided for @sshSettingsAdd.
+  ///
+  /// In en, this message translates to:
+  /// **'Add Server…'**
+  String get sshSettingsAdd;
+
+  /// No description provided for @sshSettingsEdit.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit…'**
+  String get sshSettingsEdit;
+
+  /// No description provided for @sshSettingsConnect.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect'**
+  String get sshSettingsConnect;
+
+  /// No description provided for @sshSettingsDisconnect.
+  ///
+  /// In en, this message translates to:
+  /// **'Disconnect'**
+  String get sshSettingsDisconnect;
+
+  /// No description provided for @sshSettingsDisconnectTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Disconnect from {host}?'**
+  String sshSettingsDisconnectTitle(String host);
+
+  /// No description provided for @sshSettingsDisconnectDetail.
+  ///
+  /// In en, this message translates to:
+  /// **'The conversations and terminals running there end.'**
+  String get sshSettingsDisconnectDetail;
+
+  /// No description provided for @sshSettingsCore.
+  ///
+  /// In en, this message translates to:
+  /// **'Core: {core}'**
+  String sshSettingsCore(String core);
+
+  /// No description provided for @sshSettingsVia.
+  ///
+  /// In en, this message translates to:
+  /// **'through {host}'**
+  String sshSettingsVia(String host);
+
+  /// No description provided for @sshSettingsTyped.
+  ///
+  /// In en, this message translates to:
+  /// **'As typed'**
+  String get sshSettingsTyped;
+
+  /// No description provided for @sshSettingsConfigHosts.
+  ///
+  /// In en, this message translates to:
+  /// **'Hosts of ~/.ssh/config'**
+  String get sshSettingsConfigHosts;
+
+  /// No description provided for @sshSettingsConfigHostsDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Changed in that file; their core is Automatic.'**
+  String get sshSettingsConfigHostsDescription;
+
+  /// No description provided for @sshSettingsOpenConfig.
+  ///
+  /// In en, this message translates to:
+  /// **'Open File'**
+  String get sshSettingsOpenConfig;
+
   /// No description provided for @sshServerAddTitle.
   ///
   /// In en, this message translates to:
   /// **'Add SSH Server'**
   String get sshServerAddTitle;
+
+  /// No description provided for @sshServerAddSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved to the remote list: connect to it in one click.'**
+  String get sshServerAddSubtitle;
 
   /// No description provided for @sshServerEditTitle.
   ///
@@ -16050,7 +16158,7 @@ abstract class AppLocalizations {
   /// No description provided for @sshServerNamePlaceholder.
   ///
   /// In en, this message translates to:
-  /// **'What the app calls it, e.g. Production'**
+  /// **'e.g. Production'**
   String get sshServerNamePlaceholder;
 
   /// No description provided for @sshServerAuth.
@@ -16118,6 +16226,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'If the key has a passphrase, it is asked for when connecting.'**
   String get sshServerKeyHint;
+
+  /// No description provided for @sshServerCore.
+  ///
+  /// In en, this message translates to:
+  /// **'Core'**
+  String get sshServerCore;
+
+  /// No description provided for @sshServerCoreAuto.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic'**
+  String get sshServerCoreAuto;
+
+  /// No description provided for @sshServerCoreAutoHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The server\'s Claude Code CLI if it has one, else the built-in core.'**
+  String get sshServerCoreAutoHint;
+
+  /// No description provided for @sshServerCoreBuiltinHint.
+  ///
+  /// In en, this message translates to:
+  /// **'BaoCode\'s own core: it runs on the upstreams of Settings → Models.'**
+  String get sshServerCoreBuiltinHint;
+
+  /// No description provided for @sshServerCoreCliHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The server\'s Claude Code CLI, installed there if it has none.'**
+  String get sshServerCoreCliHint;
 
   /// No description provided for @sshServerJump.
   ///
