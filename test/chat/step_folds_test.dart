@@ -10,12 +10,20 @@ const _grep = ToolCallItem(kind: ToolKind.grep, target: 'foo');
 const _edit = CodeDiffItem(fileName: 'a.dart', directory: 'lib', lines: []);
 const _words = AssistantTextItem('Looking.');
 const _answer = AssistantTextItem('Done.');
+const _reported = AssistantTextItem('Reported.');
+const _planning = LiveStatusItem('Planning', visible: false);
 
 UserMessageItem _prompt([Duration? worked = const Duration(seconds: 65)]) =>
     UserMessageItem(text: 'Fix it', worked: worked);
 
-StepFolds _fold(List<ChatItem> items, {bool live = false}) =>
-    StepFolds.of(items.length, (i) => items[i], live: live);
+StepFolds _fold(
+  List<ChatItem> items, {
+  bool live = false,
+  List<TurnMark> turns = const [],
+}) => StepFolds.of(items.length, (i) => items[i], live: live, turns: turns);
+
+TurnMark _mark(String id, int start, {int? prompt, Duration? worked}) =>
+    (turnId: id, start: start, prompt: prompt, worked: worked);
 
 /// The folds as `kind start-end`, each once, in order.
 List<String> _folds(List<ChatItem> items, {bool live = false}) {
@@ -136,6 +144,104 @@ void main() {
         const UserMessageItem(text: 'Then this', queued: true),
       ];
       expect(_folds(items, live: true), ['work 1-3']);
+    });
+  });
+
+  group('turns', () {
+    final userTurn = <ChatItem>[_prompt(), _read, _grep, _answer];
+    final twoTurns = <ChatItem>[...userTurn, _read, _grep, _reported];
+
+    List<TurnMark> twoMarks({Duration? auto = const Duration(seconds: 20)}) => [
+      _mark('u1', 1, prompt: 0, worked: const Duration(seconds: 65)),
+      _mark('auto:1', 4, worked: auto),
+    ];
+
+    List<ChatItem> autoTurn(String answer) => [
+      _read,
+      _grep,
+      AssistantTextItem(answer),
+    ];
+
+    List<String> work(List<ChatItem> items, {List<TurnMark> turns = const []}) {
+      final folds = _fold(items, turns: turns);
+      return {
+        for (var i = 0; i < items.length; i++)
+          if (folds.workAt(i) case final fold? when fold.start == i)
+            '${fold.start}-${fold.end} ${fold.worked?.inSeconds}',
+      }.toList();
+    }
+
+    test('R1: a turn the agent took up folds only its own work', () {
+      final folds = _fold(twoTurns, turns: twoMarks());
+      expect(work(twoTurns, turns: twoMarks()), ['1-3 65', '4-6 20']);
+      expect(folds.rowAt(3, twoTurns[3], (_) => false).item, isTrue);
+      expect(folds.rowAt(6, twoTurns[6], (_) => false).item, isTrue);
+      expect(folds.turnEndingAt(6), 4);
+    });
+
+    test('R2/R12: a turn with nothing to fold stays whole', () {
+      expect(work([...userTurn, _reported], turns: twoMarks()), ['1-3 65']);
+      final stopped = _fold(twoTurns, turns: twoMarks(auto: null));
+      expect(stopped.workAt(4), isNull);
+      expect(stopped.rowAt(6, twoTurns[6], (_) => false).item, isTrue);
+    });
+
+    test('R3: turns one after another each fold their own work', () {
+      final items = [...userTurn, ...autoTurn('One.'), ...autoTurn('Two.')];
+      final turns = [
+        _mark('u1', 1, prompt: 0, worked: const Duration(seconds: 65)),
+        _mark('auto:1', 4, worked: const Duration(seconds: 11)),
+        _mark('auto:2', 7, worked: const Duration(seconds: 22)),
+      ];
+      expect(work(items, turns: turns), ['1-3 65', '4-6 11', '7-9 22']);
+    });
+
+    test('R4: nothing folds under way; both fold once both ended', () {
+      final live = [...userTurn, _planning];
+      final under = _fold(live, live: true, turns: [_mark('u1', 1, prompt: 0)]);
+      expect(under.workAt(1), isNull);
+      final mid = _fold(twoTurns, live: true, turns: twoMarks(auto: null));
+      expect(mid.workAt(1)?.worked, const Duration(seconds: 65));
+      expect(mid.workAt(4), isNull);
+    });
+
+    test('R5: two turns at the same place make one window, the later one', () {
+      final turns = [
+        ...twoMarks(),
+        _mark('auto:2', 4, worked: const Duration(seconds: 9)),
+      ];
+      expect(work(twoTurns, turns: turns), ['1-3 65', '4-6 9']);
+    });
+
+    test('R6: without turns, the messages still make the windows', () {
+      expect(work(userTurn), ['1-3 65']);
+    });
+
+    test('R7: a turn read from an old history ends at the next one', () {
+      final turns = [_mark('auto:1', 4, worked: const Duration(seconds: 20))];
+      expect(work(twoTurns, turns: turns), ['1-3 65', '4-6 20']);
+    });
+
+    test('R10: the message taken up first is its own empty window', () {
+      final turns = [
+        _mark('u1', 1, prompt: 0, worked: const Duration(seconds: 65)),
+      ];
+      final folds = _fold(userTurn, turns: turns);
+      expect((folds.workAt(0), folds.turnEndingAt(3)), (null, 0));
+    });
+
+    test('R11: bad marks are dropped; a mark at the end stands', () {
+      final bad = [_mark('bad', -1), ...twoMarks(), _mark('bad2', 99)];
+      expect(work(twoTurns, turns: bad), ['1-3 65', '4-6 20']);
+      final end = [...twoMarks(), _mark('auto:2', 7)];
+      expect(work(twoTurns, turns: end), ['1-3 65', '4-6 20']);
+      // Out of order: read from the end, the earlier start stands and the
+      // one before it in the list goes.
+      final jumbled = [
+        _mark('late', 4, worked: const Duration(seconds: 20)),
+        _mark('early', 1, prompt: 0, worked: const Duration(seconds: 65)),
+      ];
+      expect(work(twoTurns, turns: jumbled), ['1-6 65']);
     });
   });
 
@@ -425,6 +531,17 @@ void main() {
         }
       }
     }
+
+    // A turn's own start must fold just as the message that began it did.
+    test('D: turns that mirror the messages change no fold at all', () {
+      final turn = <ChatItem>[_prompt(), _read, _grep, _answer];
+      final items = [...turn, ...turn];
+      final marks = [
+        _mark('u1', 1, prompt: 0, worked: const Duration(seconds: 65)),
+        _mark('u2', 5, prompt: 4, worked: const Duration(seconds: 65)),
+      ];
+      expectSame(_fold(items, turns: marks), _fold(items), items);
+    });
 
     final script = <ChatItem>[
       UserMessageItem(text: 'Fix it', worked: const Duration(seconds: 65)),

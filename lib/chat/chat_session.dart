@@ -95,7 +95,7 @@ class ModelSettingChoice {
 /// waiting, the model in effect) is projected from those or read from the
 /// kernel. The UI reaches what the kernel can do through the facets here,
 /// null when the kernel does not declare it.
-class ChatSession extends ChangeNotifier implements ChatFeed {
+class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
   ChatSession({
     KernelDescriptor? kernel,
     List<KernelDescriptor>? kernels,
@@ -143,6 +143,15 @@ class ChatSession extends ChangeNotifier implements ChatFeed {
   StreamSubscription<KernelEvent>? _subscription;
   late Transcript _transcript;
 
+  /// The turns the kernel reported (see [MarksTurns]), for the folds.
+  final List<TurnMark> _turns = [];
+
+  /// How many items were put before the others, as last seen.
+  int _prependedSeen = 0;
+
+  @override
+  List<TurnMark> get turns => _turns;
+
   /// Changes reported at or below this sequence were kept.
   int _keptSeq = -1;
 
@@ -159,11 +168,84 @@ class ChatSession extends ChangeNotifier implements ChatFeed {
     // A frame may land between `cancel()` and the kernel letting go: there is
     // then no listener left to tell.
     if (_disposed) return;
-    if (event is KernelInfoChanged || _transcript.apply(event)) {
+    final before = _transcript.length;
+    final atMessage = event is Rewound && _cutsAtMessage(event, before);
+    final changed = event is! KernelInfoChanged && _transcript.apply(event);
+    if (changed) _markTurn(event, before, atMessage);
+    if (event is KernelInfoChanged || changed) {
       _cache.clear();
       _timeQuiet();
       _reviewEvent(event);
       notifyListeners();
+    }
+  }
+
+  /// Whether [event] cuts the history at a message sent: the prompt of the
+  /// turn after it, which that turn does not own.
+  bool _cutsAtMessage(Rewound event, int before) {
+    final at = switch (event.itemId) {
+      final id? => _transcript.indexOf(id) ?? event.index,
+      null => event.index,
+    };
+    if (at == null || at < 0 || at >= before) return false;
+    return _transcript.itemAt(at) is UserMessageItem;
+  }
+
+  /// Keeps the turn [event] tells of in [_turns]: every turn from where it
+  /// starts, and how long it worked, for the transcript it changed.
+  void _markTurn(KernelEvent event, int before, bool atMessage) {
+    switch (event) {
+      case TurnStarted(:final turnId, :final unprompted):
+        final start = _transcript.length;
+        // Its message, under the turn's id (a queued one may land early).
+        final prompt = unprompted ? null : _transcript.indexOf(turnId) ?? start;
+        _turns.add((
+          turnId: turnId,
+          start: start,
+          prompt: prompt,
+          worked: null,
+        ));
+      case TurnEnded(:final turnId, :final interrupted, :final worked):
+        // A turn the history no longer holds is not told of any more.
+        for (var i = _turns.length - 1; i >= 0; i--) {
+          final mark = _turns[i];
+          if (mark.turnId != turnId) continue;
+          _turns[i] = (
+            turnId: turnId,
+            start: mark.start,
+            prompt: mark.prompt,
+            worked: interrupted ? null : worked,
+          );
+          break;
+        }
+      case HistoryPrepended():
+        final moved = _transcript.prepended - _prependedSeen;
+        _prependedSeen = _transcript.prepended;
+        if (moved == 0) break;
+        for (var i = 0; i < _turns.length; i++) {
+          final mark = _turns[i];
+          _turns[i] = (
+            turnId: mark.turnId,
+            start: mark.start + moved,
+            prompt: mark.prompt == null ? null : mark.prompt! + moved,
+            worked: mark.worked,
+          );
+        }
+      case Rewound():
+        // What it cut away, or cut into, is no turn any more.
+        final cut = _transcript.length;
+        int? nearest;
+        while (_turns.isNotEmpty && _turns.last.start >= cut) {
+          nearest = _turns.last.start;
+          _turns.removeLast();
+        }
+        // A turn the cut runs into, or took items from, goes too — unless
+        // the cut is at the message that began the next turn: that message
+        // is the next turn's, and this turn ended before it.
+        final crossed =
+            (nearest != null ? nearest > cut : before > cut) && !atMessage;
+        if (crossed && _turns.isNotEmpty) _turns.removeLast();
+      default:
     }
   }
 
@@ -332,6 +414,8 @@ class ChatSession extends ChangeNotifier implements ChatFeed {
     _transcript = Transcript(
       changes: [for (final edit in _transcript.edits) edit.change],
     );
+    _turns.clear();
+    _prependedSeen = 0;
     _connect(descriptor);
     notifyListeners();
   }

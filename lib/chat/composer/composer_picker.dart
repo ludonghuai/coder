@@ -50,6 +50,7 @@ class ComposerPicker extends StatefulWidget {
     this.focusNode,
     this.searchPlaceholder,
     this.footer,
+    this.startCollapsed = false,
   }) : assert(settingsOf == null || submenuOf == null);
 
   final List<KernelOption> options;
@@ -106,6 +107,10 @@ class ComposerPicker extends StatefulWidget {
 
   /// An action under the options (Manage Models…).
   final ComposerPickerFooter? footer;
+
+  /// Starts the groups collapsed under their headings, all but the one
+  /// [selected] is in: a long list opens on what is chosen.
+  final bool startCollapsed;
 
   /// Options from which the search shows.
   static const searchFrom = 10;
@@ -183,6 +188,24 @@ class ComposerPickerState extends State<ComposerPicker> {
   /// The groups collapsed under their headings, by id: open again as the
   /// menu is, until the picker goes.
   final Set<String> _collapsed = {};
+
+  /// The groups this picker has seen. One that arrives later — a session's
+  /// models reported after the first — starts collapsed too, all but the
+  /// one [selected] is in; a group the user opened or closed by hand is
+  /// left as it is.
+  final Set<String> _seenGroups = {};
+
+  /// Collapses the groups not seen before, all but the one [selected] is
+  /// in. Called as the picker is made and whenever its options change.
+  void _collapseNewGroups() {
+    final selected = widget.selected.group?.id;
+    for (final option in widget.options) {
+      final group = option.group;
+      if (group == null) continue;
+      if (!_seenGroups.add(group.id)) continue;
+      if (group.id != selected) _collapsed.add(group.id);
+    }
+  }
 
   bool get _collapses => _query.trim().isEmpty && _grouped;
 
@@ -373,6 +396,7 @@ class ComposerPickerState extends State<ComposerPicker> {
   @override
   void initState() {
     super.initState();
+    if (widget.startCollapsed) _collapseNewGroups();
     _searchText.addListener(() {
       if (_searchText.text != _query) _search(_searchText.text);
     });
@@ -385,6 +409,10 @@ class ComposerPickerState extends State<ComposerPicker> {
     if (widget.options.length != oldWidget.options.length) {
       _rowKeys = _keysFor(widget.options);
     }
+    // A model list that grows after this picker was made (a session's
+    // models reported later) starts collapsed as well, not just the groups
+    // present at the first build.
+    if (widget.startCollapsed) _collapseNewGroups();
   }
 
   @override

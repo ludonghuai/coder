@@ -137,10 +137,19 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
   /// under way starts is read from the feed: a feed fact, not a fold's.
   void _refold({bool grow = false}) {
     final count = _feed.itemCount;
+    final turns = switch (_feed) {
+      final MarksTurns feed => feed.turns,
+      _ => const <TurnMark>[],
+    };
     if (grow && count >= _folds.count) {
-      _folds.extend(count, _feed.itemAt, live: _feed.isStreaming);
+      _folds.extend(count, _feed.itemAt, live: _feed.isStreaming, turns: turns);
     } else {
-      _folds = StepFolds.of(count, _feed.itemAt, live: _feed.isStreaming);
+      _folds = StepFolds.of(
+        count,
+        _feed.itemAt,
+        live: _feed.isStreaming,
+        turns: turns,
+      );
     }
     _liveStart = null;
     if (!_feed.isStreaming) return;

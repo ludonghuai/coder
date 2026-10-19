@@ -13,17 +13,23 @@ import 'package:baocode/theme/app_theme.dart';
 import 'package:super_sliver_list/super_sliver_list.dart';
 
 /// A conversation held in a list, changed by hand.
-class _Feed extends ChangeNotifier implements ChatFeed {
+class _Feed extends ChangeNotifier implements ChatFeed, MarksTurns {
   _Feed(this.items, {this.streaming = false});
 
   List<ChatItem> items;
   bool streaming;
+
+  /// The turns kept, as a kernel would mark them.
+  final List<TurnMark> marks = [];
 
   void update(List<ChatItem> next, {required bool streaming}) {
     items = next;
     this.streaming = streaming;
     notifyListeners();
   }
+
+  @override
+  List<TurnMark> get turns => marks;
 
   @override
   int get itemCount => items.length;
@@ -313,4 +319,159 @@ void main() {
       'Fix the bug\nWorked for 1m 5s · 1 file +1 -1\nDone, fixed.',
     );
   }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+
+  testWidgets('a turn the agent took up folds its own work, not the last '
+      'answer', (tester) async {
+    final feed =
+        _Feed([..._turn(worked: const Duration(seconds: 65)), ..._reportWork])
+          ..marks.addAll([
+            _mark('turn', 1, prompt: 0, worked: const Duration(seconds: 65)),
+            _mark('auto:1', 8, worked: const Duration(seconds: 20)),
+          ]);
+    await _pump(tester, feed);
+    expect(find.byType(WorkFoldLine), findsNWidgets(2));
+    expect(_text('Worked for 1m 5s'), findsOneWidget);
+    expect(_text('Worked for 20s'), findsOneWidget);
+    expect(_text('Done, fixed.'), findsOneWidget);
+    expect(_text('Reported.'), findsOneWidget);
+    expect(_text('Found it.'), findsNothing);
+  });
+
+  testWidgets('a report arriving leaves the turn before it folded, short or '
+      'long a history', (tester) async {
+    tester.view.physicalSize = const Size(1000, 700);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final short = await _reportAfter(tester, 20);
+    await tester.pumpWidget(const SizedBox());
+    final long = await _reportAfter(tester, 200);
+    debugPrint('R13 short=$short');
+    debugPrint('R13 long=$long');
+    expect(short, long);
+    // The turn before shows as it did once the report starts and while it
+    // works; both turns stand folded once the report ends.
+    expect(short.map((step) => step.split(':')[1]), [
+      '1100',
+      '1100',
+      '1101',
+      '1111',
+    ]);
+  });
+
+  testWidgets('a turn the kernel leaves streaming still folds when the next '
+      'starts', (tester) async {
+    tester.view.physicalSize = const Size(1000, 700);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final feed = _Feed([..._reportTurn(0), ..._reportTurn(1)], streaming: true)
+      ..marks.addAll([
+        _mark('turn0', 1, prompt: 0, worked: const Duration(seconds: 65)),
+        _mark('turn1', 5, prompt: 4),
+      ]);
+    await _pump(tester, feed);
+    await tester.pumpAndSettle();
+    expect(_text('Worked for 1m 5s'), findsOneWidget);
+    // Ended, but the kernel still says it streams: it does not fold yet.
+    feed.marks[1] = _mark(
+      'turn1',
+      5,
+      prompt: 4,
+      worked: const Duration(minutes: 3),
+    );
+    feed.notifyListeners();
+    await tester.pump();
+    expect(_text('Worked for 3m 0s'), findsNothing);
+    // The next turn starts: the one before it folds, its answer showing.
+    feed.marks.add(_mark('auto:1', feed.items.length));
+    feed.notifyListeners();
+    await tester.pump();
+    expect(_text('Worked for 3m 0s'), findsOneWidget);
+    expect(_text('Answer 1.'), findsOneWidget);
+    // The report's own turn folds once it ends.
+    feed.items.addAll(_reportWork);
+    feed.marks[2] = _mark('auto:1', 8, worked: const Duration(seconds: 20));
+    feed.streaming = false;
+    feed.notifyListeners();
+    await tester.pump();
+    expect(_text('Worked for 3m 0s'), findsOneWidget);
+    expect(_text('Worked for 20s'), findsOneWidget);
+    expect(_text('Reported.'), findsOneWidget);
+  });
+}
+
+/// One turn, as a kernel would mark it.
+TurnMark _mark(String id, int start, {int? prompt, Duration? worked}) =>
+    (turnId: id, start: start, prompt: prompt, worked: worked);
+
+/// A finished turn of a long history: a message, two steps, its answer.
+List<ChatItem> _reportTurn(int n) => [
+  UserMessageItem(text: 'Question $n'),
+  ToolCallItem(kind: ToolKind.read, target: 'q$n.dart'),
+  ToolCallItem(kind: ToolKind.grep, target: 'needle$n'),
+  AssistantTextItem('Answer $n.'),
+];
+
+/// What the agent does in a turn it took up on its own.
+const _reportWork = <ChatItem>[
+  ToolCallItem(kind: ToolKind.read, target: 'c.dart'),
+  ToolCallItem(kind: ToolKind.grep, target: 'reported'),
+  AssistantTextItem('Reported.'),
+];
+
+/// A report's turn arriving after [turns] turns already read: what shows of
+/// them at each step, to compare a short history with a long one.
+Future<List<String>> _reportAfter(WidgetTester tester, int turns) async {
+  final feed = _Feed([for (var n = 0; n < turns; n++) ..._reportTurn(n)]);
+  for (var n = 0; n < turns; n++) {
+    feed.marks.add(
+      _mark(
+        'turn$n',
+        n * 4 + 1,
+        prompt: n * 4,
+        worked: n == turns - 1
+            ? const Duration(minutes: 3)
+            : const Duration(seconds: 65),
+      ),
+    );
+  }
+  await _pump(tester, feed);
+  await tester.pumpAndSettle();
+  final seen = <String>[];
+  void look(String step) {
+    final flags = [
+      for (final text in [
+        'Worked for 3m 0s',
+        'Answer ${turns - 1}.',
+        'Worked for 20s',
+        'Reported.',
+      ])
+        _text(text).evaluate().isEmpty ? '0' : '1',
+    ].join();
+    seen.add('$step:$flags');
+  }
+
+  look('read');
+  // The agent takes up a report: its turn starts before any item of it.
+  feed.marks.add(_mark('auto:1', feed.items.length));
+  feed.streaming = true;
+  feed.notifyListeners();
+  await tester.pump();
+  look('started');
+  for (final item in _reportWork) {
+    feed.items.add(item);
+    feed.notifyListeners();
+    await tester.pump();
+  }
+  look('worked');
+  final at = feed.marks.length - 1;
+  feed.marks[at] = _mark(
+    'auto:1',
+    feed.marks[at].start,
+    worked: const Duration(seconds: 20),
+  );
+  feed.streaming = false;
+  feed.notifyListeners();
+  await tester.pump();
+  look('ended');
+  return seen;
 }

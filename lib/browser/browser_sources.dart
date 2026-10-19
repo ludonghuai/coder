@@ -1069,7 +1069,7 @@ String? _libraryOf(String url) {
 }
 
 final _sourceTools = [
-  ClaudeSdkTool(
+  HostTool(
     name: 'browser_sources',
     description:
         "A shared tab's scripts, as DevTools' Sources panel has them, and "
@@ -1119,7 +1119,7 @@ final _sourceTools = [
       };
     },
   ),
-  ClaudeSdkTool(
+  HostTool(
     name: 'browser_breakpoints',
     description:
         "Sets a shared tab's breakpoints, as DevTools' Sources panel does: "
@@ -1267,7 +1267,7 @@ final _sourceTools = [
       ].join('\n');
     },
   ),
-  ClaudeSdkTool(
+  HostTool(
     name: 'browser_debugger',
     description:
         "A shared tab paused in the debugger (a breakpoint's, an "

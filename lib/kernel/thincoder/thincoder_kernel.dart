@@ -7,6 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 
 import '../../chat/chat_models.dart';
+import '../../host_tools/host_mcp_server.dart';
+import '../../host_tools/host_tools.dart';
 import '../../models/model_provider.dart';
 import '../../platform/event_log.dart';
 import '../agent_kernel.dart';
@@ -90,6 +92,11 @@ class ThincoderKernel
 
   /// The version the agent reported at the handshake.
   String? _version;
+
+  /// Takes HTTP MCP servers (`mcpCapabilities.http`), and the host tools'
+  /// leave this session holds.
+  bool _httpMcp = false;
+  String? _mcpToken;
 
   /// The turn under way: its id, when it began, whether the agent took it
   /// up on its own (§19.2); automatic turns, and one held for a turn's end.
@@ -237,16 +244,29 @@ class ThincoderKernel
   /// already had, or a new one (§3.5).
   Future<void> _openSession() async {
     final connection = _connection!;
+    final servers = await _hostMcpServers();
     final resume = _context.resume;
     if (resume != null && !_recordGone) {
-      await _openRecord(connection, resume);
-    } else if (!await _pickUpKept(connection)) {
-      await _openNew(connection);
+      await _openRecord(connection, resume, servers);
+    } else if (!await _pickUpKept(connection, servers)) {
+      await _openNew(connection, servers);
     }
     _sessionId = switch (_slot) {
       final String slot => ThincoderSessionRef.combine(_cwd, slot),
       null => null,
     };
+  }
+
+  /// The host tools' server for the agent, when its handshake takes HTTP
+  /// MCP servers and an exposed group has a tool to give (§4.2); null keeps
+  /// `mcpServers` out, which every CLI takes (F4).
+  Future<List<Map<String, Object?>>?> _hostMcpServers() async {
+    if (!_httpMcp || !HostTools.anyIn(HostMcpServer.exposedGroups)) return null;
+    if (await HostMcpServer.ensure() == null) return null;
+    final grant = HostMcpServer.issue(_sessionId ?? '', _cwd);
+    if (grant == null) return null;
+    _mcpToken = grant.token;
+    return [grant.server];
   }
 
   /// The record's session: its history loaded once (replayed), and resumed
@@ -258,13 +278,14 @@ class ThincoderKernel
   Future<void> _openRecord(
     ThincoderConnection connection,
     SessionRecord resume,
+    List<Map<String, Object?>>? servers,
   ) async {
     final slot = ThincoderSessionRef.slotOf(resume.id) ?? resume.id;
     _slot = slot;
     if (_loaded) {
-      if (!await _pickUp(connection, 'session/resume', slot)) {
+      if (!await _pickUp(connection, 'session/resume', slot, servers)) {
         _recordGone = true;
-        await _openNew(connection);
+        await _openNew(connection, servers);
       }
       return;
     }
@@ -274,10 +295,10 @@ class ThincoderKernel
     _loadingHistory = true;
     emitInfoChanged();
     try {
-      _loaded = await _pickUp(connection, 'session/load', slot);
+      _loaded = await _pickUp(connection, 'session/load', slot, servers);
       if (!_loaded) {
         _recordGone = true;
-        await _openNew(connection);
+        await _openNew(connection, servers);
       }
     } finally {
       _loadingHistory = false;
@@ -294,10 +315,15 @@ class ThincoderKernel
     ThincoderConnection connection,
     String method,
     String slot,
+    List<Map<String, Object?>>? servers,
   ) async {
     try {
       _events.optionsFrom(
-        await connection.request(method, {'sessionId': slot}),
+        await connection.request(method, {
+          'sessionId': slot,
+          'cwd': _cwd,
+          'mcpServers': ?servers,
+        }),
       );
       return true;
     } on ThincoderRpcError catch (error) {
@@ -311,17 +337,23 @@ class ThincoderKernel
   /// exactly this (§3.5) — picked up rather than started over. Whether
   /// there was one to pick up: one gone from the agent's own library
   /// (deleted in the terminal) is not, and a new one is made instead.
-  Future<bool> _pickUpKept(ThincoderConnection connection) async {
+  Future<bool> _pickUpKept(
+    ThincoderConnection connection,
+    List<Map<String, Object?>>? servers,
+  ) async {
     final slot = _slot;
     if (slot == null) return false;
-    return _pickUp(connection, 'session/resume', slot);
+    return _pickUp(connection, 'session/resume', slot, servers);
   }
 
   /// A session of its own, the first one (§3.5).
-  Future<void> _openNew(ThincoderConnection connection) async {
+  Future<void> _openNew(
+    ThincoderConnection connection,
+    List<Map<String, Object?>>? servers,
+  ) async {
     final created = await connection.request('session/new', {
       'cwd': _cwd,
-      'mcpServers': <Object?>[],
+      'mcpServers': ?servers,
     });
     _slot = switch (created['sessionId']) {
       final String id when id.isNotEmpty => id,
@@ -346,6 +378,9 @@ class ThincoderKernel
     final info = (answer['agentInfo'] as Map?)?.cast<String, Object?>();
     _version = '${info?['version'] ?? ''}';
     if (_version!.isEmpty) _version = null;
+    final caps =
+        (answer['agentCapabilities'] as Map?)?.cast<String, Object?>();
+    _httpMcp = (caps?['mcpCapabilities'] as Map?)?['http'] == true;
     appEvent(
       'thincoder',
       'handshake: protocol ${answer['protocolVersion']} · '
@@ -366,6 +401,10 @@ class ThincoderKernel
   }
 
   void _teardown() {
+    if (_mcpToken case final token?) {
+      HostMcpServer.revoke(token);
+      _mcpToken = null;
+    }
     _releaseCheck?.cancel();
     _releaseCheck = null;
     unawaited(_subscription?.cancel());

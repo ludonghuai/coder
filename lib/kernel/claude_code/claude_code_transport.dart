@@ -76,7 +76,7 @@ class ClaudeLaunch {
 
   final String cwd;
 
-  /// The app's own MCP servers (see claude_sdk_tools.dart), their tools
+  /// The app's own MCP servers (see host_tools.dart), their tools
   /// allowed without asking: they only do what the app does.
   final List<String> sdkServers;
 

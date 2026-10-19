@@ -70,6 +70,11 @@ class TurnUsage {
       : (inputTokens ?? 0) + (outputTokens ?? 0);
 }
 
+/// One turn, as the folds see it: its id, where its first item is, the
+/// message that began it (none when the agent took it up on its own), and
+/// how long it worked (null while under way, or stopped).
+typedef TurnMark = ({String turnId, int start, int? prompt, Duration? worked});
+
 /// What the model has written so far in the turn under way, and how fast it
 /// writes (now while it does, else on average so far; null before it has
 /// written long enough to say).
@@ -228,7 +233,7 @@ class ToolCallItem extends ChatItem {
   final String? tool;
 
   /// Its tool use's id, for one of the app's own tools (see
-  /// claude_sdk_tools.dart): what the call under way is known by, to answer
+  /// host_tools.dart): what the call under way is known by, to answer
   /// what it asks of the user.
   final String? callId;
 

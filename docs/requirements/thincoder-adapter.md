@@ -44,6 +44,7 @@
   通知 `session/update`（文本/思考/工具卡/用量/配置项/模式）；
   反向请求 `session/request_permission`、`fs/read_text_file`、`fs/write_text_file`；
   扩展族 `checkpoint/*`、`memory/*`、`ledger/*`、`batch/*`。
+- 宿主工具通道（`host-tool-channel` 批）：客户端可在 `session/new|load|resume` 的 `mcpServers` 里带本机环回 MCP server（以 agent 宣告 `mcpCapabilities.http` 为门）；ACP 无通用客户端工具声明面，见 `docs/requirements/host-tool-channel.md`。
 - 会话：id = 持久槽位号字符串；`session/list` 列的是**当前 cwd** 的槽（`acp/handlers-slots.mjs:42-62`）——
   终端写的会话同样在内，「与终端相通」原生成立；单 cwd 模型（`session/new` 的 cwd 必须等于进程 cwd，故一个项目一个 ACP 进程）。
 - 审批：逐次 `session/request_permission`，选项 approve_once / approve_always / reject；无应答/取消 → 拒。
@@ -118,6 +119,17 @@ B1 例外状态：本批要动 `thincoder/`（ACP 挂起窗新档 + `session.mjs
 
 
 
+**F17 编辑器上下文随消息注入**（批 10；用户 2026-10-17 21:16 裁定「先把 IDE 完善」）：发消息时把**当前编辑器上下文**随消息带上——打开文件路径 + 光标行 + 选区（若有）；用户不必手动 `@`。
+事实（2026-10-17 实读）：桌面 `initialize` 宣告 `clientCapabilities: {}`（`thincoder_kernel.dart:188` · `thincoder_catalog.dart:80`），无选区/文档面实现；CLI 侧 `session/prompt` 已收 `resource_link` 内容块（需求 F8 · R-A5.10）⇒ **纯客户端**可做，不动 CLI。
+验收（可机检）：打开 `a.dart` 第 10 行、选中 3–5 行 ⇒ 发消息 ⇒ 到达内核的 prompt 含该文件路径与行区间；关掉开关 ⇒ 不含；未打开文件 ⇒ 不含；同一文件同一回合只带一次。
+形态要求：注入**可见可撤销**（消息里一个 chip / 摘要，不静默塞正文）；开关是**配置项就必须有设置 UI**（产品铁律）；默认值与终端习惯对齐（默认开）。
+边界：不做全工作区索引注入；不做符号级引用解析；不改 `thincoder/`。
+
+**F18 agent 编辑走 IDE 原生 diff（`fs` 反向 RPC）**（批 10；同上裁定）：桌面宣告 `fs.readTextFile` / `fs.writeTextFile` 能力并在内核请求时执行——agent 的读写**经桌面文件模型**，已打开的文件在编辑器里表现为**可见、可审阅的变更**（与既有变更审查面一致）。
+事实（2026-10-17 实读）：桌面未宣告两能力 ⇒ 按 CLI 需求 R-A5.5「未宣告 ⇒ 回落本地」，agent 编辑直接落盘，桌面只能事后看；CLI 侧桥已有门控分支（设计 §11.4 G3）⇒ 补上宣告与两个 handler 即接通。
+验收（可机检）：agent 编辑一个**已打开且有未保存缓冲**的文件 ⇒ 内核的写入请求落到桌面侧（不走本地落盘竞争），编辑器呈现可审阅变更且不覆盖用户未保存内容；未打开文件 ⇒ 写入后磁盘内容与 agent 所述一致；越界路径（项目外）⇒ 拒绝并有可见提示。
+边界：不做任意路径写入（限于项目根内）；不代管二进制大文件；不改变既有变更审查面的语义。
+
 ## 4. 扩展性要求（「双端更新留空间」）
 
 **E1 适配层单点**：thincoder 相关代码集中一个模块（建议 `lib/kernel/thincoder/`），其余部分只经 `AgentKernel` 接口交互。
@@ -157,9 +169,12 @@ thincoder 将来补能力 → 改能力映射表（§5）+ 适配层小改即可
 
 注：❌ = 内核不声明该能力，UI 按既有机制自动隐藏（不是缺陷）；⚠️ = 部分可用，按本档口径落地。
 
+宿主工具通道（浏览器等）不以 `AgentKernel` 能力接口出现：由客户端经 `mcpServers` 提供 MCP server，见 `docs/requirements/host-tool-channel.md`。
+
 ## 6. 边界（明确不做）
 
 **B1 默认不改 thincoder 仓**——本适配默认落本仓；ACP 给不了的能力默认不通过改 thincoder 补。**例外**：接口面必要且最小的改动，经用户裁定、保持上游可合并（F12 / 批 5 先例：用户 2026-10-16「允许动仓，保留拉代码的能力」）。
+**B1 例外状态**：`host-tool-channel` 批（2026-10-18）要动 `thincoder/`（MCP forwarding + `permissionExempt` 信任位；外仓约 +170 行）——用户 2026-10-18 20:08「对，一定要实现宿主工具通道」+ 20:40 批准开工；保持上游可合并。
 **B2** 上表 ❌ 各项首版不做：图片直传、多文件夹工作区、对话 fork、对话/文件回退、后台任务控制、排队消息控制、
 MCP 连接管理、账号用量、@文件建议、prompt 建议、命令列表、会话改名、`context`/`fast` 档、effort 多档。
 **B3** 不代管 provider / key：thincoder 配置由用户终端自理，桌面端只读取使用。

@@ -6,12 +6,16 @@ import 'package:flutter/material.dart' show Icons;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
+import 'package:baocode/browser/browser_steps.dart';
 import 'package:baocode/chat/chat_models.dart';
+import 'package:baocode/host_tools/host_mcp_server.dart';
+import 'package:baocode/host_tools/host_tools.dart';
 import 'package:baocode/kernel/agent_kernel.dart';
 import 'package:baocode/kernel/kernel_event.dart';
 import 'package:baocode/kernel/kernel_registry.dart';
 import 'package:baocode/kernel/kernel_types.dart';
 import 'package:baocode/kernel/mock/mock_kernels.dart';
+import 'package:baocode/kernel/thincoder/thincoder_options.dart';
 import 'package:baocode/kernel/thincoder/thincoder_kernel.dart';
 import 'package:baocode/kernel/thincoder/thincoder_locator.dart';
 import 'package:baocode/kernel/thincoder/thincoder_mock.dart';
@@ -272,7 +276,6 @@ void main() {
       });
       expect(s.agent.requests('session/new').single['params'], {
         'cwd': '/project',
-        'mcpServers': <Object?>[],
       });
       // The host sees the folder and the slot together (D5).
       expect(s.kernel.sessionId, '/project|1');
@@ -595,6 +598,7 @@ void main() {
       expect(s.agents, hasLength(2));
       expect(s.agents.last.requests('session/resume').single['params'], {
         'sessionId': '1',
+        'cwd': '/project',
       });
       expect(s.agents.last.requests('session/new'), isEmpty);
       expect(s.kernel.sessionId, '/project|1');
@@ -651,6 +655,7 @@ void main() {
 
       expect(s.agent.requests('session/load').single['params'], {
         'sessionId': '3',
+        'cwd': '/project',
       });
       expect(s.agent.requests('session/new'), hasLength(1));
       expect(s.kernel.health.status, KernelHealthStatus.ready);
@@ -693,6 +698,7 @@ void main() {
 
       expect(s.agent.requests('session/load').single['params'], {
         'sessionId': '3',
+        'cwd': '/project',
       });
       expect(s.agent.requests('session/new'), hasLength(1));
       expect(s.kernel.sessionId, '/project|1');
@@ -716,6 +722,7 @@ void main() {
       expect(s.agents.last.requests('session/new'), isEmpty);
       expect(s.agents.last.requests('session/resume').single['params'], {
         'sessionId': '1',
+        'cwd': '/project',
       });
       expect(s.kernel.sessionId, '/project|1');
       // What was said is still shown: nothing is replayed.
@@ -741,6 +748,7 @@ void main() {
 
       expect(s.agent.requests('session/load').single['params'], {
         'sessionId': '3',
+        'cwd': '/project',
       });
       expect(s.kernel.sessionId, '/project|3');
       expect(s.kernel.loadingHistory, isFalse);
@@ -758,6 +766,7 @@ void main() {
       await settle();
       expect(s.agent.requests('session/resume').single['params'], {
         'sessionId': '3',
+        'cwd': '/project',
       });
       expect(s.agents.first.requests('session/load'), hasLength(1));
       expect(s.agents.last.requests('session/load'), isEmpty);
@@ -1088,6 +1097,12 @@ void main() {
         'openai:gpt-5',
         'anthropic:claude-opus-5',
       ]);
+      expect(s.kernel.model.options.map((o) => o.group?.id), [
+        'anthropic',
+        'openai',
+        'anthropic',
+      ]);
+      expect(s.kernel.model.options.first.label, 'claude-sonnet-5');
       expect(s.kernel.model.selected, 'anthropic:claude-sonnet-5');
       s.kernel.model.select('openai:gpt-5');
       expect(s.kernel.model.selected, 'anthropic:claude-sonnet-5');
@@ -1098,6 +1113,17 @@ void main() {
         'value': 'openai:gpt-5',
       });
       expect(s.kernel.model.selected, 'openai:gpt-5');
+    });
+
+    test('a model keeps the name the agent gave it, under its provider', () {
+      final option = thincoderOption(
+        'model',
+        'anthropic:claude-sonnet-5',
+        'anthropic:Claude Sonnet 5',
+        (_) => Icons.bolt_rounded,
+      );
+      expect(option.group?.id, 'anthropic');
+      expect(option.label, 'Claude Sonnet 5');
     });
 
     test('thinking levels are a list, named as the app names them (T56)',
@@ -2458,6 +2484,209 @@ void main() {
       await settle();
       expect(s.agent.requests('session/close'), hasLength(1));
       await s.kernel.stopped;
+    });
+  });
+
+  group('thincoder host tools', () {
+    tearDown(() async {
+      HostTools.unregister('browser_click');
+      await HostMcpServer.shutdown();
+      HostMcpServer.exposedGroups = {'browser'};
+    });
+
+    /// A browser tool in the registry, as BrowserTools puts one there.
+    void browserTool() => HostTools.register(
+      HostTool(
+        name: 'browser_click',
+        description: 'Clicks an element of a shared tab.',
+        inputSchema: const {'type': 'object'},
+        kind: ToolKind.browser,
+        group: 'browser',
+        summary: (input, output) =>
+            browserStepSummary('browser_click', input, output),
+        run: (input, call) async => 'Clicked.',
+      ),
+    );
+
+    /// The one server entry a session request carries.
+    Map<String, Object?> serverOf(ThincoderMock agent, String method) {
+      final params = agent.requests(method).single['params'] as Map;
+      final servers = params['mcpServers'] as List;
+      expect(servers, hasLength(1));
+      return (servers.single as Map).cast<String, Object?>();
+    }
+
+    /// The entry as §4.2 has it: this endpoint, and a token of its own.
+    void expectServer(Map<String, Object?> server) {
+      expect(server['type'], 'http');
+      expect(server['name'], 'baocode');
+      expect(server['url'], HostMcpServer.url);
+      final headers = (server['headers'] as List).cast<Map>();
+      expect(headers.single['name'], 'Authorization');
+      expect(
+        headers.single['value'],
+        matches(RegExp(r'^Bearer [A-Za-z0-9_-]{43}$')),
+      );
+      expect(server['_meta'], {'baocode.dev/trusted': true});
+    }
+
+    test('T11: a new, a loaded and a resumed session are given the host '
+        "tools' server", () async {
+      browserTool();
+      final s = _Session(make: () => ThincoderMock(httpMcp: true));
+      addTearDown(s.dispose);
+      s.kernel.prepare();
+      await settle();
+      expectServer(serverOf(s.agent, 'session/new'));
+
+      // Out of view and back: the same session, resumed.
+      s.kernel.release();
+      await settle();
+      s.kernel.prepare();
+      await settle();
+      expectServer(serverOf(s.agent, 'session/resume'));
+
+      // A record's session: loaded.
+      final t = _Session(
+        context: KernelContext(
+          cwd: '/project',
+          resume: SessionRecord(
+            id: '/project|3',
+            title: 'From the terminal',
+            updatedAt: DateTime.utc(2026, 10, 15),
+            cwd: '/project',
+          ),
+        ),
+        make: () => ThincoderMock(httpMcp: true),
+      );
+      addTearDown(t.dispose);
+      t.kernel.prepare();
+      await settle();
+      expectServer(serverOf(t.agent, 'session/load'));
+    });
+
+    test('T12: an agent that does not take MCP servers is sent none, and '
+        'the session goes on', () async {
+      browserTool();
+      final s = await _ready();
+      expect(
+        (s.agent.requests('session/new').single['params'] as Map)
+            .containsKey('mcpServers'),
+        isFalse,
+      );
+      s.send('hi');
+      await s.agent.finished.future;
+      expect(_prompts(s), ['hi']);
+      expect(s.kernel.health.status, KernelHealthStatus.ready);
+    });
+
+    test('T13: with no tool to give, no server is sent', () async {
+      final s = _Session(make: () => ThincoderMock(httpMcp: true));
+      addTearDown(s.dispose);
+      s.kernel.prepare();
+      await settle();
+      expect(
+        (s.agent.requests('session/new').single['params'] as Map)
+            .containsKey('mcpServers'),
+        isFalse,
+      );
+    });
+
+    test('T14: the session over takes its token back', () async {
+      browserTool();
+      final s = _Session(make: () => ThincoderMock(httpMcp: true));
+      addTearDown(s.dispose);
+      s.kernel.prepare();
+      await settle();
+      // The token the agent was given, as its request carries it.
+      final entry = serverOf(s.agent, 'session/new');
+      final token = (entry['headers'] as List)
+          .single['value']
+          .toString()
+          .substring('Bearer '.length);
+      final before = HostMcpServer.revocations;
+      s.kernel.release();
+      await settle();
+      expect(HostMcpServer.revocations, before + 1);
+
+      // The test binding would answer 400 to every request of its own.
+      final overrides = HttpOverrides.current;
+      HttpOverrides.global = null;
+      addTearDown(() => HttpOverrides.global = overrides);
+      final client = HttpClient();
+      try {
+        final request = await client.postUrl(Uri.parse(HostMcpServer.url!));
+        request.headers.set(
+          HttpHeaders.authorizationHeader,
+          'Bearer $token',
+        );
+        request.write('{"jsonrpc":"2.0","id":1,"method":"tools/list"}');
+        final response = await request.close();
+        await response.drain<void>();
+        expect(response.statusCode, 401);
+      } finally {
+        client.close(force: true);
+      }
+    });
+
+    test('T15: a host tool call is the browser card its registry makes it, '
+        'and any other tool stays as it was', () async {
+      browserTool();
+      final s = await _ready();
+      s.agent.push(
+        _update({
+          'sessionUpdate': 'tool_call',
+          'toolCallId': 't1',
+          'title': 'baocode_browser_click',
+          'kind': 'other',
+          'status': 'in_progress',
+          'rawInput': {'text': 'Sign in'},
+        }),
+      );
+      await settle();
+      final card = s.items<ToolCallItem>().single;
+      expect(card.kind, ToolKind.browser);
+      expect(card.tool, 'browser_click');
+      expect(card.target, '“Sign in”');
+      expect(card.input, {'text': 'Sign in'});
+
+      // The card keeps the tool's own identity once the call is over, as
+      // the Claude face's does (D10).
+      s.agent.push(
+        _update({
+          'sessionUpdate': 'tool_call_update',
+          'toolCallId': 't1',
+          'status': 'completed',
+          'content': [
+            {
+              'type': 'content',
+              'content': {'type': 'text', 'text': 'Clicked.'},
+            },
+          ],
+        }),
+      );
+      await settle();
+      final done = s.items<ToolCallItem>().single;
+      expect(done.status, ToolStatus.succeeded);
+      expect(done.kind, ToolKind.browser);
+      expect(done.tool, 'browser_click');
+      expect(done.input, {'text': 'Sign in'});
+      expect(done.target, '“Sign in”');
+
+      s.agent.push(
+        _update({
+          'sessionUpdate': 'tool_call',
+          'toolCallId': 't2',
+          'title': 'some_mcp_tool',
+          'kind': 'other',
+          'status': 'in_progress',
+          'rawInput': <String, Object?>{},
+        }),
+      );
+      await settle();
+      final other = s.items<ToolCallItem>().last;
+      expect(other.kind, ToolKind.other);
+      expect(other.target, 'some_mcp_tool');
     });
   });
 

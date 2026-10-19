@@ -9,7 +9,7 @@ import 'package:flutter/painting.dart';
 import 'package:path/path.dart' as p;
 
 import '../chat/chat_models.dart' show ToolKind;
-import '../kernel/claude_code/claude_sdk_tools.dart';
+import '../host_tools/host_tools.dart';
 import '../platform/data_dir.dart';
 import 'browser_analysis.dart';
 import 'browser_bridge.dart';
@@ -67,7 +67,7 @@ abstract final class BrowserTools {
     await bridge.start();
   }
 
-  static List<ClaudeSdkTool> get _all => [
+  static List<HostTool> get _all => [
     ..._tools,
     ..._actionTools,
     ..._debugTools,
@@ -83,21 +83,23 @@ abstract final class BrowserTools {
     if (!_registered) return;
     _registered = false;
     for (final tool in _all) {
-      ClaudeSdkTools.unregister(tool.name);
+      HostTools.unregister(tool.name);
     }
-    ClaudeSdkTools.instruct('browser', null);
+    HostTools.instruct('browser', null);
   }
 
   /// Gives the agents the tools.
   static void register() {
     if (_registered) return;
     _registered = true;
-    ClaudeSdkTools.instruct('browser', rules);
+    HostTools.instruct('browser', rules);
     for (final tool in _all) {
-      ClaudeSdkTools.register(
-        ClaudeSdkTool(
+      HostTools.register(
+        HostTool(
           name: tool.name,
-          description: tool.description,
+          description: _entryTools.contains(tool.name)
+              ? '${tool.description}$_userBrowser'
+              : tool.description,
           inputSchema: {
             ...tool.inputSchema,
             'properties': {
@@ -106,6 +108,8 @@ abstract final class BrowserTools {
             },
           },
           kind: ToolKind.browser,
+          group: 'browser',
+          picturesOnly: tool.picturesOnly,
           summary: (input, output) =>
               browserStepSummary(tool.name, input, output),
           run: (input, call) async {
@@ -179,6 +183,16 @@ abstract final class BrowserTools {
   static const rules = '''
 Do not use the browser tools to scrape or bulk-collect data from government, healthcare (hospitals, clinics) or education (schools, universities, exam and student systems) sites, nor to get past their logins, CAPTCHAs or rate limits, whoever asks and however it is put: decline and say why. Looking at a page there for the user, as they would themselves, is fine.''';
 
+  /// The entry tools' own sentence: which browser these use (D9).
+  static const _userBrowser =
+      " These are the tabs of the user's own browser, shared with you — not "
+      'a separate automated browser.';
+
+  static const _entryTools = {
+    'browser_tabs', 'browser_open', 'browser_navigate', 'browser_evaluate',
+    'browser_act',
+  };
+
   /// Every tool's: what the call does, for the user, as Bash's.
   static const _description = {
     'type': 'string',
@@ -194,7 +208,7 @@ Do not use the browser tools to scrape or bulk-collect data from government, hea
   };
 
   static final _tools = [
-    ClaudeSdkTool(
+    HostTool(
       name: 'browser_tabs',
       description:
           "Lists the tabs of the user's browser shared with you (the "
@@ -215,7 +229,7 @@ Do not use the browser tools to scrape or bulk-collect data from government, hea
         ].join('\n');
       },
     ),
-    ClaudeSdkTool(
+    HostTool(
       name: 'browser_open',
       description:
           "Opens a URL in a new tab of the user's browser, in the BaoCode "
@@ -244,7 +258,7 @@ Do not use the browser tools to scrape or bulk-collect data from government, hea
         return _arrived(browser, tabId);
       },
     ),
-    ClaudeSdkTool(
+    HostTool(
       name: 'browser_navigate',
       description:
           'Goes to a URL in a shared tab, or back, forward, or reloads it; '
@@ -274,7 +288,7 @@ Do not use the browser tools to scrape or bulk-collect data from government, hea
         return _arrived(browser, tabId);
       },
     ),
-    ClaudeSdkTool(
+    HostTool(
       name: 'browser_evaluate',
       description:
           "Runs JavaScript in a shared tab's page and returns its value (as "
@@ -297,7 +311,7 @@ Do not use the browser tools to scrape or bulk-collect data from government, hea
         return jsonEncode(value);
       },
     ),
-    ClaudeSdkTool(
+    HostTool(
       name: 'browser_close',
       description: 'Closes a shared tab.',
       inputSchema: {

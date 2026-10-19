@@ -2,11 +2,11 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import '../../chat/chat_models.dart';
+import '../../host_tools/host_tools.dart';
 import '../kernel_event.dart';
 import '../kernel_types.dart';
 import '../output_meter.dart';
 import 'claude_goal.dart';
-import 'claude_sdk_tools.dart';
 import 'turn_stats.dart';
 
 /// Translates Claude Code's conversation messages (stream-json output, or
@@ -952,7 +952,7 @@ class ClaudeTranslator {
     String base(String? path) => path == null ? '' : path.split('/').last;
     final name = tool.name;
     // The app's own, shown as it says.
-    if (ClaudeSdkTools.called(name) case ClaudeSdkTool(
+    if (HostTools.called(name) case HostTool(
       :final name,
       :final kind?,
       :final summary,

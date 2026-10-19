@@ -4,11 +4,11 @@ import 'dart:io';
 
 import 'package:baocode/chat/chat_models.dart';
 import 'package:baocode/chat/widgets/content_image.dart';
+import 'package:baocode/host_tools/host_tools.dart';
 import 'package:baocode/images/image_picks.dart';
 import 'package:baocode/images/image_steps.dart';
 import 'package:baocode/images/image_tools.dart';
 import 'package:baocode/kernel/claude_code/claude_code_translator.dart';
-import 'package:baocode/kernel/claude_code/claude_sdk_tools.dart';
 import 'package:baocode/kernel/transcript.dart';
 import 'package:baocode/models/model_provider.dart';
 import 'package:baocode/models/model_providers.dart';
@@ -22,8 +22,8 @@ const _png =
 
 void main() {
   group('a call of generate_image', () {
-    setUp(() => ClaudeSdkTools.register(ImageTools.tool(const [])));
-    tearDown(() => ClaudeSdkTools.unregister(ImageTools.name));
+    setUp(() => HostTools.register(ImageTools.tool(const [])));
+    tearDown(() => HostTools.unregister(ImageTools.name));
 
     late Transcript transcript;
     late ClaudeTranslator translator;
@@ -228,7 +228,7 @@ void main() {
       final (:provider, :model) = await ImageTools.modelFor(
         ModelProviders.current.imageModels,
         named: named,
-        call: ClaudeSdkCall(cwd: '/p', toolUseId: callId, cancelled: stop),
+        call: HostToolCall(cwd: '/p', toolUseId: callId, cancelled: stop),
       );
       return modelRef(provider.id, model.id);
     }

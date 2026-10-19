@@ -8,8 +8,8 @@ import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:path/path.dart' as p;
 
 import '../chat/chat_models.dart' show ToolKind;
+import '../host_tools/host_tools.dart';
 import '../ide/file_service.dart' show IdeFileExistsException;
-import '../kernel/claude_code/claude_sdk_tools.dart';
 import '../models/image_api.dart';
 import '../models/model_provider.dart';
 import '../models/model_providers.dart';
@@ -43,9 +43,9 @@ abstract final class ImageTools {
   static void _sync() {
     final models = imageModels(ModelProviders.current);
     if (models.isEmpty) {
-      ClaudeSdkTools.unregister(name);
+      HostTools.unregister(name);
     } else {
-      ClaudeSdkTools.register(tool(models));
+      HostTools.register(tool(models));
     }
   }
 
@@ -55,7 +55,7 @@ abstract final class ImageTools {
       providers.imageModels;
 
   /// The tool, offering [models].
-  static ClaudeSdkTool tool(List<ImageModel> models) => ClaudeSdkTool(
+  static HostTool tool(List<ImageModel> models) => HostTool(
     name: name,
     description: _description(models),
     inputSchema: _schema(models),
@@ -63,6 +63,7 @@ abstract final class ImageTools {
     summary: (input, output) => imageStepSummary(input),
     files: savedImageFiles,
     alwaysLoad: true,
+    group: 'images',
     run: (input, call) => _run(input, call),
   );
 
@@ -165,7 +166,7 @@ abstract final class ImageTools {
 
   static Future<Object> _run(
     Map<String, Object?> input,
-    ClaudeSdkCall call,
+    HostToolCall call,
   ) async {
     final prompt = _string(input['prompt']);
     if (prompt == null) throw const ImageToolError('Give a prompt.');
@@ -258,13 +259,13 @@ abstract final class ImageTools {
   static Future<ImageModel> modelFor(
     List<ImageModel> models, {
     String? named,
-    required ClaudeSdkCall call,
+    required HostToolCall call,
   }) => _model(models, named: named, call: call);
 
   static Future<ImageModel> _model(
     List<ImageModel> models, {
     String? named,
-    required ClaudeSdkCall call,
+    required HostToolCall call,
   }) async {
     String refOf(ImageModel entry) =>
         modelRef(entry.provider.id, entry.model.id);

@@ -33,6 +33,15 @@ abstract interface class ChatFeed implements Listenable {
   VoidCallback? stopAt(int index);
 }
 
+/// Knows its own turns: where each began, as the kernel's turn events said.
+/// Read only by the folds, on a full read, and let go of at once; a feed
+/// without it folds by the messages sent (the rule before turns were kept).
+abstract interface class MarksTurns {
+  /// Ascending; the turn under way last. The session's own list, not a
+  /// copy: callers must not add, remove, reorder, or hold it past the read.
+  List<TurnMark> get turns;
+}
+
 /// The conversation of a subagent in [session], found by [path]: the ids of
 /// the subagents leading to it, outermost first. What it was asked comes
 /// first, as a message to it; its report last, as its answer. While it

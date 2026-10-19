@@ -30,6 +30,10 @@ class StepFold {
 /// and its own item unless a closed fold hides it.
 typedef StepRow = ({StepFold? work, StepFold? steps, bool item});
 
+/// A window the folds scan: where a turn starts, the message that began it
+/// (none when the agent took it up on its own), and how long it worked.
+typedef _TurnBoundary = ({int start, int? prompt, Duration? worked});
+
 /// How a history folds: each run of at least two quick steps into one line
 /// ("Read 3 files, ran 2 commands"), and each finished turn's work into
 /// one line before its answer ("Worked for 4m 32s"). Edits, subagents and
@@ -64,11 +68,13 @@ class StepFolds {
   );
 
   /// Folds the [count] items given by [itemAt]. While [live], the last turn
-  /// is under way: it does not fold yet.
+  /// is under way: it does not fold yet. [turns], when kept, say where the
+  /// turns start (see [TurnMark]): each turn folds its own work only.
   factory StepFolds.of(
     int count,
     ChatItem Function(int index) itemAt, {
     required bool live,
+    List<TurnMark> turns = const [],
   }) {
     final folds = StepFolds._(
       List<StepFold?>.filled(count, null, growable: true),
@@ -79,7 +85,7 @@ class StepFolds {
       <int, int>{},
       List<int?>.filled(count, null, growable: true),
     );
-    return folds.._rescan(0, live: live);
+    return folds.._rescan(0, live: live, turns: turns);
   }
 
   final List<StepFold?> _steps;
@@ -108,6 +114,7 @@ class StepFolds {
     int count,
     ChatItem Function(int index) itemAt, {
     required bool live,
+    List<TurnMark> turns = const [],
   }) {
     assert(count >= _items.length, 'extend grows; it never cuts');
     if (count > _items.length) {
@@ -116,7 +123,7 @@ class StepFolds {
       _work.length = count;
       _thoughtOf.length = count;
     }
-    final from = _tailFrom(itemAt, count);
+    final from = _tailFrom(itemAt, count, turns);
     // A turn that was under way and has just ended (a prompt came after
     // it) folds now: it too is scanned again.
     final liveFrom = _liveStart;
@@ -131,8 +138,11 @@ class StepFolds {
     _thoughtOf.fillRange(start, count, null);
     _thoughtRuns.removeWhere((run, _) => run >= start);
     _merged.removeWhere((run, _) => run >= start);
-    _turnEnds.removeWhere((_, prompt) => prompt >= start);
-    _rescan(start, live: live);
+    // Only what a window read again ended at before: a turn's close moves
+    // as its answer grows, and its start may sit before the mark (a queued
+    // message taken up first). Nothing read again keeps every entry.
+    if (start < count) _turnEnds.removeWhere((last, _) => last >= start);
+    _rescan(start, live: live, turns: turns);
     return this;
   }
 
@@ -144,9 +154,19 @@ class StepFolds {
     _merged.remove(rowOf(index));
   }
 
-  /// The first item the last turn reaches back to: its prompt, or the start
-  /// of a run of thoughts or steps the history ends in.
-  int _tailFrom(ChatItem Function(int index) itemAt, int count) {
+  /// The first item the last turn reaches back to: where it starts when the
+  /// feed keeps its turns, else its prompt, or the start of a run of
+  /// thoughts or steps the history ends in.
+  int _tailFrom(
+    ChatItem Function(int index) itemAt,
+    int count,
+    List<TurnMark> turns,
+  ) {
+    if (turns.isNotEmpty) {
+      final start = turns.last.start;
+      // A mark out of the history is no boundary: the messages tell.
+      if (start >= 0 && start <= count) return start;
+    }
     var prompt = 0;
     for (var i = count - 1; i >= 0; i--) {
       if (itemAt(i) case UserMessageItem(queued: false)) {
@@ -168,7 +188,7 @@ class StepFolds {
 
   /// Scans the items from [from] on as [of] scans them all: the runs of
   /// thoughts and steps, and the turns' work.
-  void _rescan(int from, {required bool live}) {
+  void _rescan(int from, {required bool live, required List<TurnMark> turns}) {
     final count = _items.length;
     for (var start = from; start < count;) {
       if (_items[start] is! ThinkingItem) {
@@ -204,26 +224,26 @@ class StepFolds {
       start = end;
     }
 
-    final prompts = [
-      for (var i = from; i < count; i++)
-        if (_items[i] case UserMessageItem(queued: false)) i,
-    ];
-    for (var t = 0; t < prompts.length; t++) {
+    final windows = _boundaries(from, count, turns);
+    for (var t = 0; t < windows.length; t++) {
       // The turn under way, and any queued after it, are not done.
-      if (live && t == prompts.length - 1) break;
-      final prompt = prompts[t];
-      final worked = (_items[prompt] as UserMessageItem).worked;
+      if (live && t == windows.length - 1) break;
+      final window = windows[t];
+      final start = window.start;
+      final worked = window.worked;
       if (worked == null) continue;
-      var last = t + 1 < prompts.length ? prompts[t + 1] - 1 : count - 1;
-      while (last > prompt && _items[last] is UserMessageItem) {
+      var last = t + 1 < windows.length ? windows[t + 1].start - 1 : count - 1;
+      while (last > start && _items[last] is UserMessageItem) {
         last--;
       }
-      // Ending in thoughts, it ends at the row they show in.
-      if (last > prompt) _turnEnds[_thoughtOf[last] ?? last] = prompt;
-      if (last <= prompt || _items[last] is! AssistantTextItem) continue;
+      // Ending in thoughts, it ends at the row they show in; its footer, if
+      // it has a message to take it, there.
+      final footer = window.prompt ?? start;
+      if (last > start) _turnEnds[_thoughtOf[last] ?? last] = footer;
+      if (last <= start || _items[last] is! AssistantTextItem) continue;
       // The answer: the words after its last step, thoughts among them.
       var answer = last;
-      for (var i = last; i > prompt; i--) {
+      for (var i = last; i > start; i--) {
         if (_items[i] is AssistantTextItem) {
           answer = i;
         } else if (_items[i] is! ThinkingItem) {
@@ -233,26 +253,71 @@ class StepFolds {
       // A plan's card stands out of it: the work folded is what came
       // after the last (carrying it out, once approved); the planning
       // before stays as it is.
-      var start = prompt + 1;
-      for (var i = answer - 1; i > prompt; i--) {
+      var fold = start;
+      while (fold < answer && _items[fold] is UserMessageItem) {
+        fold++;
+      }
+      for (var i = answer - 1; i >= fold; i--) {
         if (_items[i] is PlanItem) {
-          start = i + 1;
+          fold = i + 1;
           break;
         }
       }
       final shown = _items
-          .sublist(start, answer)
+          .sublist(fold, answer)
           .where((item) => item is! ThinkingItem)
           .length;
       if (shown < 2) continue;
-      final fold = StepFold(StepFoldKind.work, start, answer, worked: worked);
-      _work.fillRange(start, answer, fold);
+      final work = StepFold(StepFoldKind.work, fold, answer, worked: worked);
+      _work.fillRange(fold, answer, work);
     }
 
     var liveEnd = count;
     if (count > 0 && _items[count - 1] is LiveStatusItem) liveEnd--;
     _liveEnd = live ? liveEnd : null;
-    _liveStart = live && prompts.isNotEmpty ? prompts.last : null;
+    _liveStart = live && windows.isNotEmpty ? windows.last.start : null;
+  }
+
+  /// The windows the folds scan in `[from, count]`, ascending: those the
+  /// messages sent make, and those the turns make, merged where they meet
+  /// (a turn wins over a message there, a later turn over an earlier).
+  List<_TurnBoundary> _boundaries(int from, int count, List<TurnMark> turns) {
+    final marks = <TurnMark>[];
+    var after = count;
+    for (var i = turns.length - 1; i >= 0; i--) {
+      final mark = turns[i];
+      if (mark.start < from) break;
+      // A mark out of the history, or out of order, is no boundary. One at
+      // its end is: the turn under way has no items yet.
+      if (mark.start < 0 || mark.start > count || mark.start > after) continue;
+      // The same place as the one after it: the later turn is the one.
+      if (marks.isNotEmpty && marks.last.start == mark.start) continue;
+      marks.add(mark);
+      after = mark.start;
+    }
+    final boundaries = <_TurnBoundary>[];
+    var i = from;
+    for (final mark in marks.reversed) {
+      while (i < mark.start) {
+        if (_items[i] case UserMessageItem(queued: false, :final worked)) {
+          boundaries.add((start: i, prompt: i, worked: worked));
+        }
+        i++;
+      }
+      // The message at the same place, if any, is the turn's own.
+      if (i == mark.start && i < count && _items[i] is UserMessageItem) i++;
+      boundaries.add((
+        start: mark.start,
+        prompt: mark.prompt,
+        worked: mark.worked,
+      ));
+    }
+    for (; i < count; i++) {
+      if (_items[i] case UserMessageItem(queued: false, :final worked)) {
+        boundaries.add((start: i, prompt: i, worked: worked));
+      }
+    }
+    return boundaries;
   }
 
   /// The runs of thoughts as one, as asked for.
@@ -289,8 +354,8 @@ class StepFolds {
   /// no turn is under way.
   int? _liveEnd;
 
-  /// The prompt of the turn under way, while one is: the turn to scan again
-  /// when it ends.
+  /// The start of the window the turn under way is in, while one is: what to
+  /// scan again when it ends.
   int? _liveStart;
 
   /// The run of steps item [index] is in, if folded.

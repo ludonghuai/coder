@@ -15,7 +15,7 @@ import 'dart:typed_data';
 
 import 'package:baocode/browser/browser_bridge.dart';
 import 'package:baocode/browser/browser_tools.dart';
-import 'package:baocode/kernel/claude_code/claude_sdk_tools.dart';
+import 'package:baocode/host_tools/host_tools.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
@@ -154,12 +154,12 @@ void main() {
         Map<String, Object?> input, {
         bool error = false,
       }) async {
-        final answer = await ClaudeSdkTools.handle({
+        final answer = await HostTools.handle({
           'jsonrpc': '2.0',
           'id': ++id,
           'method': 'tools/call',
           'params': {'name': name, 'arguments': input},
-        }, const ClaudeSdkCall(cwd: '/'));
+        }, const HostToolCall(cwd: '/'));
         final result = answer['result'] as Map;
         final content = (result['content'] as List).cast<Map>();
         // ignore: avoid_print

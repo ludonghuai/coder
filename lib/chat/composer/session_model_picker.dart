@@ -110,14 +110,19 @@ class SessionModelPicker extends StatelessWidget {
       tooltip: tooltip,
       menuWidth: 260,
       searchPlaceholder: l10n.modelsSearch,
-      footer: switch (SettingsOpener.maybeOf(context)) {
-        final open? => (
-          label: l10n.modelsManage,
-          icon: Icons.tune_rounded,
-          onTap: () => open(SettingsSection.models),
-        ),
-        null => null,
-      },
+      // A long provider list opens on the one chosen; the rest wait
+      // collapsed. Claude's few groups keep their own face.
+      startCollapsed: session.kernel.id == 'thincoder',
+      footer: session.kernel.id == 'thincoder'
+          ? null
+          : switch (SettingsOpener.maybeOf(context)) {
+              final open? => (
+                label: l10n.modelsManage,
+                icon: Icons.tune_rounded,
+                onTap: () => open(SettingsSection.models),
+              ),
+              null => null,
+            },
       tapRegionGroupId: tapRegionGroupId,
       focusNode: focusNode,
       onSelected: (option) =>

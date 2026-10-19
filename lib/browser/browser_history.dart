@@ -532,7 +532,7 @@ DateTime? _historyTime(String? text, DateTime now) {
   return DateTime.tryParse(text.trim());
 }
 
-final _historyTool = ClaudeSdkTool(
+final _historyTool = HostTool(
   name: 'browser_history',
   description:
       'What happened in the tabs shared with BaoCode, kept as it happened '

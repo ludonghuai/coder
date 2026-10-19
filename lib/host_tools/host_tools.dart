@@ -1,18 +1,20 @@
-// Tools of the app's own an agent can call: an MCP server that lives in
-// the app rather than in a process of its own (Claude Code's "SDK"
-// servers). Claude Code is told of it at launch (`--mcp-config`, type
-// `sdk`) and as it is initialized (`sdkMcpServers`), and sends what it
-// says to it as control requests (`mcp_message`), whose answers go back
-// the same way.
+// Tools of the app's own that an agent can call: an MCP server that lives
+// in the app rather than in a process of its own. Claude Code is told of
+// it at launch (`--mcp-config`, type `sdk`) and as it is initialized
+// (`sdkMcpServers`), and sends what it says to it as control requests
+// (`mcp_message`), whose answers go back the same way.
+//
+// The registry belongs to the app, not to one kernel: its name says what
+// it is, so the same tools serve every kernel that reaches them.
 
 import 'dart:async';
 
-import '../../chat/chat_models.dart' show ToolCallItem, ToolKind;
+import '../chat/chat_models.dart' show ToolCallItem, ToolKind;
 
 /// Where a tool is called from: the agent's working directory (its
 /// project's path, as the workspace has it) and its session.
-class ClaudeSdkCall {
-  const ClaudeSdkCall({
+class HostToolCall {
+  const HostToolCall({
     required this.cwd,
     this.sessionId,
     this.cancelled,
@@ -35,8 +37,8 @@ class ClaudeSdkCall {
 /// One tool: its name, what it does and the JSON schema of its input, for
 /// the model; [run] answers a call with text, or MCP content blocks (a
 /// list of them: text, an image), or throws to say it failed.
-class ClaudeSdkTool {
-  const ClaudeSdkTool({
+class HostTool {
+  const HostTool({
     required this.name,
     required this.description,
     required this.inputSchema,
@@ -45,12 +47,14 @@ class ClaudeSdkTool {
     this.summary,
     this.files,
     this.alwaysLoad = false,
+    this.group = '',
+    this.picturesOnly = false,
   });
 
   final String name;
   final String description;
   final Map<String, Object?> inputSchema;
-  final Future<Object> Function(Map<String, Object?> input, ClaudeSdkCall call)
+  final Future<Object> Function(Map<String, Object?> input, HostToolCall call)
   run;
 
   /// The step a call is in the conversation; else any MCP tool's.
@@ -69,6 +73,14 @@ class ClaudeSdkTool {
   /// search (where it would see only its name): for a tool it should think
   /// of unprompted.
   final bool alwaysLoad;
+
+  /// The group of tools it belongs to (`'browser'`, `'images'`): a server
+  /// that exposes one group alone gives only its tools.
+  final String group;
+
+  /// Whether its answer is pictures alone: a client whose protocol cannot
+  /// carry them (ACP's MCP face, §12-1) is not given it.
+  final bool picturesOnly;
 }
 
 /// An image as MCP content, for a tool's answer.
@@ -85,19 +97,35 @@ Map<String, Object?> claudeSdkText(String text) => {
 };
 
 /// The app's server and its tools (registered as their features start).
-abstract final class ClaudeSdkTools {
+abstract final class HostTools {
   /// The server's name: its tools are `mcp__baocode__<name>` to the agent.
   static const server = 'baocode';
 
-  static final Map<String, ClaudeSdkTool> _tools = {};
+  static final Map<String, HostTool> _tools = {};
 
   /// The calls under way, by their session and request's id (each
   /// session counts its own): to cancel them.
   static final Map<(String?, Object), Completer<void>> _calls = {};
 
-  static void register(ClaudeSdkTool tool) => _tools[tool.name] = tool;
+  static void register(HostTool tool) => _tools[tool.name] = tool;
 
   static void unregister(String name) => _tools.remove(name);
+
+  /// The tools in [group], in the order they were registered: what a
+  /// server exposing that group alone gives.
+  static List<HostTool> byGroup(String group) => [
+    for (final tool in _tools.values)
+      if (tool.group == group) tool,
+  ];
+
+  /// Whether any tool is in one of [groups]: a server exposing those has
+  /// something to give.
+  static bool anyIn(Set<String> groups) =>
+      _tools.values.any((tool) => groups.contains(tool.group));
+
+  /// The tool [name], as the registry keys it (no `mcp__baocode__`
+  /// prefix): a call's card, from the tool it answers.
+  static HostTool? lookup(String name) => _tools[name];
 
   /// What each feature tells the agent of its tools, by feature: the
   /// server's instructions, in the agent's system prompt.
@@ -111,12 +139,18 @@ abstract final class ClaudeSdkTools {
 
   /// The tool an agent calls [name] (`mcp__baocode__<name>`), if one of
   /// this server's.
-  static ClaudeSdkTool? called(String name) {
+  static HostTool? called(String name) {
     const prefix = 'mcp__${server}__';
     return name.startsWith(prefix)
         ? _tools[name.substring(prefix.length)]
         : null;
   }
+
+  /// The tool an ACP agent names [name] (`baocode_<name>`), if one of this
+  /// server's: the MCP face's naming.
+  static HostTool? named(String name) => name.startsWith('${server}_')
+      ? _tools[name.substring(server.length + 1)]
+      : null;
 
   /// Whether there is any tool: the server is only given then.
   static bool get any => _tools.isNotEmpty;
@@ -127,7 +161,7 @@ abstract final class ClaudeSdkTools {
   /// The answer to [message] (JSON-RPC) for the server.
   static Future<Map<String, Object?>> handle(
     Map<String, Object?> message,
-    ClaudeSdkCall call,
+    HostToolCall call,
   ) async {
     final id = message['id'];
     final params = (message['params'] as Map?)?.cast<String, Object?>() ?? {};
@@ -181,7 +215,7 @@ abstract final class ClaudeSdkTools {
         try {
           final answer = await tool.run(
             input,
-            ClaudeSdkCall(
+            HostToolCall(
               cwd: call.cwd,
               sessionId: call.sessionId,
               cancelled: cancel.future,

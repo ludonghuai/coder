@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import '../../chat/chat_models.dart';
 import '../../chat/composer/paste_store.dart';
 import '../../chat/composer/remote_drops.dart';
+import '../../host_tools/host_tools.dart';
 import '../../models/launch_environment.dart';
 import '../../models/model_icons.dart';
 import '../../models/model_provider.dart';
@@ -28,7 +29,6 @@ import 'claude_code_transport.dart';
 import 'claude_code_translator.dart';
 import 'claude_elicitation.dart';
 import 'claude_goal.dart';
-import 'claude_sdk_tools.dart';
 import 'turn_stats.dart';
 import 'control_channel.dart';
 
@@ -509,7 +509,7 @@ class ClaudeCodeKernel
       _launchedProvider = _providerKey;
       _launchedWindow = _autocompact;
       _launchedSuggestions = PromptSuggestions.current();
-      final sdkServers = ClaudeSdkTools.servers;
+      final sdkServers = HostTools.servers;
       final transport = await _start(
         ClaudeLaunch(
           cwd: _cwd,
@@ -985,7 +985,7 @@ class ClaudeCodeKernel
   }
 
   /// Completes as the turn's calls of the app's own tools are given up
-  /// (see [ClaudeSdkCall.cancelled]): a turn stopped, the session ended.
+  /// (see [HostToolCall.cancelled]): a turn stopped, the session ended.
   var _sdkCallsCancelled = Completer<void>();
 
   void _cancelSdkCalls() {
@@ -1679,16 +1679,16 @@ class ClaudeCodeKernel
   }
 
   /// What the agent says to one of the app's own MCP servers (see
-  /// claude_sdk_tools.dart), answered.
+  /// host_tools.dart), answered.
   Future<void> _mcpMessage(String id, Map<String, Object?> request) async {
     final message = (request['message'] as Map?)?.cast<String, Object?>();
-    if (request['server_name'] != ClaudeSdkTools.server || message == null) {
+    if (request['server_name'] != HostTools.server || message == null) {
       _control?.refuse(id, 'No such server');
       return;
     }
-    final response = await ClaudeSdkTools.handle(
+    final response = await HostTools.handle(
       message,
-      ClaudeSdkCall(
+      HostToolCall(
         cwd: _cwd,
         sessionId: _sessionId,
         cancelled: _sdkCallsCancelled.future,

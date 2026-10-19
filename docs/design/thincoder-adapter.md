@@ -97,9 +97,9 @@ class ThincoderLaunch { final String cwd; final String executable; final Map<Str
 | 方法 | params | 结果 / 通知 |
 |---|---|---|
 | `initialize` | `{protocolVersion: 1, clientCapabilities: {}}` | `{protocolVersion, agentCapabilities, authMethods, agentInfo{name,version}}`（`client-caps.mjs:46-64`） |
-| `session/new` | `{cwd, mcpServers: []}` | `{sessionId, configOptions}`（`handlers-session.mjs:163-243`） |
-| `session/load` | `{sessionId}` | `{configOptions}`；**之前**逐条重放历史通知（`handlers-slots.mjs:64-138`） |
-| `session/resume` | `{sessionId}` | `{configOptions}`；不重放（`handlers-slots.mjs:140-197`） |
+| `session/new` | `{cwd, mcpServers（过门才带）}` | `{sessionId, configOptions}`（`handlers-session.mjs:163-243`） |
+| `session/load` | `{sessionId, cwd, mcpServers（过门才带）}` | `{configOptions}`；**之前**逐条重放历史通知（`handlers-slots.mjs:64-138`） |
+| `session/resume` | `{sessionId, cwd, mcpServers（过门才带）}` | `{configOptions}`；不重放（`handlers-slots.mjs:140-197`） |
 | `session/list` | `{}` | `{sessions: [{sessionId, cwd, updatedAt?, title?}]}`（`handlers-slots.mjs:42-61`） |
 | `session/delete` | `{sessionId}` | `{}`（`handlers-slots.mjs:199-223`） |
 | `session/prompt` | `{sessionId, prompt: [{type:'text', text}]}` | `{stopReason: 'end_turn' \| 'cancelled'}`（`handlers-session.mjs:245-263`） |
@@ -252,6 +252,9 @@ class ThincoderLaunch { final String cwd; final String executable; final Map<Str
 - `usage_update{used,size}` → `UsageReported`；`ReportsContext.contextWindow` 在首个回报之前用 128 000（thincoder 未知模型兜底值，`bridge.mjs:252`；非虚构），此后以回报为准（`chat_session.dart:419-423` 取 transcript 的最近回报）。
 - 模型/供应商配置只读：桌面不写 `~/.thincoder/config.json`、不改 provider/key（B3）。
 
+**宿主工具通道（`host-tool-channel` 批；非 `AgentKernel` 能力面）**：`initialize` 回包的 `agentCapabilities.mcpCapabilities.http` 为真、且暴露组内有已注册工具时，内核在 `session/new` / `session/load` / `session/resume` 的 `mcpServers` 里带本机环回 MCP server（过门才带该键，不带空数组；线形见 §3.4）。
+server 由 `HostMcpServer` 签发（127.0.0.1 系统选端口 + 每会话 Bearer 令牌，不落盘、不进 URL），`_teardown` 撤销；工具免审以 `_meta["baocode.dev/trusted"]` 信任位表达，由 CLI 侧消费（转发与信任位属对端仓轮，不在本档机制面）。需求面 = `docs/requirements/host-tool-channel.md`。
+
 ---
 
 ## 5. 受影响文件清单（E2）
@@ -296,6 +299,8 @@ class ThincoderLaunch { final String cwd; final String executable; final Map<Str
 | ⑧ | `lib/settings/app_settings.dart:58/95/140` · `lib/main.dart:338` | 透传 `thincoderStatus`（读 `thincoder.path` 的回调同 `main.dart:154-155` 追加一行） | ⑦ 的数据来源，照 `claudeStatus` 形 |
 | ⑨ | `lib/kernel/mock/mock_kernels.dart:24-32` | 新增 `MockKernels.thincoder`，**不进 `all`** | 测试直用；`all` 不动（D18） |
 | ⑩ | `lib/platform/data_dir.dart:86-87` 注释 | 注册表文件名清单加 `thincoder` | 文档一行；登记表出现新类别 |
+| ⑪ | `lib/kernel/thincoder/thincoder_kernel.dart`（现 1195；本批 +39） | 宿主工具通道接线：`_handshake` 记 `mcpCapabilities.http`（`:383`）；`_hostMcpServers()` 门 = `_httpMcp && HostTools.anyIn(exposedGroups)`（`:264`），过门才 `ensure()` + `issue()`（`:266`）；`session/new|load|resume` 带 `mcpServers`（`:356` / `:325`）；`_teardown` 撤令牌（`:405`） | 通道不走 `AgentKernel` 能力接口：内核按握手能力位向 CLI 提供环回 MCP server（宿主设计档 §7.1 ⑭） |
+| ⑫ | `lib/kernel/thincoder/thincoder_events.dart`（现 799；本批 +14） | 宿主工具卡：`_tool` 的 `default` 分支经 `HostTools.named(title)` 还原 `kind` / `summary`，保留 `tool` / `input`（`:403-410`）；非宿主工具仍为 `other` 卡 | 可见面按注册表还原为宿主工具的既有卡形（宿主设计档 D10 / §7.1 ⑮） |
 
 （`lib/kernel/claude_code/**` 零改动；`thincoder/**` 在本仓零改动——B1；thincoder 侧的接口例外见 §16.1。）批 4 的改动点见 §15.4（同为最小接线点集）；批 5 的改动面见 §16.4（本仓测试面 + out-of-repo 档）；批 6 见 §17.4（本仓适配层两面 + 宿主 1 档 composer 开关 + 两处测试面）；批 8 见 §19.4（本仓 2 档（kernel + events）+ 固件 / 测试面；thincoder 侧 = out-of-repo 档）。
 
@@ -316,8 +321,12 @@ class ThincoderLaunch { final String cwd; final String executable; final Map<Str
 - `chat_session.dart`（1087 行）处 >800 行硬顶之上：**本批不动结构**（只走接线 ③）；拆分缝候选 = Facets（`:329`）/ Projections（`:510`）/ Commands（`:920`）段（段头注释即缝）；触发 = 独立拆分批立项。
 - `chat_screen.dart`（1231 行）处 >800 行硬顶之上：**批 4 不动结构**（只走接线 ⑬，1 行改动 / 净增 0）；拆分缝候选 = `_ChatScreenState`（`:182`）之后的私有构件族（`:903`–`:1231`：标题栏布局 / 会话列渲染 / 底部切换 / 历史载入 / 面板槽）；触发 = 独立拆分批立项。
 - `workspace.dart`（2795 行）处 >800 行硬顶之上：**本批不动结构**（只走接线 ④⑤；⑤ = `load()` 回路内改造 + `_listKept` 参数化，不新增文件、不拆类）；拆分缝候选 = The IDE's windows（`:727`）/ SSH hosts（`:1281`）/ Color theme（`:1858`）段（段头注释即缝）；触发 = 独立拆分批立项。
-- `thincoder_kernel.dart`：>800 行触发已执行——拆分前实测 1168 行 ⇒ 拆出 `thincoder_events.dart`（§3.6 事件翻译段，外部形态不变）；残余 899 行（2026-10-16 只读实测，`wc -l`）仍处 >800 线上：**续拆裁定 = 不续拆**（同其他 >800 行既有档：本批不动结构）；
+- `thincoder_kernel.dart`：>800 行触发已执行——拆分前实测 1168 行 ⇒ 拆出 `thincoder_events.dart`（§3.6 事件翻译段，外部形态不变）；现 1195 行（2026-10-18 实测）仍处 >800 线上：**续拆裁定 = 不续拆**（同其他 >800 行既有档）；本批 = 行级接线（能力门 / 三处请求 / 撤令牌，+39）⇒ 不触发拆分；
 下一缝候选 = 选择面段（`_Choice` / `_ModelSetting` + mode/model/effort）；触发 = 独立拆分批立项（或下次触碰该档时顺拆——「触碰」按结构级改动计；行级接线不计，如批 4 +3，见 §15.4）。
+- `thincoder_events.dart`（799，2026-10-18 实测）：仍 <800 硬顶 ⇒ 不入 >800 名单（既有口径）；本批 = 宿主工具卡的行级接线（+14 ⇒ 798，其后另批 +1），不动结构。
+- `test/kernel/thincoder_kernel_test.dart`（2846，2026-10-18 实测）：在 >800 名单；本批只加用例（+211 ⇒ 2840，其后另批 +6），不动结构，缝候选沿用 §15.4 的四组拆法。
+
+**实施读数（`host-tool-channel` 批，2026-10-18）**：`lib/kernel/thincoder/thincoder_kernel.dart` 1156 → 1195（+39，上界 ≤1196）· `lib/kernel/thincoder/thincoder_events.dart` 784 → 798（+14，上界 ≤798；现 799 的 +1 属其后另批）· `test/kernel/thincoder_kernel_test.dart` 2629 → 2840（+211，超估算 +140，估算非上界），其后另批 +6 ⇒ 2846。
 
 ---
 
@@ -1156,7 +1165,7 @@ console.log(JSON.stringify(seen, null, 1))
 
 ### 17.3 F14 · 模型清单与思考档位
 
-一句话：`configOptions.model.options[]` 从「当前一项」改为**运行期清单投影**（各渠道拉 `GET /models`，去重后 `provider:model`）；思考在布尔面之外**并行**投影一个档位面 `thinkingLevel`（select）。桌面：模型面**零改动**（既有 `model` 面就按 `options[]` 渲染，`thincoder_kernel.dart:693-697` + `thincoder_events.dart:179-188`）；档位面给 `effort` 加一条读取分支。
+一句话：`configOptions.model.options[]` 从「当前一项」改为**运行期清单投影**（各渠道拉 `GET /models`，去重后 `provider:model`）；思考在布尔面之外**并行**投影一个档位面 `thinkingLevel`（select）。桌面：模型面**不再零改动**（2026-10-18 轻渠道轮起按供应商分组 + 默认只展开当前组 + thincoder 隐藏「管理模型」页脚，批次档 #70；新增 `lib/kernel/thincoder/thincoder_options.dart`；原「按 `options[]` 渲染」的接线不变）；档位面给 `effort` 加一条读取分支。
 
 **① CLI 侧：模型清单（`sessionConfigOptions` 是同步的 ⇒ 缓存 + 预取，不在投影里拉网络）**
 
@@ -1164,7 +1173,7 @@ console.log(JSON.stringify(seen, null, 1))
 - 拉取时机 = **会话建好之后后台一次**（`defaultCreateSession` 里 fire-and-forget，`acp.mjs:81-84`）；落地后以 `config_option_update`（全量数组）推给客户端 ⇒ 桌面走既有路径刷新。**会话启动不等网络**（10s/渠道的上界不进首包）。被否：在 `sessionConfigOptions` 里拉（它是同步函数，且被四处响应 + 两处通知同源调用）。
 - 三路会话同经该装配：`acp.mjs:100` 的缺省 `createSession` → `:116` 的 ctx 包装 → `handlers-session.mjs:195`（`session/new`）· `handlers-slots.mjs:99`（`session/load`）· `:169`（`session/resume`）⇒ 清单投影三路一致；注入式 `createSession` 的测试路径不经过（零网络）。
 - 落地判据（fire-and-forget 的存活面，登记 §14-20）：落地时会话仍在册且仍是同一实例（`liveSession(id)?.agent === agent`，`acp.mjs` 把 `sessions` 的查取回调传进装配）——已关 / 已被 load·resume 替换 ⇒ 丢弃；`notify` 抛出（管道已断）⇒ 吞掉并记一行日志，不重试、不抛。
-- 清单来源 = `agent.config.providers`（**不是** `agent.providers`——后者是 TUI 会话字段，ACP 装配不设它；`cmd-config.mjs:76` / `make-agent.mjs:31-51`）。
+- 清单来源 = `agent.providers`（核装配对所有端统一设置：`thincoder-core/agent/assemble.mjs:106-107`；`agent.config.providersList` 同源）；按终端口径过滤 `isDerivedProviderHidden`（`tui/provider-admin.mjs:26`）。
 - 每渠道：`getProviderModels(p, {signal: AbortSignal.timeout(10_000)})` + `dedupeModels`——**复用终端同一份实现**（`thincoder-cli/src/tui/model-catalog.mjs:38-47` 60s 缓存、失败不缓存；`:81-89` 按系列去重排序）⇒ 与终端 `/model` 同一取舍。各渠道并发拉；单个失败只记日志、不参与投影。
 - 投影规则：`options` = 各渠道清单按 `config.providers` 序拼 `provider:model`；**当前会话的 `provider:model` 必在表内**（不在就补一条，防「拉不到 ⇒ 选不到自己」）。
 - 失败面 = 拿不到的渠道只报当前项：整表为空（全失败 / 未配置）⇒ 退回今天的一项。

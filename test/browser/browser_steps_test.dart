@@ -2,8 +2,8 @@ import 'dart:convert';
 
 import 'package:baocode/browser/browser_steps.dart';
 import 'package:baocode/chat/chat_models.dart';
+import 'package:baocode/host_tools/host_tools.dart';
 import 'package:baocode/kernel/claude_code/claude_code_translator.dart';
-import 'package:baocode/kernel/claude_code/claude_sdk_tools.dart';
 import 'package:baocode/kernel/transcript.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -33,8 +33,8 @@ void main() {
   group('a call of a browser tool', () {
     setUp(() {
       for (final name in ['browser_click', 'browser_screenshot']) {
-        ClaudeSdkTools.register(
-          ClaudeSdkTool(
+        HostTools.register(
+          HostTool(
             name: name,
             description: '',
             inputSchema: const {},
@@ -46,8 +46,8 @@ void main() {
       }
     });
     tearDown(() {
-      ClaudeSdkTools.unregister('browser_click');
-      ClaudeSdkTools.unregister('browser_screenshot');
+      HostTools.unregister('browser_click');
+      HostTools.unregister('browser_screenshot');
     });
 
     late Transcript transcript;

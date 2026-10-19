@@ -28,6 +28,7 @@ class ThincoderMock implements ThincoderTransport {
     this.models,
     this.thinkingLevels,
     this.configError = false,
+    this.httpMcp = false,
   }) : turn = turn ?? defaultTurn,
        replay = replay ?? defaultReplay;
 
@@ -68,6 +69,10 @@ class ThincoderMock implements ThincoderTransport {
 
   /// Answers config writes with `-32602` (T59 / T60).
   final bool configError;
+
+  /// Says its handshake takes HTTP MCP servers (`mcpCapabilities`), as the
+  /// CLI with the forwarding face does.
+  final bool httpMcp;
 
   /// Answers `session/prompt` with `-32603`: a turn that failed (T67③).
   bool promptError = false;
@@ -218,6 +223,7 @@ class ThincoderMock implements ThincoderTransport {
         _respond(id, {
           'protocolVersion': 1,
           'agentCapabilities': {
+            if (httpMcp) 'mcpCapabilities': {'http': true, 'sse': true},
             'loadSession': true,
             'promptCapabilities': {
               'image': false,

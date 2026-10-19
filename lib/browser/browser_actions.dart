@@ -49,7 +49,7 @@ const _screenshotProperty = {
 };
 
 final _actionTools = [
-  ClaudeSdkTool(
+  HostTool(
     name: 'browser_snapshot',
     description:
         "Reads a shared tab's page: its title, URL, the elements you can "
@@ -88,7 +88,7 @@ final _actionTools = [
       ].join('\n');
     },
   ),
-  ClaudeSdkTool(
+  HostTool(
     name: 'browser_screenshot',
     description:
         'Takes a picture of what a shared tab shows (CSS pixels, as x and y '
@@ -102,6 +102,7 @@ final _actionTools = [
       },
       'required': ['tabId'],
     },
+    picturesOnly: true,
     run: (input, call) async {
       final browser = BrowserTools._browser();
       final tabId = input['tabId'] as int;
@@ -119,7 +120,7 @@ final _actionTools = [
       return [await BrowserTools.screenshot(browser, tabId)];
     },
   ),
-  ClaudeSdkTool(
+  HostTool(
     name: 'browser_click',
     description:
         'Clicks an element of a shared tab, by ref or by its words (text, '
@@ -139,7 +140,7 @@ final _actionTools = [
       {...input, 'action': 'click'},
     ]),
   ),
-  ClaudeSdkTool(
+  HostTool(
     name: 'browser_type',
     description:
         'Types text into a shared tab: into an element (by ref, or text, '
@@ -163,7 +164,7 @@ final _actionTools = [
       {...input, 'action': 'type'},
     ]),
   ),
-  ClaudeSdkTool(
+  HostTool(
     name: 'browser_press',
     description:
         'Presses a key in a shared tab: Enter, Tab, Escape, Backspace, '
@@ -183,7 +184,7 @@ final _actionTools = [
       {...input, 'action': 'press'},
     ]),
   ),
-  ClaudeSdkTool(
+  HostTool(
     name: 'browser_scroll',
     description:
         'Scrolls a shared tab: by deltaY (down positive) and deltaX CSS '
@@ -205,7 +206,7 @@ final _actionTools = [
       {...input, 'action': 'scroll'},
     ]),
   ),
-  ClaudeSdkTool(
+  HostTool(
     name: 'browser_act',
     description:
         'Does several actions in a shared tab, one after the other, as '

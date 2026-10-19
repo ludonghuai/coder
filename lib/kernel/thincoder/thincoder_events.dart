@@ -3,9 +3,11 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../chat/chat_models.dart';
+import '../../host_tools/host_tools.dart';
 import '../../platform/event_log.dart';
 import '../kernel_event.dart';
 import '../kernel_types.dart';
+import 'thincoder_options.dart';
 
 /// Where the translation puts what it makes: the kernel, which holds the
 /// item space and the sequence numbers.
@@ -185,11 +187,11 @@ class ThincoderEvents {
   List<KernelOption> optionsOf(String id, IconData Function(String) icon) => [
     for (final option in (configOf(id)?['options'] as List? ?? const []))
       if (option is Map && option['value'] is String)
-        KernelOption(
+        thincoderOption(
+          id,
           '${option['value']}',
           '${option['name'] ?? option['value']}',
-          icon('${option['value']}'),
-          '',
+          icon,
         ),
   ];
 
@@ -338,6 +340,8 @@ class ThincoderEvents {
         :final path,
         :final results,
         :final label,
+        :final tool,
+        :final input,
       ) =>
         ToolCallItem(
           kind: kind,
@@ -346,6 +350,8 @@ class ThincoderEvents {
           path: path,
           results: results,
           label: label,
+          tool: tool,
+          input: input,
           status: failed ? ToolStatus.failed : ToolStatus.succeeded,
           output: output,
         ),
@@ -394,6 +400,15 @@ class ThincoderEvents {
           status: ToolStatus.running,
         );
       default:
+        if (HostTools.named(title) case final tool?) {
+          return ToolCallItem(
+            kind: tool.kind ?? ToolKind.other,
+            tool: tool.name,
+            input: raw,
+            target: tool.summary?.call(raw, null) ?? title,
+            status: ToolStatus.running,
+          );
+        }
         return ToolCallItem(
           kind: ToolKind.other,
           label: title,

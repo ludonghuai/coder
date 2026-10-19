@@ -34,6 +34,7 @@ void main() {
     WidgetTester tester,
     List<KernelOption> options, {
     bool footer = true,
+    bool startCollapsed = false,
     KernelOption? selected,
     List<ModelSettingChoice> Function(KernelOption option)? settingsOf,
   }) async {
@@ -57,6 +58,7 @@ void main() {
                 selected: selected ?? options.first,
                 focusNode: focus,
                 searchPlaceholder: 'Search models',
+                startCollapsed: startCollapsed,
                 settingsOf: settingsOf,
                 footer: footer
                     ? (
@@ -638,6 +640,35 @@ void main() {
     expect(find.text('Model 0'), findsOneWidget);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pump();
+    await tester.tap(find.text('Gateway'));
+    await tester.pump();
+    expect(find.text('Model 0'), findsOneWidget);
+  });
+
+  testWidgets('startCollapsed: the chosen group alone is open', (tester) async {
+    await pump(tester, [
+      _option('default', 'Default', _builtin),
+      _option('@gw/m0', 'Model 0', _gateway),
+    ], startCollapsed: true);
+    await open(tester, 'Default');
+    expect(find.text('Model 0'), findsNothing);
+    expect(find.text('Gateway'), findsOneWidget);
+    await tester.tap(find.text('Gateway'));
+    await tester.pump();
+    expect(find.text('Model 0'), findsOneWidget);
+  });
+
+  testWidgets('startCollapsed: a group reported after the picker was made '
+      'waits collapsed too', (tester) async {
+    await pump(tester, [_option('default', 'Default', _builtin)],
+        startCollapsed: true);
+    expect(find.byType(ComposerPicker), findsOneWidget);
+    await pump(tester, [
+      _option('default', 'Default', _builtin),
+      _option('@gw/m0', 'Model 0', _gateway),
+    ], startCollapsed: true);
+    await open(tester, 'Default');
+    expect(find.text('Model 0'), findsNothing);
     await tester.tap(find.text('Gateway'));
     await tester.pump();
     expect(find.text('Model 0'), findsOneWidget);
