@@ -1413,8 +1413,15 @@ class _SectionBar extends StatelessWidget {
   /// How many files Git has changed.
   final int changes;
 
-  /// The list's toggle and the close button, at the right.
-  static const _actionsWidth = 2 * 22.0 + 2 + 6;
+  /// The actions at the right: the move button, the list's toggle (not on
+  /// the plan's page), and the close button.
+  static const _actionsWidth = 3 * 22.0 + 2 * 2 + 6;
+
+  /// The actions' width with [shown]: the plan's page has no list toggle.
+  static double _actionsWidthFor(SidePanelSection shown) =>
+      shown == SidePanelSection.plan
+      ? _actionsWidth - (22.0 + 2)
+      : _actionsWidth;
 
   /// The pages there: the browser's once one of the user's has connected,
   /// the plan's once there is one.
@@ -1486,7 +1493,7 @@ class _SectionBar extends StatelessWidget {
                     SidePanelSection.changes: changes,
                     SidePanelSection.terminal: running,
                   }) +
-                  _actionsWidth;
+                  _actionsWidthFor(shown);
           return Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
