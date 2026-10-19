@@ -3,7 +3,7 @@
 > 编制：主 agent · 2026-10-18 · 来源 = 用户 2026-10-18 07:41「好，开合并分支」+ 07:44「A」；输入 = origin/main 24 个提交（release 1.3.0）与本地 15 个提交在 merge/upstream-1.3.0 上的两处冲突。
 > 台账 = #52（chat-streaming · 归批）。前情 = 无（独立批）。
 ## §1 讨论（主 agent）
-**状态行**：进行中（评审 pass，13 条已逐条落档；待用户批准）
+**状态行**：已收口 2026-10-18（merge commit 9656d20d 落 merge/upstream-1.3.0；main 未动）
 
 ## 讨论与定界（2026-10-18）
 
@@ -420,3 +420,13 @@ VERDICT: pass
 - 进 merge commit：两冲突档 + A4 所在测试档 + 本批次档 + `docs/design/chat-streaming.md`（§13 与两处事实更正）。
 - 不进：`pubspec.lock`（镜像 URL 翻转）· `docs/requirements/thincoder-adapter.md` · 未跟踪文档。
 - `main` 仍 `66133c97`，合并只落 `merge/upstream-1.3.0`。
+
+## 结算（2026-10-18 · 已收口）
+
+- **合并已落地**：`9656d20d`（merge commit，184 文件 / +31991 −501），落 `merge/upstream-1.3.0`；**`main` 仍 `66133c97`**，是否快进由用户定。
+- **冲突**：两处全部并集（`_refold` 合成 + `main.dart` 双接线），块外零改动。
+- **新增**：A4 用例（外壳非 0 恰 1 帧 @37，实测）。
+- **口径**：A1 六类外壳 0/0 · `ChatItemView` 每增量 1 · 每增量 10 读（20/200 逐次相等）· markdown 30。
+- **评审**：设计 1 轮 pass（0 🔴 / 7 🟡 / 6 🔵，全处置）· 设计档已删「变更记录」节（2026-10-15 裁定）· A1 读数归因两处更正。
+- **台账**：**#52 核销**；新增 **#53**（其它档的变更记录清理，归批）。
+- **已知**：`test/chat/` 35 红为 Windows 路径分隔符既有类（抽验 `code_citation_test:97`）；全量 analyze 11 条全在上游文件；上游两条行为（换 feed 不清稳态、`_liveStart` 退化扫描）只报告未改。
