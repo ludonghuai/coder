@@ -32,6 +32,7 @@ import 'package:baocode/kernel/mock/mock_kernels.dart';
 import 'package:baocode/l10n/l10n.dart';
 import 'package:baocode/main.dart';
 import 'package:baocode/sidebar/sidebar.dart';
+import 'package:baocode/settings/settings_dialog.dart';
 import 'package:baocode/theme/app_theme.dart';
 import 'package:baocode/theme/codicons.dart';
 import 'package:baocode/workspace/workspace.dart';
@@ -141,6 +142,44 @@ Map<String, Object?> result(
 };
 
 void main() {
+  testWidgets('a thincoder session hides the models page footer; Claude keeps '
+      'it', (tester) async {
+    Future<void> pumpWithOpener(KernelDescriptor kernel) async {
+      final session = ChatSession(
+        kernel: kernel,
+        kernels: [MockKernels.claudeCode, MockKernels.thincoder],
+        historyCount: 0,
+      );
+      addTearDown(session.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildAppTheme(),
+          localizationsDelegates: const [FlutterQuillLocalizations.delegate],
+          home: SettingsOpener(
+            open: (_) {},
+            child: ChatScreen(key: UniqueKey(), session: session),
+          ),
+        ),
+      );
+      await tester.pump();
+    }
+
+    await pumpWithOpener(MockKernels.thincoder);
+    await tester.pump(const Duration(milliseconds: 300));
+    final picker = find.descendant(
+      of: find.byType(SessionModelPicker),
+      matching: find.byType(ComposerPicker),
+    );
+    tester.state<ComposerPickerState>(picker).toggle();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byIcon(Icons.tune_rounded), findsNothing);
+
+    await pumpWithOpener(MockKernels.claudeCode);
+    await tester.pump(const Duration(milliseconds: 300));
+    tester.state<ComposerPickerState>(picker).toggle();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byIcon(Icons.tune_rounded), findsOneWidget);
+  });
   testWidgets('messages sent while the agent works wait over the composer, '
       'to be taken back to edit, sent now or removed', (tester) async {
     final (:session, :cli) = await pumpScripted(

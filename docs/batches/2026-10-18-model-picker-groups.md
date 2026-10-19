@@ -3,7 +3,7 @@
 > 编制：主 agent · 2026-10-18 · 来源 = 用户 2026-10-18 21:00「就按照你说的做，不用显示api地址」。
 > 台账 = #70（thincoder-adapter · 归批）。前情 = 无（独立轻渠道轮）。
 ## §1 讨论（主 agent）
-**状态行**：🔄 进行中（…）
+**状态行**：已收口 2026-10-18
 <§1 模板占位：本批条目 / 关键判据 / 授权口径>
 
 ## 讨论与定界（2026-10-18 · 轻渠道轮）
@@ -52,6 +52,17 @@
 - 未补：页脚隐藏的 widget 测试（`SessionModelPicker` 需整套会话 harness；该分支只是一行条件，视觉已由用户截图获批）——若评审坚持再补 harness。
 - 设计档 §17.3 的「桌面模型面零改动」已改为现状（父侧小改，已标记）。
 
+### 修正轮 2（评审 round 2 后 · 2026-10-18）
+
+- 补上评审 must-fix：thincoder 会话的「管理模型」页脚隐藏断言，落 `test/kernel_ui_test.dart`（`a thincoder session hides the models page footer; Claude keeps it`）：thincoder 走 `MockKernels.thincoder` + `SettingsOpener`，菜单打开后无 `Icons.tune_rounded`；Claude 同形则恰有一处。读数：`flutter test test/kernel_ui_test.dart --plain-name "hides the models page footer"` → **1 passed**。
+- 该断言的 harness 要点（「harness 已在」成立，但路径有两处坑）：① mock 内核须显式进会话的 `kernels` 列表（`ChatSession(kernel: …, kernels: [MockKernels.claudeCode, MockKernels.thincoder])`），否则 `kernelChoice` 的 `kernels.indexOf(kernel)` 为 -1、ChatScreen 抛 RangeError；② 两次会话切换间 `ComposerPickerState` 会沿用（composer 的 GlobalKey）⇒ 第二次 `toggle()` 变成关闭；`ChatScreen(key: UniqueKey())` 每次新建状态即可。
+- 现状读数（修正轮后实测）：`thincoder_events.dart` **800** · `thincoder_options.dart` **29** · `composer_picker.dart` **1716** · `session_model_picker.dart` **170** · `thincoder_kernel_test.dart` **2859**（Pen 1 的 799 / 24 / 1699 / 2846 为修正轮前读数）。
+- Pen 1 第 39 行的「`initState` 只展开当前选项所在组」以修正轮 1 为准：`initState` 与 `didUpdateWidget` 两处、后到的组同样折叠。
+- 批次档状态行仍「进行中」= 轻渠道轮生命周期（收口链未跑完）；评审对象「已实现」指实现已落 —— 两者不矛盾。
+
+> 不适用：§2 —— 轻渠道轮（细节面 · 缺陷修复），形态与披露即设计，见本段 §1。
+> 不适用：§3 —— 轻渠道轮，设计评审并入代码评审（round 1–3，round 3 pass）。
+
 ## §2 批次任务与设计（eng-designer）
 **状态行**：（eng-designer 写入时更新）
 <§2 模板占位：本批条目（覆盖） / 设计档落点 / 机制设计 / 受影响文件与测试覆盖 / 验收对照 / 关键决策 / 上抛项>
@@ -64,3 +75,12 @@
 
 ## §5 实施记录（eng-coder）
 ## §6 验证与收口（父代理）
+
+## 验证与收口
+
+- **评审**：round 1（stale，发现可用）→ round 2（changes-required：页脚断言 + 读数滞后）→ round 3（**pass**：两条未决闭环；余两条 🔵 文档卫生）。
+- **验证读数**：`flutter test test/kernel_ui_test.dart --plain-name "hides the models page footer"` → 1 passed · 模型选择器三档（model_picker / thincoder_kernel / composer）→ 165 passed · `flutter analyze` 四档 → No issues。
+- **落地路径**：`lib/kernel/thincoder/thincoder_options.dart`（新）· `composer_picker.dart`（`_seenGroups` / `_collapseNewGroups`）· `session_model_picker.dart`（`startCollapsed` / `footer`）· `thincoder_events.dart`（`optionsOf` 委托）；测试 `model_picker_test.dart` / `thincoder_kernel_test.dart` / `kernel_ui_test.dart`。
+- **回滚**：revert 提交 c651f6c2 的相关文件 + 修正轮提交；无数据迁移、无配置迁移。
+- **台账**：#67、#70 核销（证据 = 本档 §6 + round 3 pass）。
+- **🔵 残留**：§1 状态行占位由本收口的「已收口」取代；§5 指针由本节承担（轻渠道轮实施记录在 §1）。
