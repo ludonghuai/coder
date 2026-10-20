@@ -8677,7 +8677,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get branchBarWorkspace => '各文件夹的分支';
 
   @override
-  String get settingsSectionAccounts => '账号';
+  String get settingsSectionAccounts => 'Git 账号';
 
   @override
   String get settingsAccountsKeywords =>
@@ -9035,7 +9035,7 @@ class AppLocalizationsZh extends AppLocalizations {
       '让 agent 用你自己的浏览器，沿用你的登录状态：在你共享给它的标签页里打开网页、读取内容、点击和输入。它的每一步操作都能在侧边栏里看到。';
 
   @override
-  String get browserSettingsUnsupported => '浏览器功能目前只支持 macOS 和 Windows。';
+  String get browserSettingsUnsupported => '浏览器功能只支持 macOS、Windows 和 Linux。';
 
   @override
   String get browserSettingsEnabled => '允许 agent 使用浏览器';
@@ -9060,6 +9060,13 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String get browserSettingsNotRunningDescription =>
       '打开装有 BaoCode 扩展的浏览器，会自动连接。';
+
+  @override
+  String get browserSettingsSandboxed => 'Snap 和 Flatpak 装的浏览器连不上';
+
+  @override
+  String get browserSettingsSandboxedDescription =>
+      '它们的沙箱不让 BaoCode 的辅助程序运行。请改用浏览器官方的 .deb 或 .rpm 安装包，例如从 google.com/chrome 下载 Google Chrome。';
 
   @override
   String browserSettingsConnected(String browser) {
@@ -9467,4 +9474,214 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get remoteFailUnreachable => '连不上服务器：请检查地址、端口和网络。';
+
+  @override
+  String get channelSetupTitle => '欢迎使用 BaoCode';
+
+  @override
+  String get channelSetupLead => '打开官网完成首次设置，大约 10 秒。';
+
+  @override
+  String get channelSetupStepTitle => '在浏览器中完成设置';
+
+  @override
+  String get channelSetupStep =>
+      'BaoCode 会在浏览器里打开 baocode.dev，网页显示完成后，这里会自动继续。';
+
+  @override
+  String get channelSetupWaitingTitle => '正在等待浏览器完成…';
+
+  @override
+  String get channelSetupWaiting => '网页显示完成后，这里会自动继续。不小心关掉了网页，可以重新打开。';
+
+  @override
+  String get channelSetupOffline => '连不上 baocode.dev，需要联网才能完成设置。';
+
+  @override
+  String get channelSetupRetry => '重试';
+
+  @override
+  String get channelSetupDoneTitle => '设置完成';
+
+  @override
+  String get channelSetupOpen => '在浏览器中完成设置';
+
+  @override
+  String get channelSetupOpenAgain => '重新打开网页';
+
+  @override
+  String get channelSetupNoResponse => '浏览器没反应？';
+
+  @override
+  String get channelSetupPasteLead => '网页上如果有一段链接，复制后粘贴到这里：';
+
+  @override
+  String get channelSetupPasteConfirm => '确定';
+
+  @override
+  String get channelSetupLinkInvalid => '这不是网页上的链接，请复制网页上显示的完整链接。';
+
+  @override
+  String get channelSetupLinkOther => '这个链接属于另一个 BaoCode（别的电脑或重装前的），请用这里打开的网页。';
+
+  @override
+  String get channelSetupTrouble => '遇到问题？';
+
+  @override
+  String get channelSetupOnceTitle => '只需一次';
+
+  @override
+  String get channelSetupOnce => '完成后不会再出现，更新后也不会。';
+
+  @override
+  String get channelSetupPrivateTitle => '不涉及个人信息';
+
+  @override
+  String get channelSetupPrivate => '网页只告诉 BaoCode 你是从哪里知道它的，比如某个视频或网站。';
+
+  @override
+  String get channelSetupFindingTitle => '正在读取渠道信息…';
+
+  @override
+  String get channelSetupFinding => '马上就好。';
+
+  @override
+  String get channelSetupSiteOfflineTitle => '连不上 baocode.dev';
+
+  @override
+  String get channelSetupSiteOffline => '需要联网读取渠道信息，请检查网络后重试。';
+
+  @override
+  String get channelSetupUnavailableTitle => '这个渠道暂时用不了';
+
+  @override
+  String get channelSetupUnavailable =>
+      '这份安装包对应的渠道还没有开通账号服务。如果你是从别的渠道下载的，去浏览器确认一下来源；否则请联系提供安装包的一方，或到 baocode.dev 下载普通版。';
+
+  @override
+  String get channelSetupConfirmAgain => '去浏览器确认';
+
+  @override
+  String channelWelcomeTitle(String channel) {
+    return '欢迎使用 $channel';
+  }
+
+  @override
+  String channelWelcomeText(String channel) {
+    return '登录你的 $channel 账号，就可以开始使用了。';
+  }
+
+  @override
+  String get channelWelcomeSignIn => '登录';
+
+  @override
+  String get channelWelcomeSigningIn => '请在弹出的窗口中登录…';
+
+  @override
+  String get channelWelcomePreparing => '正在准备…';
+
+  @override
+  String channelWelcomeFailed(String error) {
+    return '没能完成登录：$error';
+  }
+
+  @override
+  String get channelAccountTitle => '账号管理';
+
+  @override
+  String get channelAccountBalance => '余额';
+
+  @override
+  String get channelAccountRefresh => '刷新账户';
+
+  @override
+  String get channelAccountSignOut => '退出登录';
+
+  @override
+  String get channelAccountSignOutTitle => '退出登录？';
+
+  @override
+  String channelAccountSignOutDetail(String channel) {
+    return '退出后，需要重新登录 $channel 才能继续使用 BaoCode。';
+  }
+
+  @override
+  String get channelAccountOpenSite => '打开网站';
+
+  @override
+  String get channelAccountDefaultModel => '新对话默认模型';
+
+  @override
+  String get channelAccountNoModels => '正在使用的 Key 没有可用的模型。';
+
+  @override
+  String get channelAccountKeys => '我的 API Key';
+
+  @override
+  String get channelAccountCreateKey => '创建 Key';
+
+  @override
+  String get channelAccountKeyName => '名称';
+
+  @override
+  String get channelAccountKeyGroup => '分组';
+
+  @override
+  String get channelAccountUseKey => '使用此 Key';
+
+  @override
+  String get channelAccountInUse => '使用中';
+
+  @override
+  String get channelAccountNoKeys => '还没有 API Key。';
+
+  @override
+  String get channelAccountSignedOut => '还没有登录。';
+
+  @override
+  String get channelAccountUnavailable => '这个渠道暂时用不了，请联系提供安装包的一方。';
+
+  @override
+  String channelAccountFailed(String error) {
+    return '出错了：$error';
+  }
+
+  @override
+  String channelAccountBlocked(String site, String request) {
+    return '$site 拒绝了这台电脑的连接（$request），可能是当前网络或代理的 IP 被它的防火墙拦截了。换个网络，或让 $site 不走代理后再试。';
+  }
+
+  @override
+  String get settingsSectionAbout => '关于';
+
+  @override
+  String get aboutTagline => '好看又好用的 Claude Code 桌面应用，内置毫秒级响应的 IDE。';
+
+  @override
+  String aboutVersion(String version, int build) {
+    return '版本 $version（$build）';
+  }
+
+  @override
+  String aboutRepository(String repository) {
+    return '$repository · 免费开源，GPL-3.0 许可证';
+  }
+
+  @override
+  String get aboutWebsite => '官网';
+
+  @override
+  String get aboutChangelog => '更新日志';
+
+  @override
+  String get aboutChangelogDetail => '每个版本改了什么';
+
+  @override
+  String get aboutFeedback => '反馈问题';
+
+  @override
+  String get aboutFeedbackDetail => '在 GitHub 上提 issue，或者看看别人提过的';
+
+  @override
+  String get aboutOpen => '打开';
 }
