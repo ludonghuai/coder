@@ -18,6 +18,7 @@ import '../../theme/workbench_theme.dart' show WorkbenchColors, themeColors;
 import '../chat_keys.dart';
 import '../chat_models.dart';
 import '../chat_session.dart';
+import '../editor_context_setting.dart';
 import '../open_editor.dart';
 import '../floating/floating_layer.dart';
 import '../floating/floating_placement.dart';
@@ -33,6 +34,7 @@ import 'composer_images.dart';
 import 'composer_mock_data.dart';
 import 'composer_picker.dart';
 import 'composer_polish.dart';
+import 'editor_context_chip.dart';
 import 'pickers_row.dart';
 import 'session_model_picker.dart';
 import 'kernel_option_text.dart';
@@ -163,6 +165,11 @@ class ChatComposerState extends State<ChatComposer>
 
   /// Polish asked, its answer awaited (see [_polish]).
   bool _polishing = false;
+
+  /// The file open in the editor when taken off this draft (see
+  /// [EditorContextChip]): the next message carries none of it until the
+  /// editor moves.
+  OpenEditor? _dismissedEditor;
 
   /// Every image put in, by number, kept until sent: the text's references
   /// pick which go (see [_images]), so one taken out and brought back by
@@ -375,6 +382,7 @@ class ChatComposerState extends State<ChatComposer>
     _focusNode.addListener(_handleFocusChanged);
     widget.draft?.addListener(_handleDraftChanged);
     ComposerPolishSetting.changes?.addListener(_handleSettingsChanged);
+    EditorContextSetting.changes?.addListener(_handleSettingsChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _focusNode.requestFocus();
@@ -392,7 +400,8 @@ class ChatComposerState extends State<ChatComposer>
     }
   }
 
-  /// Settings → General's Polish button, turned on or off.
+  /// Settings → General's: the Polish button, and whether the file open in
+  /// the editor goes with each message.
   void _handleSettingsChanged() {
     if (mounted) setState(() {});
   }
@@ -401,6 +410,7 @@ class ChatComposerState extends State<ChatComposer>
   void dispose() {
     widget.draft?.removeListener(_handleDraftChanged);
     ComposerPolishSetting.changes?.removeListener(_handleSettingsChanged);
+    EditorContextSetting.changes?.removeListener(_handleSettingsChanged);
     FloatingRegistry.closePopover(_menuOwner);
     _clickWindow?.cancel();
     _controller.dispose();
@@ -1477,6 +1487,22 @@ class ChatComposerState extends State<ChatComposer>
     );
   }
 
+  /// The file open in the editor, as this draft carries it: none for a
+  /// kernel that does not take it, with the setting off, with no file open,
+  /// or when taken off this draft (the chip's ×).
+  OpenEditor? get _editorContext {
+    if (!widget.session.acceptsEditorContext) return null;
+    if (!EditorContextSetting.current()) return null;
+    final editor = widget.openEditor?.call();
+    return editor == _dismissedEditor ? null : editor;
+  }
+
+  /// Takes the file open in the editor off this draft; it comes back once
+  /// the editor moves.
+  void _dismissEditorContext() {
+    setState(() => _dismissedEditor = widget.openEditor?.call());
+  }
+
   /// The dock's composer shows a stop button while a turn runs; an editing
   /// composer can always submit (resending stops the running turn).
   bool get _showsStop =>
@@ -1492,8 +1518,14 @@ class ChatComposerState extends State<ChatComposer>
       onSubmit(message);
       return;
     }
-    widget.session.send(message, editor: widget.openEditor);
+    widget.session.send(
+      message,
+      editor: widget.openEditor,
+      // Taken off this draft: this message carries none of it.
+      editorContext: widget.openEditor?.call() != _dismissedEditor,
+    );
     _pool = {};
+    _dismissedEditor = null;
     _controller.clear();
     _leaveHistory();
     _saveDraft();
@@ -1582,6 +1614,17 @@ class ChatComposerState extends State<ChatComposer>
               images: _pool,
               child: _editor ??= _buildEditor(context),
             ),
+            if (_editorContext case final editor?)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 2),
+                child: Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: EditorContextChip(
+                    editor: editor.toContext(),
+                    onDismiss: _dismissEditorContext,
+                  ),
+                ),
+              ),
             _buildToolbar(),
           ],
         ),

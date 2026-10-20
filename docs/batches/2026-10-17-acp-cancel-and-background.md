@@ -3,7 +3,7 @@
 > 编制：主 agent · 2026-10-17 · 来源 = 独立评审（advisor reviewId f50d2068）🔴#1 + 两次真机探针复现 + 用户 2026-10-17 反馈「后台子代理曾被杀」。
 > 台账 = #25（thincoder-adapter · 归批）。前情 = 无（独立批）。
 ## §1 讨论（主 agent）
-**状态行**：进行中（暂缓 · 复核条件 = 用户回头处理 ACP 取消/后台帧时（设计已过评审、15 条修正已落地，待批准实现）；2026-10-17 用户裁定「先把 IDE 完善」）
+**状态行**：已收口 2026-10-19
 <§1 模板占位：本批条目 / 关键判据 / 授权口径>
 
 ## 讨论与定界（2026-10-17）
@@ -35,7 +35,7 @@
 - 评审 🟡#5（mock 保真度）与本批绑定：**没有串行档**，本轮修的取消路径测不出来。
 
 ## §2 批次任务与设计（eng-designer）
-**状态行**：设计完成（评审 1 轮 15 条已落——见「评审 1 轮落地」（2026-10-17））
+**状态行**：设计完成（autoApprove 窄豁免修正）
 <§2 模板占位：本批条目（覆盖） / 设计档落点 / 机制设计 / 受影响文件与测试覆盖 / 验收对照 / 关键决策 / 上抛项>
 
 ### 本批条目（覆盖）
@@ -175,6 +175,71 @@
 
 **行数口径补正**：上句「788 → 819」= 编辑器显示行；与「设计档落点」表同口径（`wc -l`）= **787 → 818**，本轮增量 +31 不变。
 
+### 修正轮 1 落地（2026-10-19 · 评审第 2 轮 1–9、11 全接受）
+
+设计档 = thincoder 仓 `docs/cli/design/ACP-CLIENT.md`（1118 → 1144 行，`wc -l` 实测）。逐号落点：
+
+- **#1** → §12.8 点名三个改动点：`suspension.mjs:110`（`done` 载荷 = `{ok, error}`）· `:139`（`submit` 以 `res.error` 拒绝，`TurnFailedError` 仅兜底）· `session.mjs:48-51`（窗关残余以 `AbortError` 形拒绝）；AC-A6-3 补「窗关残余逐条回 `cancelled`」断言。
+- **#2** → §3.2 新增 `window.ending` 置位判据（仅实际 abort：`cancel()` 仅 `inflight > 0`、`close()` 无条件）+ 与 AC-A6-4 的关系（空闲取消不改门控）。
+- **#3** → 坐标重钉：`handlers-session.mjs:390`（AbortError→cancelled）· `:404-421`（`session/close`）；§3.2 / §3.2.1 回指表 / §12.8 / N9 行同改。
+- **#4** → §3.2「closed 后存档跳过」标为改动点（`session.mjs:82`）+ 新增 **AC-A6-5**（注入计数 `save`：close 在飞时回合收尾后调用次数不增）。
+- **#5** → §3.5 恢复**逐文件受影响表**（13 行，`wc -l` 口径，2026-10-19 实测）；读数统一：`acp.mjs` **184**（原 160）· `handlers-session.mjs` **474**（原 465/475 之歧）· `handlers-slots.mjs` 241 · `client-caps.mjs` 88 · `read-data.mjs` 146；表注标明 §15.9 两张表 = F11 批日期化快照。
+- **#6** → `advisor-async.mjs` 实际增量 = **+2 语句（499 → 501，越 500）** ⇒ §3.5 给拆分计划：`dequeueAdvisor`（`:299-306`）与 `refreshAdvisorQueuedTokens`（`:311-322`）外提 `advisor-queue.mjs`（新档 ≈31 行），再导出保持公开面零变，拆后 ≈476；§12.9「落点（代码）」同步。
+- **#7** → §3.1 行为变化 ① 标为**有意接受** + **重启条件**（出现排队期取消需求 ⇒ 立批扩 cancel 语义）+ 新增 **AC-A6-6**（背靠背 / 排队期取消两条断言）。
+- **#8** → §3.2 顺序表述改为「**先落 `busy`、后换 controller**」（`session.mjs:112-114`，与实装一致；同步段内两序观察等价）。
+- **#9** → §12.9「`id` / `role` 域（防混读）」补 `role` 跨键语义（本键 = 评审类型；§12.2 = relay 角色名）。
+- **#11** → §3.1 补**批次级调查证据行**（沿用 §11.1 锁定基线；两条新增依赖均在其内；无新增相关公开源）。
+- #10 由父代理改需求档 R-A7.2（设计档零改）。
+
+**§2 上文更正（以本段为准）**：
+
+- 「受影响文件」表行数已过时 ⇒ 现行读数 = 设计档 §3.5 表（`wc -l`，2026-10-19 实测）。
+- 行级任务表 **#4** 的动作改为「先落 `busy`、后换 controller」（与设计档 §3.2 一致）。
+- 新增行：**#23** 核：advisor 拆档 —— 新建 `thincoder-core/agent-tools/advisor-queue.mjs`，`advisor-async.mjs` 再导出；判据 = 拆后 <500 且公开面零变；回指 R-A7.1。
+- 设计档行数：**675 → 1144**（上文「675 → 787」以本段实测为准）。
+
+**本轮机检读数（父侧可复跑）**：设计档 1144 行（`wc -l`）；行宽 0 命中（300 字符阈；`doc_check` 全域报 0 行宽命中，锚命中 597 条均为 thincoder 仓既有、本档零新增 ✗）。**零代码改动**。
+
+**坐标补正（同轮 · 以本段为准；行级任务表计数 = 23 行）**：下表行号均为 thincoder 仓 `wc -l` 口径下的现行行号（2026-10-19 实测）。
+
+- 行 #3（session：cancel 回合定向）：`session.mjs:138-142`。判据终形 = `closed` ⇒ 零动作 → `busy` ⇒ abort 当前 controller → 窗在且未收束 ⇒ `window.cancel()` → 其余 ⇒ 零动作。
+- 行 #4（session：回合收尾顺序）：`session.mjs:112-114`；动作 = **先落 `busy`、后换 controller**（与实装一致）。
+- 行 #5（session：执行器不取收束中的窗信号）：`session.mjs:69`（取信号点）。
+- 行 #6（session：`run()` 窗收束后走普通队列）：`session.mjs:129-137`；判据 = `window && !window.ended && !window.ending` 才 submit。
+- 行 #9（suspension：`done` 交回原始错误）：`suspension.mjs:110`（`done` 载荷）+ `:134-143`（`submit` 以 `res.error` 拒绝，`TurnFailedError` 兜底）。
+- 行 #10（session：窗内残余 = cancel 形）：`session.mjs:48-51`（`reason === "aborted"` 径逐条 `done({ok:false, error:<AbortError>})`）。
+- 行 #23（advisor 拆档 · 本轮新增）：新建 `thincoder-core/agent-tools/advisor-queue.mjs`（`dequeueAdvisor` / `refreshAdvisorQueuedTokens`），`advisor-async.mjs` 再导出；拆后 ≈476（<500），公开面零变。
+
+### 交付后坐标重钉（2026-10-19 · eng-designer · 按 §5 实测）
+
+设计档 `docs/cli/design/ACP-CLIENT.md`（1144 → 1143 行）：§3.1 / §3.2 / §3.2.1 / §3.5 / §12.9 的代码锚点全量重钉；§3.5 受影响文件表改为「本批前 → 实交（`wc -l`）→ 增量」，补 `acp/background.mjs`（46）· `advisor-queue.mjs`（37）两行。31 个坐标端点逐条实读，均落到所述符号。
+
+读数（本机 `wc -l` 复测）：transport 175 · session 180 · suspension 196 · background 46 · handlers-session 474 · `acp.mjs` 184 · async-settle 384 · async-discard 256 · bash-async 286 · browser-async 203 · advisor-async 483 · advisor-queue 37 · consult 479 · 用例档 703 —— 全部代码档 <500。
+
+与 §5 的两处读数差（实测为准；§5 不改）：`advisor-async.mjs` 483（§5 写 484）· 用例档 703（§5 写 705）。口径 = `wc -l`（换行符数）；同一脚本复测 transport / session / suspension / consult 等档与 §5 一致。
+
+发现（未改——超出本轮指定范围，建议收口轮一并重钉）：§12.8「窗内中止的应答形状」的锚点已被本批改动漂移——`suspension.mjs:110` → `:124`（`done` 载荷）、`:139` → `:156-157`（`submit` 拒绝映射）、`session.mjs:48-51` → `:57-61`（残余取消形）、`suspension.mjs:99-112` → `:110-117`（不外抛的 `throw e` 在 `:117`）；同段 `:748` 引批内用例档（该档随批删后成死指针）。
+
+### 修正轮 2 落地（2026-10-19 · 用户裁定「按A修」= autoApprove 窄豁免）
+
+设计档 = thincoder 仓 `docs/cli/design/ACP-CLIENT.md`（**零代码**）。范围 = §3.1 / §3.2.1，另两处一致性同步（§2.1 方法表 · §9 D24）。
+
+- **§3.1 豁免面**：标题改「三方法 + 审批短路位 `autoApprove`」；入白名单条件 = `session/set_config_option` ∧ `params.configId === "autoApprove"`（实现位点 = `transport.mjs:30` 白名单 Set、`:106` 判据处窄判入）。
+- **§3.1 判据①**：改「模型 / 模式 / 其余 configId 的配置 / 持久槽档删除不豁免；`configId === "autoApprove"` 的 `set_config_option` 为唯一例外」；判据②补「只改审批请求面」；判据③补 `set_config_option` 的 id 来源。
+- **§3.1 新增「`autoApprove` 可豁免的理由」**：只翻审批短路位（下一次工具调用问不问），不改回合输入 / 模型 / 模式 / 会话；用户点击即表达意图，同回合生效是开关语义；提前生效不扩大授权面。
+- **§3.1 留队清单**：load / resume / delete / set_mode / **其余 configId 的 `set_config_option`**。
+- **§3.1 行为变化 ⑤**：连发 load + autoApprove 写入 ⇒ 可能先到 `-32602 unknown session`（与 ② 同族；正解 = 等 load 应答再写）。
+- **§3.2.1 新增 AC-A6-7（可机检）**：在飞写 `{configId:"autoApprove", value:true}` ⇒ 写入响应 + `config_option_update` 先于 prompt 收束；假 agent `autoApprove === true`（「后续工具不再弹审批」单测面只经该状态间接验证）；负向 `{configId:"mode", value:"plan"}` 仍留队。
+- **一致性同步（非新增语义）**：§2.1 `session/set_config_option` 行补「`autoApprove` 入站豁免」标记；§9 D24 的「三方法白名单」表述扩为「三控制方法 + `autoApprove` 审批短路位」。
+
+**发现（需求面 · 只报不改）**：需求档 `docs/cli/requirements/ACP-CLIENT.md:100` R-A6.1 只列三方法，无 autoApprove 窄豁免条文——窄豁免依据 = 用户裁定（本档 §4）。需求档是否补句由主 agent 决定。
+
+**机检读数**：设计档 `wc -l` = **1152**（read / 编辑器行 1153；上一轮编辑器口径 1143 ⇒ +10 行）；本轮改动行宽 max **224** 字符（全档 4 行 >300 均为既有表行，不在本轮改动面）；AC-A6-1…7 连续无缺；**零代码**。
+
+**D8 清理（同轮 · §3.1）**：行为变化 ②/③ 删两处历史括注（`docs/cli/design/ACP-CLIENT.md:106`「原来会排在 load 后取消它」· `:107`「原来排在 new 后可见」）——规范面只留目标态，语义零改。
+
+**行数不变**：两次 1 对 1 替换不影响行数；设计档 `wc -l` 仍 = 1152（read / 编辑器行 1153）。
+
 ## §3 设计评审（评审子代理）
 
 ### 轮次 1（评审子代理）
@@ -204,6 +269,143 @@
 VERDICT: pass
 计数：🔴 0 · 🟡 12 · 🔵 3
 
+### 轮次 2（评审子代理）
+
+**批 9 设计重评（入站 FIFO 豁免 / cancel 回合定向 / 后台工作扩展契约）** — 复评范围：`docs/cli/design/ACP-CLIENT.md` 全文 + `docs/cli/requirements/ACP-CLIENT.md` 全文；对设计内代码锚点与阈值读数做了实核抽检（transport / session / suspension / handlers-session / advisor-async / browser-async / bash-async / consult / async-settle / async-discard / session-slots）。
+
+| # | Category | Severity | Issue | Suggestion |
+|---|----------|----------|-------|------------|
+| 1 | 验收 / 需求覆盖 | 🟡 | R-A6.3「窗关 ⇒ cancelled」缺可验断言，且机制描述指错改点：`docs/cli/design/ACP-CLIENT.md:728` 称 `item.done({ok:false, error})`，实核 `thincoder-cli/src/acp/suspension.mjs:110` 只传 `{ ok }`；`:729` 称 `session.mjs:49` 以 `name:"AbortError"` 拒绝，实为 `suspension.mjs:139` 铸 `TurnFailedError`、`session.mjs:50` 只传 `{ok:false}` ⇒ 该径今日回 `-32603`（`handlers-session.mjs:390` 只认 AbortError）；AC-A6-3（`:146`）对残余输入只要求「必应答」 | 在 §12.8 点名改点（`suspension.mjs` 的 `done` 载荷 + `submit` 的拒绝映射），并给残余输入补一条 `stopReason:"cancelled"` 断言 |
+| 2 | 清晰度 | 🟡 | `window.ending` 置位时机未定形：`:127` 让 cancel 无条件调 `window.cancel()`（D59：inflight=0 零动作），`:135` 又说 `ending` 是 `suspension.mjs` 的「只读位」——若 inflight=0 也置位，则空闲窗取消改变门控（与 AC-A6-4 `:147`「零状态变化」相抵）；若只在实际 abort 时置位，需写明 | 定形置位判据（仅实际 abort 时置位），并说明与 AC-A6-4 的关系 |
+| 3 | 清晰度（坐标） | 🟡 | 两处锚点不落到所述代码：`handlers-session.mjs:345`（`:155` / `:726`）实为 session/new 的 stale 处置，AbortError→cancelled 映射在 `thincoder-cli/src/acp/handlers-session.mjs:390`；`handlers-session.mjs:359-376`（`:131`）实为 session/new 的 catch/finally，`session/close` 在 `:404-421` | 重钉坐标，或按本档 §11 自己的口径改「按方法名定位」 |
+| 4 | 清晰度（状态） | 🟡 | `:132` 把「finally 的 save 在 closed 后跳过」写成既有不变量，实核 `thincoder-cli/src/acp/session.mjs:82` 无条件 `save(agent)`；该跳过是 close 豁免 FIFO 后才可达的竞态，属本批改动，且无对应 AC | 标为改动项并补 AC（close 在飞 ⇒ 认领释放后不再写槽） |
+| 5 | 受影响文件（判据 8） | 🟡 | `:209` 明确写「逐文件表 = 一次性材料（不入状态档）」⇒ 本批被改的 10 个源文件 + 新档 `acp/background.mjs` + 批内测试档全无「当前行数 → 增量」标注，仅剩 `:210` 一行阈值读数；读数本身亦自相矛盾：`:207` 写 `acp.mjs` 现 160 行，`:1041` 的实施后读数为 184；`:188` 的 `handlers-session.mjs` 465 与实核 475 不符 | 恢复逐文件表（当前行数 ∥ 增量），至少覆盖全部被改源文件与新测试档，并统一读数口径 |
+| 6 | 受影响文件（阈值） | 🟡 | `:210` 的 `advisor-async.mjs` 499 → 500 只能容 +1 行，而 §12.9 要求在该档 `:458`（实核 `parent._asyncAdvisors.set(String(id), entry)`）加 start、在 `:253-269` 排队取消径加 end——两条新语句即越 500（导入可并入 `:66` 既有行，仍 +2）；同条又写「下一触碰先拆档」，而本批即该触碰 | 核实际增量；若越 500，按判据带拆分计划（或给出折行写法把增量压回 ≤500） |
+| 7 | 范围 / 行为 | 🟡 | `:100` 接受「prompt + cancel 背靠背且 prompt 尚未开跑 ⇒ cancel 为空操作」——用户「停止」在排队期静默失效；需求档无条文授权，AC 亦不覆盖 | 记为登记项或补一条行为条款 / AC（含重启条件），让该接受有据 |
+| 8 | 清晰度（状态） | 🔵 | `:125` 称「先换新 controller、后落 `busy`（`session.mjs:110-114`）」，实核 `thincoder-cli/src/acp/session.mjs:112-114` 是先 `busy = false` 再换 controller；同步段内两序等价，但描述与代码相反 | 改为「先落 busy、后换 controller」，或标明这是改动 |
+| 9 | 契约清晰度 | 🔵 | 同一 `role` 键两族语义不同：`thincoder.dev/subagent` 的 `role` = relay 角色名（§12.2），`thincoder.dev/background` 的 `role` = 评审类型（`:758`）；`:765` 只对 `id` 给了跨键不可比声明 | 对 `role` 补同一句跨键语义提示 |
+| 10 | 需求歧义 | 🔵 | R-A7.2「帧不携带任务正文」的读法只记在设计侧（`detail` = 输入快照、永不含输出）；bash 的 `detail` = 命令头可被读成「正文」 | 把该读法写进需求档 R-A7.2（或登记），免两档口径漂移 |
+| 11 | 方法论（调查证据） | 🔵 | 调查证据是本档级的（§11.1 as-of 2026-09-18 / §15.1），本批新增面（`session/cancel` 通知形、`session_info_update` 承载体）无批次级 survey 行 | 补一行批次级调查记录（「无新增相关」也算记录） |
+
+计数：🔴 0 · 🟡 7 · 🔵 4 ⇒ VERDICT: pass（裁决项 5 / 6 属文件尺寸债，按 R3 不升级；其余为可改进项）。
+
 ## §4 用户批准（主 agent）
+
+**用户批准（2026-10-19 00:29）**：用户逐字「批准9实施」。实现面 = `thincoder` 仓；按 §2 的 23 行任务表；设计档 `docs/cli/design/ACP-CLIENT.md`（1144 行，修正轮 1 已落）；收口前须过 U1–U3 + W1–W10 回归与 lint，收口轮父侧跑真机探针（cancel ≤2s / 下一轮 `end_turn`）。
+
+**用户裁定（2026-10-19 00:55）**：逐字「按A修」。方案 A = 仅 `configId === 'autoApprove'` 的 `session/set_config_option` 入 FIFO 豁免；其余 configId（`model` / `mode` / `thinkingLevel` 等）继续留队。理由 = autoApprove 只翻审批短路位，不改回合输入 / 模型 / 模式 / 会话；与批 6 §17.1-④「同一回合写 autoApprove」对齐。顺序：设计档 §3.1 / §3.2.1 先改 → `transport.mjs` + U1 用例 → 重跑 U1–U3 / W1–W10 / 真机探针 → 收口。复用批 9 designToken。
+
 ## §5 实施记录（eng-coder）
+
+### 实施摘要（2026-10-19）
+实现面 = `D:\baocode\thincoder`（独立仓；起点 `main` dd9f2e49 + 父侧两份未提交设计/需求改动——**本批零触碰**）。按 §2 的 23 行任务表逐行落地；设计档 = 规范源，本批未改设计/需求与 `handlers-session.mjs` / `bridge.mjs`（唯一折算点 `:390` 零动）。
+
+| # | 条目 | 落点（实测行号） |
+|---|---|---|
+| ① | advisor 拆档（#23） | 新建 `thincoder-core/agent-tools/advisor-queue.mjs`（37 行；`dequeueAdvisor` / `refreshAdvisorQueuedTokens` 逐字迁出）；`advisor-async.mjs:67-70` import + 再导出，公开面零变（`tui/mouse.mjs:21` · `subagent-async.mjs:34` 未改）；499 → 483（+两处发射点 = 484，<500） |
+| ② | transport FIFO 豁免（#1/#2） | `thincoder-cli/src/acp/transport.mjs:30`（白名单 Set）· `:81-116`（`handleLine` 解析一次 + 豁免即分派，其余仍 `inbound` 链）· `:154-168`（`start({ input, installSignalHandlers })`；缺省 = 今日行为） |
+| ③ | session 回合定向 cancel（#3–#6/#10） | `session.mjs:161-171`（closed→busy→window→零动作）· `:153`（窗内门控含 `!ending`）· `:80-83`（`execTurn` 不取收束中的窗信号）· `:57-61`（窗关残余 `AbortError` / message `cancelled by client`）· `:98-102`（closed 后存档跳过）· `:49`（装观察者） |
+| ③ | suspension 窗收束（#7–#9） | `suspension.mjs:41-48`（`ending` 位）· `:166-171`（`cancel()` 仅 `inflight>0` 置位）· `:172-176`（`close()` 无条件置位）· `:110-117`（窗自身中止吞下、非窗中止照旧上抛）· `:124`（`done` 带原始错误）· `:152-160`（`submit` 以 `res.error` 拒绝、`TurnFailedError` 兜底） |
+| ④ | ACP 帧单源（#16） | 新建 `thincoder-cli/src/acp/background.mjs`（46 行；键 `thincoder.dev/background` + 观察者工厂：closed 丢弃 / try-catch / 无值键缺席 / id 恒字符串） |
+| ④ | 核观察者缝（#11） | `async-settle.mjs:112-163`（`backgroundStart` / `backgroundEnd`；`carrierField(_bgObserver)`、`_bgStarted` 存 (kind,id)、`_bgEnded` 幂等、detail 单行化 + ≤80 码点）；`:365`（settle 公共尾 end） |
+| ④ | 四族发射点（#12–#15） | bash 起 `bash-async.mjs:187` / 止 `:206`；browser 起 `browser-async.mjs:128` / 止 `:144`；advisor 起 `advisor-async.mjs:439` / 止（排队取消 `:271` · settle 尾 `async-settle.mjs:365` · 清池 `async-discard.mjs:119`）；consult 起 `consult.mjs:440` / 止（`sessionSettled` `:157`（早退之前）· 清池 `:397`） |
+| ⑤ | 用例档（#18–#20） | 新建 `thincoder/docs/batches/2026-10-17-acp-cancel-and-background.test.mjs`（20 例：U1×6 / U2×3 / U3×11） |
+
+### 读数（本机实测）
+- `cd thincoder-cli && node --test ..\docs\batches\2026-10-17-acp-cancel-and-background.test.mjs ..\docs\batches\2026-10-17-acp-suspension.test.mjs` ⇒ **30/30 pass**（U1–U3 = 20 · W1–W10 = 10），duration ≈3.2s。
+- `cd thincoder-cli && npm run lint` ⇒ `check-syntax: 127 file(s) OK`。
+- core 不在 CLI lint 默认遍历面 ⇒ 补跑 8 档显式路径 `node scripts/check-syntax.mjs …` ⇒ `check-syntax: 8 file(s) OK`。
+- 行数（`wc -l` 口径实测）：transport 175 · session 180 · suspension 196 · acp/background 46 · async-settle 384 · async-discard 256 · bash-async 286 · browser-async 203 · advisor-async 484 · advisor-queue 37 · consult 479 · 用例档 705 —— **全部代码档 <500**。
+
+### 决策透明表
+| 判断点 | 决定 | 依据 |
+|---|---|---|
+| 窗内中止的吞下范围 | 仅「AbortError ∧ 窗控制器已中止」吞下；非窗中止照旧上抛 | R-A6.3 的意图是让核循环顶的 `abortSignal.aborted` 收窗；不该改写窗内轮自身失败径（仍 -32603） |
+| `_bgStarted` / `_bgEnded` 置位时序 | start：先置位后调观察者；end：先置位后调观察者 | 观察者抛错时守卫已在位 ⇒ 多径同达仍只一条（R-A7.3 与幂等同时成立） |
+| detail 定形位置 | 核侧 `backgroundStart` 单点（单行化 + ≤80 码点） | ACP 观察者只做载波外壳；TUI/VSC 若装观察者也拿到合规 detail |
+| consult 空 run | 不加 `run.length > 0` 守卫 | `selectConsultModels`：缺省/空数组 ⇒ 全池（已验非空池）；未知选择器 ⇒ error 返回不入池 ⇒ `run` 恒非空（用例直驱两条径） |
+| 用例档体积 705 > 设计 ≈380 | 接受 | 用例为一次性材料（随批删），多出部分 = 待实现期确认的实测径（杀树/中止/三族清池/选择集） |
+
+### 偏差 / 未做
+- **待实现期确认 1**（bash 杀树是否必达 close）：真子进程长驻 → `killBgTask` ⇒ 恰一条 end（绿，实测 ~0.5s）。
+- **待实现期确认 2**（browser 动作 promise 是否恒达 `.finally`）：起跑前 abort ⇒ 动作 promise 拒绝（因由 `cancelled`）⇒ `.finally` ⇒ 恰一条 end（绿）。**真「在飞浏览器动作 abort」需真浏览器本机环境，未做**——R-A7.3 兜底（缺 end 不阻塞）。
+- **待实现期确认 3**（consult 空 run 可达性）：不可达（判据见上表）；两条边界径有用例（错误 ⇒ 零帧不入池；空数组 ⇒ 全池）。
+- **待实现期确认 4/5/6**：advisor 三收束径各一条 end（绿）；`_bgStarted` 缺席零行为（绿）；`transport.start()` 签名定形（绿）。
+- **设计档读数漂移（只报不改——eng-designer 笔）**：§3.5 预期值 vs 实测（transport ≈185/175 · session ≈171/180 · suspension ≈185/196 · async-settle ≈355/384 · consult ≈473/479 · 用例档 ≈380/705）；§3.1/§3.2/§3.2.1/§12.9 的代码锚点行号亦漂移（如 `transport.mjs:68-93` 实为 `:81-116`）。收口轮父侧重钉。
+- **未采纳的防御建议（评审 blue #4）**：`runNormal` 排队任务体复查 `closed`——今日经 transport FIFO 不可达，避免无据改语义；记入交付报告供后续裁定。
+- 需求档 R-A7.1 未定「排队条目算不算开始」与「id 类型」——实现按设计补判（advisor 排队条目 start 于入池；`id` 恒字符串），需求档由主 agent 决定是否补句。
+
+### 审计 / 评审轮次与终态
+- **内部 explore 分歧审计 1 轮**：FINDINGS(4) = 1 yellow（§5 未写——即本段）+ 3 blue（bash 杀树径 / browser 中止径 / consult 选择集无读数）。处置：yellow 本段落笔即结；3 blue 全部补用例并通过（见上「偏差 / 未做」）。
+- **advisor 代码评审 1 轮**：verdict **pass**（0 red · 1 yellow advisory · 4 blue）→ **fix round 1**：blue #3 按建议改测试同步点（`flush()` → `until`，3 处）；yellow #5 补 consult「正常收齐」会话结果断言（`received`/`failed`/出池）。blue #1/#2 = 设计档读数漂移（报父侧）；blue #4 = 防御性建议未采纳（理由见上）。
+- **终态 = `clean`**（无未处置 must-fix；30/30 测试 + lint 全绿）。
+
+### 修正轮 3 实施记录（2026-10-19 · autoApprove 窄豁免 · 用户裁定「按A修」）
+
+**交付摘要**：实现面 = `D:\baocode\thincoder`（独立仓）。只动两个档；设计档 / 需求档 / `handlers-session.mjs` / `bridge.mjs` 零触碰。
+
+| 落点 | 改动 |
+|---|---|
+| `thincoder-cli/src/acp/transport.mjs:13-19` | 头部契约注释补窄豁免（审批短路位同回合生效） |
+| `:35-40` | 新增谓词 `isInboundExempt`：三方法白名单，或 `set_config_option` 且 `configId === "autoApprove"` |
+| `:117` | `handleLine` 判据改调该谓词（三方法语义零变；其余 configId 仍走 `inbound.then(...)`） |
+| `:87-89` | EXCEPTION ② 注释同步 |
+| `docs/batches/2026-10-17-acp-cancel-and-background.test.mjs:299-344` | 新增 U1 用例（AC-A6-7）：在飞 prompt 中写 `autoApprove` ⇒ 写入响应与 `config_option_update` 先于 prompt 收束、假 agent 由 `false` 翻 `true`；负向 `{configId:"mode", value:"plan"}` 仍排在 prompt 之后 |
+| 同档 `:5-8` | 头部用例清单补该例 |
+
+**读数（本机实测）**
+
+- `cd thincoder-cli && node --test ..\docs\batches\2026-10-17-acp-cancel-and-background.test.mjs ..\docs\batches\2026-10-17-acp-suspension.test.mjs` ⇒ **31/31 pass**（U1–U3 = 21 · W1–W10 = 10），2.96s。
+- `npm run lint` ⇒ `check-syntax: 127 file(s) OK`。
+- 红→绿（同一条用例）：临时撤掉窄判谓词 ⇒ `timeout waiting for response id=2`（1 failed，8s 超时）；恢复后 1 pass。
+- 行数（`wc -l`）：`transport.mjs` **175 → 186**（+11）；用例档 **705 → 751**（+46）。
+
+**决策透明表**
+
+| 判断点 | 决定 | 依据 |
+|---|---|---|
+| 窄判形态 | 谓词 `isInboundExempt` 置于白名单 Set 旁，判据处调用 | 设计档写「判据处窄判入」；语义等同、单点可读；供 designer 重钉时对齐措辞 |
+| 是否校验 `value` 类型 | 不校验，只按 `configId` 豁免 | 设计 §3.1 判据只列 configId；非法 value 由 handler 回 `-32602`，与留队时同形 |
+| 「全量 configOptions」断言形态 | 精确成员序列 `["thinking","mode","autoApprove"]` + 与通知 deepEqual | AC-A6-7 原文 = 「含全量 configOptions」；一次性用例，耦合成本为零 |
+
+**审计 / 评审轮次与终态**
+
+- **内部 explore 分歧审计 1 轮**：FINDINGS(5) = 4 yellow + 1 blue。处置：yellow #4（§5 缺本轮记录）= 本段落笔即结；blue #5（「全量」断言未钉）= 采纳，补成员序列断言 + 通知同源 deepEqual；yellow #1–#3 = 设计档坐标漂移（禁改设计档，报父侧）。
+- **advisor 代码评审 1 轮**：verdict **pass**（0 red · 3 yellow · 3 blue）。处置：yellow #1（§3.1 实现位点行号作废）、#2（批档读数失真）、#3（设计档「行为变化」未枚举豁免写入与队列写的交错）= doc 层，只报不改；blue #4（精确成员序列宜改结构断言）不采纳——AC 要求「全量」且用例随批删；blue #5（`flush(20)` 墙钟否定断言）不采纳——prompt 由 gate 持有，不会假红，最终判定以 `:342` 响应序号为准；blue #6（用例档 751 行过 500 建议线）无需动作——§5 已就 705 行作接受，随批删。
+- **终态 = `clean`**（无未处置 must-fix；31/31 + lint 全绿；红→绿可复现）。
+
+**偏差 / 未做**
+
+- **设计档坐标漂移（只报不改）**：§3.1「实现位点」写 `transport.mjs:30`（Set）、`:106`（判据）、`:81-116`（handleLine）、`:99-102`（client 响应豁免）、`:157-171`（start）；实测 `:33`、`:39-40`（调用点 `:117`）、`:92-127`、`:110-113`、`:168-182`。建议改符号锚（`INBOUND_EXEMPT` / `isInboundExempt` / `handleLine` / `start`）。
+- **未做**：设计 / 需求档零改（授权禁止）；`handlers-session.mjs` / `bridge.mjs` 零改；未扩到其它 configId；未跑真机探针（父侧收口轮）。
+- **观察（只报）**：设计档「行为变化（接受）」①–⑤ 未列「队列中已有其它 configId 写入时，豁免写入的全形通知会带出前一条尚未落地的投影」——最终态收敛（last-write-wins），且按「等应答再写」的客户端不可达。
+
 ## §6 验证与收口（父代理）
+
+### 验证（2026-10-19 父侧复跑）
+- 单测：`cd thincoder-cli && node --test ..\docs\batches\2026-10-17-acp-cancel-and-background.test.mjs ..\docs\batches\2026-10-17-acp-suspension.test.mjs` ⇒ **30/30 pass**（U1–U3 20 + W1–W10 10），3.03s。
+- lint：`npm run lint` ⇒ `check-syntax: 127 file(s) OK`。
+- 真机探针（AC-A6-1 / N9，本仓 CLI + 真模型）：`initialize` ok（0.12.76）；`session/new` → 1；prompt 在飞 2.5s 后写 `session/cancel` ⇒ **1.72s** 收束 `{"stopReason":"cancelled"}`（≤2s）；紧随 prompt ⇒ `{"stopReason":"end_turn"}`。**AC-A6-1 通过**。
+- 探针脚本 = `.thincoder/tmp/acp-probe.mjs`（临时区，随批清）。
+
+### 上抛处置（父侧）
+- 评审 blue #4（`runNormal` 排队任务体复查 `closed`）**不采纳，接受**：今日经 transport FIFO 不可达；加无据守卫 = 改语义。复核条件 = transport 豁免面扩大或 queue 路径变化。
+- 需求档 R-A7.1「排队条目算不算开始 / id 类型」**不改需求档**：设计档 §12.9 已定（advisor 入池即 start；`id` 恒字符串），需求只要求「开始/结束各一条帧」，不冲突；设计是「怎么实现」的规范源。
+- 设计档坐标重钉 = eng-designer #16 在飞（交付实测落点见 §5；只改设计档，零代码）。
+- 现状：未提交（thincoder 仓 11 改 + 3 新）；提交待收口时一并处理。
+
+### 父侧机械修正（2026-10-19 · 可回退）
+- §12.8 四个锚点重钉（#16 发现 1；逐条对代码核过）：`suspension.mjs:110`→`:124`（`done` 载荷）· `:139`→`:155-157`（`submit` 拒绝）· `session.mjs:48-51`→`:57-61`（窗关残余）· `suspension.mjs:99-112`→`:110-117`（不外抛）。
+- 删 §12.8 的批内测试档指针（`docs/batches/2026-10-17-acp-suspension.test.mjs` W1–W10）——状态档不引过程档。
+- 删 §3.5 表第 13 行（批内用例档，703 行）——随批删后是死指针；表余 12 行（产品文件）。
+- 以上为父侧直接执行（机械修正：锚点 / 指针 / 表行），可回退。
+
+### 收口结算（2026-10-19）
+- **autoApprove 窄豁免（用户 00:55「按A修」）**：设计档 §3.1 / §3.2.1 AC-A6-7、需求档 R-A6.1 窄豁免条文；`transport.mjs` 窄判入 + U1 新例。父侧复跑 **31/31**（U1–U3 21 + W 10）、lint **127 OK**；用户真机确认「点 for this session ⇒ 立即 auto；停止键可用」。
+- **设计档读数**：§3.5 transport 实交 **186**（+31，含窄豁免）；§12.8 四锚点 + §3.5 批内用例行已由父侧机械修正（见上）。
+- **批内测试档**：`docs/batches/2026-10-17-acp-cancel-and-background.test.mjs` 已删（随批删，读数留 §5/§6）；`2026-10-17-acp-suspension.test.mjs`（批 8，tracked）仍留——零保留待用户确认后删。
+- **台账**：#25 / #26 / #33 已核销；#28（mock 入站串行未做）由本记录收口重锚为「条件」（原批已收口，须另起批次接手）；#37 / #38（批 10）待设计 → 在途；#77（`open_editor_test` 既有红）归批；#76（上游合并轻渠道轮）在途。
+- **未决读数**：本批收口前 **54** → 收口后 **51**（核销 #25/#26/#33 三条；#28 重锚仍计未决；#37/#38 状态推进不改计数；#77 已计）。
+- **验收命令**：`cd thincoder-cli && node --test ..\docs\batches\2026-10-17-acp-cancel-and-background.test.mjs ..\docs\batches\2026-10-17-acp-suspension.test.mjs` ⇒ **31/31**（删除前）；`npm run lint` ⇒ **127 file(s) OK**；真机探针（`.thincoder/tmp/acp-probe.mjs`）⇒ cancel **1.72s** / `cancelled` / 下一轮 `end_turn`。
+- **集成测试**：本批不新增业务场景；CLI 面由 U1–U3 + W1–W10 与真机探针覆盖；桌面消费后台帧不在本批（按 §2 边界）。
+- **结算行**：requirement 行 #25/#26/#33 已核销；#28 重锚；本批交付物 = CLI 取消/后台帧 + autoApprove 窄豁免；设计/需求/批次三档同步。

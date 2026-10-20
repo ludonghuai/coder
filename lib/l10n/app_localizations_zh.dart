@@ -3941,6 +3941,20 @@ class AppLocalizationsZh extends AppLocalizations {
   String get scmFetchFromAllRemotes => '从所有远程获取';
 
   @override
+  String get scmScanFailed => '暂时无法扫描这里的仓库，稍后自动重试。';
+
+  @override
+  String get scmFetchAndPullAll => '获取并拉取所有仓库';
+
+  @override
+  String get scmFetchAndPull => '获取并拉取远端提交';
+
+  @override
+  String scmBehindCommits(int count) {
+    return '$count 个远端提交待拉取';
+  }
+
+  @override
   String get scmPull => '拉取';
 
   @override
@@ -6551,6 +6565,11 @@ class AppLocalizationsZh extends AppLocalizations {
   String get modelsSwitchConfirm => '切换';
 
   @override
+  String modelsSwitchPending(String model) {
+    return '回合结束后切换到 $model';
+  }
+
+  @override
   String get modelsAuxiliary => '辅助模型';
 
   @override
@@ -8677,7 +8696,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get branchBarWorkspace => '各文件夹的分支';
 
   @override
-  String get settingsSectionAccounts => 'Git 账号';
+  String get settingsSectionAccounts => '账号';
 
   @override
   String get settingsAccountsKeywords =>
@@ -9684,4 +9703,205 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get aboutOpen => '打开';
+
+  @override
+  String get turnTokensSpentHint => '本轮：输入与输出合计';
+
+  @override
+  String get usageSessionTotal => '本会话累计';
+
+  @override
+  String get generalSettingsEditorContext => '编辑器上下文';
+
+  @override
+  String get generalSettingsEditorContextDescription =>
+      '发消息时带上编辑器里打开的文件：路径、光标行和选区。每条消息各带一次；可以在输入框下方的标签上撤销这一条。';
+
+  @override
+  String editorContextLine(String name, int line) {
+    return '$name · 行 $line';
+  }
+
+  @override
+  String get editorContextDismiss => '关闭编辑器上下文';
+
+  @override
+  String editorContextLines(String name, int first, int last) {
+    return '$name · 行 $first–$last';
+  }
+
+  @override
+  String get agentChangeNotApplied => 'Agent 的变更（未应用）';
+
+  @override
+  String get agentWriteRefusedUnsaved => '文件在编辑器中存在未保存的修改；写入未应用。';
+
+  @override
+  String get generalSettingsGit => 'Git';
+
+  @override
+  String get generalSettingsGitAutofetch => '自动获取远端更新';
+
+  @override
+  String get generalSettingsGitAutofetchDescription =>
+      '每 3 分钟、回到前台时补一次，覆盖工作区所有仓库。';
+
+  @override
+  String get generalSettingsGitAutoPull => '自动拉取';
+
+  @override
+  String get generalSettingsGitAutoPullDescription =>
+      '仅在工作树干净、可快进、且没有未保存的缓冲盖住远端改动的文件时拉取；否则只显示远端提交数。';
+
+  @override
+  String get generalSettingsGitAutofetchPeriod => '获取周期';
+
+  @override
+  String gitPeriodMinutes(String minutes) {
+    return '$minutes 分钟';
+  }
+
+  @override
+  String gitLastFetched(String time) {
+    return '上次成功：$time';
+  }
+
+  @override
+  String get gitAutoFetchDirty => '有未提交的改动，未自动拉取';
+
+  @override
+  String get gitAutoFetchDiverged => '分支与上游都已改动，未自动拉取';
+
+  @override
+  String get gitAutoFetchLimit => '改动比读取的多，未自动拉取';
+
+  @override
+  String gitAutoFetchBuffered(String repository, String files) {
+    return '$repository：有未保存的改动，未自动拉取：$files';
+  }
+
+  @override
+  String gitAutoFetchFilesMore(String files) {
+    return '$files 等';
+  }
+
+  @override
+  String get gitAutoFetchNetwork => '网络不可用，自动重试中';
+
+  @override
+  String get gitAutoFetchProxy => '代理不可用，自动重试中';
+
+  @override
+  String gitAutoFetchAuth(String repository) {
+    return '$repository：获取需要登录';
+  }
+
+  @override
+  String gitAutoFetchConflict(String repository) {
+    return '$repository：需要你处理后才能拉取';
+  }
+
+  @override
+  String gitAutoFetchOther(String repository) {
+    return '$repository：自动获取失败';
+  }
+
+  @override
+  String get renameTitleRequired => '请填写标题';
+
+  @override
+  String get renameTitleTooLong => '标题最多 80 个字符';
+
+  @override
+  String get revertFromTurn => '从这个回合起回退文件…';
+
+  @override
+  String get revertTitle => '从这个回合起回退文件？';
+
+  @override
+  String get revertWarning => '回合之后的改动将丢弃。';
+
+  @override
+  String get revertConfirm => '回退';
+
+  @override
+  String get revertDone => '回退完成';
+
+  @override
+  String revertFileCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 个文件',
+      one: '1 个文件',
+      zero: '没有文件',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get revertGroupRestored => '恢复';
+
+  @override
+  String get revertGroupSkipped => '跳过';
+
+  @override
+  String get revertUnrevertable => '无法回退';
+
+  @override
+  String get revertGroupFailed => '失败';
+
+  @override
+  String get revertReasonChanged => '回合之后改过';
+
+  @override
+  String get revertReasonOversize => '文件过大';
+
+  @override
+  String get revertReasonEvicted => '已不再保留';
+
+  @override
+  String get revertReasonAfterUnknown => '无法确认是否改过';
+
+  @override
+  String revertSummaryRestored(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '回退了 $count 个文件',
+      one: '回退了 1 个文件',
+      zero: '没有回退文件',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String revertSummarySkipped(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '跳过了 $count 个文件',
+      one: '跳过了 1 个文件',
+      zero: '没有跳过文件',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String revertSummaryUnrevertable(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 个文件无法回退',
+      one: '1 个文件无法回退',
+      zero: '没有无法回退的文件',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get revertNothingToRevert => '无可回退。';
+
+  @override
+  String get revertTurnInFlight => '回合进行中，暂时不能回退';
 }

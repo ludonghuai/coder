@@ -14,6 +14,7 @@ import 'chat_feed.dart';
 import 'chat_models.dart';
 import 'composer/composer_draft.dart';
 import 'composer/paste_store.dart';
+import 'editor_context_setting.dart';
 import 'mock_conversation.dart';
 import 'open_editor.dart';
 import 'review/change_review.dart';
@@ -304,6 +305,8 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
         unawaited(review.refresh());
       case FileEdited(:final change, :final original):
         review.report(change, original: original);
+      case ChangesReverted():
+        unawaited(review.refresh());
       default:
     }
   }
@@ -434,6 +437,13 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
     _ => false,
   };
 
+  /// The model picked while a turn ran, to be applied when it is over: null
+  /// when none waits.
+  String? get pendingModel => switch (_kernel) {
+    final DefersModelSwitch kernel => kernel.pendingModel,
+    _ => null,
+  };
+
   KernelChoice? get modes => switch (_kernel) {
     final SelectsMode kernel => _choice(kernel.mode),
     _ => null,
@@ -535,6 +545,11 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
   bool get acceptsImages =>
       _kernel is AcceptsImages || _kernel is AcceptsImageFiles;
 
+  /// Whether the file open in the editor goes with each message
+  /// ([AcceptsEditorContext]): its chip shows in the composer, and the
+  /// message carries it.
+  bool get acceptsEditorContext => _kernel is AcceptsEditorContext;
+
   /// What the user would likely send next: offered while the agent waits
   /// for them.
   String? get promptSuggestion => switch (_kernel) {
@@ -583,6 +598,15 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
   bool get canQueue => _kernel is QueuesMessages;
 
   bool get canRename => _kernel is RenamesSession;
+
+  /// Whether its kernel names sessions itself: the host titles none (F1.3).
+  bool get ownsTitle => _kernel is GeneratesTitles;
+
+  /// The title picked while a turn ran (§3.5); null when none waits.
+  String? get pendingTitle => switch (_kernel) {
+    final DefersRename kernel => kernel.pendingTitle,
+    _ => null,
+  };
 
   /// Whether the conversation can be copied into a new one (see [fork]).
   bool get canFork => switch (_kernel) {
@@ -684,11 +708,14 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
   /// is live. Hidden (but there, to come and go smoothly) where something
   /// else says so, or it would only flash.
   @override
-  int get itemCount => _transcript.length + (isStreaming ? 1 : 0);
+  int get itemCount =>
+      _transcript.length + _notices.length + (isStreaming ? 1 : 0);
 
   @override
   ChatItem itemAt(int index) {
     if (index < _transcript.length) return _transcript.itemAt(index);
+    final notice = index - _transcript.length;
+    if (notice < _notices.length) return _notices[notice];
     // Waiting on its model unless its kernel says otherwise.
     final output = _transcript.output;
     return switch (_transcript.activity?.kind) {
@@ -982,6 +1009,40 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
     return null;
   }
 
+  /// The turn the earliest change not kept or undone came from (F2.1).
+  String? get revertTurn => _pendingEdits.firstOrNull?.turnId;
+
+  /// Whether a revert can be planned and done now (§3.3, §3.5).
+  bool get canPlanRevert => switch (_kernel) {
+    final PlansReverts kernel => kernel.canRevertNow,
+    _ => false,
+  };
+  /// Whether the kernel plans reverts at all: its entry never falls back
+  /// to the host's own undo (the kernel holds the stack, §9).
+  bool get plansReverts => _kernel is PlansReverts;
+
+  /// What a revert from [sinceTurn] on would do; nothing is written.
+  Future<RevertPlan> revertPlan(String sinceTurn) => switch (_kernel) {
+    final PlansReverts kernel => kernel.revertPlan(sinceTurn: sinceTurn),
+    _ => Future.error(UnsupportedError('revertPlan')),
+  };
+
+  /// Does what [revertPlan] planned for [sinceTurn], each file on its own.
+  Future<RevertOutcome> applyRevert(String sinceTurn) => switch (_kernel) {
+    final PlansReverts kernel => kernel.applyRevert(sinceTurn: sinceTurn),
+    _ => Future.error(UnsupportedError('applyRevert')),
+  };
+
+  /// What the host itself put in the conversation (§9): after the kernel's.
+  final List<NoticeItem> _notices = [];
+
+  /// Puts [notice] at the conversation's end: the host's own (§9: a
+  /// revert's summary), the kernel sending none of it.
+  void addNotice(NoticeItem notice) {
+    _notices.add(notice);
+    notifyListeners();
+  }
+
   /// Puts [changes]' files back; null when files cannot be undone one by
   /// one (no review of the project).
   ValueChanged<List<FileChange>>? get undoChanges => switch (_activeReview) {
@@ -1050,18 +1111,39 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
     return [editor?.note ?? OpenEditor.closedNote];
   }
 
+  /// [editors] as a turn's contexts: one per file, by canonical absolute
+  /// path (a turn may gather them from several sources).
+  static List<EditorContext> _contexts(Iterable<OpenEditor> editors) {
+    final seen = <String>{};
+    final contexts = <EditorContext>[];
+    for (final editor in editors) {
+      final context = editor.toContext();
+      if (seen.add(context.dedupeKey)) contexts.add(context);
+    }
+    return contexts;
+  }
+
   /// Sends [message]; [now], taken up at once, the turn running stopped
   /// for it (rather than queued behind it). With a plan awaiting (see
   /// [awaitingPlan]), it says what should change in it.
   ///
   /// [editor] gives the file open in the editor beside the chat, where
-  /// there is one; the agent is told of it as it changes.
+  /// there is one. A kernel that takes it with each message
+  /// ([AcceptsEditorContext]) is given it with this one unless
+  /// [editorContext] is false (dismissed for this draft) or the
+  /// `chat.editorContext` setting is off; the rest are told of it as it
+  /// changes.
   void send(
     ComposerMessage message, {
     bool now = false,
     OpenEditor? Function()? editor,
+    bool editorContext = true,
   }) {
     if (message.isEmpty || !canSend) return;
+    final takesContext = _kernel is AcceptsEditorContext;
+    final open = takesContext && editorContext && EditorContextSetting.current()
+        ? editor?.call()
+        : null;
     final turn = KernelTurn(
       id: newTurnId(),
       // Pastes too long to send, kept in files the agent reads; a remote
@@ -1072,8 +1154,9 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
       },
       mentions: message.mentions,
       images: acceptsImages ? message.images : const [],
+      contexts: open == null ? const [] : _contexts([open]),
       now: now,
-      notes: editor == null ? const [] : _editorNotes(editor()),
+      notes: takesContext || editor == null ? const [] : _editorNotes(editor()),
     );
     // A turn about to start: what was put back since the last is no
     // longer pending.

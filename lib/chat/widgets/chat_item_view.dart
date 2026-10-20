@@ -25,6 +25,7 @@ class ChatItemView extends StatelessWidget {
     this.expanded = false,
     this.onToggle,
     this.onEdit,
+    this.onContextMenu,
     this.onMoveToBackground,
     this.onStop,
     this.onOpen,
@@ -37,6 +38,9 @@ class ChatItemView extends StatelessWidget {
 
   /// Starts editing a user message.
   final VoidCallback? onEdit;
+
+  /// A right click on a user message, at where it pressed (§9).
+  final ValueChanged<Offset>? onContextMenu;
 
   /// Moves a running command or subagent to the background.
   final VoidCallback? onMoveToBackground;
@@ -60,11 +64,14 @@ class ChatItemView extends StatelessWidget {
 
   Widget _build() {
     return switch (item) {
-      UserMessageItem(:final text, :final images) => UserMessageBubble(
-        text: text,
-        images: images,
-        onEdit: onEdit,
-      ),
+      UserMessageItem(:final text, :final images, :final contexts) =>
+        UserMessageBubble(
+          text: text,
+          images: images,
+          contexts: contexts,
+          onEdit: onEdit,
+          onContextMenu: onContextMenu,
+        ),
       AssistantTextItem(:final text) => AssistantText(text),
       final ToolCallItem tool when tool.kind == ToolKind.browser => BrowserStep(
         item: tool,

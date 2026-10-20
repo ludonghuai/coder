@@ -5,6 +5,7 @@
 // file, without the model.
 
 import '../chat/chat_models.dart';
+import '../chat/chat_session.dart';
 import '../kernel/claude_code/claude_haiku.dart';
 import '../l10n/l10n.dart';
 import '../models/model_providers.dart';
@@ -17,6 +18,12 @@ typedef AgentTitler = Future<String?> Function(
   String? model,
   String? location,
 });
+
+/// Whether the host names [session]'s conversation after its first message:
+/// not a kernel that names it itself ([GeneratesTitles]) — there would be
+/// two writers (F1.3, §3.3) — nor one that cannot rename.
+bool hostTitlesSession(ChatSession session) =>
+    session.canRename && !session.ownsTitle;
 
 /// The most of a message the model is given, in characters.
 const agentTitleMessageBudget = 2000;

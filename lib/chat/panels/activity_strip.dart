@@ -28,6 +28,7 @@ class ActivityStrip extends StatefulWidget {
     this.root = '.',
     this.paths,
     this.onUndo,
+    this.undoTooltip,
     this.onKeepFiles,
     this.onUndoFiles,
     this.onOpenFile,
@@ -60,6 +61,10 @@ class ActivityStrip extends StatefulWidget {
 
   /// Null when the changes cannot be put back: no Undo then.
   final VoidCallback? onUndo;
+
+  /// Why Undo shows greyed out instead: with [onUndo] null it still shows
+  /// (§9: a turn still running).
+  final String? undoTooltip;
 
   final ValueChanged<List<FileChange>>? onKeepFiles;
 
@@ -181,6 +186,7 @@ class _ActivityStripState extends State<ActivityStrip> {
               expanded: _filesExpanded,
               onToggle: () => setState(() => _filesExpanded = !_filesExpanded),
               onUndo: widget.onUndo,
+              undoTooltip: widget.undoTooltip,
               onKeep: widget.onKeep,
             ),
             if (_filesExpanded)
@@ -424,17 +430,15 @@ class _TasksHeader extends StatelessWidget {
 
 class _FilesHeader extends StatelessWidget {
   const _FilesHeader({
-    required this.changes,
-    required this.expanded,
-    required this.onToggle,
-    required this.onUndo,
-    required this.onKeep,
+    required this.changes, required this.expanded, required this.onToggle,
+    required this.onUndo, required this.onKeep, this.undoTooltip,
   });
 
   final List<FileChange> changes;
   final bool expanded;
   final VoidCallback onToggle;
   final VoidCallback? onUndo;
+  final String? undoTooltip;
   final VoidCallback onKeep;
 
   @override
@@ -491,12 +495,13 @@ class _FilesHeader extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 8),
-        if (onUndo case final onUndo?) ...[
+        if (onUndo != null || undoTooltip != null) ...[
           SizedBox(
             height: 20,
             child: FittedBox(
               child: PanelButton(
                 label: context.l10n.stripUndoAll,
+                tooltip: undoTooltip,
                 onTap: onUndo,
               ),
             ),

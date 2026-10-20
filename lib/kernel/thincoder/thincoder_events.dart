@@ -41,6 +41,12 @@ class ThincoderEvents {
   /// falls back to for a model it does not know (128 000).
   int contextWindow = 128000;
 
+  /// What the session and the turn under way spent so far (F20).
+  int _spent = 0;
+  int _turnSpent = 0;
+
+  int get turnSpent => _turnSpent;
+
   /// Which run of items this is (a turn, or a replay): item ids are
   /// `t<run>.<block>` (what the agent said) and `u<run>.<block>` (what was
   /// replayed of the user's), so they never clash with the agent's own
@@ -103,6 +109,7 @@ class ThincoderEvents {
     _tapeSaid(seal: true);
     _run++;
     _blocks = 0;
+    _turnSpent = 0;
   }
 
   /// One `session/update`: what the agent says happened.
@@ -428,9 +435,10 @@ class ThincoderEvents {
       _ => contextWindow,
     };
     contextWindow = size;
-    _sink.emit(
-      UsageReported(_sink.nextSeq, ContextUsage(window: size, used: used)),
-    );
+    _spent += used;
+    _turnSpent += used;
+    final usage = ContextUsage(window: size, used: used, sessionSpent: _spent);
+    _sink.emit(UsageReported(_sink.nextSeq, usage));
   }
 
   // --- Subagents --------------------------------------------------------------

@@ -153,6 +153,10 @@ class ContextUsagePanel extends StatelessWidget {
                 ],
               ),
             ],
+            if (usage.sessionSpent case final spent?) ...[
+              const SizedBox(height: 10),
+              _Legend(label: l10n.usageSessionTotal, value: _format(spent)),
+            ],
             if (stats?.cache case final cache?) ...[
               const SizedBox(height: 10),
               _PromptCacheMeter(cache: cache),

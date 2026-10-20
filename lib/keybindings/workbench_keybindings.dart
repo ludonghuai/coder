@@ -536,7 +536,7 @@ final List<CommandInfo> workbenchExtraCommands = [
   const CommandInfo('git.fetch', 'Fetch', category: _gitCategory),
   const CommandInfo(
     'git.fetchAll',
-    'Fetch From All Remotes',
+    'Fetch and Pull All Repositories',
     category: _gitCategory,
   ),
   const CommandInfo('git.pull', 'Pull', category: _gitCategory),

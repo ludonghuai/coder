@@ -174,7 +174,18 @@ class ForgeRef {
     }
     if (uri.host.isEmpty) return null;
     final host = uri.host.toLowerCase();
-    final parts = uri.pathSegments.where((part) => part.isNotEmpty).toList();
+    // `pathSegments` decodes percent-escapes; a legit escape whose bytes are
+    // not valid UTF-8 throws FormatException (a stray `%` never reaches here —
+    // `Uri.parse` rewrites it to `%25`). A URL an agent printed is just text,
+    // so a page we cannot read is no page (null), never a crash on the
+    // notification path that scans chat items. Only `Uri.parse` output is
+    // passed here, so FormatException is the only decode failure to catch.
+    final List<String> parts;
+    try {
+      parts = uri.pathSegments.where((part) => part.isNotEmpty).toList();
+    } on FormatException {
+      return null;
+    }
     // GitLab: <path>/-/(issues|merge_requests)/<n>, on any host but a
     // known GitHub's or Gitee's.
     final dash = parts.indexOf('-');

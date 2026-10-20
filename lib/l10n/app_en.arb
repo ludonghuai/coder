@@ -2831,6 +2831,27 @@
   "scmSynchronizingChanges": "Synchronizing Changes...",
   "scmFetch": "Fetch",
   "scmFetchFromAllRemotes": "Fetch From All Remotes",
+  "scmScanFailed": "Can't look for repositories here right now; trying again shortly.",
+  "@scmScanFailed": {
+    "description": "A warning when the project's subfolders could not be scanned for repositories; the panel would otherwise say there is none."
+  },
+  "scmFetchAndPullAll": "Fetch and Pull All Repositories",
+  "@scmFetchAndPullAll": {
+    "description": "The workspace menu's Fetch: fetches every repository and merges its upstream."
+  },
+  "scmFetchAndPull": "Fetch and pull remote commits",
+  "@scmFetchAndPull": {
+    "description": "The Get action's tooltip: it fetches the branch's upstream and merges it in."
+  },
+  "scmBehindCommits": "{count} remote commits to pull",
+  "@scmBehindCommits": {
+    "description": "The ↓N badge's tooltip in a repository's header: the commits its upstream has that it does not.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "scmPull": "Pull",
   "scmPush": "Push",
   "scmPullCommits": "Pull {count} commits from {upstream}",
@@ -4905,6 +4926,14 @@
   },
   "modelsSwitchDetail": "Claude Code restarts on the other upstream and resumes this conversation (--resume). Its history is sent to the new model as it is; some upstreams take it slower the first time. A reply still running stops when you send the next message.",
   "modelsSwitchConfirm": "Switch",
+  "modelsSwitchPending": "Switches to {model} when this turn ends",
+  "@modelsSwitchPending": {
+    "placeholders": {
+      "model": {
+        "type": "String"
+      }
+    }
+  },
   "modelsAuxiliary": "Auxiliary Model",
   "modelsAuxiliaryDescription": "Used for auxiliary work, such as generating conversation titles and commit messages. Automatic: the session's model (for commit messages, new sessions' default); an upstream's by its Haiku tier.",
   "modelsAuxiliaryAuto": "Automatic",
@@ -7097,5 +7126,157 @@
   "aboutChangelogDetail": "What each version changed",
   "aboutFeedback": "Report an Issue",
   "aboutFeedbackDetail": "Open an issue on GitHub, or see those others opened",
-  "aboutOpen": "Open"
+  "aboutOpen": "Open",
+  "turnTokensSpentHint": "This turn: input and output tokens together",
+  "usageSessionTotal": "Session total",
+  "generalSettingsEditorContext": "Editor Context",
+  "@generalSettingsEditorContext": {
+    "description": "Settings → General switch: whether the file open in the editor goes with each message, for thincoder."
+  },
+  "generalSettingsEditorContextDescription": "The file open in the editor goes with each message: its path, the cursor's line and the selection. Once per message; dismiss it for a draft with the chip below the message box.",
+  "editorContextLine": "{name} · line {line}",
+  "editorContextDismiss": "Dismiss Editor Context",
+  "@editorContextDismiss": {
+    "description": "The chip's close button, read out: it takes the editor's context off the next message."
+  },
+  "@editorContextLine": {
+    "description": "The chip over a message: the file open in the editor and the cursor's line.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "line": {
+        "type": "int"
+      }
+    }
+  },
+  "editorContextLines": "{name} · lines {first}–{last}",
+  "@editorContextLines": {
+    "description": "The chip over a message: the file open in the editor and the lines selected.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "first": {
+        "type": "int"
+      },
+      "last": {
+        "type": "int"
+      }
+    }
+  },
+  "agentChangeNotApplied": "Agent's change (not applied)",
+  "@agentChangeNotApplied": {
+    "description": "Title of the read-only diff tab of a change an agent could not write: the editor has unsaved changes."
+  },
+  "agentWriteRefusedUnsaved": "The file has unsaved changes in the editor; the write was not applied.",
+  "@agentWriteRefusedUnsaved": {
+    "description": "Said in the conversation, and returned to the agent, when a write was refused because the editor has unsaved changes."
+  },
+  "generalSettingsGit": "Git",
+  "generalSettingsGitAutofetch": "Fetch Remote Updates Automatically",
+  "generalSettingsGitAutofetchDescription": "Every 3 minutes, and once when the window comes back to the front: fetches every repository of the workspace.",
+  "generalSettingsGitAutoPull": "Pull Automatically",
+  "generalSettingsGitAutoPullDescription": "Only when the working tree is clean, the branch can fast-forward, and no unsaved buffer covers the files the remote changed; otherwise the number of remote commits alone shows.",
+  "generalSettingsGitAutofetchPeriod": "Fetch Period",
+  "gitPeriodMinutes": "{minutes} min",
+  "@gitPeriodMinutes": {
+    "description": "The fetch period's choice in Settings: how many minutes.",
+    "placeholders": {"minutes": {"type": "String"}}
+  },
+  "gitLastFetched": "Last fetched: {time}",
+  "@gitLastFetched": {
+    "description": "In the branch's tooltip: when the remote's commits last came in.",
+    "placeholders": {"time": {"type": "String"}}
+  },
+  "gitAutoFetchDirty": "Not pulled: there are uncommitted changes",
+  "@gitAutoFetchDirty": {
+    "description": "The automatic fetch's tooltip: the working tree has changes, so nothing was pulled."
+  },
+  "gitAutoFetchDiverged": "Not pulled: the branch and its upstream have both changed",
+  "@gitAutoFetchDiverged": {
+    "description": "The automatic fetch's tooltip: the branch and its upstream diverged, so nothing was pulled."
+  },
+  "gitAutoFetchLimit": "Not pulled: there are more changes than are checked",
+  "@gitAutoFetchLimit": {
+    "description": "The automatic fetch's tooltip: the status has more changes than are read, so nothing was pulled."
+  },
+  "gitAutoFetchBuffered": "{repository}: not pulled, unsaved changes in {files}",
+  "@gitAutoFetchBuffered": {
+    "description": "The automatic fetch's notification and tooltip: files the remote changed have unsaved changes in the editor.",
+    "placeholders": {
+      "repository": {"type": "String"},
+      "files": {"type": "String"}
+    }
+  },
+  "gitAutoFetchFilesMore": "{files} and more",
+  "@gitAutoFetchFilesMore": {
+    "description": "After the first three files an issue names: there are more.",
+    "placeholders": {"files": {"type": "String"}}
+  },
+  "gitAutoFetchNetwork": "The network is not available: retrying automatically",
+  "@gitAutoFetchNetwork": {
+    "description": "The automatic fetch's tooltip after a network failure, which is not notified."
+  },
+  "gitAutoFetchProxy": "The proxy is not available: retrying automatically",
+  "@gitAutoFetchProxy": {
+    "description": "The automatic fetch's tooltip after a proxy failure, which is not notified."
+  },
+  "gitAutoFetchAuth": "{repository}: sign-in is needed to fetch",
+  "@gitAutoFetchAuth": {
+    "description": "The automatic fetch's notification: Git wants a sign-in the app cannot give.",
+    "placeholders": {"repository": {"type": "String"}}
+  },
+  "gitAutoFetchConflict": "{repository}: cannot be pulled without your attention",
+  "@gitAutoFetchConflict": {
+    "description": "The automatic fetch's notification: Git refused to fast-forward, for the user to look at.",
+    "placeholders": {"repository": {"type": "String"}}
+  },
+  "gitAutoFetchOther": "{repository}: the automatic fetch failed",
+  "@gitAutoFetchOther": {
+    "description": "The automatic fetch's tooltip for a failure that is not one of the known kinds.",
+    "placeholders": {"repository": {"type": "String"}}
+  },
+  "renameTitleRequired": "A title is required",
+  "@renameTitleRequired": {"description": "The title field's hint when the title is empty."},
+  "renameTitleTooLong": "A title is at most 80 characters",
+  "@renameTitleTooLong": {"description": "The title field's hint when the title is over 80 characters."},
+  "revertFromTurn": "Revert files from this turn…",
+  "@revertFromTurn": {"description": "The user message's context menu: reverts every file the turn and the ones after it changed."},
+  "revertTitle": "Revert files from this turn?",
+  "@revertTitle": {"description": "The confirmation's title before a turn's files are reverted."},
+  "revertWarning": "Changes made after this turn will be lost.",
+  "@revertWarning": {"description": "The confirmation's warning: changes made after the turn are lost."},
+  "revertConfirm": "Revert",
+  "@revertConfirm": {"description": "The confirmation's button: it carries the revert out."},
+  "revertDone": "Revert complete",
+  "@revertDone": {"description": "The result's title once the revert is done."},
+  "revertFileCount": "{count, plural, =0{No files} =1{1 file} other{{count} files}}",
+  "@revertFileCount": {"description": "The confirmation's count of the files the revert brings back.", "placeholders": {"count": {"type": "int"}}},
+  "revertGroupRestored": "Restored",
+  "@revertGroupRestored": {"description": "The result's group of the files the revert brought back."},
+  "revertGroupSkipped": "Skipped",
+  "@revertGroupSkipped": {"description": "The result's group of the files left as they are, having changed after the turn."},
+  "revertUnrevertable": "Cannot be reverted",
+  "@revertUnrevertable": {"description": "The result's group of the files the kernel cannot revert."},
+  "revertGroupFailed": "Failed",
+  "@revertGroupFailed": {"description": "The result's group of the files the revert could not write."},
+  "revertReasonChanged": "Changed after the turn",
+  "@revertReasonChanged": {"description": "Why a file was skipped: it changed after the turn."},
+  "revertReasonOversize": "Too large to revert",
+  "@revertReasonOversize": {"description": "Why a file cannot be reverted: it is too large for a copy to be kept."},
+  "revertReasonEvicted": "No longer kept",
+  "@revertReasonEvicted": {"description": "Why a file cannot be reverted: its copy is no longer kept, the undo history having dropped it."},
+  "revertReasonAfterUnknown": "Cannot tell if it changed",
+  "@revertReasonAfterUnknown": {"description": "Why a file cannot be reverted: the state it was left in is unknown, so whether it changed cannot be told."},
+  "revertSummaryRestored": "{count, plural, =0{Reverted no files} =1{Reverted 1 file} other{Reverted {count} files}}",
+  "@revertSummaryRestored": {"description": "The conversation's notice: how many files the revert brought back.", "placeholders": {"count": {"type": "int"}}},
+  "revertSummarySkipped": "{count, plural, =0{Skipped no files} =1{Skipped 1 file} other{Skipped {count} files}}",
+  "@revertSummarySkipped": {"description": "The conversation's notice: how many files were skipped.", "placeholders": {"count": {"type": "int"}}},
+  "revertSummaryUnrevertable": "{count, plural, =0{No files are unrevertable} =1{1 file cannot be reverted} other{{count} files cannot be reverted}}",
+  "@revertSummaryUnrevertable": {"description": "The conversation's notice: how many files cannot be reverted.", "placeholders": {"count": {"type": "int"}}},
+  "revertNothingToRevert": "Nothing to revert.",
+  "@revertNothingToRevert": {"description": "Said when the turn has no changes to revert."},
+  "revertTurnInFlight": "Unavailable while a turn is running",
+  "@revertTurnInFlight": {"description": "The tooltip of a revert entry while a turn runs: the revert has to wait."}
 }

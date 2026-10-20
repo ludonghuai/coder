@@ -13,6 +13,7 @@ import '../../kernel/claude_code/claude_path_setting.dart';
 import '../../kernel/commit_attribution.dart';
 import '../../kernel/prompt_suggestions.dart';
 import '../../chat/composer/composer_polish.dart' show ComposerPolishSetting;
+import '../../chat/editor_context_setting.dart';
 import '../../chat/widgets/turn_footer.dart' show LiveTurnStatsSetting;
 import '../../kernel/queued_messages.dart';
 import '../../kernel/thincoder/thincoder_locator.dart';
@@ -27,6 +28,7 @@ import '../../window/window_settings.dart';
 import '../../workspace/main_window.dart';
 import '../shell_command_actions.dart';
 import '../user_settings.dart';
+import 'git_settings.dart';
 import 'settings_dropdown.dart';
 import 'settings_widgets.dart';
 
@@ -371,6 +373,17 @@ class GeneralSettingsPage extends StatelessWidget {
                   ),
                 ),
                 SettingsSwitchRow(
+                  label: l10n.generalSettingsEditorContext,
+                  description: l10n.generalSettingsEditorContextDescription,
+                  value: EditorContextSetting.enabled(
+                    settings?[EditorContextSetting.settingKey],
+                  ),
+                  onChanged: (on) => _write(
+                    EditorContextSetting.settingKey,
+                    on ? null : EditorContextSetting.off,
+                  ),
+                ),
+                SettingsSwitchRow(
                   label: l10n.generalSettingsComposerPolish,
                   description: l10n.generalSettingsComposerPolishDescription,
                   value: ComposerPolishSetting.enabled(
@@ -484,6 +497,7 @@ class GeneralSettingsPage extends StatelessWidget {
                 ),
               ],
             ),
+            GitSettingsGroup(settings: settings),
             if (ShellCommand.supported)
               const SettingsCard(children: [_ShellCommandSetting()]),
             if (ContextMenu.supported)

@@ -10,11 +10,13 @@ import 'package:path/path.dart' as p;
 import 'package:bao_editor/textmate/textmate_syntax.dart';
 
 import 'package:bao_editor/monaco/flutter/language_assets.dart';
+import 'package:bao_remote/local.dart' show setGitProcessEnvironment;
 
 import 'browser/browser_bridge.dart';
 import 'browser/browser_tools.dart' show BrowserHistory;
 import 'chat/composer/composer_files.dart' show ComposerFile, pastedAsPicture;
 import 'chat/chat_width.dart';
+import 'chat/editor_context_setting.dart';
 import 'chat/reply_scroll.dart';
 import 'chat/user_message_style.dart';
 import 'chat/widgets/chat_minimap.dart';
@@ -62,6 +64,7 @@ import 'models/model_providers.dart';
 import 'models/model_runtime.dart';
 import 'models/model_welcome.dart';
 import 'network/network_proxy.dart';
+import 'network/network_proxy_io.dart' show NetworkProxy;
 import 'notifications/attention_host.dart';
 import 'notifications/attention_settings.dart';
 import 'platform/app_platform.dart';
@@ -165,12 +168,21 @@ Future<void> main(List<String> arguments) async {
       files.settings,
       (key) => files.settings[key],
     ).timeout(const Duration(seconds: 1), onTimeout: () {});
+    // Git reads the same proxy, each time a Git process starts.
+    setGitProcessEnvironment(
+      () => NetworkProxy.instance.current.environment,
+    );
     // Read as each agent starts.
     CommitAttribution.current = () =>
         CommitAttribution.parse(files.settings[CommitAttribution.settingKey]);
     // Read as each message is sent.
     QueuedMessages.current = () =>
         QueuedMessages.parse(files.settings[QueuedMessages.settingKey]);
+    // The file open in the editor, read as each message is sent.
+    EditorContextSetting.current = () => EditorContextSetting.enabled(
+      files.settings[EditorContextSetting.settingKey],
+    );
+    EditorContextSetting.changes = files.settings;
     // Read as each agent starts, and as each message is sent.
     PromptSuggestions.current = () =>
         PromptSuggestions.enabled(files.settings[PromptSuggestions.settingKey]);

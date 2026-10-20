@@ -190,13 +190,13 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('#73 the CHANGES ... offers Fetch From All Remotes, Pull and '
-      'Push', (tester) async {
+  testWidgets('#73 the CHANGES ... offers Fetch and Pull All Repositories, '
+      'Pull and Push', (tester) async {
     await pumpScm(tester);
     await hover(tester, find.text('Changes').first);
     await tester.tap(find.byTooltip('More Actions...').first);
     await tester.pumpAndSettle();
-    for (final item in ['Fetch From All Remotes', 'Pull', 'Push']) {
+    for (final item in ['Fetch and Pull All Repositories', 'Pull', 'Push']) {
       expect(find.text(item), findsOneWidget, reason: item);
     }
   });

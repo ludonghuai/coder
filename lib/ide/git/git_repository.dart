@@ -17,14 +17,17 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 
+import 'git_autofetch.dart';
 import 'git_model.dart';
+import 'git_pull.dart';
 import 'git_service.dart';
 
 class IdeGitRepository extends ChangeNotifier {
   IdeGitRepository(
     this.service, {
     this.refreshDelay = const Duration(milliseconds: 500),
-  }) {
+    DateTime Function()? clock,
+  }) : clock = clock ?? DateTime.now {
     unawaited(refresh());
   }
 
@@ -32,6 +35,10 @@ class IdeGitRepository extends ChangeNotifier {
 
   /// How long file changes settle before the status is read again.
   final Duration refreshDelay;
+
+  /// The time a successful fetch is stamped with (the status bar's "last
+  /// fetched"); a test's own.
+  final DateTime Function() clock;
 
   IdeGitState? _state;
   Object? _error;
@@ -57,6 +64,28 @@ class IdeGitRepository extends ChangeNotifier {
 
   /// Why the last read or operation failed.
   Object? get error => _error;
+
+  /// When a fetch, a pull, a sync or a fast-forward last succeeded: the
+  /// status bar's "last fetched". Kept in memory alone: the first round
+  /// after a restart fills it within seconds.
+  DateTime? lastFetchAt;
+
+  /// The last thing the automatic fetch did not do here, and why; null
+  /// while it goes well. The status bar and Source Control show it.
+  IdeGitAutoFetchIssue? get autoFetchIssue => _autoFetchIssue;
+  IdeGitAutoFetchIssue? _autoFetchIssue;
+  set autoFetchIssue(IdeGitAutoFetchIssue? value) {
+    if (_disposed || _autoFetchIssue == value) return;
+    _autoFetchIssue = value;
+    _notify();
+  }
+
+  /// Notes that the remote's commits are here now.
+  void _markFetched() {
+    if (_disposed) return;
+    lastFetchAt = clock();
+    _notify();
+  }
 
   /// Whether the status has been read once.
   bool get loaded => _loaded;
@@ -147,13 +176,13 @@ class IdeGitRepository extends ChangeNotifier {
 
   /// Runs [operation] after the ones queued before it; a [background]
   /// one (a status read) does not make the repository [busy].
-  Future<void> _enqueue(
-    Future<void> Function() operation, {
+  Future<T> _enqueue<T>(
+    Future<T> Function() operation, {
     bool background = false,
   }) {
     if (background) {
       final run = _queue.then((_) => operation());
-      _queue = run.catchError((Object _) {});
+      _queue = run.then<void>((_) {}, onError: (Object _) {});
       return run;
     }
     _operations++;
@@ -162,14 +191,14 @@ class IdeGitRepository extends ChangeNotifier {
       _operations--;
       _notify();
     });
-    _queue = run.catchError((Object _) {});
+    _queue = run.then<void>((_) {}, onError: (Object _) {});
     return run;
   }
 
   /// Runs [operation], then refreshes; its error is kept and rethrown.
-  Future<void> _operate(Future<void> Function() operation) async {
+  Future<T> _operate<T>(Future<T> Function() operation) async {
     try {
-      await _enqueue(operation);
+      return await _enqueue(operation);
     } catch (error) {
       if (!_disposed) {
         _error = error;
@@ -306,13 +335,16 @@ class IdeGitRepository extends ChangeNotifier {
     final (remote, name) = splitUpstream(upstream, await service.remotes());
     await service.pull(remote, name);
     if (head.ahead > 0) await service.push(remote, '$branch:$name');
+    _markFetched();
   });
 
   /// Git: Fetch (`Repository.fetch`), or from every remote
-  /// (`Repository.fetchAll`, which the title bar's Fetch From All Remotes
+  /// (`Repository.fetchAll`, which the single repository's `...` menu
   /// runs) when [remote] is null.
-  Future<void> fetch({String? remote}) =>
-      _operate(() => service.fetch(remote: remote));
+  Future<void> fetch({String? remote}) => _operate(() async {
+    await service.fetch(remote: remote);
+    _markFetched();
+  });
 
   /// Git: Pull (`Repository.pull`): pulls the branch's upstream. Throws
   /// when the branch has none (`Repository.pull`'s "no tracking
@@ -320,7 +352,85 @@ class IdeGitRepository extends ChangeNotifier {
   Future<void> pull() => _operate(() async {
     final (remote, name) = await _upstream('pull');
     await service.pull(remote, name);
+    _markFetched();
   });
+
+  /// Pulls the branch's upstream in [mode] (§12.2): fetch, the status read
+  /// after it, [veto], then the merge; a merge of ours that failed is rolled
+  /// back where it started, with every error's words (§12.2, step 6).
+  Future<IdeGitPullOutcome> pullFromUpstream({
+    required IdeGitPullMode mode,
+    IdeGitPullVeto? veto,
+  }) => _operate(() async {
+    final merge = mode == IdeGitPullMode.merge;
+    IdeGitAutoFetchIssue? fetch;
+    try {
+      await service.fetch();
+      _markFetched();
+    } catch (error) {
+      if (merge) rethrow;
+      fetch = ideGitFailureOf(error);
+    }
+    IdeGitState? state;
+    try {
+      state = await service.status();
+      if (state == null) throw const IdeGitException('Not a Git repository.');
+      final head = state.head;
+      if (head.branch == null || head.upstream == null || head.unborn) {
+        if (!merge) return IdeGitPullOutcome(root: state.root, issue: fetch);
+        throw const IdeGitException('Nothing to pull: no upstream.');
+      }
+      final upstream = head.upstream!;
+      final incoming = await service.changedPaths('HEAD', upstream);
+      if (veto != null) {
+        final decision = veto(state, incoming);
+        if (!decision.pull) {
+          return IdeGitPullOutcome(root: state.root, issue: ideGitPullIssue(fetch, decision.issue));
+        }
+      }
+      if (!merge) {
+        await service.fastForward(upstream);
+      } else if (await service.merging()) {
+        throw const IdeGitException('A merge is in progress: finish or abort it first.');
+      } else {
+        try {
+          await service.merge(upstream);
+        } catch (error) {
+          var check = '';
+          // A failed recheck still aborts; a failed abort may leave MERGE_HEAD (§12.2).
+          final started = await service.merging().catchError((Object failure) { check = '$failure'; return true; });
+          if (started) {
+            try {
+              await service.abortMerge();
+            } catch (abort) {
+              check = [if (check.isNotEmpty) check, '$abort', 'Run "git merge --abort" to finish.'].join('\n');
+            }
+          }
+          throw IdeGitException(['$error', if (check.isNotEmpty) check].join('\n'));
+        }
+      }
+      return IdeGitPullOutcome(root: state.root, updated: incoming, issue: fetch);
+    } catch (error) {
+      if (merge) rethrow;
+      return IdeGitPullOutcome(
+        root: state?.root ?? service.root,
+        issue: ideGitPullIssue(fetch, ideGitFailureOf(error)),
+      );
+    }
+  });
+
+  /// Fast-forwards the branch to [ref] (its upstream, `origin/main`) the
+  /// way the automatic fetch used to, without a merge commit; the automatic
+  /// fetch now goes through [pullFromUpstream]. Throws where Git refuses.
+  Future<void> fastForward(String ref) => _operate(() async {
+    await service.fastForward(ref);
+    _markFetched();
+  });
+
+  /// The files [upstream] changes against the branch, as absolute paths:
+  /// what a fast-forward to it would update.
+  Future<List<String>> incomingPaths(String upstream) =>
+      service.changedPaths('HEAD', upstream);
 
   /// Git: Push (`Repository.push`): pushes the branch to its upstream.
   /// Throws when the branch has none.

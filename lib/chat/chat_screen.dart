@@ -34,6 +34,7 @@ import 'panels/interaction_panel.dart';
 import 'panels/context_usage_panel.dart';
 import 'panels/goal_panel.dart';
 import 'panels/queue_panel.dart';
+import 'panels/revert_dialog.dart';
 import 'panels/todo_panel.dart';
 import 'side_panel/file_link.dart';
 import 'side_panel/file_open.dart';
@@ -458,7 +459,9 @@ class _ChatScreenState extends State<ChatScreen>
       title = SizedBox(
         width: 320,
         child: InlineRenameField(
-          initial: widget.title,
+          // A title picked while a turn ran waits to be confirmed (§3.5):
+          // the field reopens on that target, not the confirmed one.
+          initial: _session.pendingTitle ?? widget.title,
           style: style.copyWith(color: AppColors.textPrimary),
           onDone: (text) {
             if (text != null) onRename(text);
@@ -531,13 +534,26 @@ class _ChatScreenState extends State<ChatScreen>
               original: original,
             ),
           );
+    final revertTurn = _session.revertTurn;
+    final canPlan = _session.canPlanRevert && revertTurn != null;
+    final undo = _session.undoAllChanges;
+    // The kernel's revert waits for the turn to end rather than fall back
+    // to the host's own undo: shown disabled, and says why (§9). A kernel
+    // that plans reverts never falls back, whatever its review holds.
+    final plans = _session.plansReverts;
+    final waiting = plans && _session.isStreaming && !canPlan;
     return ActivityStrip(
       tasks: tasks,
       changes: changes,
       root: _session.root ?? '.',
       paths: _session.paths,
       onKeep: _session.keepAllChanges,
-      onUndo: _session.undoAllChanges,
+      onUndo: canPlan
+          ? () => unawaited(revertFilesFrom(context, _session, revertTurn))
+          : plans
+          ? null
+          : undo,
+      undoTooltip: waiting ? context.l10n.revertTurnInFlight : null,
       onKeepFiles: _session.keepChanges,
       onUndoFiles: _session.undoChanges,
       onOpenFile: open == null

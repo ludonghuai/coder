@@ -60,6 +60,8 @@ import 'file_views.dart';
 import 'file_service.dart'
     show IdeFileListing, IdeHostFiles, localizedFileError, readFileBytes;
 import 'git/commit_message.dart';
+import 'git/git_autofetch.dart';
+import 'git/git_autofetch_engine.dart';
 import 'git/git_change_editor.dart';
 import 'git/git_checkout.dart';
 import 'git/git_model.dart';
@@ -505,6 +507,16 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
 
   /// The status the open revisions were last read against.
   IdeGitState? _gitState;
+
+  /// What the shown repository last told the status bar of the automatic
+  /// fetch: the commits behind, when it last succeeded, and its issue.
+  int _gitBehind = 0;
+  DateTime? _gitFetchedAt;
+  IdeGitAutoFetchIssue? _gitIssue;
+
+  /// The workspace's automatic fetch and fast-forward: it fetches every
+  /// repository as the app runs, and where it can be done safely, pulls.
+  IdeGitAutoFetch? _autoFetch;
 
   /// The quick input's text while it is open (its prefix picks the mode).
   String? _quickInput;
@@ -1077,8 +1089,13 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
     }
     _restoreView();
     _attach();
+    _attachAutoFetch();
     _lifecycle = AppLifecycleListener(
-      onResume: () => unawaited(_git?.refresh()),
+      onResume: () {
+        unawaited(_git?.refresh());
+        // Back to the front: what the remote got meanwhile, now.
+        _autoFetch?.resume();
+      },
       // The window left: `onFocusChange` and `onWindowChange` save.
       onInactive: () =>
           unawaited(_autoSaveNow(const {'onFocusChange', 'onWindowChange'})),
@@ -1315,9 +1332,22 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
     _listenToRepositories();
     final count = _changesInAllRepositories;
     final branch = state?.head.branch;
-    if (count == _gitCount && branch == _gitBranch && !loaded) return;
+    final behind = state?.head.behind ?? 0;
+    final fetchedAt = _git?.lastFetchAt;
+    final issue = _git?.autoFetchIssue;
+    if (count == _gitCount &&
+        branch == _gitBranch &&
+        behind == _gitBehind &&
+        fetchedAt == _gitFetchedAt &&
+        issue == _gitIssue &&
+        !loaded) {
+      return;
+    }
     _gitCount = count;
     _gitBranch = branch;
+    _gitBehind = behind;
+    _gitFetchedAt = fetchedAt;
+    _gitIssue = issue;
     if (mounted) setState(() {});
   }
 
@@ -1428,6 +1458,11 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
     if (oldWidget.settings != widget.settings) {
       oldWidget.settings?.removeListener(_settingsChanged);
       widget.settings?.addListener(_settingsChanged);
+      // The engine listens to the file it was made with.
+      if (_autoFetch != null) {
+        _autoFetch!.dispose();
+        _attachAutoFetch();
+      }
     }
     if (oldWidget.remote != widget.remote) {
       oldWidget.remote?.removeListener(_remoteChanged);
@@ -1439,6 +1474,9 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
     if (oldWidget.workspace != widget.workspace) {
       _detach(oldWidget.workspace);
       _attach();
+      // The engine follows the workspace it was made over.
+      _autoFetch?.dispose();
+      _attachAutoFetch();
       _readBranch();
     }
     if (widget.visible && !oldWidget.visible) {
@@ -1462,6 +1500,7 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
     _statusMessageTimer?.cancel();
     _autoSaveTimer?.cancel();
     _lifecycle?.dispose();
+    _autoFetch?.dispose();
     // A quick pick or input box going with the workbench hides (the color
     // themes one applies the theme it started with again).
     _quickModel?.onDidHide?.call();
@@ -4612,14 +4651,14 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
       ?widget.remote?.item(context),
       if (_gitBranch ?? _branch case final branch?)
         // Upstream's `CheckoutStatusBar`: Checkout to…, its tooltip the
-        // repository's (`<folder> (Git) - `) before the command's.
+        // repository's (`<folder> (Git) - `) before the command's; here with
+        // the commits the upstream is ahead by and the last fetch.
         if (_git?.state case final state?)
           IdeStatusBarItem(
-            branch,
+            _gitBranchText(branch),
             icon: Codicons.gitBranch,
             tooltip: keys.titleWithKeybinding(
-              '${p.basename(state.root)} (Git) - '
-                  '$branch, ${l10n.gitCheckoutBranchTag}',
+              _gitBranchTooltip(state, branch, l10n),
               'git.checkout',
             ),
             onTap: _gitCheckout,
@@ -4709,6 +4748,64 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
         ),
         bell,
       ],
+    );
+  }
+
+  /// The branch as the status bar shows it: `main ↓2 · 02:15` — the commits
+  /// the upstream is ahead by, and when the remote was last fetched.
+  String _gitBranchText(String branch) {
+    final behind = _git?.state?.head.behind ?? 0;
+    final fetchedAt = _git?.lastFetchAt;
+    return '$branch'
+        '${behind > 0 ? ' ↓$behind' : ''}'
+        '${fetchedAt == null ? '' : ' · ${ideGitFetchedAt(fetchedAt)}'}';
+  }
+
+  /// The branch's tooltip: the repository, when the remote was last
+  /// fetched, and why the automatic fetch did not pull (`↓N` alone does not
+  /// say).
+  String _gitBranchTooltip(
+    IdeGitState state,
+    String branch,
+    AppLocalizations l10n,
+  ) {
+    final root = p.basename(state.root);
+    final fetchedAt = _git?.lastFetchAt;
+    final issue = _git?.autoFetchIssue;
+    return [
+      '$root (Git) - $branch, ${l10n.gitCheckoutBranchTag}',
+      if (fetchedAt != null) l10n.gitLastFetched(ideGitFetchedAt(fetchedAt)),
+      if (issue != null) ideGitAutoFetchTooltip(l10n, issue, repository: root),
+    ].join('\n');
+  }
+
+  /// Makes the automatic fetch over [widget]'s workspace and starts it. The
+  /// engine follows the workspace it is made over: another workspace, or
+  /// another settings file, gets another.
+  void _attachAutoFetch() {
+    _autoFetch = IdeGitAutoFetch(
+      repositories: () => widget.workspace.repositories,
+      documents: () => [
+        for (final doc in widget.workspace.documents)
+          (path: doc.path, dirty: doc.dirty, isFile: doc.isFile),
+      ],
+      reload: widget.workspace.reload,
+      setting: (key) => widget.settings?[key],
+      paths: widget.workspace.paths,
+      settingsChanges: widget.settings ?? Listenable.merge(const []),
+      workspaceChanges: widget.workspace,
+      onNeedsAttention: _gitNeedsAttention,
+    )..start();
+  }
+
+  /// An issue of the automatic fetch that needs the user: told once, in the
+  /// notification center.
+  void _gitNeedsAttention(IdeGitAutoFetchIssue issue, String root) {
+    if (!mounted) return;
+    _notifications.notify(
+      IdeSeverity.warning,
+      ideGitAutoFetchMessage(context.l10n, issue, repository: p.basename(root)),
+      source: 'Git',
     );
   }
 

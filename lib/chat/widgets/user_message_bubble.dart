@@ -9,6 +9,7 @@ import '../../theme/app_theme.dart';
 import '../chat_find.dart';
 import '../chat_models.dart';
 import '../composer/composer_embeds.dart';
+import '../composer/editor_context_chip.dart';
 import '../user_message_style.dart';
 import 'assistant_text.dart';
 import 'fade_curve.dart';
@@ -35,12 +36,21 @@ class UserMessageBubble extends StatefulWidget {
     super.key,
     required this.text,
     this.images = const [],
+    this.contexts = const [],
     this.onEdit,
+    this.onContextMenu,
   });
 
   final String text;
   final List<ImageAttachment> images;
+
+  /// The editor's context sent with it: shown as chips above its text.
+  final List<EditorContext> contexts;
   final VoidCallback? onEdit;
+
+  /// A right click on it, at where it pressed (global): the menu the
+  /// history holds (§9). Null where it offers none.
+  final ValueChanged<Offset>? onContextMenu;
 
   /// Its corners; what answers it is inset this much at either side.
   static const radius = 8.0;
@@ -178,6 +188,10 @@ class _UserMessageBubbleState extends State<UserMessageBubble> {
         event.buttons == kPrimaryMouseButton;
     final onImage = _pressOnImage;
     _pressOnImage = false;
+    // A right click: the message's menu, which the history holds (§9).
+    if (event.buttons & kSecondaryMouseButton != 0) {
+      widget.onContextMenu?.call(event.position);
+    }
     _pressedAt =
         primary && !onImage && !HardwareKeyboard.instance.isShiftPressed
         ? event.position
@@ -249,21 +263,31 @@ class _UserMessageBubbleState extends State<UserMessageBubble> {
                   borderRadius: BorderRadius.circular(UserMessageBubble.radius),
                   border: Border.all(color: AppColors.bubbleBorder()),
                 ),
-          child: SelectionContainer(
-            delegate: _selection,
-            child: _Collapsed(
-              shrinkWrap: fitted,
-              collapsedHeight: _lineHeight * _collapsedLines,
-              // All of it while it holds the find's match at hand, which
-              // may be in the lines it hides.
-              collapseAbove: ChatFindRow.holdsCurrent(context)
-                  ? double.infinity
-                  : _lineHeight * (_collapsedLines + 1),
-              content: InlineCodeText(
-                _messageSpan(widget.text, vocabulary, widget.images),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (widget.contexts.isNotEmpty) ...[
+                EditorContextChips(contexts: widget.contexts),
+                const SizedBox(height: 6),
+              ],
+              SelectionContainer(
+                delegate: _selection,
+                child: _Collapsed(
+                  shrinkWrap: fitted,
+                  collapsedHeight: _lineHeight * _collapsedLines,
+                  // All of it while it holds the find's match at hand, which
+                  // may be in the lines it hides.
+                  collapseAbove: ChatFindRow.holdsCurrent(context)
+                      ? double.infinity
+                      : _lineHeight * (_collapsedLines + 1),
+                  content: InlineCodeText(
+                    _messageSpan(widget.text, vocabulary, widget.images),
+                  ),
+                  overlay: const _CollapsedOverlay(),
+                ),
               ),
-              overlay: const _CollapsedOverlay(),
-            ),
+            ],
           ),
         ),
       ),
@@ -280,12 +304,17 @@ class UserMessageViewer extends StatefulWidget {
     super.key,
     required this.text,
     this.images = const [],
+    this.contexts = const [],
     this.controller,
     required this.onClose,
   });
 
   final String text;
   final List<ImageAttachment> images;
+
+  /// The editor's context the message carried: shown above its text, as in
+  /// its bubble ([UserMessageBubble.contexts]), and just as read only.
+  final List<EditorContext> contexts;
   final ScrollController? controller;
   final VoidCallback onClose;
 
@@ -320,7 +349,7 @@ class _UserMessageViewerState extends State<UserMessageViewer> {
 
   @override
   Widget build(BuildContext context) {
-    final UserMessageViewer(:text, :images, :controller) = widget;
+    final UserMessageViewer(:text, :images, :contexts, :controller) = widget;
     final vocabulary = ComposerVocabulary.of(context);
     return Focus(
       focusNode: _focus,
@@ -357,11 +386,21 @@ class _UserMessageViewerState extends State<UserMessageViewer> {
                 child: SingleChildScrollView(
                   controller: controller,
                   padding: const EdgeInsets.fromLTRB(12, 10, 12, 11),
-                  // Its own selection: not the history's.
-                  child: SelectionArea(
-                    child: InlineCodeText(
-                      _messageSpan(text, vocabulary, images),
-                    ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (contexts.isNotEmpty) ...[
+                        EditorContextChips(contexts: contexts),
+                        const SizedBox(height: 6),
+                      ],
+                      // Its own selection: not the history's.
+                      SelectionArea(
+                        child: InlineCodeText(
+                          _messageSpan(text, vocabulary, images),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),

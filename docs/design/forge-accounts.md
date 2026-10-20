@@ -335,13 +335,3 @@ l10n：新增 2 键（`accountsGiteeHosts`、`accountsTokenGiteeScopes`）+ 5 �
 - 限流头：`x-ratelimit-limit: 60`（未认证）。
 - `GET https://gitee.com/profile/personal_access_tokens` ⇒ 307 → `/login?redirect_to_url=/profile/personal_access_tokens`；`https://www.gitee.com/` ⇒ 302 → `https://gitee.com/`。
 
----
-
-## 变更记录
-
-- 2026-10-16 首版：Gitee 接入设计（端点对位来源 [D] / [O] / [M] / [P]；决策 D1–D6；未核实清单 R1–R9）。
-- 2026-10-16 修正轮 1（评审 10 项全 Accepted）：R9 收口（§3.4 / §5 / §8）· §5 体量拆包结论（500 档三件）· D3 失败路径 + G9 · D1 核查口径 · 资产声明（§5）· R10 入 §9 · 端点 6 补 [M] · §2.2 先例三元组 · 行号口径（档首声明 + 图标臂取齐）· G15 闸门回归。
-- 2026-10-16 实施实测修正：`test/forge/forge_test.dart` 实测 899 越 800 硬顶 ⇒ 自设触发成立、按缝拆包（既有用例留本档、G1–G15 落新档 `test/forge/forge_gitee_test.dart`）；§5（文件行 / 测试覆盖 / 体量条）与 §6 A4 命令改两档同跑。
-- 2026-10-16 实施交付随修：§5 文件表行数改实测（`forge_ref` 220 → 271 · `forge_api` 527 → 707 · `forge_accounts` 439 → 450 · `forge_view` 120 → 132 · `accounts_page` 495 → 503 · `forge_test` 518 → 475 · `forge_gitee_test` 新 → 452 · `fake_forge_http` 新 → 46）；补清单外 `fake_forge_http.dart` 与 4 档 import 连带行；测试覆盖段与体量条同步。
-- 2026-10-16 扩裁随修（用户「补gitee」）：新增 §3.7 改文清单（5 键 = `accountsDescription` + 4 键，逐键 en / zh 新文与落点）；§8-B3 口径改写（行为不动 / 文案随家数更新）；§5 l10n 行 5 键改文；R9 裁定完成态；§1 / §3.4 同步。
-- 2026-10-16 扩裁补录（coder 上抛 #1 / #2，用户已裁、实现已落）：§3.7 补「同源扩裁」2 项 —— ① `settingsAccountsKeywords` 两档各补 `Gitee` 一词（`app_en.arb:6388` / `app_zh.arb:2408`）；② `stash_skill.dart:88` / `:98` 枚举补 Gitee；§8 边界句改「已裁定：补一词」；§3.4 / §5（l10n 行 + `stash_skill.dart` 行）同步；口径 = 5 键改文 + 2 项同源扩裁。

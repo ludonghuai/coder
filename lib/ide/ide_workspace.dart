@@ -215,6 +215,10 @@ class IdeDocument {
 /// Open files belong to the IDE pane, not to any one agent conversation.
 class IdeWorkspace extends ChangeNotifier
     implements IdeSearchReplaceBackend, IdeScmHost {
+  /// The workspaces open now, a window's each: where an agent's files are
+  /// found (F18).
+  static final Set<IdeWorkspace> openWorkspaces = {};
+
   IdeWorkspace(
     this.root, {
     IdeFileService? files,
@@ -239,6 +243,7 @@ class IdeWorkspace extends ChangeNotifier
            } {
     addListener(_watchOpenFiles);
     _setRoots(roots);
+    openWorkspaces.add(this);
     if (_gitOf == null && _git != null && hasFolder) _detectIn(root);
   }
 
@@ -510,6 +515,12 @@ class IdeWorkspace extends ChangeNotifier
   /// The open model of [path]: its tab's.
   EditorDocumentModel? modelOf(String path) =>
       _fileModel(paths.normalize(path));
+
+  /// The open tab of [path]'s file — its own, not a diff's or a revision's:
+  /// null when the file is not open.
+  IdeDocument? documentOf(String path) => _documents
+      .where((d) => d.path == paths.normalize(path) && d.isFile)
+      .firstOrNull;
 
   /// The document [edit], [applyEdits], [undo] and [redo] change: [path]'s
   /// file's.
@@ -1229,6 +1240,7 @@ class IdeWorkspace extends ChangeNotifier
   @override
   void dispose() {
     _disposed = true;
+    openWorkspaces.remove(this);
     _changesTimer?.cancel();
     for (final watch in _watches.values) {
       unawaited(watch.cancel());

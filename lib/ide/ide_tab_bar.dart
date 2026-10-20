@@ -538,6 +538,7 @@ class IdeEditorTab extends StatefulWidget {
     this.onDoubleTap,
     this.renaming = false,
     this.onRenamed,
+    this.renameInitial,
     this.tooltip,
     this.minWidth = 80,
     this.borderTop = true,
@@ -552,6 +553,9 @@ class IdeEditorTab extends StatefulWidget {
 
   /// The new label, or null when the rename was cancelled.
   final ValueChanged<String?>? onRenamed;
+
+  /// What the field opens with when [renaming]: [label] when null (§3.5).
+  final String? renameInitial;
 
   /// In 16px, in the tab's color unless it has its own.
   final Widget icon;
@@ -692,7 +696,7 @@ class _IdeEditorTabState extends State<IdeEditorTab> {
                   Flexible(
                     child: widget.renaming && widget.onRenamed != null
                         ? InlineRenameField(
-                            initial: label,
+                            initial: widget.renameInitial ?? label,
                             style: IdeEditorTab.labelStyleBase.copyWith(
                               color: foreground,
                             ),

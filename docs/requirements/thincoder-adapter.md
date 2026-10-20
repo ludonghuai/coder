@@ -36,7 +36,7 @@
 - 机读通道：`thincoder acp` —— ACP v1 服务端，stdio 上 NDJSON JSON-RPC 2.0（Zed / JetBrains 同款接入面）。
 - 握手（`thincoder/thincoder-cli/src/acp/client-caps.mjs:52-64`）：`initialize` 返回
   `protocolVersion`（协商：同版本优先，否则取它支持的最新，`:18-21`）、
-  `agentCapabilities`（`loadSession: true`；`promptCapabilities` 图片/音频/内嵌上下文**全 false——源码注明不虚报**；
+  `agentCapabilities`（`loadSession: true`；`promptCapabilities` 图片 **true（批 11 起；B1 例外）**、音频/内嵌上下文 false；
   `sessionCapabilities` = list/resume/delete/close）、
   `authMethods`（客户端宣告 `auth.terminal` 才有 terminal 登录项，实际执行 `thincoder acp --login`，`:28-37`）、
   `agentInfo {name, version}`。
@@ -128,7 +128,24 @@ B1 例外状态：本批要动 `thincoder/`（ACP 挂起窗新档 + `session.mjs
 **F18 agent 编辑走 IDE 原生 diff（`fs` 反向 RPC）**（批 10；同上裁定）：桌面宣告 `fs.readTextFile` / `fs.writeTextFile` 能力并在内核请求时执行——agent 的读写**经桌面文件模型**，已打开的文件在编辑器里表现为**可见、可审阅的变更**（与既有变更审查面一致）。
 事实（2026-10-17 实读）：桌面未宣告两能力 ⇒ 按 CLI 需求 R-A5.5「未宣告 ⇒ 回落本地」，agent 编辑直接落盘，桌面只能事后看；CLI 侧桥已有门控分支（设计 §11.4 G3）⇒ 补上宣告与两个 handler 即接通。
 验收（可机检）：agent 编辑一个**已打开且有未保存缓冲**的文件 ⇒ 内核的写入请求落到桌面侧（不走本地落盘竞争），编辑器呈现可审阅变更且不覆盖用户未保存内容；未打开文件 ⇒ 写入后磁盘内容与 agent 所述一致；越界路径（项目外）⇒ 拒绝并有可见提示。
-边界：不做任意路径写入（限于项目根内）；不代管二进制大文件；不改变既有变更审查面的语义。
+**F19 原生图片块（ACP image 内容块）**（批 11；用户 2026-10-19 01:21「原生图片块…提上日程」）：把会话里的图片以 ACP 原生 image 内容块随 `session/prompt` 发送，模型直接看图；不再只依赖落盘路径告知。
+事实（2026-10-19 实读）：桌面 `KernelTurn.images` 走「图片替代」——`thincoder_kernel.dart` 落 `<cwd>/.thincoder/tmp/` 并在 text 里给路径（F6/A5）；ACP `session/prompt` 的 prompt 数组当前只发一个 text 块；CLI `buildPromptText` 只取首个 text 块（`resource-link.mjs:114-124`）。
+ACP schema v1 的 image 块形 = `{type:"image", mimeType, data}`（已查实）；CLI 的 provider vision = `anthropic.mjs` 的 `image_url` 未转 image 块（批 12 的 #85 修）。
+验收（可机检）：发送一张图片 ⇒ `session/prompt` 的 prompt 数组含原生 image 内容块（与 text 块并存）；模型回答能引用图片内容；CLI 不支持 image 时回退既有路径替代且行为同今天。
+边界：不做图片编辑 / OCR；不改 Claude 内核的图片面；不做远程项目图片；图片大小 / 格式限制沿用既有（F6/A5）。
+依赖：ACP schema v1 image 块；CLI `buildPromptText` / bridge；provider vision；**B1 例外 = 允许**（用户 2026-10-19 01:37「运行改thincoder仓库」；批 11 CLI 侧 5 档 ≈ +70 行 + 批 12 的 core/CLI 4 档 ≈ +64（同裁），out-of-repo 轮，保持上游可合并）。
+
+**F20 用量**（批 11；同上）：在桌面展示 thincoder 会话的用量——按回合与会话的 token、上下文占用；与终端状态行 ↑+↓ 口径对齐（终端无 `/usage`）；成本本批不做。
+事实（2026-10-19 实读 + 设计调查）：ACP `usage_update {used,size}` 已翻译（设计 §3.4）；turn footer 有 tokens / speed / cost（上游 1.3.0）；无会话级汇总、无用量页。终端**没有 `/usage` 命令**；终端用量面 = 状态栏累计 ↑+↓ + context%（context% 为 `estimateTokens` 估算，与 ACP `usage_update.used` 不同仪器）；成本无来源（bridge 只发 used/size，core 无价目表；ACP cost 为可选字段）。
+验收（可机检）：一个会话跑多回合 ⇒ 会话级累计 = Σ `usage_update.used` = 终端状态行 ↑+↓ 合计（口径 = CLI 上报值，不重算）；上下文占用显示 used/size（不与终端 estimateTokens 的 context% 对照）；成本本批不做（登记条件 = 协议面出现 cost 再显示）。
+边界：不做账号 / 账单用量（B3）；不改 CLI 的 usage 计算；不做跨会话历史统计。
+依赖：`usage_update`；turn footer 数据；终端状态行 ↑+↓（只读对照）。
+
+**F21 模型切换后置应用**（批 14；用户 2026-10-19 03:25「切模型是怎么啦？」+ 03:22「不行，非视觉模型还是做不了这个图片识别这个活，显示not support」）：回合在飞时切换模型不丢请求——切换记为目标，回合结束后自动应用，等待 / 生效 / 失败均可见。
+事实（2026-10-19 实测）：CLI 的 ACP 入站 FIFO 只豁免 `session/cancel` / `session/close` / `session/list` 与 `autoApprove`（`transport.mjs:31-40`），`model` 写入排在回合后；桌面 60s 超时（`thincoder_protocol.dart:61`）后丢弃（`events.log` 03:09:38 `got no answer` + 03:09:39 迟到 `id c6`）⇒ 模型未切、界面误以为已切 ⇒ 发图落到非视觉模型。
+验收（可机检）：回合在飞时选另一个模型 ⇒ 当回合仍用旧模型跑完，回合结束自动切换，UI 显示「已排队 → 已生效」；切换失败 ⇒ 保持旧模型 + 一条错误、不假装成功；会话切换 / 关窗打断 ⇒ 待应用目标清空。
+边界：不做非视觉模型自动借视觉子代理（用户 2026-10-19 03:30「E等一下」）；不改 CLI 的 FIFO 语义；不做 provider 级切换后置（除非证据要求）。
+依赖：ACP `set_config_option`；回合边界事件（`TurnEnded`）；模型选择器状态位。
 
 ## 4. 扩展性要求（「双端更新留空间」）
 
@@ -157,7 +174,7 @@ thincoder 将来补能力 → 改能力映射表（§5）+ 适配层小改即可
 | 思考档 `SelectsEffort` | `set_config_option(thinking)` | ⚠️ 仅开关 |
 | 上下文用量 `ReportsContext` | `usage_update` | ✅ |
 | 历史载入 `LoadsHistory` | `loadSession` + `session/load` | ✅ |
-| 图片 `AcceptsImages` | `promptCapabilities.image: false` | ❌ 走 F6 替代 |
+| 图片 `AcceptsImages` | `promptCapabilities.image: true`（批 11 起；B1 例外） | ✅ 原生 image 块（§22）；旧 CLI / 缺位 ⇒ F6 替代 |
 | 图片文件面（接口 `AcceptsImageFiles`） | 图片落盘 `<cwd>/.thincoder/tmp/` + 消息附路径行（F6） | ✅ |
 | 会话改名 `RenamesSession` | 无 | ❌ |
 | fork / 对话回退 / 文件回退 | 无 | ❌ |
@@ -175,7 +192,7 @@ thincoder 将来补能力 → 改能力映射表（§5）+ 适配层小改即可
 
 **B1 默认不改 thincoder 仓**——本适配默认落本仓；ACP 给不了的能力默认不通过改 thincoder 补。**例外**：接口面必要且最小的改动，经用户裁定、保持上游可合并（F12 / 批 5 先例：用户 2026-10-16「允许动仓，保留拉代码的能力」）。
 **B1 例外状态**：`host-tool-channel` 批（2026-10-18）要动 `thincoder/`（MCP forwarding + `permissionExempt` 信任位；外仓约 +170 行）——用户 2026-10-18 20:08「对，一定要实现宿主工具通道」+ 20:40 批准开工；保持上游可合并。
-**B2** 上表 ❌ 各项首版不做：图片直传、多文件夹工作区、对话 fork、对话/文件回退、后台任务控制、排队消息控制、
+**B2** 上表 ❌ 各项首版不做：多文件夹工作区、对话 fork、对话/文件回退、后台任务控制、排队消息控制、
 MCP 连接管理、账号用量、@文件建议、prompt 建议、命令列表、会话改名、`context`/`fast` 档、effort 多档。
 **B3** 不代管 provider / key：thincoder 配置由用户终端自理，桌面端只读取使用。
 **B4** 不做会话在两内核间迁移（内核会话格式不通；既有「对话开始即锁定内核」语义不变）。
@@ -209,10 +226,17 @@ MCP 连接管理、账号用量、@文件建议、prompt 建议、命令列表�
 - **批 6** 审批自动档 + 模型清单与档位：F13、F14（含 thincoder 侧 `configOptions` 投影）。
 - **批 7** 工作中发送的消息：F15（本仓内核本地队列，thincoder 零改动）。
 - **批 8** 回合结束后继续关注后台子代理：F16（含 thincoder 侧 ACP 挂起窗 + 回合边界帧；B1 例外待裁定——见 F16 条目）。
+- **批 9** ACP 取消 / 后台工作帧（thincoder CLI 轨；需求见该仓 ACP-CLIENT R-A6 / R-A7）。
+- **批 10** 编辑器上下文 + agent 编辑走 IDE 原生 diff：F17、F18。
+- **排期（2026-10-19 用户「先A后B」）**：**A = 批 11**（F19 原生图片块 + F20 用量）先行；**B = 批 2**（F8 远程 SSH）随后。
 
 ## 10. 裁定记录（用户逐字要点，2026-10-16）
 
 - 2026-10-17 · B1 例外（批 8）：**「可以动thincoder仓库」**——允许为 F16 改 thincoder 仓（ACP 挂起窗 + 回合边界帧），保持上游可合并。
+- 2026-10-19 · 用户 01:21：「原生图片块；远程SSH；用量这几个我们也要提上日程了」——三点入需求池：F8 远程 SSH（批 2，复用）· F19 原生图片块 · F20 用量；F19/F20 的正式条目与验收在各自批次启动时落。
+- 2026-10-19 · 用户 01:37：「运行改thincoder仓库」——F19 的 B1 例外获准（方案 A）；CLI 侧另立 out-of-repo 轮，保持上游可合并。
+
+- 2026-10-19 · 用户 19:45：「模型以后都用视觉型即可，大模型厂商也会逐渐做的综合全面」——图片/视觉面不为「非视觉模型」加提示（#96 撤回）；模型选型以视觉模型为准。
 
 - 「加上 thincoder 内核，Claude 保留，thincoder 为默认，需要和终端的 thincoder 相通；全做；
   thincoder 用户自己的事情；thincoder 的配置去用户电脑里面找……我做出来桌面版之后只需要添加配置即可；不改 thincoder 仓库」。

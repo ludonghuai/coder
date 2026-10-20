@@ -14,6 +14,7 @@ import '../chat/mock_conversation.dart';
 import '../icons/emoji_sheet.dart';
 import '../icons/icon_library.dart';
 import '../icons/project_icon.dart';
+import '../ide/ide_kernel_files.dart';
 import '../kernel/agent_kernel.dart';
 import '../kernel/kernel_registry.dart';
 import '../kernel/kernel_types.dart';
@@ -117,6 +118,10 @@ class AgentThread {
   /// Its session's id: none for a new agent until its first message.
   String? get id => (isOpen ? session.sessionId : null) ?? record?.id;
   String? get _id => id;
+
+  /// The title picked while a turn ran, not confirmed yet (§3.5); null when
+  /// none waits, or it is not open.
+  String? get pendingTitle => isOpen ? session.pendingTitle : null;
 
   /// A new agent of this run that nothing was sent to, nor named.
   bool get untouched =>
@@ -522,8 +527,10 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
         project: project,
         kernel: kernel,
         record: session,
+        // A kernel that can rename its stored sessions keeps the title
+        // itself (§3.3): the host's names are not a second source for it.
         title:
-            _names[id] ??
+            (kernel.catalog is RenamesStoredSessions ? null : _names[id]) ??
             (session.title.isEmpty ? l10n().agentImageUntitled : session.title),
         updatedAt: session.updatedAt,
         pinned: _pinned.contains(id),
@@ -537,6 +544,7 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
             // As it was left, or as a new agent starts.
             settings: {..._preferredSettings, ...?_agentSettings[session.id]},
             workspace: () => _kernelWorkspace(session.cwd),
+            files: IdeKernelFiles(l10n: l10n),
           ),
           historyCount: 0,
         ),
@@ -571,7 +579,10 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
       final session = ChatSession(
         kernel: descriptor,
         kernels: workspace.kernels,
-        kernelContext: KernelContext(cwd: project.path),
+        kernelContext: KernelContext(
+          cwd: project.path,
+          files: IdeKernelFiles(l10n: workspace.l10n),
+        ),
         historyCount: history,
         changes: changes,
         usage: isCodex
@@ -2210,8 +2221,11 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
 
   void _listen(AgentThread thread) {
     if (_listeners.containsKey(thread)) return;
-    // Named while closed: its CLI keeps the name once running.
-    if (_names[thread.record?.id] case final name?) thread.session.rename(name);
+    // Named while closed: its CLI keeps the name once running — for a
+    // kernel that keeps titles itself, the kernel's record is the source.
+    if (thread.kernel.catalog is! RenamesStoredSessions) {
+      if (_names[thread.record?.id] case final name?) thread.session.rename(name);
+    }
     _followDraft(thread);
     void listener() => _sync(thread);
     _listeners[thread] = listener;
@@ -2545,6 +2559,7 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
           cwd: cwd,
           settings: settings,
           workspace: () => _kernelWorkspace(cwd),
+          files: IdeKernelFiles(l10n: l10n),
         ),
         historyCount: 0,
       ),
@@ -2587,6 +2602,7 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
           resume: record,
           settings: {..._preferredSettings, ...?_agentSettings[record.id]},
           workspace: () => _kernelWorkspace(record.cwd),
+          files: IdeKernelFiles(l10n: l10n),
         ),
         historyCount: 0,
       ),
@@ -2632,7 +2648,7 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
           session.rename(title);
           return;
         }
-        if (titler == null || !session.canRename) return;
+        if (titler == null || !hostTitlesSession(session)) return;
         unawaited(
           titler!(
             text,
@@ -2649,18 +2665,39 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
     }
   }
 
-  void rename(AgentThread thread, String title) {
+  /// Renames [thread] (§3.4): through its kernel when it is open, its
+  /// catalog when it is not (the kernel's own record), and the host's names
+  /// for a kernel that keeps neither. False when the title was refused: the
+  /// thread keeps the one it had.
+  Future<bool> rename(AgentThread thread, String title) async {
     final trimmed = title.trim();
-    if (trimmed.isEmpty || trimmed == thread._title) return;
+    if (trimmed.isEmpty || trimmed.length > 80) return false;
+    if (trimmed == thread._title) return true;
     thread
       .._named = true
       .._wantsTitle = false;
-    // Kept here too: its CLI takes the name only once running.
-    if (thread._id case final id?) {
-      _names[id] = trimmed;
-      _save();
+    final record = thread.record;
+    // Its kernel takes a title only where it can rename (§3.4); anything
+    // else falls to the catalog or the host's names, open or not.
+    final byKernel = thread.isOpen && thread.session.canRename;
+    if (record == null || byKernel) {
+      _retitle(thread, trimmed);
+      return true;
     }
+    if (thread.kernel.catalog case final RenamesStoredSessions catalog) {
+      try {
+        await catalog.rename(record, trimmed);
+      } on Object {
+        return false;
+      }
+      _retitle(thread, trimmed);
+      return true;
+    }
+    // Kept here too: its CLI takes the name only once running.
+    _names[record.id] = trimmed;
+    _save();
     _retitle(thread, trimmed);
+    return true;
   }
 
   void _retitle(AgentThread thread, String title) {

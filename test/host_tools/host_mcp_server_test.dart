@@ -344,6 +344,37 @@ void main() {
     expect(reply.status, 413);
   });
 
+  test('T19: a grant rebound to the session it made keys its calls by it',
+      () async {
+    register(HostTool(
+      name: 'browser_open',
+      description: 'A tool.',
+      inputSchema: const {'type': 'object'},
+      group: 'browser',
+      run: (input, call) async => 'session=${call.sessionId}',
+    ));
+    // session/new goes out before the session has an id: the grant starts
+    // with the empty one, and the kernel rebinds it once the id is known.
+    final second = HostMcpServer.issue('', '/project')!.token;
+    HostMcpServer.rebind(second, 's2');
+
+    final reply = bodyOf(
+      await call(
+        token: second,
+        message: rpc(2, 'tools/call', {
+          'name': 'browser_open',
+          'arguments': <String, Object?>{
+            'url': 'https://example.com',
+          },
+        }),
+      ),
+    );
+    expect(((reply['result'] as Map)['content'] as List).single, {
+      'type': 'text',
+      'text': 'session=s2',
+    });
+  });
+
   test('T18: a heartbeat is answered', () async {
     final reply = bodyOf(await call(message: rpc(10, 'ping')));
     expect(reply['id'], 10);

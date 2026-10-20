@@ -90,6 +90,15 @@ abstract final class HostMcpServer {
     }
   }
 
+  /// Gives [token]'s grant the [sessionId] its session got: its calls are
+  /// keyed by it, where session/new's grant went out with the empty one
+  /// (two of those could collide on a request id).
+  static void rebind(String token, String sessionId) {
+    final grant = _grants[token];
+    if (grant == null || sessionId.isEmpty) return;
+    _grants[token] = _Grant(token, sessionId, grant.cwd);
+  }
+
   /// A token for [sessionId] (its calls run in [cwd]), and the entry an ACP
   /// session request gives its agent; null while the endpoint is not up.
   /// One a request: a new leave each time a session starts.

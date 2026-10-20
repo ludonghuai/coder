@@ -146,6 +146,21 @@ void main() {
     await catalog.delete('/p|9');
   });
 
+  test('renames a session without opening one, where the kernel keeps it '
+      '(G9)', () async {
+    // One agent across the calls, as a machine keeps its slots.
+    final agent = ThincoderMock(cwd: '/p');
+    final catalog = ThincoderCatalog(connect: (cwd) async => _Kept(agent));
+    final session = (await catalog.sessionsIn('/p')).single;
+    await catalog.rename(session, 'Renamed');
+    expect(agent.requests('session/set_title').single['params'], {
+      'sessionId': '3',
+      'title': 'Renamed',
+    });
+    // The kernel's record is the source: the list reads it back (§3.3).
+    expect((await catalog.sessionsIn('/p')).single.title, 'Renamed');
+  });
+
   test('an id that is not one of ours opens nothing', () async {
     var opened = 0;
     final catalog = ThincoderCatalog(

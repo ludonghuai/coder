@@ -25,6 +25,21 @@ class FakeGit {
   /// `git diff` output (of the index, or with `--cached` of HEAD).
   String diff = '';
 
+  /// `git diff --name-only -z --no-renames <from> <to>` output, by
+  /// `<from> <to>`: repository-relative paths (`/`), none unless set.
+  final Map<String, List<String>> changedFiles = {};
+
+  /// `git merge --ff-only <ref>` answers, by ref: success, doing nothing,
+  /// unless set (a refusal, e.g. `not possible to fast-forward`).
+  final Map<String, IdeGitOutput> merges = {};
+
+  /// `git merge --no-edit <ref>` answers, by ref: success, already up to
+  /// date, unless set (a conflict).
+  final Map<String, IdeGitOutput> mergeCommits = {};
+
+  /// `git merge --abort`'s answer: success, unless set.
+  IdeGitOutput abortMerge = const IdeGitOutput(0, '');
+
   /// `git diff --no-index -- /dev/null <path>` output, by relative path.
   final Map<String, String> newFileDiffs = {};
 
@@ -104,8 +119,22 @@ class FakeGit {
       case ['diff', ..., '--no-index', '--', '/dev/null', final path]:
         final added = newFileDiffs[path];
         return IdeGitOutput(added == null ? 0 : 1, added ?? '');
+      case ['diff', '--name-only', '-z', '--no-renames', final from, final to]:
+        return IdeGitOutput(
+          0,
+          [
+            for (final path in changedFiles['$from $to'] ?? const <String>[])
+              '$path\x00',
+          ].join(),
+        );
       case ['diff', ...]:
         return IdeGitOutput(0, diff);
+      case ['merge', '--ff-only', final ref]:
+        return merges[ref] ?? const IdeGitOutput(0, '');
+      case ['merge', '--no-edit', final ref]:
+        return mergeCommits[ref] ?? const IdeGitOutput(0, 'Already up to date.');
+      case ['merge', '--abort']:
+        return abortMerge;
       case ['show', ..., final object] when object.contains(':'):
         final text = show[object];
         if (text == null) {

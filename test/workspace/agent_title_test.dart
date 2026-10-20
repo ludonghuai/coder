@@ -2,10 +2,30 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:baocode/chat/chat_models.dart';
+import 'package:baocode/chat/chat_session.dart';
+import 'package:baocode/kernel/mock/mock_kernels.dart';
 import 'package:baocode/l10n/l10n.dart';
 import 'package:baocode/workspace/agent_title.dart';
 
 void main() {
+  test('a kernel that titles its sessions is not titled by the host (G2)', () {
+    final thincoder = ChatSession(
+      kernel: MockKernels.thincoder,
+      historyCount: 0,
+    );
+    addTearDown(thincoder.dispose);
+    expect(thincoder.ownsTitle, isTrue);
+    expect(
+      hostTitlesSession(thincoder),
+      isFalse,
+      reason: 'the host titler is never called for it',
+    );
+    final claude = ChatSession(kernel: MockKernels.claudeCode, historyCount: 0);
+    addTearDown(claude.dispose);
+    expect(claude.ownsTitle, isFalse);
+    expect(hostTitlesSession(claude), isTrue);
+  });
+
   test('images alone are titled after the first with a file name', () {
     ImageAttachment image([String? name]) => ImageAttachment(
       bytes: Uint8List(0),

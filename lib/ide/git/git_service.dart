@@ -436,6 +436,63 @@ class IdeGitService {
     _check(await _git(['pull', '--tags', remote, branch]), 'Cannot pull.');
   }
 
+  /// `git merge --ff-only <ref>`: moves the branch to [ref] where it can be
+  /// fast-forwarded to, and fails where it cannot (a merge commit would be
+  /// needed, or local changes are in the way): no merge commit, no conflict
+  /// is ever made.
+  Future<void> fastForward(String ref) async {
+    await _requireRoot();
+    _check(await _git(['merge', '--ff-only', ref]), 'Cannot fast-forward.');
+  }
+
+  /// `git merge --no-edit <ref>`: merges [ref] into the branch (a merge
+  /// commit where it diverged); its words are the stderr, else the stdout.
+  Future<void> merge(String ref) async {
+    await _requireRoot();
+    final out = await _git(['merge', '--no-edit', ref]);
+    if (out.exitCode == 0) return;
+    final detail = (out.stderr.trim().isEmpty ? out.stdout : out.stderr).trim();
+    final cut = detail.length > 500 ? '${detail.substring(0, 500)}…' : detail;
+    throw IdeGitException(cut.isEmpty ? 'Cannot merge.' : 'Cannot merge.\n$cut');
+  }
+
+  /// Whether a merge is in progress (`rev-parse --verify -q MERGE_HEAD`):
+  /// false where none is, and an error where Git cannot say.
+  Future<bool> merging() async {
+    await _requireRoot();
+    final out = await _git(['rev-parse', '--verify', '-q', 'MERGE_HEAD']);
+    if (out.exitCode == 0) return true;
+    final detail = (out.stderr + out.stdout).trim();
+    if (out.exitCode == 1 && detail.isEmpty) return false;
+    const what = 'Cannot read the merge state.';
+    throw IdeGitException(detail.isEmpty ? what : '$what\n$detail');
+  }
+
+  /// `git merge --abort`: rolls back the merge in progress.
+  Future<void> abortMerge() async {
+    await _requireRoot();
+    _check(await _git(['merge', '--abort']), 'Cannot abort the merge.');
+  }
+
+  /// The files [to] changes against [from] (`git diff --name-only -z
+  /// --no-renames`), as absolute paths under the repository's top level: an
+  /// empty list where nothing changed, or where [root] is in no repository.
+  Future<List<String>> changedPaths(String from, String to) async {
+    final top = await repositoryRoot();
+    if (top == null) return const [];
+    final output = _check(
+      await _git(['diff', '--name-only', '-z', '--no-renames', from, to]),
+      'Cannot read the changed files.',
+    );
+    return [
+      for (final path in output.stdout.split('\x00'))
+        if (path.isNotEmpty)
+          pathContext.normalize(
+            pathContext.join(top, pathContext.joinAll(path.split('/'))),
+          ),
+    ];
+  }
+
   /// `git push [-u] remote name` (`push`; [setUpstream] to publish).
   Future<void> push(
     String remote,

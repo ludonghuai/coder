@@ -13,6 +13,7 @@ import 'package:super_sliver_list/super_sliver_list.dart';
 import '../base/smooth_scroll.dart';
 import '../ide/ide_find_widget.dart';
 import '../ide/ide_hover.dart';
+import '../ide/ide_menu.dart';
 import '../l10n/l10n.dart';
 import '../theme/app_theme.dart';
 import '../theme/workbench_theme.dart' show themeColors;
@@ -24,6 +25,7 @@ import 'chat_models.dart';
 import 'chat_session.dart';
 import 'composer/composer.dart';
 import 'composer/composer_draft.dart';
+import 'panels/revert_dialog.dart';
 import 'reply_scroll.dart';
 import 'side_panel/file_link_menu.dart';
 import 'steadiness.dart';
@@ -408,6 +410,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
   int? _editingIndex;
   String _editingText = '';
   List<ImageAttachment> _editingImages = const [];
+  List<EditorContext> _editingContexts = const [];
   final GlobalKey _editorPlaceholderKey = GlobalKey();
 
   /// The status row's, kept as the items before it grow in number: it
@@ -625,6 +628,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
     _editingIndex = editing.index;
     _editingText = item.text;
     _editingImages = item.images;
+    _editingContexts = item.contexts;
   }
 
   @override
@@ -1126,9 +1130,11 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
     _pointersDown++;
     // What a right click is on, found as it presses: the selection's menu
     // builds as it comes up, when nothing may be hit tested.
-    _linkMenu = event.buttons & kSecondaryMouseButton != 0
-        ? fileLinkMenuAt(context, event.position)
-        : null;
+    final secondary = event.buttons & kSecondaryMouseButton != 0;
+    _linkMenu = secondary ? fileLinkMenuAt(context, event.position) : null;
+    if (!secondary || _linkMenu != null || _turnMenu?.at != event.position) {
+      _turnMenu = null;
+    }
     // A press stops the list where it is (a trackpad swipe's fling carries
     // on for a while), as it does in the platform's lists: a mouse is not
     // one of the list's drag devices, so nothing else would, and a
@@ -1453,6 +1459,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
       _editingIndex = index;
       _editingText = item.text;
       _editingImages = item.images;
+      _editingContexts = item.contexts;
       _editComposerKey = GlobalKey();
       _editorHeight = _editorFromHeight = laidOut.isEmpty
           ? 0
@@ -1735,7 +1742,9 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
                           key: ValueKey(('sticky', index)),
                           text: item.text,
                           images: item.images,
+                          contexts: item.contexts,
                           onEdit: () => _startEditing(index),
+                          onContextMenu: (at) => _showTurnMenu(index, at),
                         ),
                       ),
                     ),
@@ -1838,6 +1847,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
                                     ? UserMessageViewer(
                                         text: _editingText,
                                         images: _editingImages,
+                                        contexts: _editingContexts,
                                         controller: _viewerScroll,
                                         onClose: _cancelEditing,
                                       )
@@ -2045,6 +2055,9 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
         expanded: _isExpanded(index),
         onToggle: () => _toggle(index),
         onEdit: item is UserMessageItem ? () => _startEditing(index) : null,
+        onContextMenu: item is UserMessageItem
+            ? (at) => _showTurnMenu(index, at)
+            : null,
         onMoveToBackground: _feed.moveToBackgroundAt(index),
         onStop: _feed.stopAt(index),
         onOpen: switch ((item, widget.onOpenAgent)) {
@@ -2213,8 +2226,25 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
   /// The file link the last right click pressed on (see [_contextMenu]).
   ChatItemMenu? _linkMenu;
 
-  /// The selection's right click: on a file the conversation names, that
-  /// file's menu (see [FileLinkMenu]) in place of the selection's.
+  /// The turn's revert menu the last right click pressed on, and where (§9).
+  ({ChatSession session, String turnId, Offset at})? _turnMenu;
+
+  /// The turn [index]'s message began (its id is the turn's, §3.3).
+  String? _turnIdAt(int index) =>
+      _session?.turns.where((turn) => turn.prompt == index).firstOrNull?.turnId;
+
+  /// Offers the revert from the message at [index] on (§9), kernel idle.
+  void _showTurnMenu(int index, Offset at) {
+    _turnMenu = null;
+    final session = _session;
+    final turnId = session?.canPlanRevert == true ? _turnIdAt(index) : null;
+    if (session != null && turnId != null) {
+      _turnMenu = (session: session, turnId: turnId, at: at);
+    }
+  }
+
+  /// The selection's right click: a file's menu, a message's revert, or the
+  /// selection's own.
   Widget _contextMenu(BuildContext context, SelectableRegionState selection) {
     final at = selection.contextMenuAnchors.primaryAnchor;
     if (_linkMenu case final menu?) {
@@ -2225,10 +2255,32 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
       });
       return const SizedBox.shrink();
     }
+    if (_turnMenu case final menu?) {
+      _turnMenu = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        selection.hideToolbar();
+        if (mounted) _showRevertMenu(menu);
+      });
+      return const SizedBox.shrink();
+    }
     return AdaptiveTextSelectionToolbar.selectableRegion(
       selectableRegionState: selection,
     );
   }
+
+  /// "Revert files from this turn…" for [menu]'s turn, at where it pressed.
+  void _showRevertMenu(({ChatSession session, String turnId, Offset at}) menu) =>
+      unawaited(showIdeMenu(
+        context,
+        position: menu.at,
+        entries: ideMenuGroups([[
+          IdeMenuAction(
+            context.l10n.revertFromTurn,
+            onSelected: () => unawaited(
+              revertFilesFrom(context, menu.session, menu.turnId)),
+          ),
+        ]]),
+      ));
 
   /// Scrolls row [index] to the top of the view, [fraction] of the way
   /// down it, laid out yet or not.

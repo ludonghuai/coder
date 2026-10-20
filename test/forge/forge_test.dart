@@ -47,6 +47,17 @@ void main() {
       expect(ForgeRef.parse('not a link'), isNull);
     });
 
+    test('a URL whose percent-escape is broken is no page, not a crash', () {
+      expect(ForgeRef.parse('https://github.com/o/r/pull/7%'), isNull);
+      expect(ForgeRef.parse('https://github.com/o/r/issues/%zz'), isNull);
+      expect(ForgeRef.allIn('see https://github.com/o/r/pull/7% now'), isEmpty);
+      // The crash this guards against is a *valid* escape decoding to invalid
+      // UTF-8 (`Missing extension byte`), not a stray '%' — the two below are
+      // the ones that actually reach `pathSegments` and would throw without it.
+      expect(ForgeRef.parse('https://github.com/o/r/issues/%E4'), isNull);
+      expect(ForgeRef.allIn('see https://github.com/o/r/issues/%E4 now'), isEmpty);
+    });
+
     test('every one a text links to, once each', () {
       final refs = ForgeRef.allIn(
         'Opened https://github.com/o/r/pull/7. See '

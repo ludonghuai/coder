@@ -4193,6 +4193,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get scmFetchFromAllRemotes => 'Fetch From All Remotes';
 
   @override
+  String get scmScanFailed =>
+      'Can\'t look for repositories here right now; trying again shortly.';
+
+  @override
+  String get scmFetchAndPullAll => 'Fetch and Pull All Repositories';
+
+  @override
+  String get scmFetchAndPull => 'Fetch and pull remote commits';
+
+  @override
+  String scmBehindCommits(int count) {
+    return '$count remote commits to pull';
+  }
+
+  @override
   String get scmPull => 'Pull';
 
   @override
@@ -6973,6 +6988,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get modelsSwitchConfirm => 'Switch';
 
   @override
+  String modelsSwitchPending(String model) {
+    return 'Switches to $model when this turn ends';
+  }
+
+  @override
   String get modelsAuxiliary => 'Auxiliary Model';
 
   @override
@@ -9182,7 +9202,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get branchBarWorkspace => 'Branches of the folders';
 
   @override
-  String get settingsSectionAccounts => 'Git Accounts';
+  String get settingsSectionAccounts => 'Accounts';
 
   @override
   String get settingsAccountsKeywords =>
@@ -10242,4 +10262,212 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aboutOpen => 'Open';
+
+  @override
+  String get turnTokensSpentHint =>
+      'This turn: input and output tokens together';
+
+  @override
+  String get usageSessionTotal => 'Session total';
+
+  @override
+  String get generalSettingsEditorContext => 'Editor Context';
+
+  @override
+  String get generalSettingsEditorContextDescription =>
+      'The file open in the editor goes with each message: its path, the cursor\'s line and the selection. Once per message; dismiss it for a draft with the chip below the message box.';
+
+  @override
+  String editorContextLine(String name, int line) {
+    return '$name · line $line';
+  }
+
+  @override
+  String get editorContextDismiss => 'Dismiss Editor Context';
+
+  @override
+  String editorContextLines(String name, int first, int last) {
+    return '$name · lines $first–$last';
+  }
+
+  @override
+  String get agentChangeNotApplied => 'Agent\'s change (not applied)';
+
+  @override
+  String get agentWriteRefusedUnsaved =>
+      'The file has unsaved changes in the editor; the write was not applied.';
+
+  @override
+  String get generalSettingsGit => 'Git';
+
+  @override
+  String get generalSettingsGitAutofetch =>
+      'Fetch Remote Updates Automatically';
+
+  @override
+  String get generalSettingsGitAutofetchDescription =>
+      'Every 3 minutes, and once when the window comes back to the front: fetches every repository of the workspace.';
+
+  @override
+  String get generalSettingsGitAutoPull => 'Pull Automatically';
+
+  @override
+  String get generalSettingsGitAutoPullDescription =>
+      'Only when the working tree is clean, the branch can fast-forward, and no unsaved buffer covers the files the remote changed; otherwise the number of remote commits alone shows.';
+
+  @override
+  String get generalSettingsGitAutofetchPeriod => 'Fetch Period';
+
+  @override
+  String gitPeriodMinutes(String minutes) {
+    return '$minutes min';
+  }
+
+  @override
+  String gitLastFetched(String time) {
+    return 'Last fetched: $time';
+  }
+
+  @override
+  String get gitAutoFetchDirty => 'Not pulled: there are uncommitted changes';
+
+  @override
+  String get gitAutoFetchDiverged =>
+      'Not pulled: the branch and its upstream have both changed';
+
+  @override
+  String get gitAutoFetchLimit =>
+      'Not pulled: there are more changes than are checked';
+
+  @override
+  String gitAutoFetchBuffered(String repository, String files) {
+    return '$repository: not pulled, unsaved changes in $files';
+  }
+
+  @override
+  String gitAutoFetchFilesMore(String files) {
+    return '$files and more';
+  }
+
+  @override
+  String get gitAutoFetchNetwork =>
+      'The network is not available: retrying automatically';
+
+  @override
+  String get gitAutoFetchProxy =>
+      'The proxy is not available: retrying automatically';
+
+  @override
+  String gitAutoFetchAuth(String repository) {
+    return '$repository: sign-in is needed to fetch';
+  }
+
+  @override
+  String gitAutoFetchConflict(String repository) {
+    return '$repository: cannot be pulled without your attention';
+  }
+
+  @override
+  String gitAutoFetchOther(String repository) {
+    return '$repository: the automatic fetch failed';
+  }
+
+  @override
+  String get renameTitleRequired => 'A title is required';
+
+  @override
+  String get renameTitleTooLong => 'A title is at most 80 characters';
+
+  @override
+  String get revertFromTurn => 'Revert files from this turn…';
+
+  @override
+  String get revertTitle => 'Revert files from this turn?';
+
+  @override
+  String get revertWarning => 'Changes made after this turn will be lost.';
+
+  @override
+  String get revertConfirm => 'Revert';
+
+  @override
+  String get revertDone => 'Revert complete';
+
+  @override
+  String revertFileCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count files',
+      one: '1 file',
+      zero: 'No files',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get revertGroupRestored => 'Restored';
+
+  @override
+  String get revertGroupSkipped => 'Skipped';
+
+  @override
+  String get revertUnrevertable => 'Cannot be reverted';
+
+  @override
+  String get revertGroupFailed => 'Failed';
+
+  @override
+  String get revertReasonChanged => 'Changed after the turn';
+
+  @override
+  String get revertReasonOversize => 'Too large to revert';
+
+  @override
+  String get revertReasonEvicted => 'No longer kept';
+
+  @override
+  String get revertReasonAfterUnknown => 'Cannot tell if it changed';
+
+  @override
+  String revertSummaryRestored(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Reverted $count files',
+      one: 'Reverted 1 file',
+      zero: 'Reverted no files',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String revertSummarySkipped(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Skipped $count files',
+      one: 'Skipped 1 file',
+      zero: 'Skipped no files',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String revertSummaryUnrevertable(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count files cannot be reverted',
+      one: '1 file cannot be reverted',
+      zero: 'No files are unrevertable',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get revertNothingToRevert => 'Nothing to revert.';
+
+  @override
+  String get revertTurnInFlight => 'Unavailable while a turn is running';
 }

@@ -1,6 +1,8 @@
 import 'package:bao_editor/monaco/flutter/document_snapshot.dart';
 import 'package:flutter/services.dart' show TextSelection;
 
+import 'chat_models.dart';
+
 /// The file in front in the editor beside a conversation (the IDE's, the
 /// side panel's): the agent is told of it with the user's next message, as
 /// Claude Code is told of the file open in an IDE.
@@ -54,33 +56,18 @@ class OpenEditor {
 
   /// The most of [selectedText] the agent is told: a selection of a whole
   /// long file would weigh on every message after.
-  static const maxSelectedText = 10000;
+  static const maxSelectedText = EditorContext.maxSelectedText;
 
-  /// What the agent is told: the code selected with it.
-  String get note {
-    final lines = switch (selectedLines) {
-      (final first, final last) when first == last => 'line $first',
-      (final first, final last) => 'lines $first-$last',
-      null => null,
-    };
-    final opened = switch ((line, lines)) {
-      (_, final lines?) => 'The user selected $lines of $path in the editor',
-      (final line?, null) =>
-        'The user has $path open in the editor, the cursor on line $line',
-      _ => 'The user has $path open in the editor',
-    };
-    final selected = switch (selectedText) {
-      final text? when text.length > maxSelectedText =>
-        ':\n${text.substring(0, maxSelectedText)}\n'
-            '[${text.length - maxSelectedText} more characters selected, '
-            'not shown: read the file for them]\n\n',
-      final text? when text.isNotEmpty => ':\n$text\n\n',
-      _ => '. ',
-    };
-    return '<system-reminder>$opened$selected'
-        'This may or may not be related to the current task.'
-        '</system-reminder>';
-  }
+  /// This file as a message's context carries it.
+  EditorContext toContext() => EditorContext(
+    path,
+    line: line,
+    selectedLines: selectedLines,
+    selectedText: selectedText,
+  );
+
+  /// What Claude Code is told: the code selected with it.
+  String get note => toContext().note;
 
   /// What the agent is told once no file is open where one was.
   static const closedNote =

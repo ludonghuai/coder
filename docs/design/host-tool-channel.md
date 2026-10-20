@@ -48,9 +48,9 @@ thincoder CLI（子进程）
 
 | 面 | 先例 | 我们照抄的形 |
 |---|---|---|
-| 进程内 MCP server 实现 | `lib/kernel/claude_code/claude_sdk_tools.dart:128-228`（`handle`：initialize / tools/list / tools/call / notifications） | 同一份 `handle` 同时服务两种传输 |
+| 进程内 MCP server 实现 | `lib/host_tools/host_tools.dart` 的 `handle`（initialize / tools/list / tools/call / notifications；迁自 `claude_sdk_tools.dart`，§16-1） | 同一份 `handle` 同时服务两种传输 |
 | 本机认证监听 | `lib/browser/browser_bridge.dart:214-242`（loopback + 系统选端口 + 令牌）；`lib/models/proxy/model_proxy.dart:81-82`（loopback `HttpServer.bind`） | `127.0.0.1` + 端口 0 + 每会话令牌 |
-| 工具名面 | Claude：`mcp__baocode__<name>`（`claude_sdk_tools.dart:114-119`）；thincoder MCP：`<server>_<name>`（`thincoder-core/mcp.mjs:145-155`） | 注册表键保持 `browser_open`，两面各自加前缀 |
+| 工具名面 | Claude：`mcp__baocode__<name>`（`HostTools.server` 前缀，`lib/host_tools/host_tools.dart`）；thincoder MCP：`<server>_<name>`（`thincoder-core/mcp.mjs:145-155`） | 注册表键保持 `browser_open`，两面各自加前缀 |
 | 工具卡成形 | `lib/kernel/thincoder/thincoder_events.dart:357-402`（按 ACP `kind` 造项） | 追加一条按宿主注册表取 `kind` / `summary` 的分支 |
 | 能力位协商 | `docs/design/thincoder-adapter.md` §3.4（`initialize` 的 `agentCapabilities` 现状） | 只读 `mcpCapabilities.http`，不加版本门 |
 | 外仓 ACP 扩面 + 本仓接线 | 批 5 / F12（`docs/requirements/thincoder-adapter.md:173`：B1 = 默认不改仓 + 经用户裁定的最小接口例外；`docs/batches/thincoder-subagent-attribution.md:85`）· 批 8 / F16（`docs/requirements/thincoder-adapter.md:211` 记裁原话；`docs/batches/thincoder-suspension.md:170`） | 外仓新档 + 本仓接线，各带批次档与测试；B1 例外见 §7.2 |
@@ -100,7 +100,7 @@ thincoder CLI（子进程）
 **采用 A2**：
 
 1. **它不是一个新协议**。ACP 规格逐字允许「客户端自带 MCP server 把工具给模型」；thincoder 侧要做的只是把它自己登记为待做的 M2 转发面做掉（`thincoder/docs/cli/design/ACP-CLIENT.md:33`、`:572`）。B 要在 ACP 之外发明一套客户端工具面，上游没有采用动机 ⇒ 长期 fork。
-2. **服务端几乎免费**：`HostTools.handle`（编制日名 `ClaudeSdkTools.handle`，`lib/kernel/claude_code/claude_sdk_tools.dart:128-228`）已经是一个完整的 MCP server（initialize / tools/list / tools/call / 取消），换一层传输即可复用，工具体系零复制。
+2. **服务端几乎免费**：`HostTools.handle`（`lib/host_tools/host_tools.dart`；编制日名 `ClaudeSdkTools.handle`，迁自 `claude_sdk_tools.dart`，§16-1）已经是一个完整的 MCP server（initialize / tools/list / tools/call / 取消），换一层传输即可复用，工具体系零复制。
 3. **降级不需要协商代码**：旧 CLI 不宣告 `mcpCapabilities.http` ⇒ 我方不发 `mcpServers` ⇒ 无工具、无报错、无日志噪声（F4）。
 4. **代价可控且可测**：新增一个已认证的环回监听（与 `BrowserBridge` 的既有做法同型），无新进程、无打包面。
 
@@ -215,7 +215,7 @@ Accept: application/json, text/event-stream
 | 情况 | 线上 | 依据 |
 |---|---|---|
 | 工具抛错 | `result.isError:true` + 文本 = 错误文句 | MCP 规范逐字：工具错误放结果体（§2.3） |
-| 未知工具 | 同上，文本 `No tool <name>.` | 与 Claude 面同句（`claude_sdk_tools.dart:164-171`） |
+| 未知工具 | 同上，文本 `No tool <name>.` | 与 Claude 面同句（`HostTools.handle` 的未知工具分支，`lib/host_tools/host_tools.dart`） |
 | 组未暴露（开关关后仍调用） | 同上，文本 `BaoCode's browser tools are off (Settings → Browser).` | F3「调用被明确拒绝」 |
 | `image` 内容块 | 换成一行文本注记（图片只对 Claude 面可见，见 §12-1） | thincoder 客户端把非 text 块 `JSON.stringify`（`thincoder-core/mcp.mjs:192-199`） |
 | JSON 解析失败 / 参数非法 / 未知方法 | `-32700` / `-32602` / `-32601` | JSON-RPC 2.0 |
@@ -224,7 +224,7 @@ Accept: application/json, text/event-stream
 
 | 面 | 模型看到的名字 | 证据 |
 |---|---|---|
-| Claude Code | `mcp__baocode__browser_open` | `claude_sdk_tools.dart:114-119` |
+| Claude Code | `mcp__baocode__browser_open` | `HostTools.server` 前缀（`lib/host_tools/host_tools.dart`） |
 | thincoder | `baocode_browser_open` | `thincoder-core/mcp.mjs:145-155`（`<server>_<tool>`，非字母数字换 `_`，截 64） |
 | 会话里的工具卡 | `baocode_browser_open`（CLI 判 `kind:"other"`） | `thincoder-cli/src/acp/bridge.mjs:284-292` |
 | 注册表键（唯一真名） | `browser_open` | `lib/browser/browser_tools.dart:92-130` |
@@ -296,6 +296,7 @@ thincoder 会话 prepare()
   │     ├─ 首次过门：HostMcpServer.ensure() 绑定 127.0.0.1:0（懒启动；幂等；失败记一条 appEvent，本次不带 mcpServers，会话照常）
   │     └─ HostMcpServer.issue(sessionId, cwd) → {url, headers, token}
   ├─ session/new | load | resume（带 cwd + mcpServers）
+  │     └─ session/new 应答回会话 id ⇒ _openNew 调 HostMcpServer.rebind(token, 会话 id)（grant 的会话键从空串换成真 id）
   └─ CLI：connectMcpServer → initialize → tools/list → 工具进 agent.tools
 
 会话结束 / 切换 / dispose
@@ -303,6 +304,10 @@ thincoder 会话 prepare()
 ```
 
 监听器**活到进程退出**（D7）。**不设应用退出钩子**：进程退出由 OS 回收本机 socket（无持久状态要清）；`shutdown()` 只用于单元测试收尾（⑰），不接应用生命周期。懒启动触发者 = 上面 `prepare()` 的首次过门（`ThincoderKernel` 调 `HostMcpServer.ensure()`，不新增调用档）。
+
+**grant 的会话键**：`session/new` 的 `mcpServers` 在会话有 id 之前发出 ⇒ grant 初值 `sessionId` 为空串（`thincoder_kernel.dart:297`）；应答带回会话 id 后，`_openNew` 用 `HostMcpServer.rebind(token, sessionId)` 回填
+（`thincoder_kernel.dart:394-399`；`host_mcp_server.dart:93-100`）。宿主工具调用的 `HostToolCall.sessionId` 因此是真实会话 id；取消表以 `(sessionId, requestId)` 为键（`host_tools.dart:208`），两个新会话的同号请求不再互相取消。
+`session/load` / `session/resume` 发出时 id 已知，不需要回填。
 
 ### 5.2 会话期的状态
 
@@ -331,7 +336,7 @@ thincoder 会话 prepare()
 | **新 baocode + 新 CLI**（宣告 `mcpCapabilities.http`） | 工具可见、免审、卡片与 Claude 同形；调用落到同一 `BrowserTools` 实现 |
 | **新 baocode + 旧 CLI**（无该键；含 `thincoder.path` 指向旧版） | 我方不发 `mcpServers` ⇒ 会话正常、无工具、无报错、终端无 warn（A4） |
 | **新 baocode + 旧 CLI（老代码收非空）** | 即便收到也只 warn 并忽略（`handlers-session.mjs:266-268`）——我方根本不发，这一段不会触发 |
-| **baocode 有通道能力但宿主无工具**（浏览器未连 / 开关关） | 不发 ⇒ 无工具（与 Claude 面 `ClaudeSdkTools.servers` 同规则，`claude_sdk_tools.dart:121-125`） |
+| **baocode 有通道能力但宿主无工具**（浏览器未连 / 开关关） | 不发 ⇒ 无工具（与 Claude 面 `HostTools.servers` 同规则，`lib/host_tools/host_tools.dart`） |
 | **Claude 会话** | 零变化：SDK MCP 路径照旧（`claude_code_kernel.dart:512-516`、`:550-554`、`:1683-1698`） |
 | **浏览器扩展** | 零变化：协议号、消息面、分组、白名单都不动 |
 | **多桌面实例** | 各自一个端口、各自令牌；浏览器只认一个（既有 `otherApp` 逻辑，`browser_tools.dart:320-324`） |
@@ -365,11 +370,11 @@ thincoder 会话 prepare()
 | ⑭ | `lib/kernel/thincoder/thincoder_kernel.dart`（1156） | `_handshake` 记 `mcpCapabilities.http`；`_openNew` / `_pickUp` 带 `cwd` + `mcpServers`；`_teardown` 撤令牌 | ≤ +40（⇒ ≤1196）；实测 +39（⇒ 1195） |
 | ⑮ | `lib/kernel/thincoder/thincoder_events.dart`（784） | `_tool()` 加宿主工具名映射（kind / summary 回注册表） | ≤ +14（⇒ ≤798）；实测 +14（⇒ 798），其后他批 +1 ⇒ 799 |
 | ⑯ | `test/host_tools/host_tools_test.dart`（迁自 `test/kernel/claude_sdk_tools_test.dart` 157 行） | 类型名（机械）+ T16（Claude 面零变化断言）+ 分组 API 用例；13 例 | 157 ⇒ 315（+158） |
-| ⑰ | `test/host_tools/host_mcp_server_test.dart`（新） | T1–T10、T10②（取消转交）、T17、T18；13 例 | ~+240；实测 352 |
+| ⑰ | `test/host_tools/host_mcp_server_test.dart`（新） | T1–T10、T10②（取消转交）、T17、T18、T19；14 例 | ~+240；实测 352 |
 | ⑱ | `test/kernel/thincoder_kernel_test.dart`（2629） | T11–T15；既有 `session/load` / `session/resume` 用例补 `cwd`、`session/new` 改为「不含 `mcpServers` 键」 | ≤ +140；实测 +211（⇒ 2840），其后他批 +6 ⇒ 2846 |
 | ⑲ | `docs/design/thincoder-adapter.md`（2208） | §5.2 改动点清单补本批两档（⑭ / ⑮）+ 体量立场随本批读数；能力映射面补 ACP `mcpServers` 用法一行 | 文档；净 0 代码 |
 | ⑳ | `docs/requirements/thincoder-adapter.md`（216） | §2.2 ACP 面用法补 `mcpServers` + 信任位；B1 例外（本批）状态句按 `:173` 口径登记；E5 的 §5 能力映射表为单一维护点，随本批补一行 | 文档；**主 agent 笔** |
-| ㉑ | `lib/kernel/thincoder/thincoder_mock.dart`（632） | 测试对端的 `httpMcp` 开关（清单外，已批准） | 清单外加档 |
+| ㉑ | `lib/kernel/thincoder/thincoder_mock.dart`（632） | 测试对端的 `httpMcp` 开关（清单外，已批准） | ≤ +10（`httpMcp` 实测 +5） |
 
 **生命周期接缝**：`HostMcpServer` 的懒绑定触发者 = `ThincoderKernel.prepare()` 首次过门时（§5.1；落在 ⑭ 内，不新增调用档）；关闭不设应用生命周期钩子——进程退出由 OS 回收 socket，`shutdown()` 只供单元测试收尾（⑰）。
 
@@ -428,7 +433,7 @@ thincoder 会话 prepare()
 | **A2** 边界 | §4.5、§5.2、§12-5 | 走查 3（只见黄色分组）+ T8（组未暴露 ⇒ 明确拒绝）+ 走查 5（开关关）+ 走查 7（扩展断开 ⇒ 既有文案） |
 | **A3** Claude 回归 | §4.4、§6、§7.1-⑯ | T16（`HostTools.handle` 的 initialize / tools/list / tools/call / 取消与改名前逐字段相同；`called('mcp__baocode__browser_open')` 命中）+ 走查 6 |
 | **A4** 旧 CLI | §4.2 门、§6 | T12（mock 不宣告能力 ⇒ `session/new` 不带 `mcpServers`，会话正常）+ 走查 6 |
-| **A5** 机检 | §10、§11 | T1–T15、T17、T18 全绿（T16 归 A3）；`test/fixtures/thincoder/` 不改 |
+| **A5** 机检 | §10、§11 | T1–T15、T17、T18、T19 全绿（T16 归 A3）；`test/fixtures/thincoder/` 不改 |
 
 ---
 
@@ -450,6 +455,7 @@ thincoder 会话 prepare()
 | T10 | 协议错误 | 坏 JSON / 未知方法 | `-32700` / `-32601`（HTTP 200） |
 | T17 | 请求体上界 | 超过 1 MiB 的请求体 | `413`（§4.3） |
 | T18 | 心跳 | `ping{}` | `200` + `{}` |
+| T19 | grant 回填 | `issue('', '/project')` 后 `rebind(token, 's2')`；用该 token 调工具 | 工具读到的 `HostToolCall.sessionId == 's2'`（`host_mcp_server_test.dart` 的 T19） |
 
 **内核接线**（`test/kernel/thincoder_kernel_test.dart`；`ThincoderMock` 对端）
 
@@ -471,7 +477,7 @@ thincoder 会话 prepare()
 
 ## 11. 测试策略
 
-- **单元测试**（变更实施者写、跑、留一行读数）：上表 T1–T18。宿主 server 用真 loopback 绑定 + 伪工具（`BrowserBridge` 的测试先例 `test/browser/browser_bridge_test.dart` 同型），不依赖浏览器；内核接线用 `ThincoderMock`（`lib/kernel/thincoder/thincoder_mock.dart`），零真实进程。
+- **单元测试**（变更实施者写、跑、留一行读数）：上表 T1–T19。宿主 server 用真 loopback 绑定 + 伪工具（`BrowserBridge` 的测试先例 `test/browser/browser_bridge_test.dart` 同型），不依赖浏览器；内核接线用 `ThincoderMock`（`lib/kernel/thincoder/thincoder_mock.dart`），零真实进程。
 - **固件**：`test/fixtures/thincoder/` 不改——本批不改任何 `session/update` 形状（工具卡仍是既有 `tool_call` / `tool_call_update`）。
 - **不新增集成测试**：通道的业务观察点（工具可见 / 可调用 / 侧栏跟随）由走查覆盖；本仓集成面未受影响。
 - **走查**（A 段交付时执行）：§15。
@@ -491,11 +497,6 @@ thincoder 会话 prepare()
 9. **`session/new` 的阻塞预算**：MCP 连接在 CLI 装配期完成（握手 30 s 上限，`helpers.mjs:5`）；宿主 server 本地即时。判定条件：走查见会话创建明显变慢 ⇒ 改惰性连接（工具表先给、后台连）。
 10. **多桌面实例**：各自端口、各自令牌，互不可见；浏览器只认一个实例（既有 `otherApp` 逻辑）。
 11. **信任位的上游接受风险（D5）**：`_meta["baocode.dev/trusted"]` → `permissionExempt` 是 thincoder 侧的非标准扩展面（第二个上游面）。判定条件：上游拒收该位（评审 / 合并被拒）⇒ 回落逐调用审批（`dispatch.mjs:177` 的短路条件不扩；浏览器工具每次弹审批卡），信任位整条撤除，其余不变。
-
-12. **新会话 grant 的 `sessionId` 为空（台账 #71；非阻塞）**：grant 在 `session/new` 应答前发出（`thincoder_kernel.dart:266` 的 `issue(_sessionId ?? '', _cwd)`）⇒ 新会话的 `HostToolCall.sessionId` 是空串。
-    取消表以 `(sessionId, requestId)` 为键（`host_tools.dart:208` / `:245`）⇒ 两个新会话的同号请求可互相取消。
-    今天无可见消费方：客户端不发 `notifications/cancelled`（§12-3）。
-    判定条件：出现「取消打到另一会话」的证据，或客户端开始发 `notifications/cancelled` ⇒ 补 rebind（`session/new` 应答后回填 sessionId）或换键（token / grant id）。
 13. **`'browser'` 字面量（非阻塞）**：`host_mcp_server.dart:253`（`tool.group != 'browser'`）与 `:259`（`_given[name] == 'browser'`）用字面量判组，与 `exposedGroups` 常量（`:38`）各自成立；今天暴露组恒为 `{'browser'}`，无行为差异。判定条件：暴露组增加第二组或改名 ⇒ 两处改读 `exposedGroups`。
 14. **`initialize.instructions` 取全体特性文本（非阻塞）**：`host_tools.dart:179-180` 把 `_instructions` 全表（按特性登记，`instruct` `:136-138`）拼进 `instructions`，不按 `exposedGroups` 过滤；今天只有浏览器特性登记文本，MCP 面读数无差异。判定条件：第二个特性开始 `instruct`（图片 / IDE / 终端）⇒ 按 `exposedGroups` 过滤。
 
@@ -542,6 +543,8 @@ thincoder 会话 prepare()
 三处设计与实现不一致 + 两处体量偏差；机制结论（能力门 / 契约 / 错误映射 / 边界）未变。行号 = 实施后坐标，行数 = 换行数实测（2026-10-18 工作树）。
 
 **16-1 测试档路径** = `test/host_tools/host_tools_test.dart`。原设计 ⑯ 记 `test/kernel/claude_sdk_tools_test.dart`（157 行）；实施把整档迁到 `test/host_tools/`，补 T16 逐字段断言与分组 API 用例，共 13 例，旧档已删。§7.1 ⑯ / §10 已按实订正。
+
+同批源码档迁移：`lib/kernel/claude_code/claude_sdk_tools.dart`（229 行）整档删除、内容迁入 `lib/host_tools/host_tools.dart`（§7.1 ① / ①′）；§2.2 / §3.3 / §4.3 / §4.4 / §6 里指向旧档行号的坐标已改指新档符号。
 
 **16-2 `picturesOnly` 的定义处** = `browser_actions.dart:105`。原设计把它记在 `browser_tools.dart`；实际是 `browser_screenshot` 的注册项上打标（`browser_actions.dart:105`），`BrowserTools.register` 只透传（`browser_tools.dart:112`）。口径不变：MCP 面不出该工具（§4.3 / §12-1）。
 

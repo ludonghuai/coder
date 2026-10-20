@@ -13,13 +13,7 @@ class ThincoderMock implements ThincoderTransport {
   ThincoderMock({
     this.cwd = '/project',
     this.version = '0.12.74',
-    this.slots = const [
-      {
-        'sessionId': '3',
-        'updatedAt': '2026-10-15T09:30:00.000Z',
-        'title': 'From the terminal',
-      },
-    ],
+    List<Map<String, Object?>>? slots,
     List<Map<String, Object?>>? turn,
     List<Map<String, Object?>>? replay,
     this.authRequired = false,
@@ -29,7 +23,10 @@ class ThincoderMock implements ThincoderTransport {
     this.thinkingLevels,
     this.configError = false,
     this.httpMcp = false,
-  }) : turn = turn ?? defaultTurn,
+    this.promptImage = false,
+    this.serialInbound = false,
+  }) : slots = slots ?? _shelf,
+       turn = turn ?? defaultTurn,
        replay = replay ?? defaultReplay;
 
   /// How the app starts one, as a kernel does.
@@ -57,6 +54,10 @@ class ThincoderMock implements ThincoderTransport {
   /// Answers the session family with `-32000` (not logged in).
   final bool authRequired;
 
+  /// Whether inbound frames are handled one at a time, each on its own
+  /// turn, as a real transport's FIFO does (off: in the caller's stack).
+  final bool serialInbound;
+
   /// Whether the script's tool calls ask the user first.
   bool askPermission;
 
@@ -70,9 +71,24 @@ class ThincoderMock implements ThincoderTransport {
   /// Answers config writes with `-32602` (T59 / T60).
   final bool configError;
 
+  /// Answers `session/set_title` with `-32602` (a title refused).
+  bool titleError = false;
+
+  /// What `session/revert` answers with: the plan for a `dryRun`, and what
+  /// applying does (the plan when none is given).
+  Map<String, Object?>? revertPlan;
+  Map<String, Object?>? revertApply;
+
+  /// Answers `session/revert` with `-32602` (an unknown turn).
+  bool revertUnknown = false;
+
   /// Says its handshake takes HTTP MCP servers (`mcpCapabilities`), as the
   /// CLI with the forwarding face does.
   final bool httpMcp;
+
+  /// Says its handshake takes pictures as native image blocks (F19); off
+  /// like an older CLI, which is today's way.
+  final bool promptImage;
 
   /// Answers `session/prompt` with `-32603`: a turn that failed (T67③).
   bool promptError = false;
@@ -102,6 +118,9 @@ class ThincoderMock implements ThincoderTransport {
 
   /// The slots deleted, which [slots] no longer lists.
   final Set<String> _deleted = {};
+
+  /// The titles written since, by slot ([slots] stays as given).
+  final Map<String, String> _titles = {};
   int _newSlots = 0;
   int _rpc = 0;
   bool _crashed = false;
@@ -121,6 +140,31 @@ class ThincoderMock implements ThincoderTransport {
   @override
   void write(Map<String, Object?> message) {
     written.add(message);
+    if (!serialInbound) {
+      _receive(message);
+      return;
+    }
+    // A real transport reads frames FIFO, one at a time, each handled on a
+    // turn of its own: a frame cannot run inside the one before it.
+    _inbound.add(message);
+    if (_draining) return;
+    _draining = true;
+    unawaited(_drainInbound());
+  }
+
+  final List<Map<String, Object?>> _inbound = [];
+  bool _draining = false;
+
+  Future<void> _drainInbound() async {
+    while (_inbound.isNotEmpty) {
+      final message = _inbound.removeAt(0);
+      await Future<void>.delayed(Duration.zero);
+      _receive(message);
+    }
+    _draining = false;
+  }
+
+  void _receive(Map<String, Object?> message) {
     final method = message['method'];
     if (method is String) {
       final id = message['id'];
@@ -226,7 +270,7 @@ class ThincoderMock implements ThincoderTransport {
             if (httpMcp) 'mcpCapabilities': {'http': true, 'sse': true},
             'loadSession': true,
             'promptCapabilities': {
-              'image': false,
+              'image': promptImage,
               'audio': false,
               'embeddedContext': false,
             },
@@ -279,7 +323,11 @@ class ThincoderMock implements ThincoderTransport {
           'sessions': [
             for (final session in slots)
               if (!_deleted.contains('${session['sessionId']}'))
-                {'cwd': cwd, ...session},
+                {
+                  'cwd': cwd,
+                  ...session,
+                  'title': _titles['${session['sessionId']}'] ?? session['title'],
+                },
           ],
         });
       case 'session/delete':
@@ -291,6 +339,20 @@ class ThincoderMock implements ThincoderTransport {
           return;
         }
         _respond(id, const {});
+      case 'session/set_title':
+        final title = '${params['title'] ?? ''}';
+        if (titleError || title.trim().isEmpty || title.length > 80) {
+          return _error(id, -32602, 'a title is refused');
+        }
+        _titles['${params['sessionId']}'] = title;
+        _respond(id, const {});
+      case 'session/revert':
+        if (revertUnknown) return _error(id, -32602, 'unknown turn');
+        final answer = switch (params['dryRun'] == true) {
+          true => revertPlan,
+          false => revertApply ?? revertPlan,
+        };
+        _respond(id, answer ?? _noRevert);
       case 'session/prompt':
         unawaited(_prompt(id, '${params['sessionId']}'));
       case 'session/cancel':
@@ -494,6 +556,14 @@ class ThincoderMock implements ThincoderTransport {
     if (holding.isCompleted) return;
     await holding.future;
   }
+
+  static const _shelf = <Map<String, Object?>>[
+    {'sessionId': '3', 'updatedAt': '2026-10-15T09:30:00.000Z', 'title': 'From the terminal'},
+  ];
+
+  static const _noRevert = <String, Object?>{
+    'files': <Object?>[], 'failed': <Object?>[], 'skipped': <Object?>[],
+    'unrevertable': <Object?>[]};
 
   /// What a turn sends when nothing else is asked for: a thought, some
   /// text, a tool call and its result, the usage, and the rest of the

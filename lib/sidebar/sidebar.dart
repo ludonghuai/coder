@@ -18,6 +18,7 @@ import '../icons/project_icon_picker.dart';
 import '../icons/project_icon_view.dart';
 import '../ide/ide_button.dart' show IdeButtonColors;
 import '../ide/ide_commands.dart' show ideUsesMacKeys;
+import '../ide/ide_dialog.dart';
 import '../ide/ide_hover.dart';
 import '../ide/ide_list.dart';
 import '../l10n/l10n.dart';
@@ -914,6 +915,7 @@ class _SidebarState extends State<Sidebar>
                 child: InlineRenameField(
                   initial: _workspace.hostLabel(current),
                   style: TextStyle(color: AppColors.text, fontSize: 11.5),
+                  checksTitle: false,
                   onDone: (name) {
                     setState(() => _renamingHost = false);
                     if (name != null) _workspace.renameHost(current, name);
@@ -1479,9 +1481,14 @@ class _SidebarState extends State<Sidebar>
       renaming: identical(thread, _renaming),
       onTap: () => _handleRowTap(thread),
       onRename: () => setState(() => _renaming = thread),
-      onRenamed: (title) {
-        if (title != null) _workspace.rename(thread, title);
+      onRenamed: (title) async {
+        final accepted = title == null || await _workspace.rename(thread, title);
+        if (!mounted) return;
         setState(() => _renaming = null);
+        if (!accepted) {
+          await showIdeDialog(context, message: 'Could not rename this session.',
+              buttons: [context.l10n.commonOk], cancel: null, type: IdeDialogType.error);
+        }
       },
       onPin: () => _workspace.setPinned(thread, !thread.pinned),
       onArchive: () => _workspace.setArchived(thread, !thread.archived),
@@ -2936,7 +2943,8 @@ class _ThreadRow extends StatelessWidget {
                       minWidth: renaming ? 0 : _titleMinWidth,
                       renaming
                           ? InlineRenameField(
-                              initial: thread.localizedTitle(context.l10n),
+                              initial: thread.pendingTitle ??
+                                  thread.localizedTitle(context.l10n),
                               onDone: onRenamed,
                             )
                           // What the row has no room for, over the title

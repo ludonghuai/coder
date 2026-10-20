@@ -128,6 +128,7 @@ class ContextUsage {
     required this.window,
     required this.used,
     this.segments = const [],
+    this.sessionSpent,
   });
 
   final int window;
@@ -135,6 +136,9 @@ class ContextUsage {
 
   /// What the tokens are spent on, when the kernel says; else empty.
   final List<ContextSegment> segments;
+
+  /// What the session spent so far, when the kernel says (F20); else null.
+  final int? sessionSpent;
 
   double get fraction => window == 0 ? 0 : used / window;
 }
@@ -583,6 +587,7 @@ class KernelTurn {
     required this.text,
     this.mentions = const [],
     this.images = const [],
+    this.contexts = const [],
     this.now = false,
     this.notes = const [],
   });
@@ -602,4 +607,62 @@ class KernelTurn {
 
   /// Only for kernels that accept images.
   final List<ImageAttachment> images;
+
+  /// The files open in the editor as it was sent: only for kernels that
+  /// accept them ([AcceptsEditorContext]), carried as their own text.
+  final List<EditorContext> contexts;
+}
+
+/// What a revert does with a file: put its earlier text back, or remove it.
+enum RevertAction { restore, delete }
+
+class RevertFile {
+  const RevertFile(this.path, this.action, {this.displayPath});
+
+  /// Its absolute path.
+  final String path;
+  /// What the user reads, e.g. relative to the project; [path] when null.
+  final String? displayPath;
+  final RevertAction action;
+}
+
+/// A file a revert leaves alone, and why: `changed`, `oversize`, `evicted`
+/// or `after-unknown`.
+class RevertSkip {
+  const RevertSkip(this.path, this.reason, {this.displayPath});
+
+  final String path;
+  final String? displayPath;
+  final String reason;
+}
+
+/// A file a revert did not manage to put back, and what went wrong.
+class RevertFailure {
+  const RevertFailure(this.path, this.error, {this.displayPath});
+
+  final String path;
+  final String? displayPath;
+  final String error;
+}
+
+class RevertPlan {
+  const RevertPlan({
+    this.files = const [],
+    this.skipped = const [],
+    this.unrevertable = const [],
+  });
+  final List<RevertFile> files;
+  final List<RevertSkip> skipped;
+  final List<RevertSkip> unrevertable;
+}
+
+class RevertOutcome extends RevertPlan {
+  const RevertOutcome({
+    super.files,
+    super.skipped,
+    super.unrevertable,
+    this.failed = const [],
+  });
+
+  final List<RevertFailure> failed;
 }

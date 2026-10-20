@@ -176,6 +176,19 @@ void main() {
       );
     });
 
+    test('a percent escape that is not UTF-8 has no path', () {
+      // `%E4` is a valid escape whose bytes are not UTF-8: Uri.parse keeps
+      // it, and decoding throws FormatException.
+      expect(
+        fileUriToPath(Uri.parse('file:///a/%E4'), OperatingSystem.linux),
+        isNull,
+      );
+      expect(
+        fileUriToPath(Uri.parse('file://%E4/foo'), OperatingSystem.linux),
+        isNull,
+      );
+    });
+
     test('other schemes have no path', () {
       expect(
         fileUriToPath(Uri.parse('http://foo/bar'), OperatingSystem.linux),

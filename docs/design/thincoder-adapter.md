@@ -2,9 +2,9 @@
 
 > 板块：内核适配（thincoder 桌面接入）· 范围仓：baocode。
 > 配对需求档：`docs/requirements/thincoder-adapter.md`（用户已确认，2026-10-16）。
-> 分批：**批 1 = 本地内核全链路**（需求档 F1–F7、F10 + 扩展性 E1–E5，本档详写）；批 2 = 远程 SSH（F8）；批 3 = Customize 对接（F9）；**批 4 = 子代理活动可见（F11，§15）**；**批 5 = 子代理内容归属（F12，§16）**；**批 6 = 审批自动档 + 模型清单与思考档位（F13 / F14，§17）**；**批 7 = 工作中发送的消息（F15，§18）**；**批 8 = 回合结束后继续关注后台子代理（F16，§19）**。
+> 分批：**批 1 = 本地内核全链路**（需求档 F1–F7、F10 + 扩展性 E1–E5，本档详写）；批 2 = 远程 SSH（F8）；批 3 = Customize 对接（F9）；**批 4 = 子代理活动可见（F11，§15）**；**批 5 = 子代理内容归属（F12，§16）**；**批 6 = 审批自动档 + 模型清单与思考档位（F13 / F14，§17）**；**批 7 = 工作中发送的消息（F15，§18）**；**批 8 = 回合结束后继续关注后台子代理（F16，§19）**；**批 10 = 编辑器上下文注入 + agent 编辑走 IDE 原生 diff（F17 / F18，§20 / §21）**；**批 11 = 原生图片块 + 用量（F19 / F20，§22 / §23）**；**批 12 = F19 CLI 收口（真机 provider 面 / 槽文件剥离 / 挂起窗残余，§22.9–§22.12）**；**批 14 = 模型切换后置应用（F21，§24）**；**批 15 = 会话治理 A1：重命名 + 回合级文件回退（独立板块档 `session-governance`，本档只留 ACP 方法面指针）**。
 > 先例坐标对照基准：`lib/kernel/claude_code/`（完整适配）· `lib/kernel/codex/`（薄内核）。
-> 状态：设计稿 · 2026-10-16 · 本文档中行号 = 编制日快照（实施时按符号定位）。
+> 状态：设计稿 · 2026-10-19 · 本文档中行号 = 编制日快照（实施时按符号定位）。
 
 ---
 
@@ -47,6 +47,8 @@
 
 先例的文档坐标：先例无设计档可引——claude 适配与 codex 薄内核在本仓无设计档 / 批次档（`docs/design/`、`docs/requirements/`、`docs/batches/` 下均无对应档；其形态只由实现与扁平功能档承载，如 `docs/ssh-remote-goal.md:16-17`、`docs/windows.md:26`）；先例批界无从对照，本对照以代码实现为准。
 
+**公开资料调查（survey-evidence）**：ACP v1 schema（`agentclientprotocol.com/protocol/schema`，2026-10-19 取）——image 内容块、`usage_update` 与 `session/set_config_option` 的帧形相关，取用见 §22 / §23 / §24；外仓设计档（`thincoder/docs/**`，声明来源）与先例对照相关，取用见各节 survey 证据；其余断言无公开源相关，以代码实读为准。
+
 ---
 
 ## 3. 接口契约
@@ -87,7 +89,7 @@ class ThincoderLaunch { final String cwd; final String executable; final Map<Str
 - `Future<Map<String, Object?>> request(String method, [Map<String, Object?> params, {Duration? timeout}])`：超时抛 `ThincoderRpcError`。
 - 入站三分流：响应（有 id、无 method，配对我们发出的）｜通知（有 method、无 id）｜反向请求（有 method、有 id，我们要回包）。
 - 错误对象 `ThincoderRpcError { code, message, data? }`；错误码语义 = `transport.mjs:14-20`：`-32600` parse / `-32601` 方法不存在 / `-32602` 参数非法 / `-32603` 内部 / `-32000` 需要凭据。
-- 反向请求应答器：`session/request_permission` → 审批流（§4 F4）；`fs/read_text_file` / `fs/write_text_file` 与**一切未知方法** → 立即回 `-32601` 错误（"得体降级"：服务端不会干等它的超时）。
+- 反向请求应答器：`session/request_permission` → 审批流（§4 F4）；`fs/read_text_file` / `fs/write_text_file` → §21.1 的两个 handler（仅内核连接；catalog 不宣告能力位，D73）；其余未知方法 → 立即回 `-32601` 错误（"得体降级"：服务端不会干等它的超时）。
 - **未知通知 / 未知 `sessionUpdate` 变体 / 已知通知里的未知字段**：忽略；协商与未知方法留痕走 `appEvent('thincoder', …)`（`lib/platform/event_log.dart:84`）（E4）。
 
 ### 3.4 ACP 线形（本适配用到的全部；逐条与 thincoder 源对位）
@@ -96,17 +98,18 @@ class ThincoderLaunch { final String cwd; final String executable; final Map<Str
 
 | 方法 | params | 结果 / 通知 |
 |---|---|---|
-| `initialize` | `{protocolVersion: 1, clientCapabilities: {}}` | `{protocolVersion, agentCapabilities, authMethods, agentInfo{name,version}}`（`client-caps.mjs:46-64`） |
+| `initialize` | `{protocolVersion: 1, clientCapabilities}`——内核连接 = `{fs: {readTextFile: true, writeTextFile: true}}`（§21.2），catalog 连接 = `{}`（D73） | `{protocolVersion, agentCapabilities, authMethods, agentInfo{name,version}}`（`client-caps.mjs:46-64`） |
 | `session/new` | `{cwd, mcpServers（过门才带）}` | `{sessionId, configOptions}`（`handlers-session.mjs:163-243`） |
 | `session/load` | `{sessionId, cwd, mcpServers（过门才带）}` | `{configOptions}`；**之前**逐条重放历史通知（`handlers-slots.mjs:64-138`） |
 | `session/resume` | `{sessionId, cwd, mcpServers（过门才带）}` | `{configOptions}`；不重放（`handlers-slots.mjs:140-197`） |
 | `session/list` | `{}` | `{sessions: [{sessionId, cwd, updatedAt?, title?}]}`（`handlers-slots.mjs:42-61`） |
 | `session/delete` | `{sessionId}` | `{}`（`handlers-slots.mjs:199-223`） |
-| `session/prompt` | `{sessionId, prompt: [{type:'text', text}]}` | `{stopReason: 'end_turn' \| 'cancelled'}`（`handlers-session.mjs:245-263`） |
+| `session/prompt` | `{sessionId, prompt: [{type:'text', text}], turnId?}`——原生路可含 image 块（§22：`{type:'image', mimeType, data}`；单 text 块 = 回退路）；`turnId?` = 回合标识（`session-governance` §3.1） | `{stopReason: 'end_turn' \| 'cancelled'}`（`handlers-session.mjs:245-263`） |
 | `session/cancel` | `{sessionId}` | `{}` |
 | `session/close` | `{sessionId}` | `{}`（未知会话也回 `{}`） |
 | `session/set_mode` | `{sessionId, mode: 'plan'\|'normal'}` | `{}` + 通知 `current_mode_update{currentModeId}`（`:321-341`） |
 | `session/set_config_option` | `{sessionId, configId, value}` | `{configOptions}` + 通知 `config_option_update{configOptions}`（`:292-319`） |
+| `session/set_title` · `session/revert`（扩展方法） | 形状 / 错误面 / 队列归属见 `docs/design/session-governance.md` §3.1 | 同上（本档只留指针，D2） |
 
 **通知（服务端 → 我方）：`session/update{ sessionId, update: { sessionUpdate, … } }`**
 
@@ -127,7 +130,9 @@ class ThincoderLaunch { final String cwd; final String executable; final Map<Str
 | 方法 | params | 我方应答 |
 |---|---|---|
 | `session/request_permission` | `{sessionId, options:[{optionId,name,kind}], toolCall{toolCallId,title,content[]}}`（选项序 = approve_once / approve_always / reject，`bridge.mjs:49-54`） | `{outcome:{outcome:'selected', optionId}}` ∥ `{outcome:{outcome:'cancelled'}}` |
-| `fs/*` · 其它 | — | `-32601` 错误（不挂） |
+| `fs/read_text_file` | `{sessionId, path}` | `{content}`（仅内核连接；错误码 = §21.2） |
+| `fs/write_text_file` | `{sessionId, path, content}` | `{}`（同上） |
+| 其它未知方法 | — | `-32601` 错误（不挂） |
 
 （服务端反向请求自带超时：传输层默认 60s（`acp/transport.mjs:42`），按方法覆写——审批 5 分钟（`bridge.mjs:319`）、`fs/*` 30 秒（`bridge.mjs:143`/`:152`）；超时或失败按拒绝处理——我们不回包也不会卡死它。）
 
@@ -141,7 +146,7 @@ class ThincoderLaunch { final String cwd; final String executable; final Map<Str
     · 没有续接记录            → session/new          （槽号 = 新认领）
     · 有续接记录、本内核未载入 → session/load         （重放历史；sessionId = 记录 id 原文）
     · 本内核已载入过（重连）   → session/resume       （不重放；避免历史重复进 transcript）
-活跃 ──release()──▶ session/close（best effort）+ 进程退出；槽号留在内存以备 resume
+活跃 ──release()──▶ 无在飞回合且无活子代理时 session/close（best effort）+ 进程退出；否则延后到收尾那一刻（D64，§19.2）；槽号留在内存以备 resume
 活跃 ──dispose()──▶ 同上 + 事件流关闭 + stopped 完成（进程真退出）
 ```
 
@@ -157,7 +162,7 @@ class ThincoderLaunch { final String cwd; final String executable; final Map<Str
 
 | ACP | KernelEvent |
 |---|---|
-| `send()` 接受回合 | `TurnStarted(turnId)` + `ItemUpserted(turnId, UserMessageItem(text: 实发文本))` |
+| `send()` 起回合（无在飞回合时） | `TurnStarted(turnId)` + `ItemUpserted(turnId, UserMessageItem(text: 实发文本))`；回合在飞时的发送入内核本地队列，到 `_endTurn` 才发（§18） |
 | `agent_message_chunk` | 文本项：首块 `ItemUpserted(id, AssistantTextItem(''), streaming: true)`，其后 `TextDelta(id, offset, text)`；项 id = `"t<序号>.<块序号>"` 形态由适配层自定（本层自持 id 空间）。**带 `_meta` 归属标 ⇒ 入该子代理的谈话，不带 ⇒ 本行（主对话）**（§16.2） |
 | `agent_thought_chunk` | 思考项：同上，`ThinkingItem(text, tokens: 已收字符数, startedAt)`（tokens 近似先例 = `codex_kernel.dart:296`）；归属标同上（§16.2） |
 | `tool_call` | `ItemUpserted(toolCallId, …)`，按 kind 成形（表下）；**带 `_meta` 归属标 ⇒ 入该子代理 children，不带 ⇒ 主对话**（§16.2） |
@@ -203,6 +208,7 @@ class ThincoderLaunch { final String cwd; final String executable; final Map<Str
 - 展示：`title`（可能为空串——旧槽无标题字段）与 `updatedAt`（ISO 8601 字符串）直接进 `SessionRecord`；标题空时沿用宿主"未命名"显示（`workspace.dart:508-510`）。
 - 载入/恢复：目录项的打开路径走既有 `KernelContext.resume` → §3.5 的 `session/load`（历史重放填 transcript，`LoadsHistory` 期间为真）。
 - 删除：走 `SessionCatalog.delete`（`workspace.dart:2679-2697` 既有调用点）。
+- 重命名与回合级文件回退：见 `docs/design/session-governance.md`（D2 单源；本档只留方法面指针）。
 
 ### F3 对话全链路
 
@@ -238,6 +244,7 @@ class ThincoderLaunch { final String cwd; final String executable; final Map<Str
 - 阈值同终端口径：单项 ≤ 15 MB、单回合合计 ≤ 30 MB，超阈项弃并在会话内提示（`attachments.mjs:33-36`）。
 - 落盘项也随 `UserMessageItem.images` 显示缩略图（图片在内存里，bubble 照常显示）；transcript 文本 = 实发文本（含路径行）——所见即所发。
 - 不复制终端句尾的 `use the read_image tool …` 指令（桌面不知模型是否多模态，该指令属 thincoder 自己的提示面）——D7。
+- **原生路见 §22（D82–D85）；F6 = 回退路**：握手能力位 `promptCapabilities.image === true` 时 prompt 直接携 image 块、不落盘（§22.1）；本节的落盘 + 路径行 = 旧 CLI / 未声明能力位时的回退形（§22.7-6）。
 
 ### F7 检测与引导
 
@@ -299,10 +306,13 @@ server 由 `HostMcpServer` 签发（127.0.0.1 系统选端口 + 每会话 Bearer
 | ⑧ | `lib/settings/app_settings.dart:58/95/140` · `lib/main.dart:338` | 透传 `thincoderStatus`（读 `thincoder.path` 的回调同 `main.dart:154-155` 追加一行） | ⑦ 的数据来源，照 `claudeStatus` 形 |
 | ⑨ | `lib/kernel/mock/mock_kernels.dart:24-32` | 新增 `MockKernels.thincoder`，**不进 `all`** | 测试直用；`all` 不动（D18） |
 | ⑩ | `lib/platform/data_dir.dart:86-87` 注释 | 注册表文件名清单加 `thincoder` | 文档一行；登记表出现新类别 |
-| ⑪ | `lib/kernel/thincoder/thincoder_kernel.dart`（现 1195；本批 +39） | 宿主工具通道接线：`_handshake` 记 `mcpCapabilities.http`（`:383`）；`_hostMcpServers()` 门 = `_httpMcp && HostTools.anyIn(exposedGroups)`（`:264`），过门才 `ensure()` + `issue()`（`:266`）；`session/new|load|resume` 带 `mcpServers`（`:356` / `:325`）；`_teardown` 撤令牌（`:405`） | 通道不走 `AgentKernel` 能力接口：内核按握手能力位向 CLI 提供环回 MCP server（宿主设计档 §7.1 ⑭） |
-| ⑫ | `lib/kernel/thincoder/thincoder_events.dart`（现 799；本批 +14） | 宿主工具卡：`_tool` 的 `default` 分支经 `HostTools.named(title)` 还原 `kind` / `summary`，保留 `tool` / `input`（`:403-410`）；非宿主工具仍为 `other` 卡 | 可见面按注册表还原为宿主工具的既有卡形（宿主设计档 D10 / §7.1 ⑮） |
+| ⑪ | `lib/kernel/thincoder/thincoder_kernel.dart`（本批 1156 → 1195，+39） | 宿主工具通道接线：`_handshake` 记 `mcpCapabilities.http`（`:383`）；`_hostMcpServers()` 门 = `_httpMcp && HostTools.anyIn(exposedGroups)`（`:264`），过门才 `ensure()` + `issue()`（`:266`）；`session/new|load|resume` 带 `mcpServers`（`:356` / `:325`）；`_teardown` 撤令牌（`:405`） | 通道不走 `AgentKernel` 能力接口：内核按握手能力位向 CLI 提供环回 MCP server（宿主设计档 §7.1 ⑭） |
+| ⑫ | `lib/kernel/thincoder/thincoder_events.dart`（本批 784 → 798，+14） | 宿主工具卡：`_tool` 的 `default` 分支经 `HostTools.named(title)` 还原 `kind` / `summary`，保留 `tool` / `input`（`:403-410`）；非宿主工具仍为 `other` 卡 | 可见面按注册表还原为宿主工具的既有卡形（宿主设计档 D10 / §7.1 ⑮） |
 
 （`lib/kernel/claude_code/**` 零改动；`thincoder/**` 在本仓零改动——B1；thincoder 侧的接口例外见 §16.1。）批 4 的改动点见 §15.4（同为最小接线点集）；批 5 的改动面见 §16.4（本仓测试面 + out-of-repo 档）；批 6 见 §17.4（本仓适配层两面 + 宿主 1 档 composer 开关 + 两处测试面）；批 8 见 §19.4（本仓 2 档（kernel + events）+ 固件 / 测试面；thincoder 侧 = out-of-repo 档）。
+批 10 见 §20.4 / §21.3（本仓文件面；F18 含 `thincoder_kernel.dart` 拆分方案）。
+批 11 见 §22.3 / §23.3（F19 桌面半 + F20；B1 例外面 = §22.2 表）；批 12 见 §22.12（F19 CLI 收口：core 3 档 + CLI 1 档；零留存单测档 = `thincoder/docs/batches/2026-10-19-f19-cli-closure.test.mjs`；本仓零改动）。
+批 14 见 §24.3（本仓适配层 2 档 + 宿主 2 档 + `agent_kernel.dart` 接口 1 档 + l10n 两源档 / 生成档 + 测试 2 档；CLI 零改动）。
 
 **接线点 ⑤ 细则（按内核判定）**
 
@@ -316,17 +326,19 @@ server 由 `HostMcpServer` 签发（127.0.0.1 系统选端口 + 每会话 Bearer
 各修改文件当前行数（2026-10-16 快照，供评审核体量）：`kernel_registry.dart` 46 · `agent_kernel.dart` 423 · `chat_session.dart` 1087 · `workspace.dart` 2795 · `main.dart` 733 · `general_page.dart` 796 · `app_settings.dart` 268 · `mock_kernels.dart` 48 · `data_dir.dart` 409。
 本批对上述各档的净增上界（`≤ N 行` 式；实施后按各档 diff 核，超出 ⇒ 核接线点范围）：① ≤11 行（含 2 条 import）· ② ≤12 行 · ③ ≤4 行 · ④ ≤10 行 · ⑤ ≤14 行 · ⑥ ≤6 行 · ⑦ ≤81 行（新行 widget，形同 `_ClaudePathSetting`）· ⑧ ≤10 行 · ⑨ ≤16 行 · ⑩ ≤2 行。
 
-体量立场（三个 >800 行既有档 + 新档的拆分审阅）：
+体量立场（>800 行既有档与测试档的拆分审阅）：
 
 - `chat_session.dart`（1087 行）处 >800 行硬顶之上：**本批不动结构**（只走接线 ③）；拆分缝候选 = Facets（`:329`）/ Projections（`:510`）/ Commands（`:920`）段（段头注释即缝）；触发 = 独立拆分批立项。
 - `chat_screen.dart`（1231 行）处 >800 行硬顶之上：**批 4 不动结构**（只走接线 ⑬，1 行改动 / 净增 0）；拆分缝候选 = `_ChatScreenState`（`:182`）之后的私有构件族（`:903`–`:1231`：标题栏布局 / 会话列渲染 / 底部切换 / 历史载入 / 面板槽）；触发 = 独立拆分批立项。
+- `chat_models.dart`（719 → 806，2026-10-19 实测）：处 >800 行硬顶之上；本批只加 `EditorContext` / `UserMessageItem.contexts`（行级新增，不动结构）；拆分缝候选 = `EditorContext` 段（`:52`–`:131`）出档 `lib/chat/editor_context.dart`；触发 = 下一次结构级触碰或独立拆分批立项。
 - `workspace.dart`（2795 行）处 >800 行硬顶之上：**本批不动结构**（只走接线 ④⑤；⑤ = `load()` 回路内改造 + `_listKept` 参数化，不新增文件、不拆类）；拆分缝候选 = The IDE's windows（`:727`）/ SSH hosts（`:1281`）/ Color theme（`:1858`）段（段头注释即缝）；触发 = 独立拆分批立项。
-- `thincoder_kernel.dart`：>800 行触发已执行——拆分前实测 1168 行 ⇒ 拆出 `thincoder_events.dart`（§3.6 事件翻译段，外部形态不变）；现 1195 行（2026-10-18 实测）仍处 >800 线上：**续拆裁定 = 不续拆**（同其他 >800 行既有档）；本批 = 行级接线（能力门 / 三处请求 / 撤令牌，+39）⇒ 不触发拆分；
-下一缝候选 = 选择面段（`_Choice` / `_ModelSetting` + mode/model/effort）；触发 = 独立拆分批立项（或下次触碰该档时顺拆——「触碰」按结构级改动计；行级接线不计，如批 4 +3，见 §15.4）。
-- `thincoder_events.dart`（799，2026-10-18 实测）：仍 <800 硬顶 ⇒ 不入 >800 名单（既有口径）；本批 = 宿主工具卡的行级接线（+14 ⇒ 798，其后另批 +1），不动结构。
-- `test/kernel/thincoder_kernel_test.dart`（2846，2026-10-18 实测）：在 >800 名单；本批只加用例（+211 ⇒ 2840，其后另批 +6），不动结构，缝候选沿用 §15.4 的四组拆法。
+- `thincoder_kernel.dart`：>800 行触发已执行——拆分前实测 1168 行 ⇒ 拆出 `thincoder_events.dart`（§3.6 事件翻译段，外部形态不变）；编制日实测（2026-10-19）**1121** 行（§21.3 拆分已落）仍处 >800 线上：**续拆裁定 = 不续拆**（同其他 >800 行既有档；选择面缝已兑现，不再立新缝）。
+  行数口径：与 §24.3 起点 1091 差 30 行（两批各记了当时的实测）；**实施首轮 `wc -l` 复核，以复核值为准**。
+- `thincoder_events.dart`（799，2026-10-19 `wc -l` 实测）：<800 硬顶；批 11 的用量翻译面 ≤ +8 ⇒ ≤807 ⇒ **入 >800 名单**（行级新增，不动结构）；缝候选 = 子代理段（段头 `:436`）出档 `thincoder_agents.dart`（`part` 先例同 §21.3；段界由拆分批勘定——`_putSubagent` / `_card` 另有 `:682` / `:741` 调用点）；**拆分方案（分步 + 行数预算）见 §23.3**；触发 = 下一次结构级触碰或独立拆分批立项。
+- **>500 且 <800 的档**（`thincoder_mock.dart` 668 · `kernel_types.dart` 615 · `context_usage_panel.dart` 530 等）：体量立场只跟 >800 硬顶——>500 层不立缝、不登记拆分候选；新增按行级计，不触发结构级裁定。`thincoder_kernel.dart`（会话治理 A1 后 1296）入 >800 名单，行级新增不续拆。
+- `test/kernel/thincoder_kernel_test.dart`（3395，2026-10-19 实测）：在 >800 名单；只加用例、不动结构，缝候选沿用 §15.4 的四组拆法。
 
-**实施读数（`host-tool-channel` 批，2026-10-18）**：`lib/kernel/thincoder/thincoder_kernel.dart` 1156 → 1195（+39，上界 ≤1196）· `lib/kernel/thincoder/thincoder_events.dart` 784 → 798（+14，上界 ≤798；现 799 的 +1 属其后另批）· `test/kernel/thincoder_kernel_test.dart` 2629 → 2840（+211，超估算 +140，估算非上界），其后另批 +6 ⇒ 2846。
+**实施读数（`host-tool-channel` 批，2026-10-18；本批起点 → 终点）**：`lib/kernel/thincoder/thincoder_kernel.dart` 1156 → 1195（+39，上界 ≤1196）· `lib/kernel/thincoder/thincoder_events.dart` 784 → 798（+14，上界 ≤798）· `test/kernel/thincoder_kernel_test.dart` 2629 → 2840（+211，超估算 +140，估算非上界）。三档现值见 §5.2 体量行。
 
 ---
 
@@ -340,7 +352,7 @@ server 由 `HostMcpServer` 签发（127.0.0.1 系统选端口 + 每会话 Bearer
 | D4 | catalog 用短命连接（串行队列），不做常驻连接 | list/delete 是低频操作；常驻连接要管进程生命周期、崩溃恢复与闲置策略，成本不成比例 |
 | D5 | 会话记录 id = `"<cwd>\|<slot>"`（组合 id），宿主 `SessionRecord.id` 与内核 `sessionId` 同形 | 槽号跨项目重复（每项目各自从 1 起）；宿主按 id 去重（`workspace.dart:490-496`）——裸槽号会把另一项目的会话误判"已列出"而丢弃。拆解按最后一个 `\|`（Windows 路径不容 `\|`） |
 | D6 | `catalog.projects()` 返回空；靠宿主逐项目列（接线点 ⑤） | ACP 无跨 cwd 枚举；被否：读 `~/.thincoder/sessions/` 反查 cwd——读 thincoder 内部布局（需求档 F2 明写"走 session/list"）；被否：`projects()` 里对"记得的项目"逐个起进程——刷新（窗口聚焦）时进程风暴 |
-| D7 | 图片：不声明 `AcceptsImages`；新增 `AcceptsImageFiles` + 落盘 + 路径行 | 需求档 F6 原文；不复制终端 `read_image` 指令（桌面不知模型多模态性） |
+| D7 | 图片：不声明 `AcceptsImages`；新增 `AcceptsImageFiles` + 落盘 + 路径行（= 回退路；原生路见 §22 / D82–D85） | 需求档 F6 原文；原生路随握手能力位（§22.1）；不复制终端 `read_image` 指令（桌面不知模型多模态性） |
 | D8 | 不声明 `StartsPlans`，计划以对话文本呈现 | 协议面无计划对象/文件；终端同形；声明了就得造假计划卡 |
 | D9 | 模型候选 = `configOptions.options`（当前一项）；不读 config.json、不直连 provider `/models` | 需求档 §5 口径就是 `set_config_option` + `config_option_update`；读 config.json 拿不到清单（渠道不携模型），直连 `/models` 要用户的 key（B3 张力）且要复刻三种渠道格式（`model-picker.mjs:294-319`）。E3 钩子：thincoder 填多候选即亮 |
 | D10 | 思考 = `ModelSetting(toggle: true)` | 协议面 thinking 是 boolean；先例 = claude 的 `fast` |
@@ -377,8 +389,13 @@ server 由 `HostMcpServer` 签发（127.0.0.1 系统选端口 + 每会话 Bearer
 | F14 模型清单与思考档位（批 6） | §17.3（验收对照 = §17.6） | 运行期清单投影进 `model.options[]` + `thinkingLevel` 档位面；模型面桌面零改动；走查 §17.9⑤⑥ |
 | F15 工作中发送的消息（批 7） | §18（验收对照 = §18.5 · 用例 = §18.7） | 内核本地队列 + 声明 `QueuesMessages`：在跑时入队，回合结束依次发，撤回 / 立即发送 / 收束清队；宿主零改动（唯一触碰 = 设置页一句文案）；走查 §18.10 |
 | F16 回合结束后继续关注后台子代理（批 8） | §19（验收对照 = §19.6 · 用例 = §19.7） | ACP 挂起窗（out-of-repo）+ `_meta["thincoder.dev/turn"]` 边界帧 + 桌面 unprompted 回合；走查 §19.10 |
+| F17 编辑器上下文随消息注入（批 10） | §20（验收对照 = §20.6 · 用例 = §20.7） | 每消息快照（路径 + 光标行 + 选区）随 `session/prompt` 一个文本块；composer chip 可撤销 + 气泡摘要；开关 `chat.editorContext` 带设置 UI；走查 §20.9 |
+| F18 agent 编辑走 IDE 原生 diff（批 10） | §21（验收对照 = §21.5 · 用例 = §21.6） | 内核 `initialize` 宣告 `fs` 两位 + 两个反向 RPC handler；脏缓冲拒绝写 + 只读 diff；干净 / 未打开落盘并发既有 `FileEdited`；根外拒绝 + 可见提示；走查 §21.9 |
+| F19 原生图片块（批 11） | §22（验收对照 = §22.5 · 用例 = §22.6 · 真机 provider 面 = §22.9） | 握手 `promptCapabilities.image` ⇒ prompt 数组带原生 image 块（不落盘）；旧 CLI ⇒ 今天逐字；B1 例外面 = §22.2（**已裁 A**）；「模型能看图」判据 = T1 / T1b + 走查 S1；走查 §22.8 / §22.12 |
+| F20 用量（批 11） | §23（验收对照 = §23.5 · 用例 = §23.6） | 回合 token = 本回合 `usage_update.used` 之和（turn footer）；会话累计 = 全会话之和（上下文面板）；成本无来源（§14-25）；走查 §23.8 |
+| F21 模型切换后置应用（批 14） | §24（验收对照 = §24.5 · 用例 = §24.6） | 回合在飞时点模型 ⇒ 回合收尾自动重发；pill 标「回合结束后切换到 <目标>」；失败 = 旧模型 + 一条 error；走查 §24.8 |
 
-需求档条目覆盖（三方一致链）：F1–F7、F10–F16、E1–E5 全部有落点；F8/F9 只留接口（§13）；B1–B4 遵守——B1 默认不改 thincoder 仓，例外 = 经用户裁定的最小接口改动（F12 归属标 §16.1；F13 / F14 的 configOptions 投影 §17.1-① / §17.3-①②；F16 的 ACP 挂起窗 + 回合边界帧 §19.3）。
+需求档条目覆盖（三方一致链）：F1–F7、F10–F20、E1–E5 全部有落点；F8/F9 只留接口（§13）；B1–B4 遵守——B1 默认不改 thincoder 仓，例外 = 经用户裁定的最小接口改动（F12 归属标 §16.1；F13 / F14 的 configOptions 投影 §17.1-① / §17.3-①②；F16 的 ACP 挂起窗 + 回合边界帧 §19.3；F19 的 `promptCapabilities.image` + 图像块内容 §22.2——**B1 已裁 A**；会话治理 A1 的 `session/set_title` / `session/revert` + 撤销栈回合化 / `prompt.turnId`——用户 2026-10-20 00:02 已准，落点见 `session-governance`）。
 
 ---
 
@@ -421,6 +438,7 @@ server 由 `HostMcpServer` 签发（127.0.0.1 系统选端口 + 每会话 Bearer
 ## 9. 测试策略（A9 / E5）
 
 - **mock ACP 对端**（`thincoder_mock.dart`）：一个进程内的脚本化服务端——按写入的请求回对应响应，并按脚本发通知/反向请求。覆盖五路径：握手 / 会话（new·load·resume·list·delete）/ 事件（文本·思考·工具卡·用量·模式·配置）/ 审批（三选项）/ 取消。被内核测试直驱（先例：`kernel_test.dart:4487` 直建 `CodexKernel(..., server)`）。
+- **入站串行档（保真度）**：mock 默认在调用方栈上同步处理入站帧；`serialInbound: true` 时按 FIFO 逐个、各在独立的 turn 上处理（`thincoder_mock.dart:132-156`）——真实传输就是串行读帧、一帧不跑在上一帧的栈里（外仓 `transport.mjs:13-19` 的入站 FIFO）。内核测试的 `_Session` 默认用串行档（`thincoder_kernel_test.dart:53`）；默认值只留给不依赖时序的直驱用例。
 - **固件**（`test/fixtures/thincoder/*.ndjson`）：每文件 = 一个场景的帧序列（服务端发出的行 + 期望客户端动作清单）；`thincoder_fixtures_test.dart` 逐帧回放并断言 transcript 结果。用途 = 离线回归：**thincoder 更新后先跑固件**（不装 thincoder 也能验协议面是否变形），变形 ⇒ 按 §12 清单核对。
 - 真机冒烟（可选、默认 skip）：`-t e2e-thincoder` 起真 CLI 走一遍 A3/A4 的最短路径，照 `dart_test.yaml` 的 e2e 形。
 - 既有测试不回退：`flutter test` 全量；特别关注 `test/kernel_test.dart`、`test/kernel_ui_test.dart`（D18 已避开默认内核面改动）。
@@ -430,17 +448,25 @@ server 由 `HostMcpServer` 签发（127.0.0.1 系统选端口 + 每会话 Bearer
 - 子代理内容面（批 5）：§16.7 用例（T42–T50）入 `thincoder_kernel_test.dart`；固件新增 `subagent-content*.ndjson`（`_check` 增 `agents` 键）——「先跑固件」口径不变。thincoder 侧机制由 out-of-repo 轮的一次性探针钉形（§16.1：该仓测试清单为空，不向空清单塞档）。
 - 选择面（批 6）：§17.7 用例（T51–T62）入 `thincoder_kernel_test.dart`，T61（形态面 widget）入 `test/composer_test.dart`（mock 加 `autoApprove` / `models` / `thinkingLevels` / `configError` 四个可选脚本参数，缺省 = 今天的形状；
   T61 的 thincoder 一半 = `ThincoderMock(autoApprove: false)` + 自建 descriptor，Claude 一半 = 既有 `pumpScreen`）；**不加固件**——回放没有「点选择器」的动作（`thincoder_fixtures_test.dart:84-125`），选项面在 kernel 测试断言；既有固件保持绿即回归。thincoder 侧机制同样由 out-of-repo 轮的一次性探针钉形（§17.1 / §17.3 的探针期望）。
+- 上下文与 fs 面（批 10）：§20.7 / §21.6 的 T77–T92 入 `thincoder_kernel_test.dart` 与新增 `thincoder_files_test.dart` / `ide_kernel_files_test.dart`（另有 `test/chat/*` 两档）；**不加固件**——F17 的线形是既有 `session/prompt`（无新帧），F18 的反向请求由 mock `push` 直推（`thincoder_mock.dart:138-140`）；既有固件保持绿 = 回归哨兵。
+- 图片与用量面（批 11）：§22.6 / §23.6 的 T93–T98 入 `thincoder_kernel_test.dart`（mock 增 `promptImage` 能力位开关，缺省 false = 今天）；**不加固件**——F19 的线形是既有 `session/prompt`（块数变、方法不变），F20 的 `usage_update` 帧形不变；既有固件保持绿 = 回归哨兵。
+- 图片收口面（批 12）：本仓零新增（baocode 零改）；thincoder 侧单元测试档 = `thincoder/docs/batches/2026-10-19-f19-cli-closure.test.mjs`（T1 / T1b / T2 / T3 / T4），跑法 `cd thincoder && node --test <该档>`；零留存（收口删除），不进该仓 `npm test`（只收 `test/**`）。
+- 模型切换后置面（批 14）：§24.6 的 T100–T105 入 `thincoder_kernel_test.dart`（mock 的既有 `hold` / `configError` / `models` 直驱，零 mock 改动）；T106 宿主投影入 `test/chat/pending_model_test.dart`；**不加固件**——线形是既有 `session/set_config_option`（无新帧）；既有固件保持绿 = 回归哨兵。
 
 ---
 
 ## 10. 边界（本批不做）
 
-- 需求档 B1–B4 全部沿用：B1 默认不改 `thincoder/`；例外 = 经用户裁定的最小接口改动（F12 归属标 §16.1；F13 / F14 的 configOptions 投影 §17.1-① / §17.3-①②；F16 的 ACP 挂起窗 + 回合边界帧 §19.3）；❌ 各项不做（图片直传 / 多文件夹 / fork / 回退 / 后台任务 / MCP 管理 / 账号用量 / 建议类 / 改名 / `context` 与 `fast` 两个选择器档——指 context-size 与 fast 面）。
+- 需求档 B1–B4 全部沿用：B1 默认不改 `thincoder/`；例外 = 经用户裁定的最小接口改动（F12 归属标 §16.1；F13 / F14 的 configOptions 投影 §17.1-① / §17.3-①②；F16 的 ACP 挂起窗 + 回合边界帧 §19.3；会话治理 A1，见 `session-governance`）；❌ 各项不做（图片直传 / 多文件夹 / fork / 后台任务 / MCP 管理 / 账号用量 / 建议类 / `context` 与 `fast` 两个选择器档——指 context-size 与 fast 面；**回退 / 改名已由会话治理 A1 落地**）。
 - `effort` 档位面**不在上条边界内**：多档随批 6 落地（§17.3-③，`thinkingLevel` 上报即有列表）。
 - 本档新增不做：计划卡（D8）；终端登录动作（D12）；`checkpoint/*`·`memory/*`·`ledger/*`·`batch/*` 扩展族（不接）；审批「总是」= 会话级 auto（§17.1-④；与终端 `/auto` 同源），更细的作用域（按工具）不做。（子代理显示面 = 批 4、子代理内容归属 = 批 5 已接；边界见 §15.8 / §16.8。）
 - 队列面（工作中发送的消息）= 批 7 设计已定（§18）；本批边界见 §18.9。
 - 挂起面（回合结束后继续关注后台子代理）= 批 8 设计已定（§19）；本批边界见 §19.8（timer 唤醒 / 自动轮审批 / 重放边界 / 只停一轮不做）。
-- `FileEdited` 事件不发：ACP 的 `tool_call` / `tool_call_update` 不带 diff（`bridge.mjs:259-292`），无可靠增删行数 ⇒ 变更审查面板按既有快照面工作（§14 登记）。
+- `tool_call` 路由不发 `FileEdited`：ACP 的 `tool_call` / `tool_call_update` 不带 diff（`bridge.mjs:259-292`），无可靠增删行数 ⇒ 变更审查面板按既有快照面工作；`fs/write_text_file` 写路由发既有 `FileEdited`（§21.2 / D79）。登记 = §14-5。
+- 图片面（F19）= 批 11 设计已定（§22）：原生块需 B1 例外（§22.2，**已裁 A**）；桌面半与 CLI 半一并实施；新 CLI 合入前生产行为 = 今天；边界见 §22.7。
+- 用量面（F20）= 批 11 设计已定（§23）：成本无来源（§14-25）、终端无 `/usage` 命令（§14-26）；边界见 §23.7。
+- 图片收口面（F19 CLI 半）= 批 12 设计已定（§22.9–§22.12）：core 3 档 + CLI 1 档属 B1 例外（依据 = §22.12 首段）；各节边界见 §22.9 / §22.10 / §22.11 末段。
+- 模型切换后置面（批 14）= 设计已定（§24）：只对 thincoder 内核的 `model` configId；不做回合内生效、不做 provider 后置、不做等待态持久化；边界见 §24.7。
 
 ---
 
@@ -454,6 +480,9 @@ server 由 `HostMcpServer` 签发（127.0.0.1 系统选端口 + 每会话 Bearer
 - 已落地（批 6）：审批自动档 = composer 右下角的拨动开关（胶囊 track + 圆 knob，开 = knob 在右、track 橙，关 = knob 在左、无填充；两档 ⇒ 右端开关，≥3 档仍是左簇菜单——Claude 的 UI 不动；§17.1-③）——本批唯一的宿主改动（`composer.dart` ㉗，+≤70）；思考面在 CLI 上报 `thinkingLevel` 时变为档位列表，否则仍是开关（§17.3-③）。无新 l10n 键：tooltip 文案来自内核选项（英文占位，§14-19），标题复用 `composerApprovalTitle`。
 - 批 7 设计已定（§18）：工作中发送的消息 = 宿主既有队列面（队列面板 / 撤回 / 编辑 / 立即发送三动作），thincoder 内核声明 `QueuesMessages` 后自动生效，宿主零改动（§18.8）；唯一触碰 = 设置页「工作中发送的消息」的说明文案（D54）。
 - 已落地（批 8，设计）：自动轮 = 宿主既有「无提示回合」面（不滚到底 / 完成不响铃 / 可停止 / 期间可排队）；无新组件、无新文案（§19.9）。
+- 已落地（批 10，设计）：编辑器上下文 = composer 输入区下方的可撤销 chip + 已发消息气泡里的只读摘要（无新面板，§20.3）；agent 编辑的拒绝面 = 会话内 `NoticeItem(error)` + 编辑器只读 diff，不弹窗（§21.2 / D80）。
+- 已落地（批 11，设计）：图片保持既有 composer / 气泡面（收图判据不变，D82）——原生块与回退对用户零新增可见面；用量 = turn footer 的「N tokens」（无 speed / cost）+ 上下文面板新增「本会话累计」一行（§23.1）。
+- 已落地（批 14，设计）：模型切换的等待态 = 既有模型 pill 的 label 后缀 + tooltip（不新增控件 / 弹窗）；失败 = 会话内既有 error notice；等待态文案走 l10n（`modelsSwitchPending`），失败 notice 为内核口英文并登记 §14-28（§24.9）。
 
 ---
 
@@ -472,6 +501,8 @@ server 由 `HostMcpServer` 签发（127.0.0.1 系统选端口 + 每会话 Bearer
 `session_info_update._meta["thincoder.dev/turn"].{phase,kind?,ok?}`（§19.2）/
 `agent_message_chunk`·`agent_thought_chunk`·`tool_call`·`tool_call_update` 的 `update._meta["thincoder.dev/subagent"].{role,id}`（§16.1））；
 另外批 6 起的两个 id 与一项形状：`configOptions[].id` 值域含 `autoApprove`（boolean）与 `thinkingLevel`（select，值域 = `off` + 档位名）；`model.options[]` 可为多项（`provider:model`，运行期清单投影）——少了任何一项，桌面按「旧 CLI」降级（§17.3-④），不是错误。
+批 12 起的存档线形：槽 JSON 的 `contextHistory` 与 `history` 都不再含 `image_url` / `data:image/`（§22.10 剥离；只剩占位文本 `[image omitted — stripped from the session archive]`）——批 12 前落盘的旧槽仍可能带图（不回扫）。
+批 11 起的线形：`initialize` 回包的 `agentCapabilities.promptCapabilities.image`（true ⇒ `session/prompt.prompt[]` 可含 `{type:"image", data, mimeType}`；缺位 / false ⇒ 桌面只发 text 块）；`usage_update.cost` 仍不出现（CLI 不上报，§14-25）。
 变了 ⇒ 改 `thincoder_protocol.dart` 的解析与 `thincoder_events.dart` 的翻译（§3.6 / §15.2），重录固件。
 5. **核对错误面**：`-32000/-32601/-32602/-32603` 语义（`acp/transport.mjs:14-20`）；凭据门文案是否仍指向 `providers[].apiKey` 与 `thincoder acp --login`（`handlers-session.mjs:85-105`）。
 6. **版本下限**：若新版本协议面有变 ⇒ 更新 `thincoderVerifiedVersion` 常量（`thincoder_locator.dart`）+ 本档 §3.4 + 固件；只有内部变化 ⇒ 只重录固件。
@@ -509,7 +540,7 @@ server 由 `HostMcpServer` 签发（127.0.0.1 系统选端口 + 每会话 Bearer
 | 2 | 拒绝理由文本无通道 | `ApprovalAnswer.message` 丢弃（ACP outcome 无文本位）。判定条件：协议面出现携带文本的 outcome（或 `_meta` 扩展） |
 | 3 | 代理面 | 不注入 baocode `NetworkProxy` 变量（Node 客户端是否读 env 代理未核实；thincoder 自带 config `proxy` 段）。判定条件：实测终端 thincoder 走系统/配置代理而桌面进程不走 ⇒ 补注入 |
 | 4 | 子代理面的剩余边界 | 批 4 已接显示面（§15）、批 5 已接内容归属（§16）、批 8 已接 digest 回合边界（§19）。剩余不做与判定条件：停止与转后台控制 / 父子嵌套——逐条见 §15.8 / §16.8 |
-| 5 | 变更审查面板无增量 | 不发 `FileEdited`（无 diff 来源）。判定条件：协议面补 diff（`tool_call_update.content` 变体）或走 `fs/write_text_file` 路由（届时开 `fs` 能力位） |
+| 5 | 变更审查面板无增量（`tool_call` 路由） | **已闭合（批 10；fs 写路由）**：`fs/write_text_file` 写成功发既有 `FileEdited(original: OriginalText(before))`，进 `ChangeReview`，Keep / Undo 语义不变（§21.2 / D79）；`tool_call` / `tool_call_update` 仍无 diff 来源（`bridge.mjs:259-292`）⇒ 该路由不发。判定条件：协议面给工具帧补 diff（`tool_call_update.content` 变体）⇒ 该路由也发 |
 | 6 | 终端新会话的实时同步 | 窗口聚焦刷新（`workbench.dart:513`）时 thincoder 不重列（D6）。判定条件：用户要"开着桌面看终端建会话"⇒ 加"逐项目重列 + 节流"或 thincoder 补跨 cwd 枚举 |
 | 7 | 会话 id 组合形与"半合法路径" | 拆解取最后一个 `\|`；Unix 路径可含 `\|`（罕见）。判定条件：出现歧义（同项目 id 拆错）⇒ 改分隔形（如 json 编码） |
 | 8 | 版本下限的"下限" | 0.12.74 = 编制核对版本，非 thincoder 承诺的兼容下限。判定条件：用户裁定支持更旧版本 ⇒ 调常量与核对清单 |
@@ -518,7 +549,7 @@ server 由 `HostMcpServer` 签发（127.0.0.1 系统选端口 + 每会话 Bearer
 | 11 | 「未列目录」时卫生清理整体推迟 | `_forgetGone` 只在本轮没有触发逐目录列出时运行（§5.2-⑤）：thincoder 的 `projects()` 恒空（D6）⇒ `_folders` 非空即有未覆盖内核 ⇒ pinned/archived/names/drafts 的清理整体推迟、`_folders` 不再被剪除（每轮逐目录再列）。有界、非数据损坏（只留旧标记，不误删）。判定条件：旧标记堆积 / 状态档见大，或要恢复清理 ⇒ 守卫改「本轮触发的逐目录列出全部返回后再清理」（清理移入 `_listKept` 收尾） |
 | 12 | `session/close` best-effort 的残余 | close 只写不等、随即进程退出（§3.5）⇒ 认领是否真释放不保证；「有界等待」会引入本批无法实测的时序依赖 ⇒ 本批不做。判定条件：真机走查确认会话确已释放（残留 ⇒ 加有界等待） |
 | 13 | 「会话已不在」（续接记录一路）的兜底 | 处置定死（§3.5）：`session/load` / `session/resume` 收 `-32602`（`gone`）⇒ 忘槽、起新会话（不留启动死结；两路同此处置）；兜底起的新会话跨 `release()` → `prepare()` 续接（同一运行内；记「记录槽已忘」标记，此后走保留槽路线，不重走 `session/load` 死槽）。实现已随末修单落地。判定条件：终端删掉会话后，桌面打开该记录 ⇒ 起新会话、可发消息；此后重连仍续接该会话，不再永久启动失败（真机走查 T15） |
-| 14 | ⑦ 设置组文案英文占位 | 新行与状态行英文直写（`general_page.dart:768-770`/`:790-791`、`thincoder_locator.dart:56-59`）；本机无 `flutter gen-l10n`、生成档不可手改 ⇒ 口径 = 英文占位接受；补齐窗口 = SDK 就位轮（补 `app_en.arb` / `app_zh.arb` 键 + 生成档重产 + 设置行改用 `context.l10n`）。判定条件：补齐后 zh-cn 该行显示中文、与同页 Claude Code 行一致 |
+| 14 | ⑦ 设置组文案英文占位 | 新行与状态行英文直写（`general_page.dart:768-770`/`:790-791`、`thincoder_locator.dart:56-59`）。键面口径 = 无 SDK ⇒ ARB 与生成档同拍手改、保持 `test/l10n_test.dart` 绿，SDK 就位轮 `flutter gen-l10n` 重产（同 §18.8）。本行 = 尚未建键 ⇒ 英文占位接受；补齐窗口 = SDK 就位轮（补 `app_en.arb` / `app_zh.arb` 键 + 生成档随 ARB 同拍 + 设置行改用 `context.l10n`）。判定条件：补齐后 zh-cn 该行显示中文、与同页 Claude Code 行一致 |
 | 15 | 子代理状态文案英文占位 | 卡片 activity 与活动条详情 / 定格文英文直写（`queued` / `turn <n>/<maxTurns>` / `approval · <tool>` / `thincoder stopped`，§15.2）。同因 = §14-14（本机无 `flutter gen-l10n`）；补齐窗口 = SDK 就位轮（与 14 同轮补 `app_en.arb` / `app_zh.arb` + 生成档重产） |
 | 16 | 子代理工具卡的归属与结果 | 归属已接（批 5）：工具帧带同一 `_meta`、本仓路由进 children（§16.1 / §16.2）。结果面仍缺：结果不经 ACP（`spawn-child.mjs:159-161`；`wrapChildCallbacks` 不包 `onToolResult`）⇒ 视图内工具卡停在 in_progress（不伪造终态，§16.8-1）。判定条件：补结果通道 ⇒ `tool_call_update` 路由自动闭合；输出通知另接 |
 | 17 | 子代理内容不落盘 | 谈话表随进程（`endSubagents()` 清；§16.8-4）。重开桌面后卡片只剩状态、无 children。判定条件：需要事后回看 ⇒ 另立持久面（会话存档无此字段） |
@@ -526,6 +557,13 @@ server 由 `HostMcpServer` 签发（127.0.0.1 系统选端口 + 每会话 Bearer
 | 19 | 审批开关与档位标签英文占位 | 审批两项（`Ask` / `Auto`）、其 description（开关 tooltip 的第二句）与档位名（`effortLabel`）英文直写；`localizedKernelOption`（`kernel_option_text.dart:8-46`）只认 claude 元组，未知元组原样透出 ⇒ 英文占位接受。同因 = §14-14；补齐窗口 = SDK 就位轮（同轮补 `app_en.arb` / `app_zh.arb` 键 + 生成档重产） |
 | 20 | 模型清单后台推送的落地面 | `refreshModelChoices` 是 fire-and-forget（§17.3-①）：落地时会话已关 / 已被 load·resume 替换 ⇒ 丢弃；`notify` 抛出（管道已断）⇒ 吞掉并记一行日志，不重试、不抛。判据 = 会话在册且同实例（`liveSession(id)?.agent === agent`，`acp.mjs` 的 ctx 包装传入）。判定条件：观察到清单在会话关闭后仍被推送 / 进程因未处理的拒绝退出 ⇒ 复核该判据 |
 | 21 | timer 唤醒轮不在 ACP 面 | 挂起窗不接 `timerFace`（§19.3-①），且窗内轮与普通轮都带 `suspDriven:true`（§19.3-②）⇒ 桌面会话里到期的 timer 不在后台自起一轮，也不在工具轮收尾投递（`post-turn.mjs:23`）；到期件留在途（不出列、不丢），交付面为零（§19.8-1）。判定条件：桌面需要 timer 唤醒 ⇒ 接 `timerFace`（`suspension.mjs:173-205` 第四态）+ 边界帧 `kind:"timer"` |
+| 22 | F17 重放里的 system-reminder 原文 | `session/load` 重放 `user_message_chunk` 文本；CLI 是否过滤机器行未核（`unverified`，§20.8-4）⇒ 本批不解析、不剥离。判定条件：走查看到重放消息里出现 system-reminder 正文 ⇒ 翻译层按固定前缀剥离（另立） |
+| 23 | 同一文件并发写 | 不同文件各自落盘；同一文件由 CLI 工具调用串行 + `expectedText` 基线保护（后写发现基线变了 ⇒ `-32603`，§21.8-9）。判定条件：走查见到同一文件并发写丢更新 ⇒ `IdeKernelFiles` 加每路径串行队列 |
+| 24 | F17 / F18 的 l10n 键与生成档 | 6 键（F17 4 + F18 2）在 `app_en.arb` / `app_zh.arb` 与生成档同拍在位——无 SDK ⇒ 生成档随 ARB 手改、保持 `test/l10n_test.dart` 绿（同 §18.8 / §14-14）；SDK 就位轮 `flutter gen-l10n` 重产。T82 只机检两源档（生成档由编译引用与控件走查覆盖）。判定条件：重产结果与手改逐键一致 |
+| 25 | 成本无来源（F20） | CLI 从不上报 `usage_update.cost`（`bridge.mjs:254-261` 只发 used / size），core 无价目表 ⇒ 桌面不显示成本（不重算，D89）。判定条件：CLI 在 `usage_update.cost`（ACP 可选 `Cost{amount,currency}`）上报 ⇒ 桌面在会话面板与回合 footer 显示（字段按 ACP 形读） |
+| 26 | 终端 `/usage` 不存在 / context% 非同一仪器 | 终端斜杠命令表无 `/usage`（`slash-commands.mjs:44-106`）；终端用量面 = 状态行累计 ↑prompt ↓completion + context%（`status-line.mjs:122-143`），其中 context% 是 `estimateTokens(history)` 估算（`render-loop.mjs:89-90`），与 ACP `usage_update.used` 不同仪器。本批对照口径 = token 合计（同 `onUsage` 源，D90）。判定条件：终端后续加 `/usage`（CLI 面）⇒ 按该命令输出补对照项 |
+| 27 | F20 的 l10n 键与生成档 | 2 键（`turnTokensSpentHint` / `usageSessionTotal`）在两源档与生成档同拍在位——无 SDK ⇒ 生成档随 ARB 手改、保持 `test/l10n_test.dart` 绿（同 §18.8 / §14-14）；SDK 就位轮 `flutter gen-l10n` 重产。T96 只机检两源档。判定条件：重产结果与手改逐键一致 |
+| 28 | F21 后置切换的失败文案英文占位 | 回合收尾重发失败 ⇒ 会话内 error notice 为内核口英文（含原始错误），形同 `thincoder stopped unexpectedly`；等待态文案已走 l10n（`modelsSwitchPending`，§24.2）。内核层无 l10n 面（`lib/kernel/**` 零 `l10n` 引用，2026-10-19 实测）。判定条件：`KernelContext` 携本地化回调（内核 l10n 面）⇒ 该 notice 改走键 |
 
 ---
 
@@ -802,7 +840,7 @@ f–k 是契约档与需求档的**同拍义务**：代码改了而契约档不�
 - **发射规则**（`bridge.mjs` 两个内容回调 + 两个工具回调）：`parseRelayPath` 命中 ⇒ 同一条通知带本标；未命中（主代理的帧）⇒ **零变化**（无 `_meta` 键）。
 - **嵌套** = 最内段身份（与 §12.2 同规则）；父链不承载。
 - **可见面零改**：内容 `content` 与工具 `title` / `kind` / `rawInput` / `status` 与今天逐字节相同——剥离语义照旧；不认本扩展的客户端忽略 `_meta`（`_meta` 通用条款「MUST NOT make assumptions」）即合规；协议版本 / `initialize` 形状 / 方法面零动。
-- **重放面**（`replayHistory`，`bridge.mjs:389` 起）不加本标：重放走独立路径（不经过上面四个回调），还原来源 = 槽文件里的主会话历史（`agent.history`，`thincoder-core/session.mjs:184`）——逐条发 `user_message_chunk` / `agent_message_chunk` / `tool_call` / `tool_call_update`（`bridge.mjs:413` / `:436` / `:425` / `:441`）。
+- **重放面**（`replayHistory`，`bridge.mjs:389` 起）不加本标：重放走独立路径（不经过上面四个回调），还原来源 = 槽文件里的主会话历史（`agent.history`，`thincoder-core/session.mjs:200`）——逐条发 `user_message_chunk` / `agent_message_chunk` / `tool_call` / `tool_call_update`（`bridge.mjs:413` / `:436` / `:425` / `:441`）。
   子代理的流式内容只经 relay 回调到显示面（`spawn-child.mjs:147-164`），不写入主会话历史 ⇒ 重放不含子代理正文 / 思考 / 工具卡；主代理自己的工具卡（含 spawn 调用的结果文本）照旧还原——那是主对话自己的 tool result。
 - **工具结果面**：子代理工具结果当前不经 ACP 转发（`onToolOutput` 不进桥；`wrapChildCallbacks` 不包装 `onToolResult`——`spawn-child.mjs:147-164`）⇒ 现网子代理只发 `tool_call`、不发 `tool_call_update`；更新侧同标已就位（结果通道就位即成对）。
 ```
@@ -1083,7 +1121,7 @@ console.log(JSON.stringify(seen, null, 1))
 
 - **起点**：`agent.autoApprove` 默认 false（`thincoder-core/agent.mjs:55`）；`session/new` 直建会话、不读槽（`handlers-session.mjs:193-195`）⇒ 新会话默认关，与终端一致（终端新会话也默认关）。
 - **终端 → 桌面**：`session/load` / `resume` 走 `applySession`（`handlers-slots.mjs:112` / `:177`）⇒ `agent.autoApprove = data.autoApprove ?? false`（`session-lifecycle.mjs:119`）⇒ 槽里开着，ACP 会话就开着，`configOptions` 如实报出。
-- **桌面 → 终端**：`set_config_option` 只改内存（与 model / thinking 同口径，`:107-111`），落盘靠**既有的**回合末存档（`acp/session.mjs:44` `save(agent)` → `thincoder-core/session.mjs:139` 写 `autoApprove`）⇒ 终端下次打开同槽读到的就是它。**不新增写盘路径**。
+- **桌面 → 终端**：`set_config_option` 只改内存（与 model / thinking 同口径，`:107-111`），落盘靠**既有的**回合末存档（`acp/session.mjs:111` `save(agent)` → `thincoder-core/session.mjs:155` 写 `autoApprove`）⇒ 终端下次打开同槽读到的就是它。**不新增写盘路径**。
   - 精度：开关后**没发消息就关窗口** ⇒ 不落盘（本回合没发生）。走查按「开关 → 发一条 → 再看终端」验（§17.9-④⑧）。
   - 同槽两窗口 = last-write-wins，各自内存态不互推（与今天终端两开一致）。
 
@@ -1566,7 +1604,7 @@ bool _drain() {
 
 - 排水时 `_beginTurn(id)` + `_deliver(turn)`：`_deliver` 开头那次 `ItemUpserted(同 id, UserMessageItem(text, images))` 就是转正——宿主把该 id 从队列表移出、追加到对话尾（`transcript.dart:188-203`）。
 - 顺序 = 入队顺序：对话里出现的顺序与用户打的顺序一致。
-- **图片落盘与阈值判定在转正时执行**：`_deliver` 开头的 `_attachImages(turn)`（`:436`）就是 F6 的既有路径。⇒ 队列项预览 = 入队时的原样 N 张；实发时超阈项被弃，气泡里少于 N 张 + 一条 `dropped` warning（`:445-458`）⇒ **预览与实际可能不一致**，差异由那条提示交代——与首条发送同形（F6 的弃图只发生在发出那一刻）。
+- **图片落盘与阈值判定在转正时执行**：`_deliver` 开头的 `_attachImages(turn)`（`:436`）就是 F6 的既有路径（= **回退路**；原生路见 §22 / D82–D85——能力位为 true 时不落盘、不发路径行）。⇒ 队列项预览 = 入队时的原样 N 张；实发时超阈项被弃，气泡里少于 N 张 + 一条 `dropped` warning（`:445-458`）⇒ **预览与实际可能不一致**，差异由那条提示交代——与首条发送同形（F6 的弃图只发生在发出那一刻）。
 - **预览与实发正文的另一处差异**：面板预览 = `turn.text` + 「N 张图片」（`queue_panel.dart:120-126`）；转正正文还会拼 `notes`（空行分隔，`:911`）与图片路径行 `[Attached images: …]`（§4 F6 的落盘结果，`:941-943`）⇒ 面板与实发正文可能不完全一致。`notes` 按契约本就不展示（`kernel_types.dart:590-592`），路径行是内部细节 ⇒ 面板不改；用户可见的差异仍只有弃图（上一条提示交代）。
 
 **③ 撤回 / 立即发送**
@@ -2020,7 +2058,8 @@ void _releaseWhenIdle() {
 | ⑥ | `thincoder/docs/core/design/AGENT-LOOP-ASYNC-POOL.md` | `:442`「CLI headless / ACP ❌ 不支持」行改「ACP 已支持（ACP-CLIENT §12.8）」 | 1 行 |
 | ⑦ | `thincoder/docs/batches/2026-10-17-acp-suspension.md` + 同名 `.test.mjs` | 该仓批次档（§1–§6）+ 单元测试档（假 run 直驱 `createAcpSession`；该仓惯例 = 测试档随批次档） | 新增 |
 
-- **体量**（2026-10-17 修正轮 3 后实测 + 修正轮 4 预估）：`thincoder_kernel.dart` 1113 行（修正轮 4 ≤ +35 ⇒ ≤1148）在 >800 名单；本批 = 会话面行级新增，不动结构 ⇒ 不触发「先立拆分批」；会话面缝候选（§18.4 所列）**追加** `_turnReport` / 释放延后 / 窗开关与 `dispose` 延后三条，触发不变。`thincoder_events.dart` 784（<800，不入名单）。`session.mjs` 与新增档均 <500 行。测试档 2570 在 >800 名单：只加用例，缝候选沿用 §15.4。
+- **体量**（2026-10-17 修正轮 3 后实测 + 修正轮 4 预估）：`thincoder_kernel.dart` 1113 行（修正轮 4 ≤ +35 ⇒ ≤1148）在 >800 名单；本批 = 会话面行级新增，不动结构 ⇒ 不触发「先立拆分批」；会话面缝候选（§18.4 所列）**追加** `_turnReport` / 释放延后 / 窗开关与 `dispose` 延后三条，触发不变。`thincoder_events.dart` 784（<800；批 11 后 ⇒ ≤807 入名单，见 §5.2）。
+  `session.mjs` 与新增档均 <500 行。测试档 2570 在 >800 名单：只加用例，缝候选沿用 §15.4。
 - **out-of-repo 边界**：上述 ①–⑦ 由父侧另起 out-of-repo 轮，在 thincoder 仓写它自己的批次档与测试（本仓只出设计，不写外仓文件）。
 
 ### 19.5 关键决策记录（含被否）
@@ -2158,60 +2197,1089 @@ W 侧判据不变：CLI 的 `end` 恒发布尔 `ok`（成功 = true；抛错 = f
 
 ---
 
-## 变更记录
+## 20. 编辑器上下文随消息注入（F17）
 
-- 2026-10-16 · 首版（批 1 设计：F1–F7、F10 + E1–E5 落地；批 2/3 只留接口面）。
-- 2026-10-16 · 修正轮 1（评审发现 #1–#9）：§2.2 先例文档坐标 · §3.4 两层超时关系 · §3.5/§14-9 fork 后 id 处置 · §5.2 体量立场与净增上界 · §7/§8 走查前提与用例 T26/T27 · §12 反向同步行 · §14-10 能力位固定面登记。
-- 2026-10-16 · 修正轮 2（实现期缺口：load 跳过判据跨内核合并 ⇒ 与 claude 同项目的 thincoder 会话漏列）：§5.2-⑤ 改按内核判定（`_listKept` 收内核子集、守卫按内核修正、代价说明）+ 净增上界与体量立场随涉 · §7 A3 补列出行 · §5.1 补 `preferred_kernel_test.dart` 登记 · §14-11「未列目录时清理推迟」。
-- 2026-10-16 · 修正轮 3（A 段实现期表外披露登记归位）：§5.1 补 `thincoder_events.dart` 行（拆自 kernel）· `thincoder_kernel.dart` / `thincoder_locator.dart` 行与实况对齐 · 体量立场 kernel bullet（拆分已执行 + 不续拆 + 下一缝 = 选择面段）。
-- 2026-10-16 · 修正轮 4（失效措辞与体量立场口径对齐）：§2.2 偏离 ③ 与 D2 改按已执行拆分口径（翻译档 = `thincoder_events.dart`；续拆裁定 = 不续拆） · §12-4 翻译指针随拆分校正（`thincoder_events.dart`）。
-- 2026-10-16 · 修正轮 4 · 追加（A 段交付披露裁定落地）：§3.5 补 `session/close` best-effort 与「会话已不在」兜底两条口径（登记 §14-12 / §14-13） · §12-7 补固件基准口径（真机重录执行点 = T15 走查）。
-- 2026-10-16 · 修正轮 5（C 段代码评审三项裁定落地：跨重连口径 / A1 断言 / 上界快照）：§3.5 与 §14-13 补「跨重连口径」（兜底后记「记录槽已忘」，走保留槽路线；实现随后续单）· §7 A1 断言改描述符身份 + 代码核口径 · §5.2 净增上界 ① ≤11（含 2 条 import）/ ⑦ ≤81 · §14-14 登记 ⑦ 设置组文案英文占位。
-- 2026-10-16 · 修正轮 6（走查现场缺陷：`session/prompt` 未设超时 ⇒ 走连接缺省 60s，长回合误报「got no answer」+ 误标 interrupted）：§3.4 补我方请求超时口径——`session/prompt` 显式不设超时（回合时长无上界；兜底 = 取消 + 进程健康），其余请求照旧；实现修随后续单。
-- 2026-10-16 · 批 4 设计（F11 子代理活动可见）：新增 §15（翻译表 / 挂起态与 digest / 受影响文件 / 关键决策 D21–D30 / 走查 7 步 / 用例 T28–T37 / 边界 / UI）；随改 §3.4 通知表（子代理信号指针）· §3.6 翻译表（新增行）· §5.2 尾（批 4 指针）· §7（F11 行）· §9（子代理测试面）· §10（原「仅忽略」句随批 4 撤）· §11（批 4 已落地行）· §12-A-4（核对形状补子代理 meta）· §14-4（判定条件闭合改写）· §14-15（文案英文占位登记）。
-- 2026-10-16 · 批 4 修正轮 1（设计评审 #1–#8 落地）：§5.2 体量立场（`chat_screen.dart` 入 >800 名单 · 快照刷新为当前值 · kernel 触发句补「触碰按结构级改动计」）· §15.4（kernel +4 口径 · kernel_test 体量裁定 · ⑰ ≤ +115）· §15.2（`cancelled` 已建处置 + 契约坐标 · `{position}` 不展示）· §15.6（步 3 / 7 观察点）· §15.7（T38–T40）· §14-15（补 `thincoder stopped`）· §15 引言块去沿革指注。
-- 2026-10-16 · 批 4 交付随修（实交读数落档 + 终态后契约外报告裁定）：§15.4 文件表与体量条按交付读数刷新（⑪ 608 · ⑫ +5 · ⑬ 1 行改动 / 净增 0 · ⑭ +3 · ⑯ 191 · ⑰ 1442 · 补录 ⑱ 固件 README）· §15.2（`queued` / `async` 行 + 终态后忽略口径）· §15.5 D31 · §15.7 T41 · §15.8-7 · §5.2 体量条读数（+3 / 888 · ⑬ 净增 0）。
-- 2026-10-16 · 批 4 点修（守卫口径扩展 + 实交读数刷新）：§15.8-7 / §15.5 D31 口径扩展——卡片已移除（`cancelled` 墓碑）后同键任何迟到报告（含 `settled` / `stopped` / `done` / 未知态）⇒ 忽略（与四态口径并列一条统一规则）；§15.2 规则行与状态表 `queued` / `async` 行、§15.7 T41 随同步；§15.4 ⑪ / ⑰ 实交读数与缝坐标随守卫修正轮刷新（637 · 1524 · `:1358` 起）；零代码改动。
-- 2026-10-16 · 批 5 设计（F12 子代理内容归属）：新增 §16（thincoder 侧 diff 钉死 / 本仓路由 / UI / 受影响文件 / D32–D38 / 用例 T42–T50 / 边界 / 走查）；随改 §3.6（内容帧归属标指针）· §7（F12 行）· §9（批 5 测试面）· §10（边界指针）· §11（卡片可点）· §12-A-4（核对形状）· §14-4（内容归属闭合）· §14-16/-17（登记）· §15.1 / §15.2 / §15.5（D21 拆条、卡片字段、偏离 1·3 按批 5 现状改写）
-  · §15.8-2 / §15.9（批 4 边界与 UI 按现状改写）· §5.2（§16.4 指针）。
-- 2026-10-16 · 批 5 审前修订（父侧内容核验 2 项）：§16.1 归属标扩到工具帧（`bridge.mjs:275-282` / `:287-291`，辅助 `contentMeta` → `frameMeta`，净增 11 行 + 2 行改写）· §16.2 工具帧路由与结果不回传判据 · §16.7 +T50
-  · §16.8-1 / §14-16 改登记口径（归属已接 / 结果面缺）· §16.6 ①② 补工具卡、边界行 diff 处数 · D36 转已确认 · 随改 §3.6 工具两行 / §7 F12 行 / §9 用例号 / §11 / §15.8-2 / §12-A-4 / §16.9 走查①② / §16.4 ⑲⑳㉑㉒。
-- 2026-10-16 · 批 5 设计评审修正轮 1（#1–#9 落地、#10 注记；零代码）：§15.1 偏离 1·3 · §15.2 卡片字段 · §15.5 D21（id / children 有来源；五类无来源）· §16 最近先例行（批 4 §15.2 / §15.9 ∥ `claude_code_translator.dart:419-423`）· §16.1 重放面重写 + `SUBAGENT_META_KEY` 既有定义 · §16.2 键命名空间 + 重放降级行
-  · §16.4 本批不拆裁定 + `bridge.mjs` 行数 / 档位 · §16.7 T43 / T50 · §16.8-2 措辞 · §16.8-7 重放边界 · §3.6 重放帧口径 · §5.2 §16.4 指针。
-- 2026-10-16 · 批 5 修正轮补笔（表外发现 1：B1 改写后的口径回灌；零代码）：§7 需求覆盖行补 F11 / F12，并把「无越界改动」改为「默认不改仓 + F12 最小接口例外（§16.1）」· §10 边界行同口径对齐。
-- 2026-10-16 · 批 5 交付订正（按实现实况回读；零代码）：§16.4 ⑳ 记「预估 ≤ +200（⇒ ≤1737）→ 实交 +308（⇒ 1845）」（仍处 >800 名单，缝候选 = 按 group 拆（§15.4），本批不动结构）· ⑲ 措辞对齐实交（`_putSubagent` 签名不变；`id` 由 `_openCard` `:665` 承载、`children` 由 `_card` `:550` 承载）
-  · D34 补 `closePiece()` 顺带冲刷（`:198`）· §16.8-7 补「带标重放帧按正文渲染」（今日不可达，判定条件同 §16.8-7）。
-- 2026-10-16 · 批 6 设计（F13 审批自动档 + F14 模型清单与思考档位）：新增 §17（服务端位暴露的逐行 diff / 桌面审批面与档位面的最小接线 / 兼容矩阵 / D39–D47 / T51–T58 / 边界 / 走查）；
-  随改 §4 F5（模型候选与档位面现状）· §5.2（§17.4 指针）· §7（F13/F14 行 + B1 例外口径）· §9（T51–T58 + 不加固件的理由）· §10（例外口径；`effort 多档` 随批 6 落地）· §11（审批 pill / 档位面）· §12-A-4（新 id 与多项清单）· §14-1（模型候选改现状）· §14-18/-19（登记）
-- 2026-10-16 · 批 6 设计评审修正轮 1（#1–#12 落地；零代码）：§10 边界行改 `context` / `fast` 选择器口径并落 `effort` 多档例外 · §17.4 补测试档体量行 + 行数统一（`wc -l` 实测）
-  行数：kernel 899 · mock 567 · test 1845 · `acp.mjs` 157（快照日 = 2026-10-16）；§17.3-③ `effortLabel` 词表外档名规则 + T56 补 `low` · §17.7 +T59 / T60（两条写路径的错误面）与 T57② 改 mock 参数面
-  · §17.3-① 三路装配口径 + 落地存活判据（§14-20）· §17.1-① 去流程性批注 · 探针注 `providerSpec` 取值键 · §9 / §17.6 / §5.2 / §2 随同步
-- 2026-10-16 · 批 6 形态修正轮 2（用户 21:25 定形：审批自动档 = composer 右下角的小开关）：§17.1-③ 改成右下角紧凑开关（两档 ⇒ 开关；≥3 档 ⇒ 左簇菜单，Claude 不动）· 审批两项 label 收短为 `Ask` / `Auto` · tooltip = 既有标题 + 另一项 description；
-  §17.4 加 ㉗ `composer.dart`（≤ +50）/ ㉘ `composer_test.dart`（≤ +70）并落宿主一档口径 · §17.5 D41/D42 · §17.6（+形态派生行）· §17.7（+T61，T51/T54 随形）· §17.9 走查②③⑦ · §7 · §9 · §11 · §14-19 随同步；零代码
-- 2026-10-16 · 批 6 形态修正轮 3（用户 21:39 改形：不用警示色，开关照参照图）：§17.1-③ 颜色条改「开 = 填充 pill（底色 `button.secondaryHoverBackground`，图标 / 文字 `AppColors.text`）/ 关 = 无底色（textMuted）」，`selected.caution` 不再参与取色；
-  §17.1-③ 选项表备注与「可见性」句、hover 句随填充态同步 · T61 断言改「开 = 有填充、关 = 无填充」· §17.6「一眼可见」行判据改 T61 · §11 一句改「开态填充 pill、关态纯文字」；零代码
-- 2026-10-16 · 批 6 形态修正轮 3 扫尾（零代码）：§17 残留的「警示色 / caution 取色」表述扫成新形态（开 = 填充 pill 有底色 / 关 = 纯文字无底色）——§17.4 ㉗ · §17.5 D41 / D42 · §17.9 走查②③；数据面 `caution: true`（T51）不动。
-- 2026-10-16 · 批 6 语义修正轮（用户 21:47 裁定：面板「Approve for this session」真的开会话级 auto）：§17.1-④ 从「本批不改」改为本批做（桌面侧）——先答本次 approve，同一回合写 `set_config_option('autoApprove', true)`（与右下角开关同一写路径）；写失败不影响本次批准、开关不变；once / reject 零写
-  · §17.5 D46 · §17.6（+派生行；错误面 +T62④）· §17.7（+T62，紧接 T51）· §17.9（+走查 9）· §17.8-3 · §10 · §9 · §14-18 改「已闭合（桌面侧）」 · §17.4 ㉔（≤+66）/ ㉕（T62 零增）/ ㉖（≤+290）；零代码
-- 2026-10-16 · 批 6 语义修正轮 · 追加（父侧裁定，并进本轮；零代码）：§17.4 ㉗ `composer.dart` 增量 ≤+50（⇒ ≤2119）→ **≤+70（⇒ ≤2139；实交 2139 = +70）**——按 §17.1-③ 形态（公开类 + IdeHover/HoverBuilder + 放置分支 + 两档判定 + localized）下限约 2123，原 +50 低估 10–16 行；§17.4 体量行补「>800 名单 / 缝 = 右下角固定组整段出档 / 触发 = 下一次结构级触碰或独立拆分批」
-- 2026-10-16 · 批 6 形态修正轮 4（用户 22:12 第 4 次定形：审批开关改**拨动开关**）：§17.1-③「形态与放置」整节重写——track 35 × 20 / 圆角 10 + knob 直径 16 / 内缩 2、左右换位（几何与 140ms · easeOut 动画逐项照 `lib/ide/ide_switch.dart:44-84`）；
-  开 = track 橙 `AppColors.claude` `0xFFD97857`（`app_theme.dart:157`）+ knob `button.foreground`，关 = track 无填充（`Colors.transparent` + 1px `AppColors.textFaint` 描边）+ knob `AppColors.textMuted`；无文字 label / 无图标（tooltip 承载语义，`Semantics(toggled:)` 承载读屏）、热区 35 × 22
-  · §17.1-③ 选项表引句与「可见性」句随形 · §17.6「一眼可见」判据改「位置 + 颜色即状态」· T61 断言改「knob 位置 + track 颜色」；零代码，实现待随后续实施轮改形
-- 2026-10-16 · 批 6 颜色点改（用户 23:37 裁定：开态橙 = 参照图 "Fast Ide" 胶囊底色）：§17.1-③ 颜色条改 `AppColors.autoTrack`（`0xFFE2B373`，`app_theme.dart` 新增；截图逐像素取色）——取代上一条的 `AppColors.claude` 借色方案；§17.4 ㉗ 与 §17.7 T61 随同步；另修 §17.4 体量行的 2135/2139 读数打架（统一 2139）。零语义改动。
-- 2026-10-16 · 批 7 设计（F15 工作中发送的消息）：新增 §18（内核本地队列 / 排水挂在 `_endTurn` / 四个入口 / 失败面与 `duringTurn` 判据 / 兼容矩阵 / D48–D54 / T63–T67 / 边界 / 走查）；
-  随改 §4 F3（流式中可继续发、指 §18）· §7（F15 行 + 一致链补 F15）· §9（队列测试面与不加固件的判据）· §10（边界撤「队列控制」、加「队列面 = 批 7 设计已定」）· §11（批 7 设计已定）；零代码
-- 2026-10-16 · 批 7 设计评审修正轮 1（评审 #1–#12 全落地；零代码）：§18.7 用例符号改 `agent.release()` + 符号注（#1）· §18.1 插入点前置不变量 + 约束 1 收紧（#2）· §18.5 编辑列标「宿主既有、本批不机检」（#3）· T65④ / T66⑥ 补 `_next` 两条边（#4）
-  · §10 / §11 改状态中性措辞（#5）· 抬头分批补批 6 / 批 7（#6）· §18.1 状态表补 `_sent`（#7）· §18.2② 钉住图片落盘与阈值在转正（#8）· §18.2⑤ 挂起态回指 §15.3（#9）· §18 先例行回指 §2.2（#10）· §18.4 生成档归类（#11）· §18.4 会话面缝候选（#12）
-- 2026-10-17 · 批 7 实现期登记（零代码）：§18.9-8 `KernelTurn.now` 不兑现 + 判定条件 · §18.2-② 补「预览 ≠ 实发正文」的另一源（`notes` / 图片路径行）。
-- 2026-10-17 · 批 8 设计（F16 回合结束后继续关注后台子代理）：新增 §19（挂起窗装配 / 回合边界帧与桌面翻译 / 收束 / D55–D61 / T68–T74 + W1–W5 / 边界 / 走查 / 兼容）；
-  随改 §3.4 通知表（turn meta）· §3.6 翻译表（新增行 + 自动轮边界一句）· §5.2 尾（§19.4 指针）· §7（F16 行 + 一致链）· §9（挂起测试面）· §10（B1 例外 + 边界指针）· §11（批 8 已落地行）· §12-A-4（核对形状补 turn meta）
-  · §14-4（剩余边界改写）· §14-21（timer 登记）· §15.3（digest 到达形改写）· §15.5 D26（随改写）· §15.6 走查 6 · §15.7 T34（旧 CLI 形）· §15.8-1（闭合）；零代码；thincoder 侧 = out-of-repo 轮
-- 2026-10-17 · 批 8 设计评审修正轮 1（#1–#5、#8、#9 落地；零代码）：§19.2 插入点钉死（`emit(TurnEnded)` 之后、`_drain()` 之前；暂存自动轮先起，队列 / 释放等自动轮收尾）+ `_turnKey` / `_turnUnprompted` / `lastTurnUnprompted` 的命名与取值层（#1 / #9）· §18.1 插入点一句随同步（#1）
-  · §19.1 / §19.3-② 自动轮 `try … finally` 必发 `end{ok:false}` + W6 / T71②（#2）· D58 / §19.3-② / W5 回调缺席判决 = 拒绝（桥侧 `unverified`）（#3）· §19.3-② upstream 返回路 + W7（#4）· §15.3 挂起期发消息加「无在飞回合时」、§19.2 末条改为实际改动（#5）· §5.2 尾改「本仓 1 档（kernel）+ 固件 / 测试面」（#8）
-- 2026-10-17 · 批 8 实现期修正轮 2（两处实现期设计缺口；零代码）：§19.2 暂存位与自己的 `end` 配对（**撤暂存**，该轮在桌面不成轮；暂存位已占的第二个 `start` 不覆盖）+ `ok` 宽容（自动轮在飞时 `end` 一律收轮，只认布尔 `false` = 中断）+ 翻译表与字段域随改 · §19.5 +D62 / D63（含被否）
-  · §19.7 T74 行限定「暂存位空」+ 补项 T74① / T74② + W 侧「恒发布尔 `ok`」一句 · §19.6 判据补 T74①② · §3.6 turn meta 行随同步 · §19.4 实交读数回灌（㉟ 1070 / ㊱ 2471 / ㊲ 9 行 / ㊳ +3 / ㊴ +3；体量行同刷）
-- 2026-10-17 · 批 8 实现期修正轮 3（走查暴露的设计缺口：切走视图丢后台子代理；零代码）：§19.2 释放规则（D64：谓词 `_turn ∥ _starting ∥ hasLiveSubagents` · 兑现点 = `_endTurn` 尾 + 最后一个子代理离开后的一个 macrotask 静默期 · 静默期理由与被否）+ 插入点坐标刷为现行 · §19.4 ㉟ / ㊱ 上界 + 新增 ㊵ `thincoder_events.dart`（移出零改动名单）· §19.5 +D64 · §19.6 判据行 · §19.7 +T75①–③ · §19.8-10/-11/-12 边界 · §19.9 切回可见面 · §19.11 旧 CLI 一句 · 体量行按实测刷（kernel 1079 / events 778 / test 2516）
-- 2026-10-17 · 批 8 实现期修正轮 4（走查第二条缺陷：结算那一刻切项目窗口 ⇒ 结果丢；零代码）：§19.2 窗开关帧（`phase:"watch"` + 布尔 `on`；建窗即发、`done` 的 finally 发、建窗失败补发）+ `_watching` / `_canClose` / 三兑现点 + `dispose()` 延后（D66）· §19.1 流程图 · §19.3-① 发射点与 ④ 收束表 · §19.4 上界（㉟ ≤1148 / ㊱ ≤2630）+ CLI ① / ⑤ 增行 · §19.5 D64 改写 + D65 / D66 · §19.6 判据行 · §19.7 +T76①–③ / W8 · §19.8-10 改写 + -13 / -14 · §19.9 / §19.10 步 8 · §19.11 窗帧行 · §3.4 / §3.6 索引 · §9 用例号随改；out-of-repo：`acp/suspension.mjs` 窗帧 + ACP-CLIENT §12.8 `watch` 行
-- 2026-10-17 · 批 8 实现期修正轮 5（上抛 1 裁定：`prepare()` 不清 `_watching`；零代码）：§19.2 字段条与骨架条改「`_watching` 只由 `watch{on:false}`（四条退径都发）与 `_teardown()` 清」，`prepare()` 只清 `_releaseWanted` · §19.8-13 改写为该裁定（`attach()` 引用计数下清位会让「离开 → 回来 → 再离开」丢窗开位；丢 `on:false` 帧的后果与判定条件）· §19.2 代价与边界条随改。
-- 2026-10-17 · 批 8 实现期修正轮 7（普通用户回合也带 `suspDriven:true`；零代码）：§19.3-② 补「普通用户回合（窗外）同带 `suspDriven: true`」条（`session.mjs:106-109`；与 TUI 同源；不传 ⇒ 用户回合内结算的条目被该轮自收、池空不开窗 = F16 最窄漏实例；影响面 = 工具轮收尾不再注入到期 timer）· §19.7 W 表 +W9（窗内两型轮）/ W10（普通回合），抬头改 W1–W10 · §19.8-1 补 timer 交付边界（`post-turn.mjs:23`：无 `timerFace` ⇒ 交付面为零、到期件留在途；判定条件 = 接 `timerFace`）· §14-21 同口径改写。
+> 需求档 F17（用户 2026-10-17 21:16 裁定「先把 IDE 完善」）：发消息时把当前编辑器上下文随消息带上——打开文件路径 + 光标行 + 选区（若有），用户不必手动 `@`；注入可见可撤销，开关是配置项且有设置 UI，默认开。
+> 一句结论：**上下文 = 宿主既有 `OpenEditor` 快照的每消息快照**，以一个文本块（`<system-reminder>` 摘要 + 选中文本）随 `session/prompt` 携带；界面 = 输入框下方一个可撤销 chip + 已发消息里的摘要；开关 = `chat.editorContext`（默认开）。
+
+**最近先例（对齐 ∥ 偏离及理由）**
+
+- 对齐 ①：采集 = 宿主既有 `OpenEditor.at`（`lib/chat/open_editor.dart:17-42`；活动文档 + 编辑器选区由 `ide_workbench.dart:769-775` 构造），语义不动。
+- 对齐 ②：传输 = `KernelTurn.notes` 先例（`lib/kernel/kernel_types.dart:580-605`）；thincoder 今日把 notes 以空行附在正文后（`thincoder_kernel.dart:1077-1080`），`session/prompt` 仍是一个文本块（`thincoder_kernel.dart:613-618`）。
+- 对齐 ③：设置项形制 = `PromptSuggestions`（`lib/kernel/prompt_suggestions.dart:6-17`；`main.dart:169-171` 接线）与设置页 `SettingsSwitchRow`（`general_page.dart:362-405`）。
+- 对齐 ④：chip 形制 = composer 既有 token chip（`composer_embeds.dart:422-540`）与 `UserMessageItem.images` 的呈现先例（`user_message_bubble.dart:33-43`）。
+- 偏离 ①：thincoder **每条消息都带**；Claude 是「编辑器变化才告知」（`chat_session.dart:1039-1051`，`test/chat/open_editor_test.dart:86-137` 钉住）——需求原文是「发消息时把当前编辑器上下文随消息带上」，不是「变化时」。
+- 偏离 ②：不用 `resource_link`（D67）。
+- 偏离 ③：上下文不进消息正文的显示（wire 有、气泡只显示摘要 chip）——D68。
+
+**survey 证据**：本仓设计档 §3.4 / §4 F3；外仓 CLI 设计档 §2.1（`session/prompt` 接受 `text` / `resource_link`）。
+`thincoder-cli/src/acp/resource-link.mjs:77-104`（`resource_link` 由 CLI 读**磁盘**并内联，选区文法 `#L<a>-<b>`）与 `:114-124`（`buildPromptText` 只取**首个** text 块，再拼 resource_link 段）。
+结论：自动上下文用文本块；`resource_link` 读盘、整文件内联，不适合每条消息的自动注入。
+
+### 20.1 做法：一次快照 ∥ 三处可见
+
+```text
+composer 提交（openEditor()：活动文档 + 光标 / 选区）
+  │  设置开 ∧ 未点 ×
+  ▼
+ChatSession.send → KernelTurn.contexts（按规范绝对路径去重，一条）
+  ▼
+ThincoderKernel._deliver → 一个 text 块：
+   <用户正文>\n\n<system-reminder>…路径 … 光标行 … 选区行 … 选中文本 …</system-reminder>
+  ▼
+CLI buildPromptText（首个 text 块）→ 模型
+界面：输入框下方 chip（可 ×）· 已发消息气泡里的摘要 · 队列项沿用同一 UserMessageItem
+```
+
+- 采集点唯一 = `ChatSession.send`（与 `notes` 同处）；composer 只把 `OpenEditor?` 交给它（既有 `editor:` 回调，`composer.dart:1495`）。
+- 去重键 = `EditorContext.dedupeKey`（= `p.normalize(p.absolute(path))`，平台路径上下文；单一出处见 §20.2）；同一回合同一路径只出一条。今天只有一个活动编辑器 ⇒ 恒一条；去重是防多来源（多分栏 / 多窗口）的不变量，用例直接喂重复项。
+- 开关：`chat.editorContext`，缺省 / 非 `false` = 开（照 `PromptSuggestions.enabled` 形：关时写 `false`）；每条消息发送时读一次。
+- 撤销：composer 里点 × ⇒ 本条草稿不再带上下文；撤销态绑定当前 `OpenEditor` 快照——路径 / 光标行 / 选区一变，chip 重新出现（新上下文 = 新提议）。发送后草稿清空，下一句按当时编辑器状态重新给出。
+- 没有活动编辑器（`OpenEditor` 为 null：未打开文件 / 未命名文档 / 打开失败，`ide_workbench.dart:769-773`）⇒ 不注入、无 chip；thincoder 不发「没有打开文件」这类反向告知（那是 Claude notes 的语义，`OpenEditor.closedNote`）。
+- 有文件但无光标（`OpenEditor.line == null`：编辑器状态未挂载 / 选区无效，`open_editor.dart:22`；媒体文档，`ide_workbench.dart:772`）⇒ 仍注入，`editorNote` 只写路径、chip 只写文件名。媒体文档不过滤——路径照带，光标行 / 选区为空（需求「路径恒带、光标行与选区若有」）。
+- 上下文不进 `UserMessageItem.text`：`text` = 用户输入原样；`contexts` 单独字段供 chip；wire 文本由 thincoder 内核拼（D68）。
+
+### 20.2 契约（数据形与线上形）
+
+**宿主类型**（`lib/chat/chat_models.dart`）
+
+```dart
+class EditorContext {
+  const EditorContext(this.path, {this.line, this.selectedLines, this.selectedText});
+  final String path;               // 绝对路径
+  final int? line;                 // 光标行，1 基；null = 有文件无光标（编辑器状态未挂载 / 选区无效 / 媒体文档）
+  final (int, int)? selectedLines; // 选区首末行，1 基闭区间
+  final String? selectedText;      // 选区文本（上限同 OpenEditor.maxSelectedText）
+  String get note;                 // 既有形（Claude 用；有选区时不提光标行，逐字保持）
+  String get editorNote;           // thincoder 形：有光标行则恒带（有选区也带）+ 选区行区间；line == null ⇒ 只写路径
+  String get name;                 // 文件名，chip 用（line == null 时 chip 只写文件名）
+  String get dedupeKey;            // 规范绝对路径（p.normalize(p.absolute(path))）：去重键的单一出处
+}
+```
+
+- `line == null` 的形（有文件无光标）：`editorNote` 只写 `The user has <path> open in the editor.`（无 cursor / 选区段）；chip 只写文件名。`note`（Claude 形）无选区时本就只写路径，文案不动。
+- 去重键 = `EditorContext.dedupeKey`（规范绝对路径，单一出处）：宿主采集（`ChatSession._contexts`）与内核防御（`ThincoderKernel._contexts`）两个去重点都取它；同一回合同一 `dedupeKey` 只出一条（§20.1 / D71）。
+- `KernelTurn.contexts: List<EditorContext>`（缺省 `const []`；`kernel_types.dart`）。
+- `UserMessageItem.contexts: List<EditorContext>`（缺省 `const []`；内核发出用户消息时带上，气泡显示）。
+- `OpenEditor` 保留为编辑器快照，新增 `EditorContext toContext()`；`OpenEditor.note` 委托 `toContext().note`（Claude 文案与既有测试逐字不变）；thincoder 用 `editorNote`（有光标行则恒带，无光标行只写路径）。
+- `AcceptsEditorContext` 标记接口（`agent_kernel.dart`，照 `AcceptsImageFiles` 形）：thincoder 实现；其它内核不实现，行为不变。
+
+**线上形（`session/prompt` 的 `prompt` 数组，只有一个 text 块）**
+
+```json
+[{"type": "text",
+  "text": "<用户正文>\n\n<system-reminder>The user has /p/a.dart open in the editor, the cursor on line 10; the user selected lines 3-5 of /p/a.dart in the editor:\n<选中文本>\n\nThis may or may not be related to the current task.</system-reminder>"}]
+```
+
+- 有光标行时恒带（有选区也带）；选区行区间写成 `a-b`；`line == null` ⇒ 只写路径段（§20.1）。
+- 选中文本上限 = `OpenEditor.maxSelectedText`（10 000 字符）；超出截断并注明 `[N more characters selected, not shown: read the file for them]`（与既有 note 逐字相同，`open_editor.dart:72-79`）。
+- `editorNote` 与既有 `note` 的差别：有选区时也写明光标行（需求「光标行 + 选区」两者都要；`note` 的既有文案不动）；`line == null` 时两者都只写路径。
+- 一个回合只有一个 text 块；thincoder 不再使用 `KernelTurn.notes`（D69）。`notes` 字段保留给其它内核。
+- 不用 `resource_link`：CLI 会读**磁盘**并内联选中行（`resource-link.mjs:77-104`），编辑器里有未保存修改时是旧文本；且整文件 / 2000 行上限的成本摊在每条消息上。用户手动 `@` 仍走 `resource_link`（F8），不受影响。
+
+### 20.3 设置与 UI（全部落地，无 open）
+
+- 设置项 `chat.editorContext`（boolean；缺省开，关写 `false`），形同 `chat.promptSuggestions`（`prompt_suggestions.dart:6-17`；`main.dart:169-171` 接线）。新档 `lib/chat/editor_context_setting.dart`：`settingKey` / `enabled(Object?)` / `current` / `changes`（形同 `ComposerPolishSetting`）。
+- 设置 UI：设置 → 通用 → 「随消息带上编辑器上下文」一行开关（`SettingsSwitchRow`，`general_page.dart:362-405` 形）；描述说明「文件路径、光标行与选区；每条消息一次；可在输入框下方的 chip 上撤销」。
+- 输入框 chip：位于 composer 盒内输入区下方（`ComposerImages` 与 `_buildToolbar()` 之间、工具条上方，`composer.dart:1617-1627`）；形如 `a.dart · 行 10` / `a.dart · 行 3–5`，右侧 ×；无光标行只写文件名（`a.dart`）。
+  只在 `session.acceptsEditorContext ∧ 设置开 ∧ 有 OpenEditor ∧ 未撤销` 时显示。样式复用 `ComposerTokenChip` 的圆角 / 字号（`composer_embeds.dart:422-540`），不自造外观。
+- chip 的 × 对读屏是一个有名字的按钮：`Semantics(button: true, label: l10n.editorContextDismiss)`，悬停提示同文（`IdeHover`，`excludeFromSemantics: true` 避免重复朗读；`editor_context_chip.dart:58-67`）。理由：图标单独对读屏既不成按钮、也没有名字；文案走专用键（en「Dismiss Editor Context」/ zh「关闭编辑器上下文」），不复用通用「关闭」——读屏要能说出关掉的是编辑器上下文。
+- 已发消息：`UserMessageBubble` 文本上方一行同款小 chip（只读、无 ×），显示 `文件名 · 行 / 行区间`；不展开选中文本。`chat_item_view.dart:63` 与 `chat_history_view.dart:1741` 把 `contexts` 传进气泡。
+  已发消息打开态（`UserMessageViewer`）同样渲染只读 chip（文本上方、无 ×；`user_message_bubble.dart:306-308` / `:384-388`，数据 = `chat_history_view.dart:411` 的 `_editingContexts`）；可编辑打开态见 §20.8-3。
+- 撤销语义：× 只作用于当前草稿（绑定当前 `OpenEditor` 快照）；编辑器状态一变，chip 回来。发送后下一次按新状态重新给出。
+- 队列项：`UserMessageItem` 同一字段 ⇒ 转正后的气泡一致；本批不改 `queue_panel.dart` 的行内布局（chip 在转正后的气泡里出现）——登记 §20.8-5。
+- 没有打开文件 / 未命名文档：无 chip、无提示（沉默是正确形态：没有上下文可带）；有文件无光标（含媒体文档）⇒ chip 只写文件名。
+
+### 20.4 受影响文件清单（E2 增量；行数 = 2026-10-19 只读实测）
+
+| # | 坐标 | 改动 | 增量 |
+|---|---|---|---|
+| ① | `lib/chat/chat_models.dart`（719） | 新增 `EditorContext`（path / line / selectedLines / selectedText / note / editorNote / name / dedupeKey）；`UserMessageItem.contexts` + `copyWith` 随带 | ≤ +60（⇒ ≤779）；实交 +87（⇒ 806） |
+| ② | `lib/chat/open_editor.dart`（101） | `toContext()`；`note` 委托 `EditorContext.note`（Claude 文案逐字不变）；thincoder 用 `editorNote` | ≤ +12（⇒ ≤113）；实交 −14（⇒ 87；`note` / 截断委托进 `EditorContext`） |
+| ③ | `lib/kernel/kernel_types.dart`（606） | `KernelTurn.contexts`（缺省 `const []`） | ≤ +8（⇒ ≤614） |
+| ④ | `lib/kernel/agent_kernel.dart`（435） | `AcceptsEditorContext` 标记接口（文档 + 空接口） | ≤ +10（⇒ ≤445） |
+| ⑤ | `lib/chat/chat_session.dart`（1188） | `acceptsEditorContext` getter（= `_kernel is AcceptsEditorContext`，同 `acceptsImages` 形）；`send(..., bool editorContext = true)`；按 getter + 设置 + 撤销构建 `contexts`（去重）；非该内核仍走 `_editorNotes` | ≤ +30（⇒ ≤1218） |
+| ⑥ | `lib/chat/composer/composer.dart`（2363） | 输入区下方的 chip 行（新组件）+ 撤销态 + 传 `editorContext` | ≤ +25（⇒ ≤2388）；实交 +43（⇒ 2406） |
+| ⑦ | `lib/chat/composer/editor_context_chip.dart`（新增） | chip 组件（文件图标 + 摘要 + ×；无 × 时只读） | ~90（实交 98） |
+| ⑧ | `lib/chat/widgets/user_message_bubble.dart`（1104） | `contexts` 可选参数 + 文本上方 chip 行 | ≤ +35（⇒ ≤1139） |
+| ⑨ | `lib/chat/widgets/chat_item_view.dart`（285）· `lib/chat/chat_history_view.dart`（3685） | 两处把 `contexts` 传进气泡；已发消息打开态经 `_editingContexts` 传入 viewer（`chat_history_view.dart:411` / `:629` / `:1458` / `:1845`） | 各 ≤ +2；实交 +2（⇒ 287）/ +5（⇒ 3690：第二波 +1 + 收尾修复 +4） |
+| ⑩ | `lib/chat/editor_context_setting.dart`（新增） | `chat.editorContext` 的 key / 缺省 / current / changes | ~25 |
+| ⑪ | `lib/settings/pages/general_page.dart`（855） | 设置 → 通用一行开关 | ≤ +12（⇒ ≤867） |
+| ⑫ | `lib/main.dart`（797） | `EditorContextSetting.current` / `changes` 接线 | ≤ +5（⇒ ≤802） |
+| ⑬ | `lib/l10n/app_en.arb`（6995）· `app_zh.arb`（2700） | 4 个键（设置标题 / 描述 / chip 行 / 行区间）；生成档 `app_localizations_*.dart` 与两源档同拍在位（无 SDK ⇒ 手改，保持 `test/l10n_test.dart` 绿；SDK 就位轮重产——§18.8 / 登记 §14-24） | 各 +4 |
+| ⑭ | `lib/kernel/thincoder/thincoder_kernel.dart`（1196） | `implements AcceptsEditorContext`；`_deliver` 用 `turn.contexts` 拼 note、不再用 `notes`；`UserMessageItem.contexts` 带上 | ≤ +14（⇒ ≤1210；另见 §21.3 拆分后净降）；实交 +20（⇒ 1216；第三波拆分后 ≤1148） |
+| ⑮ | `test/chat/open_editor_test.dart`（139） | `toContext` / note 委托 / 摘要不回归 | ≤ +45（⇒ ≤184） |
+| ⑯ | `test/chat/editor_context_chip_test.dart`（新增） | chip 可见 / × 撤销 / 编辑器变化后回来 / 设置关 / 内核不接受 / 已发消息打开态（只读 chip） | ~80（实交 318，6 例） |
+| ⑰ | `test/kernel/thincoder_kernel_test.dart`（2859） | T77–T82（§20.7）；只加用例、不动结构（缝候选 = §15.4 的四组拆法：connection / session ids / locator / the registered kernel） | ≤ +130（⇒ ≤2989）；实交 +229（⇒ 3088） |
+
+- **体量**：`thincoder_kernel.dart` 的净增在 §21.3 的拆分里一并核（拆分后 ≤1148）；本节的 +14 是拆分前的参考上界。新增档均 <300 行。`composer.dart` 在 >800 名单（实交 2406），本批只加一段 chip 行与撤销态（行级新增，不动结构；缝候选沿用 §17.4 的右下角固定组；触发同 §17.4，不因本批变化）。
+- **体量（`chat_history_view.dart`，3685，2026-10-19 `wc -l` 实测）**：在 >800 名单；本批行级 +5（⇒ 3690；传参 / 打开态状态位 / viewer 接线，不动结构）；缝候选 = 会话列渲染段 / 历史载入段分开成档（段界由拆分批勘定）；触发 = 独立拆分批立项。同表的 `chat_item_view.dart`（285）< 800，不入名单。
+- **零改动**：`queue_panel.dart` · Claude / Codex 内核 · thincoder 仓（协议面零改：仍只发 text 块） · 固件。
+
+### 20.5 关键决策记录（含被否）
+
+| # | 决策 | 理由 / 被否 |
+|---|---|---|
+| D67 | 自动上下文用**一个文本块**（system-reminder 摘要 + 选中文本），不用 `resource_link` | 编辑器缓冲可能未保存，`resource_link` 由 CLI 读盘（`resource-link.mjs:77-104`）⇒ 会送旧内容；整文件 / 2000 行上限的成本不应摊在每条消息上；文本块还能逐字复用既有 note 形态与上限。被否：`resource_link` + `#L<a>-<b>`（路径 / 行区间天然可机检，但内容来自磁盘）；被否：两者都带（同一文件两处内容，重复注入） |
+| D68 | 显示与线上分离：`KernelTurn.contexts` 驱动 chip；wire note 由 thincoder 内核拼；`UserMessageItem.text` 不含 note | 需求「可见可撤销、不静默塞正文」；`text` 保持用户原样 ⇒ 编辑 / 重发 / 查找 / 标题生成都不受污染。被否：把 note 拼进消息正文并在气泡里显示（旧行为，正文被机器文本污染） |
+| D69 | thincoder **每条消息都带**；开关关 = 完全不带（也不发「没有打开文件」） | 需求原文「发消息时把当前编辑器上下文随消息带上」；Claude 的「变化才告知」是另一套语义，保持不动。被否：沿用变化才告知（用户每一句都期望带上当前状态）；被否：关开关时发 closedNote（反向噪音） |
+| D70 | 撤销 = 草稿级、绑定当前编辑器快照；不做会话级「永久关闭」 | 「可撤销」针对这一条消息；永久关闭是设置项的职责。快照一变 chip 回来，避免旧状态被静默沿用。实现形：composer State 持 `_dismissedEditor`（当前 `OpenEditor` 快照，`composer.dart:172`）；发送后复位（`:1528`）；快照一变即重新出现。被否：撤销后直到设置改回都不再出现（用户失去上下文却看不出原因） |
+| D71 | 去重键 = 规范绝对路径，同回合同路径一次；`@`-mention 不算重复 | 需求「同一文件同一回合只带一次」按**自动上下文集合**判；用户显式 `@` 是另一来源（resource_link），两者语义不同。被否：按 mention 字符串做模糊匹配（相对 / 绝对 / 文件夹三种形态，误判面大） |
+| D72 | 只取当前活动编辑器（单文件、单选区） | 需求是「当前编辑器上下文」；多分栏 / 多窗口的上下文选择没有产品定形，先不做。判定条件：产品要「所有打开文件都带」⇒ 在采集点扩为多来源 + 去重（本批已把去重键定好） |
+
+### 20.6 验收对照（回指需求档 F17）
+
+| 需求条目（F17） | 本档落点 | 判据（机检 / 走查） |
+|---|---|---|
+| 打开 `a.dart` 第 10 行、选中 3–5 行 ⇒ 发消息 ⇒ prompt 含路径与行区间 | §20.1 / §20.2 | T77：`session/prompt` 的 text 块含 `/p/a.dart`、`cursor on line 10`、`lines 3-5` |
+| 关掉开关 ⇒ 不含 | §20.3 设置项 + §20.1 开关 | T78：`chat.editorContext=false` ⇒ prompt 无该文本；T82：设置页写入 |
+| 未打开文件 ⇒ 不含 | §20.1 无文件 | T79：`OpenEditor` 为 null ⇒ prompt 与今天逐字一致 |
+| 同一文件同一回合只带一次 | §20.1 去重 | T80：重复输入 ⇒ 一条 note |
+| 注入可见可撤销（chip / 摘要） | §20.3 composer chip + 气泡 chip | T81：chip 显示；点 × ⇒ 本条 prompt 无上下文；编辑器变化 ⇒ chip 回来 |
+| 开关是配置项 ⇒ 有设置 UI；默认开 | §20.3 | T82：设置行存在、缺省开、关写 `false`；`test/l10n_test.dart` 键对齐 |
+| （派生）可见内容与实发一致 | §20.2（note 由同一 `EditorContext` 生成） | T77 与 T81 同源；走查 2–4 |
+| （派生）有文件无光标 ⇒ 路径仍带、不编造光标行 | §20.1 / §20.2（`line == null`） | T79②：system-reminder 只含路径；chip 只写文件名 |
+
+### 20.7 用例表（T77–T82，`test/kernel/thincoder_kernel_test.dart` + `test/chat/*`）
+
+| # | 场景 | 输入 | 期望 |
+|---|---|---|---|
+| T77 | 全形：光标 + 选区 + 选中文本 | `KernelContext(cwd:'/p')`；`EditorContext('/p/a.dart', line: 10, selectedLines: (3,5), selectedText: 'x\ny\nz')`；发一条消息 | 请求 `session/prompt` 的 prompt 单块 text；含 `/p/a.dart`、`cursor on line 10`、`lines 3-5`、`x\ny\nz`、`<system-reminder>` 包裹；`transcript` 用户项 `text` 仍是用户原文、`contexts` 一条 |
+| T78 | 开关关 | `EditorContextSetting.current = () => false`；同 T77 | prompt 单块 text = 用户原文（无 system-reminder）；气泡无 chip |
+| T79 | 无打开文件 | `editor: () => null` | prompt 与今天逐字一致；无 chip |
+| T79② | 有文件无光标 | `editor: () => OpenEditor('/p/a.dart')`（`line == null`） | system-reminder 只含 `/p/a.dart`（无 `cursor on line` / `lines` 段）；chip 只写 `a.dart`；`contexts` 一条 |
+| T80 | 同文件一次 | 构造器喂两条同路径 `EditorContext` | 只生成一条 note（去重）；`UserMessageItem.contexts` 一条 |
+| T81 | 撤销 | composer chip 点 × ⇒ 发送 | `session.send(..., editorContext: false)`；prompt 无上下文；`OpenEditor` 变化后 chip 重现 |
+| T81② | 已发消息打开 | 携带 `contexts` 的已发消息点开（thincoder 会话 `canEditMessages == false` ⇒ 恒走只读 `UserMessageViewer`） | 文本上方同款 chip 行可见、无 ×；无 Dismiss 语义按钮 |
+| T82 | 设置项 | 设置 → 通用关闭 ⇒ `settings.json` | 写入 `chat.editorContext=false`；缺省（不写）为开；`l10n`：`app_en.arb` / `app_zh.arb` 两源档均含这 4 个键（生成档不机检；可跑判据与不可跑回落 = §20.4 ⑬ / §14-24） |
+
+- 既有 `test/chat/open_editor_test.dart:44-83` 的 note 文案断言保持绿（委托后逐字不变）；Claude 的「变化才告知」用例（`:86-137`）保持绿。
+
+### 20.8 边界（本批不做）与登记（判定条件）
+
+1. **不做全工作区索引注入 / 符号级引用解析**：只带当前活动编辑器的一个文件（需求边界）。
+2. **`@`-mention 与自动上下文不互斥**：同一文件可能既被 `@` 又被自动带上——两处是不同来源；「同一文件同一回合只带一次」按自动上下文集合判（D71）。判定条件：产品要求「@ 过就不再自动带」⇒ 在 `ChatSession.send` 解析 `message.mentions` 的路径后跳过同名项。
+3. **可编辑打开态无 chip**：`contexts` 只由 `AcceptsEditorContext` 内核产生（现只有 thincoder，`chat_session.dart:1088`），而 thincoder 不实现 `RewindsConversation`（`chat_session.dart:586`）⇒ 携带 `contexts` 的会话 `canEditMessages == false`，已发消息打开恒走只读 `UserMessageViewer`；
+  可编辑的 `ChatComposer` 分支（`chat_history_view.dart:1849`）拿不到非空 `contexts`，故编辑层不渲染 chip（不发明交互）。判定条件：出现既实现 `RewindsConversation` 又带 `contexts` 的内核 ⇒ 编辑层补只读 chip 行。
+4. **重放不重建 chip**：`session/load` 只重放 `user_message_chunk` 文本；若 CLI 把 note 存进了会话历史，重放文本里会看到 `<system-reminder>` 原文（本批不解析、不剥离）。`unverified`：CLI 的 `saveSession` 机器行过滤只在 TUI 面读到（`bridge.mjs:399-400` 的注释），ACP 路径是否过滤未核。判定条件：走查看到重放消息里出现 system-reminder 正文 ⇒ 在翻译层按固定前缀剥离，只显示用户文本（另立）。
+5. **队列面板行内不显示 chip**：输入框 chip 的撤销态不进队列项；转正后的气泡显示 `contexts`。判定条件：产品要求队列里也能看到上下文 ⇒ `queue_panel.dart` 行内加摘要（宿主改动）。
+6. **Claude / Codex 内核行为不变**：Claude 仍按「编辑器变化才告知」（`chat_session.dart:1039-1051`）；本批只让 thincoder 走新路径。判定条件：要把同一形态推广到 Claude ⇒ 另立（会改 Claude 的既有语义与用例）。
+
+### 20.9 真机走查步骤
+
+1. 打开项目，在编辑器打开 `a.dart`，光标停在第 10 行 ⇒ 输入框下方出现 chip `a.dart · 行 10`。
+2. 发一条消息 ⇒ 气泡里同一 chip；模型答话能引用该文件 / 行（不要求逐字）。
+3. 选中第 3–5 行 ⇒ chip 变 `a.dart · 行 3–5`；再发一条 ⇒ 气泡 chip 同行区间。
+4. 点 chip 的 × ⇒ chip 消失；发消息 ⇒ 气泡无 chip、prompt 无 system-reminder；移动光标 ⇒ chip 回来。
+5. 设置 → 通用关掉「随消息带上编辑器上下文」⇒ chip 消失、发消息不带；重开 ⇒ 回来。
+6. 打开图片（媒体文档）⇒ chip 只写文件名、消息只带路径（无光标行 / 选区）；打开文本文件但编辑器状态未挂载（有路径、无光标行）⇒ 同形；未命名文档 / 没有打开文件 ⇒ 无 chip、消息不带上下文。
+7. 对照：thincoder 终端没有自动上下文（只 `@`）；桌面是增量，终端行为不变。
+8. 点开一条已发消息（展开态）⇒ 摘要 chip 可见、无 ×。
+
+## 21. agent 编辑走 IDE 原生 diff（F18）
+
+> 需求档 F18（用户 2026-10-17 21:16 同裁定）：桌面宣告 `fs.readTextFile` / `fs.writeTextFile` 能力并在内核请求时执行——agent 的读写经桌面文件模型，已打开的文件在编辑器里表现为可见、可审阅的变更；项目根外拒绝并有可见提示。
+> 一句结论：**能力位只在内核的 `initialize` 宣告**；两个反向 RPC 由新档 `ThincoderFiles` 处理，读写经宿主新接口 `KernelFiles` 落到 IDE 的打开文档 / 文件服务；**有未保存缓冲 ⇒ 拒绝写入**（不落盘、不动缓冲）并给出可审阅的只读 diff + 会话内提示；成功的写入落盘并复用既有 `FileEdited` 变更审查面。
+
+**最近先例（对齐 ∥ 偏离及理由）**
+
+- 对齐 ①：反向 RPC 分发 = 既有 `_serverRequest`（`thincoder_kernel.dart:772-811`；未知方法回 `-32601`，`thincoder_protocol.dart:167-174`）。
+- 对齐 ②：能力门控 = CLI 侧已备好（`bridge.mjs:102-105` 快照能力位；`:149-165` `readBuffer` / `writeBuffer`；`:347-387` 工具路由）；未宣告 ⇒ 回落本地写盘（外仓设计档 §11.4 G3）。本批只补客户端这一半。
+- 对齐 ③：变更审查面 = `FileEdited` → `ChangeReview.report`（`chat_session.dart:298-309`；`lib/chat/review/change_review.dart`）；编辑器内 hunks = `IdeAgentEdits`（`lib/ide/ide_agent_edits.dart:88-184`）。本批不新造事件、不改审查语义。
+- 对齐 ④：打开文档模型 = `IdeWorkspace`（`ide_workspace.dart:45-215` 文档 / 脏标记；`:764-794` `reload` 保留未保存缓冲；`:629-682` `openDiff`；`:502` / `:507-512` 文档与模型读取）。
+- 对齐 ⑤：宿主能力面注入 = `KernelContext.workspace` 先例（`agent_kernel.dart:54-75`）与 `AcceptsImageFiles` 标记（`:260-267`）。
+- 偏离 ①：**不**把 `fs` 能力宣告进 `thincoder_catalog.dart`（短命 list/delete 连接没有 prompt / 工具，宣告即虚报；E3）。
+- 偏离 ②：脏缓冲不写盘、不改缓冲（D76）——不复刻「写盘后靠文件监视静默重载」的旧路。
+- 偏离 ③：内核不直接 import IDE 层；宿主桥 `KernelFiles` 由 IDE 侧实现（E1 / E2）。
+
+**survey 证据**：外仓 `thincoder-cli/src/acp/bridge.mjs:347-387`（只有 `write` / `edit` 走 `fs/*`；`read` / `delete` / `apply_patch` 保持本地）、`:102-105`（`clientCaps?.fs?.readTextFile === true` / `writeTextFile === true`）、`:152` / `:161`（每次调用 30 s 超时）。
+外仓设计档 §2.2（`read` 仅 edit 桥读回）与 §11.4 G3（能力位默认 false，未宣告回落本地）。
+结论：能力位与两个 handler 就位即接通；写成功必须落盘（CLI 的 `read` 工具读盘）。
+
+### 21.1 做法：能力位 ∥ 两个 handler ∥ 一处宿主桥
+
+```text
+CLI toolRouter（bridge.mjs:357-387）
+  write → fs/write_text_file {sessionId, path, content}       （全量内容，无回读）
+  edit  → fs/read_text_file {path} → computeEditEntry → fs/write_text_file
+  read / delete / apply_patch → 本地（不路由）
+        │ 能力门：initialize 快照（bridge.mjs:102-105）
+        ▼
+桌面 initialize：clientCapabilities.fs = {readTextFile: true, writeTextFile: true}
+        ▼
+ThincoderKernel._serverRequest → ThincoderFiles（新档）
+        ├─ 路径限定：cwd + workspace folders（realpath 比较）
+        ├─ read  → KernelFiles.readText(path) → {content}
+        └─ write → KernelFiles.writeText(path, content)
+                    ├─ 打开且有未保存缓冲 ⇒ blocked（不落盘、不动缓冲）
+                    │     + 只读 diff（缓冲 vs agent 内容）+ 会话内 error 提示
+                    └─ 其余 ⇒ 落盘（expectedText 基线）+ 重载打开文档
+        ▼
+写成功 ⇒ emit FileEdited(FileChange, original: OriginalText(before)) → 既有审查面
+```
+
+- 能力位：`initialize` 在 `KernelContext.files != null` 时把 `clientCapabilities` 从 `{}` 改为 `ThincoderFiles.capabilities`（`{'fs': {'readTextFile': true, 'writeTextFile': true}}`；`thincoder_kernel.dart:210-212`），宿主没给文件桥时保持 `{}`（E3 不虚报）。`thincoder_catalog.dart:78-80` **保持 `{}`**（D73）。
+- 分发：`_serverRequest` 在 `session/request_permission` 之外接 `fs/read_text_file` / `fs/write_text_file`，其余仍回 `-32601`（E4 不变）。
+- handler 的 `sessionId` 只用于留痕（CLI 传当前槽号），不改变路由；`path` 按 cwd 解析相对路径。
+- 超时：CLI 侧每次 30 s；handler 在本地决策完即回，**不等用户**（D76）。
+- 宿主桥 = `IdeKernelFiles`（`KernelContext.files` 的 IDE 侧实现，D78）；查找打开文档用 `IdeWorkspace.openWorkspaces` 注册表（静态 `Set`；与实例方法 `open(String path)` 区分）。
+
+### 21.2 契约（线形、限定、读写、错面）
+
+**能力位与线形（逐字对 ACP）**
+
+```json
+// initialize params（仅内核连接）
+{"protocolVersion": 1,
+ "clientCapabilities": {"fs": {"readTextFile": true, "writeTextFile": true}}}
+
+// 反向请求（服务端 → 我方）
+{"method": "fs/read_text_file",  "params": {"sessionId": "<槽号>", "path": "<路径>"}}
+{"method": "fs/write_text_file", "params": {"sessionId": "<槽号>", "path": "<路径>", "content": "<全文>"}}
+```
+
+- **宣告条件**：`clientCapabilities.fs` 只在 `KernelContext.files != null` 时出现；宿主没给文件桥 ⇒ `clientCapabilities` = `{}`（E3 不虚报；catalog 连接同样 `{}`，D73）。生产装配四点都给了 `files`（§21.3 ⑦）。
+- 读结果：`{"content": "<文本>"}`（CLI 取 `read?.text ?? read?.content`，`bridge.mjs:153`；按 ACP schema 用 `content`）。
+- 写结果：`{}`。
+- 错误：JSON-RPC error；CLI 把它包成工具结果 `Error: fs/… failed: <message>`（`bridge.mjs:155` / `:163` / `:369`），模型看得见。本档约定：`-32602` = 参数 / 路径非法（项目根外、缺 path）；`-32603` = IO 失败 / 未保存缓冲拒绝。
+- 两个方法名是 **snake_case**（`fs/read_text_file` / `fs/write_text_file`）；`fs.readTextFile` / `fs.writeTextFile` 只是**能力位名**（`bridge.mjs:104-105`）。实现不得把两者混用。
+
+**路径限定（单一权威 = 内核 handler）**
+
+- 允许根 = `cwd()` + `folders()`（`KernelContext.workspace()?.folders`）：**每个请求现读**，会话中途加入 / 移除的工作区文件夹即时生效（§21.8-12）。
+- 单一入口 `_allowed`：`path` 缺失 / 非字符串 ⇒ `-32602`（只回协议错，不发会话提示）；否则 `path = _canonical(_absolute(raw))`（相对路径接 `cwd()`）。
+  每个根同样以 `_canonical(_absolute(root))` 规范化后与它比较（平台 `p.Context` 的 `equals` / `isWithin`；Windows 大小写不敏感由 context 处理）；命中 ⇒ 返回规范路径，否则发提示并返回 null（拒绝已在 `_allowed` 内发出，两个 handler 见 null 直接 return）。
+- `_canonical` = `resolveSymbolicLinksSync()`；路径不存在 ⇒ 解析最近存在祖先的 realpath 再拼回其余段——`..` 逃逸与「不存在的文件」按同一规则判定。
+- 根外 / `..` 逃逸 / 符号链接逃逸 ⇒ `-32602`，并：
+  - `ItemUpserted(nextSeq, 'fs:<n>', NoticeItem(NoticeKind.error, '…项目外路径…'))`（会话内可见）；
+  - `appEvent('thincoder', 'fs: refused a path outside the project: …')`（日志）。
+- 宿主桥再做一次「在某个打开工作区根内」的检查（防御面；同一进程内不是安全边界，但不让错误路径落到文件服务），并按同口径规范化请求路径与工作区根（§21.8-10）。
+
+**读（`fs/read_text_file`）**
+
+- 文件在任一打开的 `IdeWorkspace` 里 ⇒ 返回**编辑器当前文本**（含未保存修改）——edit 桥必须基于用户看到的文本算 diff（D75）。同一路径在多窗口打开 ⇒ 取**先打开者**（注册顺序；写侧脏检查覆盖全部持有者，§21.8-11）。
+- 未打开 ⇒ 用该根所属工作区的 `files.read(path)`（`ide_workspace.dart:443`；本地或远端宿主各自的文件服务）；没有打开工作区 ⇒ `IdeFileService(root).read(path)`（本地）。
+- 二进制 / 超限 / 不可读 ⇒ `-32603`，消息取文件服务异常的可读文本（`IdeBinaryFileException` / `IdeFileTooLargeException` / `IdeFileNotFoundException`，`file_service.dart:96-109` 的既有本地化源）。
+- 远端根且无打开工作区 ⇒ `-32603`「remote project has no open workspace」（登记 §21.8-4）。
+
+**写（`fs/write_text_file`）** ——三态决策（D76 / D77）
+
+| 目标文件状态 | 处置 | 返回 |
+|---|---|---|
+| 在任一打开的 `IdeWorkspace` 里、且该文档 `dirty`（有未保存缓冲） | **不落盘、不改缓冲**；打开只读 diff（左 = 编辑器当前文本，右 = agent 内容）+ 会话内 error 提示；`appEvent` 留痕 | `-32603`「the file has unsaved changes in the editor; the write was not applied」 |
+| 打开但干净 ⇒ 落盘（`files.write(path, content, expectedText: before)`，`file_service.dart:29-31` 的基线保护）；再对每个含该路径的工作区 `reload([该工作区拼写])`（干净文档更新 `text` + `savedText`，`ide_workspace.dart:764-794`；拼写见 §21.8-10） | 写成功 | `{}` |
+| 未打开 ⇒ 落盘（同上，无 `reload`） | 写成功 | `{}` |
+
+- **为什么脏缓冲必须拒绝**：CLI 的独立 `read` 工具读**磁盘**（`bridge.mjs:386`「read-only tools … stay local」）。任何「成功」若不落盘，模型随后 `read` 会看到旧内容——前后矛盾。而要落盘就得把用户未保存的文本一并写下去（静默替用户保存）或覆盖它（数据丢失）。两条都不可接受 ⇒ 唯一安全解是拒绝 + 可审阅 diff（D76）。
+- 写成功的 `FileEdited`：`FileChange(path, added, removed, kind: before == null ? added : modified)`，`original: OriginalText(before)`；行数用行级 LCS 计（与本仓 Claude 翻译层的 diff 计数同形）。这直接进既有 `ChangeReview.report`（`chat_session.dart:305-306`），Keep / Undo 语义不变（D79）。
+- 只读 diff：`workspace.openDiff(path, label: <l10n「Agent's change (not applied)」>, original: () async => 当前编辑器文本, modified: () async => content)`（`ide_workspace.dart:629-682`；`modified != null` ⇒ `readRevision` 置位 ⇒ 右侧只读，`:196`）。`unawaited` 打开，不阻塞应答；没有打开工作区时只发提示。
+- 提示：写入拒绝与根外拒绝都发 `NoticeItem(NoticeKind.error, …)`（会话内可见）；不做弹窗（D80）。
+
+### 21.3 受影响文件清单与 `thincoder_kernel.dart` 拆分方案（E2；行数 = 2026-10-19 `wc -l` 实测）
+
+**拆分方案（硬要求：实现后 ≤1148 行）**
+
+| 步 | 动作 | 迁移面 | 行数 |
+|---|---|---|---|
+| 1 | 新档 `thincoder_choices.dart`，以 `part of 'thincoder_kernel.dart'` 接入（先例 `lib/browser/browser_actions.dart:1`） | 选择面：`_Choice` / `_ModelSetting`、全部选项 / 取值闭包与六个顶层 helper（`_modeOf` / `_permissionOf` / `_modelOf` / `_effortOf` / `_setModeOf` / `_configOf`）。**`part` 不能给类加成员** ⇒ 四个 `@override` 字段（`mode` / `permission` / `model` / `effort`）与 `_setMode` / `_config` 留在内核类体，各一行委托（`late final mode = _modeOf(this);` 等） | 实交 203（原估 ~194） |
+| 2 | 新档 `thincoder_files.dart`（普通 library） | `ThincoderFiles`：能力位常量、两个 handler、路径限定（`_allowed`）、`KernelFiles` 调用、`FileEdited` / `NoticeItem` 发射回调 | 实交 210（原估 ~170） |
+| 3 | 内核接线 | `implements AcceptsEditorContext` · 能力位（条件宣告） · `_serverRequest` 分发 · `_deliver` 用 `contexts` · `part` 指令与 `_files` | 实交 +42（1216 − 203 + 42 ⇒ 1055；含第一波已交的 `implements` / `_deliver` 与第三波的委托壳） |
+| — | **预算** | 1055 ≤ 1148（§5.2 的预算）；余量 93 行 | ✅ |
+
+- 选择面是 §5.2 已登记的「下一缝候选」；本批为 F18 handler 腾预算而**兑现**该缝（结构级触碰，符合「先立拆分批」口径）。`part` 保持私有成员访问，公开面零变；类成员不能跨 `part` ⇒ 选择面的四个能力字段与两个转发壳以一行委托留在内核（见步 1）。
+- 新档均 <300 行；`thincoder_events.dart`（799）不动。
+- 批 11（F19·F20）的增量预算见 §22.3 体量条（拆分已落，kernel 基线 1055）。
+
+**本仓文件表**
+
+| # | 坐标 | 改动 | 增量 |
+|---|---|---|---|
+| ① | `lib/kernel/thincoder/thincoder_kernel.dart`（1216） | 能力位（仅 `KernelContext.files != null` 时宣告）· `_serverRequest` 分发（`fs/*` 先交 `ThincoderFiles`）· `_deliver` 用 `turn.contexts` · `implements AcceptsEditorContext` · 选择面移出（拆分步 1；四个字段 + 两个转发壳留类体） | 实交 净 −161（⇒ 1055；拆分见上） |
+| ② | `lib/kernel/thincoder/thincoder_choices.dart`（新增） | 选择面（`part`）：`_Choice` / `_ModelSetting`、选项 / 取值闭包、六个顶层 helper | 实交 203 |
+| ③ | `lib/kernel/thincoder/thincoder_files.dart`（新增） | `ThincoderFiles`：能力位常量 · `fs/read_text_file` / `fs/write_text_file` · 路径限定（`_allowed`） · 错误码 · `FileEdited` / `NoticeItem` | 实交 210 |
+| ④ | `lib/kernel/agent_kernel.dart`（438） | `KernelFiles` 接口 + `KernelFilesException` + `KernelContext.files` | ≤ +45（⇒ ≤483） |
+| ⑤ | `lib/ide/ide_kernel_files.dart`（新增） | `IdeKernelFiles implements KernelFiles`：打开文档优先 · 脏缓冲检测 · 只读 diff · 文件服务读写 · 远端根拒绝 | 实交 201 |
+| ⑥ | `lib/ide/ide_workspace.dart`（1243） | `static final Set<IdeWorkspace> openWorkspaces`（构造登记 / `dispose` 注销，`:218` / `:1199`；与实例方法 `open(String path)` 同名会遮蔽，故用 `openWorkspaces`）；`documentOf(path)` 小取值器（或直接用 `documents`） | ≤ +14（⇒ ≤1257） |
+| ⑦ | `lib/workspace/workspace.dart`（2828） | 四处 `KernelContext(...)`（`:541` / `:578` / `:2553` / `:2596`）加 `files: IdeKernelFiles(l10n: l10n)`（带 l10n 回调，非 const） | ≤ +4（⇒ ≤2832）；实交 +6（⇒ 2834，超 2 行） |
+| ⑧ | `lib/kernel/thincoder/thincoder_catalog.dart`（131） | **零改动**（能力位保持 `{}`，D73） | 0 |
+| ⑨ | `lib/l10n/app_en.arb`（7026）· `app_zh.arb`（2703） | 2 键：只读 diff 标题 / 未保存缓冲提示；生成档与两源档同拍在位（无 SDK ⇒ 手改，保持 `test/l10n_test.dart` 绿；SDK 就位轮重产——§18.8 / 登记 §14-24） | 各 +2 |
+| ⑩ | `test/kernel/thincoder_files_test.dart`（新增） | handler 直测：限定 / 读 / 写三态 / 错误码 / `FileEdited`（假 `KernelFiles`） | ~150（实交 260，10 例） |
+| ⑪ | `test/ide/ide_kernel_files_test.dart`（新增） | 桥：打开文档优先 / 脏缓冲拒绝 / 干净写入 + 重载 / 远端拒绝（假工作区 + 假文件服务） | ~90（实交 234，11 例：10 + 链接根） |
+| ⑫ | `test/kernel/thincoder_kernel_test.dart`（3088） | T83–T92（§21.6）：push 反向请求、断言响应与事件；只加用例、不动结构（缝候选同 §15.4 的四组拆法） | 实交 +307（⇒ 3395；开工前上界 ≤+180 超 126——T83–T90 需真实临时目录 + `IdeWorkspace` 夹具）。该档后续预算以 3395 起算（基数按第三波开工实测重定） |
+
+- **零改动**：`thincoder_mock.dart`（用 `push` 直推反向请求即可，无需新脚本位）· `thincoder_protocol.dart`（分发已够）· 既有变更审查档 · thincoder 仓（能力门控与两个方法已备）。
+- **out-of-repo**：零。本批不写 thincoder 仓。
+
+### 21.4 关键决策记录（含被否）
+
+| # | 决策 | 理由 / 被否 |
+|---|---|---|
+| D73 | `fs` 能力位只在内核连接宣告；`thincoder_catalog.dart` 保持 `{}` | catalog 只做 list / delete 的短命连接，没有 prompt、没有工具 ⇒ 不会有 `fs/*` 请求；宣告即虚报（E3 / D12 同口径）。被否：两处都宣告（虚假能力位；catalog 也不实现 handler） |
+| D74 | 路径限定在内核 handler 做（单一权威）；宿主桥再查一次打开工作区根 | 内核知道 `cwd` + 工作区 folders；桥不知道会话根。二次检查是防御面，不是安全边界（同进程）。被否：只在桥里查（会话根丢失，多项目窗口会放宽到所有打开根） |
+| D75 | `fs/read_text_file` 返回**编辑器当前文本**（含未保存）；CLI 自己的 `read` 工具保持读盘（协议事实） | edit 桥必须基于用户看到的文本算 diff，否则会把用户未保存的修改算成「要删掉的行」。被否：读盘（edit 会覆盖用户未保存内容）；被否：读盘但脏时拒绝读（edit 直接失败，无法在缓冲上工作） |
+| D76 | 脏缓冲 ⇒ **拒绝写**（不落盘、不动缓冲）+ 只读 diff + 会话内 error | 写成功必须落盘（CLI `read` 工具读盘）；落盘要么静默保存用户未保存的文本、要么覆盖它——都不可接受。拒绝是唯一不丢数据且前后一致的选择；可审阅 diff 满足「呈现可审阅变更」。被否：写盘（静默保存 / 用户后续保存再覆盖 agent 内容）；被否：全量内容套进缓冲（覆盖用户未保存内容）；被否：弹窗等用户选择（CLI 30 s 超时，且没有反向等待通道） |
+| D77 | 干净 / 未打开 ⇒ 落盘 + 对打开文档 `reload`；两者都发 `FileEdited` | 复用 `IdeWorkspace.reload`（干净文档更新、脏文档保留——本路径已保证无脏文档）；`FileEdited` 让既有 Keep / Undo 原样工作。被否：只写盘不更新模型（等文件监视 100 ms 后重载，慢且可能被自动保存抢先）；被否：只更新模型不写盘（`read` 工具会看到旧内容） |
+| D78 | 宿主桥 = `KernelContext.files`（通用接口）+ `IdeKernelFiles`（IDE 侧实现）+ `IdeWorkspace.openWorkspaces` 注册表 | 内核不 import IDE（E1）；多窗口 / 多工作区都能找到打开文档；测试可注入假桥。被否：内核直接 `dart:io`（绕过编辑器模型，脏缓冲不可见）；被否：Workbench 全局单例（多窗口覆盖不全） |
+| D79 | 写成功复用 `FileEdited` + `OriginalText(before)`，不新增事件、不改审查语义 | 既有 `ChangeReview` / `IdeAgentEdits` 直接工作；需求「与既有变更审查面一致」。被否：新事件 `FileWritten`（宿主与审查面都要改，E2 违规） |
+| D80 | 拒绝面 = 会话内 `NoticeItem(error)` + `appEvent`；不做弹窗 | 拒绝是工具结果的一部分（模型能读）；会话内提示是既有可见面（`thincoder_kernel.dart:578-591` 的图片丢弃同形）。被否：模态弹窗（阻断、且反向请求没有等待用户的面） |
+| D81 | 脏缓冲的只读 diff 不提供「应用」按钮 | 需求只要求「可审阅」；应用 = 用户保存 / 放弃自己的缓冲后让 agent 重试。被否：就地三方合并（范围爆炸，且本批不改审查语义） |
+
+### 21.5 验收对照（回指需求档 F18）
+
+| 需求条目（F18） | 本档落点 | 判据（机检 / 走查） |
+|---|---|---|
+| 桌面宣告 `fs.readTextFile` / `fs.writeTextFile` 能力 | §21.2 能力位 | T87：带 `files` 的会话 `initialize` 的 `clientCapabilities.fs` 两位皆 true，无 `files` ⇒ `{}`；catalog 的 initialize 仍为 `{}`（T87②） |
+| 已打开且有未保存缓冲 ⇒ 写入请求落到桌面侧，不走本地落盘竞争 | §21.1 / §21.2 写三态 | T87（内核 `initialize` 的 `fs` 两位皆 true）+ CLI 侧门控（`bridge.mjs:102-105` 快照能力位 ⇒ 宣告即走桌面路由）+ 走查 2（脏缓冲下写请求到达桌面、回 `-32603`、缓冲与磁盘不变、只读 diff 弹出）；T83 只钉桌面 handler 的拒绝行为（`push` 直推绕过能力门） |
+| 编辑器呈现可审阅变更 | §21.2 只读 diff | T84：桥调用 `openDiff`（假工作区记录调用：original = 当前文本，modified = agent 内容）；会话内 `NoticeItem(error)` 一条 |
+| 不覆盖用户未保存内容 | §21.2 写三态 + D76 | T83：模型文本 / `savedText` / 磁盘均不变 |
+| 未打开文件 ⇒ 写入后磁盘内容与 agent 所述一致 | §21.2 写三态（未打开行） | T85：临时目录写后 `readAsString` == content |
+| 越界路径（项目外）⇒ 拒绝并有可见提示 | §21.2 路径限定 | T86：`/outside/x` ⇒ `-32602` + `NoticeItem(error)` 一条；文件未被创建 |
+| （派生）edit 桥基于编辑器缓冲 | §21.2 读 | T88：打开文档（含未保存）⇒ 响应 `content` == 模型文本 |
+| （派生）干净打开文件写后模型同步 | §21.2 写三态（干净行） | T89：写后模型 `text` == content、`isDirty` 假 |
+| （派生）变更审查面不变 | §21.2 `FileEdited` | T90：写后 `FileEdited` 一条，`change.path` / `original` 正确；`ChangeReview` 既有用例不回退 |
+| （派生）未知方法仍得体降级 | §21.1 分发 | T91：`fs/something_else` ⇒ `-32601` |
+| （派生）二进制 / 超限读错误面 | §21.2 读 | T92：假桥抛 `IdeBinaryFileException` ⇒ `-32603` + 可读消息 |
+
+### 21.6 用例表（T83–T92，`test/kernel/thincoder_kernel_test.dart` + 新档）
+
+| # | 场景 | 输入 | 期望 |
+|---|---|---|---|
+| T83 | 脏缓冲拒绝写 | `_Session(context: KernelContext(cwd:'/p', files: fake))`；fake 报某路径 `blockedByUnsavedBuffer`；`agent.push` 一条 `fs/write_text_file` 请求 | 响应 `error.code == -32603`；`fake.writes` 空；`transcript` 有一条 error `NoticeItem`；无 `FileEdited` |
+| T84 | 可审阅变更 | fake 记录 `openDiff` 调用（或桥直测） | `openDiff` 的 `original` 读到当前缓冲文本、`modified` 读到 agent 内容；模型文本不变 |
+| T85 | 未打开文件写 | 临时目录；fake 走真实文件服务；push 一条 `fs/write_text_file` | 响应 `{}`；磁盘内容 == content；`FileEdited` 一条 |
+| T86 | 项目根外 | `path: '/outside/x'` | 响应 `-32602`；`/outside/x` 不存在；error `NoticeItem` 一条；`appEvent` 一条 |
+| T87 | 能力位 | 起会话（`KernelContext(files: fake)`） | ① 内核 `initialize` 的 `clientCapabilities.fs == {'readTextFile': true, 'writeTextFile': true}`；无 `files` 的会话 ⇒ `{}`；② `ThincoderCatalog` 的 `initialize` 仍为 `{}` |
+| T88 | 读走缓冲 | fake 的 `readText` 返回缓冲文本；push `fs/read_text_file` | 响应 `{'content': '<缓冲文本>'}` |
+| T89 | 干净打开写 | 假工作区干净文档；push 写 | 响应 `{}`；模型 `text` == content、`savedText` == content；`FileEdited` 一条 |
+| T90 | 变更面 | 同 T89 | `FileEdited.change.path` == 路径；`original` 是 `OriginalText(before)`；`turnId` 为当前回合（无回合时 null） |
+| T91 | 未知方法 | push `fs/something_else` | 响应 `-32601`（既有路径）；零 handler 调用 |
+| T92 | 读错误面 | fake 抛二进制 / 超限异常 | 响应 `-32603`，message 含可读原因；无 `FileEdited` |
+
+- 测试手段：`ThincoderMock.push()` 直推反向请求（`thincoder_mock.dart:138-140`），响应在 `mock.written` 里按 id 取（`thincoder_protocol.dart:176-186`）；`KernelFiles` 用测试假件（`KernelContext(files: …)`），IDE 桥用假 `IdeWorkspace` / 假 `IdeFileService` 直测（`test/ide/ide_kernel_files_test.dart`）。
+
+### 21.7 测试策略与机检命令
+
+- 单测（本批）：`flutter test test/kernel/thincoder_files_test.dart test/ide/ide_kernel_files_test.dart test/kernel/thincoder_kernel_test.dart test/chat/open_editor_test.dart test/chat/editor_context_chip_test.dart`；静态检查：`flutter analyze`。
+- 固件：不加（线形无新增；FS 请求由 mock `push` 直推）。
+- 集成测试：本批不新增业务场景；收口时按仓库既有集成门跑一次（面不受影响）。
+- 验收命令（逐条）：
+  - T87：`expect((agent.requests('initialize').single['params'] as Map)['clientCapabilities'], {'fs': {'readTextFile': true, 'writeTextFile': true}})`。
+  - T83 / T86：从 `agent.written` 里按请求 id 找 `error`；检查 `transcript` 的 `NoticeItem`。
+  - T85：`Directory.systemTemp.createTempSync()` 写后 `File(path).readAsStringSync() == content`。
+
+### 21.8 边界（本批不做）与登记（判定条件）
+
+1. **不做任意路径写入**：只允许 `cwd` + 工作区 folders 之内（需求边界）；根外用 `-32602` + 可见提示。
+2. **不代管二进制大文件**：`fs/read_text_file` 遇二进制 / 超限按文件服务异常回 `-32603`；`fs/write_text_file` 只写文本（`content` 必须是字符串，非法 ⇒ `-32602`）。判定条件：产品要「agent 改二进制」⇒ 另立（需新的字节面，协议无）。
+3. **不改既有变更审查面语义**：只发既有 `FileEdited`；Keep / Undo / hunks 不动（D79）。
+4. **不做远端项目的 fs 桥**：thincoder 进程是本地进程；远端根且无打开工作区 ⇒ 拒绝并在会话内提示。判定条件：thincoder 支持远端会话 ⇒ 把 `KernelFiles` 实现换成 `IdeHostFiles`（`file_service.dart:56-68` 已有远端文件面）。
+5. **不路由 `apply_patch` / `delete` / `read` 工具**：CLI 侧保持本地（`bridge.mjs:386`）；本批只接 `write` / `edit` 两条既有路由。
+6. **脏缓冲不自动保存、不合并、不提供应用按钮**（D76 / D81）：用户保存或放弃自己的缓冲后让 agent 重试；只读 diff 供审阅。
+7. **不接 `terminal/*`**：CLI 侧明确不支持（外仓设计档 §2.2）。
+8. **`security` 面**：路径限定是「项目根内」的产品约束，不是安全沙箱（同一用户进程、同一权限）；不做审批弹窗（写工具本身走既有审批面）。
+9. **并发写**：两个写请求同时到（不同文件）各自落盘；同一文件由 CLI 串行（tool 调用串行）+ `expectedText` 基线保护（后写发现基线变了 ⇒ `-32603`）。判定条件：走查见到「同一文件并发写丢更新」⇒ 在 `IdeKernelFiles` 加每路径串行队列（本批不改）。
+10. **符号链接根（非 Windows）**：请求路径与每个允许根都按 realpath 规范化后比较（不存在路径按最近存在祖先）；桥侧同口径——`IdeKernelFiles` 先规范化请求路径与各工作区根，命中后按该工作区自己的拼写（根 + 相对段）回传文件服务与 `reload`。经链接打开的根（macOS `/var` 等）因此仍能找到打开文档与未保存缓冲。Windows 未复现该类根。判定条件：非 Windows 走查见到「内核已放行、桥侧找不到打开文档 / 脏缓冲未被拦住」⇒ 内核与桥的规范口径分叉，按本条修。
+11. **多窗口同一路径**：打开文档的读取取**先打开者**（`IdeWorkspace.openWorkspaces` 的注册顺序）；写侧脏检查覆盖全部持有者（任一脏 ⇒ 拒绝），写成功后对每个持有者 `reload`。判定条件：产品要求「活动窗口优先」⇒ 注册表改按活动窗口排序（本批不做）。
+12. **工作区 folders 现读（不冻结）**：允许根每个请求现读 `KernelContext.workspace()?.folders`——会话中途加入 / 移除的工作区文件夹即时生效。判定条件：产品要求「根集合随会话启动冻结」⇒ 在 `ThincoderFiles` 构造时快照并补用例（本批不做）。
+
+### 21.9 真机走查步骤
+
+1. 新建 thincoder 会话，打开项目；在编辑器打开 `a.dart`，**改一行但不保存**（脏缓冲）。
+2. 让 agent「把 a.dart 的第 X 行改成 Y」⇒ 编辑器弹出只读 diff（左 = 你的缓冲，右 = agent 内容）；会话里一条 error 提示；你的缓冲与磁盘都没变；agent 的答话说明写入未应用。
+3. 保存（或放弃）你的修改，再让 agent 重试 ⇒ 写入成功；编辑器显示新文本；变更面板出现该文件，Keep / Undo 可用。
+4. 让 agent 改一个**没打开**的文件 ⇒ 保存后 `cat` 内容与 agent 所述一致；变更面板列出。
+5. 让 agent 写项目外路径（如 `/tmp/x` 或 `C:\Windows\x`）⇒ 工具结果 error + 会话内提示；文件未创建。
+6. 让 agent 用 `edit` 工具改一个**干净但打开**的文件 ⇒ 走 `fs/read_text_file` + `fs/write_text_file`；编辑器同步更新、无脏标记残留。
+7. 用终端 thincoder 对照：终端没有 IDE 能力位 ⇒ 编辑直接落盘（桌面看不到 diff）——本批是桌面独有能力。
+8. 关闭全部 IDE 窗口后再让 agent 改文件 ⇒ 直接落盘（无打开缓冲可保护）；无 diff 可开，行为与终端一致。
+
+### 21.10 未核实 / 实现期确认项
+
+| # | 项 | 现状 | 处置 |
+|---|---|---|---|
+| 1 | 脏缓冲拒绝后，CLI 是否把 `-32603` 原文完整回给模型 | `bridge.mjs:369` 包一层 `Error: fs/write_text_file failed: <message>`，已读；模型呈现未走查 | 走查 2 确认；不影响设计 |
+| 2 | `IdeFileService.write(expectedText:)` 的冲突异常类型 | 接口注释（`file_service.dart:29-31`）说「拒绝基线变化」，具体异常未读实现 | 实现期读 `file_service_io.dart`，映射到 `-32603` 的可读消息 |
+| 3 | `openDiff(modified:)` 的右侧是否稳定只读 | `IdeDocument.readOnly = readRevision != null`（`ide_workspace.dart:196`）已读；diff 编辑器库内行为未走查 | T84 / 走查 2 确认 |
+| 4 | thincoder 会话是否可能跑在远端项目 | 本仓 `RemoteLocation` 存在；thincoder 起进程用本地 `cwd` | 实现期确认；远端根按 §21.8-4 拒绝 |
+| 5 | 同一文件并发写的实际顺序 | CLI 工具调用串行（`toolRouter` 在 turn 内）；桌面 handler 无队列 | 按 §21.8-9 登记；出现丢更新再加队列 |
+| 6 | `saveSession` 对 system-reminder 的过滤（F17 重放） | 只在 TUI 面读到（`bridge.mjs:399-400` 注释）；ACP 路径未核 | 按 §20.8-4 登记；走查确认 |
+
+
+---
+
+## 22. 原生图片块（F19）
+
+> 需求档 F19（用户 2026-10-19 01:21「原生图片块…提上日程」）：图片以 ACP 原生 image 内容块随 `session/prompt` 发送，模型直接看图；CLI 不支持 image 时回退既有路径（落盘 + 路径行），行为同今天。
+> 一句结论：**桌面按握手能力位分两路**——`agentCapabilities.promptCapabilities.image === true` ⇒ prompt 数组 = 一个 text 块 + 逐图 image 块（base64，不落盘）；否则 = 今天逐字不变（`_attachImages` 落盘 + 路径行）。**原生路需动 `thincoder/` 仓（B1 例外，已裁定：用户 2026-10-19 01:37「运行改thincoder仓库」）**；桌面半可单独落地（旧 CLI 下零可见变化）。
+
+**最近先例（对齐 ∥ 偏离及理由）**
+
+- 对齐 ①：原生图片 = Claude 内核既有形（`claude_code_kernel.dart:929-945`：逐图 `text [Image #N]` + `image` 块 base64 + 媒体类型）——本批照抄「image 块携原始字节」的形，不照抄其外层 envelope。
+- 对齐 ②：能力位探测 = 既有握手读取（`thincoder_kernel.dart:378-391` 读 `agentCapabilities.mcpCapabilities.http`；本批同点读 `promptCapabilities.image`）。
+- 对齐 ③：限额与丢弃 = 既有 `_attachImages`（`:1096-1134`：单项 15 MB / 回合 30 MB / 扩展名白名单，超阈弃 + `NoticeItem(warning)`）——原生路复用同一判据，只把「落盘」换成「直接进块」。
+- 对齐 ④：线形 = ACP v1 `ContentBlock::Image`（schema：`{type:"image", data:<base64>, mimeType, uri?}`；`PromptCapabilities.image` 默认 false，启用才可发）。
+- 偏离 ①：原生路**不**发 `[Attached images: …]` 路径行（无落盘文件）；正文里已有的 `[Image #N]` 行内标记由 composer 写入（`composer.dart:609`），照发。
+- 偏离 ②：内核**不**声明 `AcceptsImages`（编译期能力不随握手变；宿主侧仍以 `AcceptsImageFiles` 判「收图」）——D82。
+- 偏离 ③：非多模态模型的降级**不在桌面做**（桌面不读 provider 规格，E3）：CLI 侧 `stripImagesForTextModel`（`provider/core.mjs:133` / `normalize.mjs:100-121`）已把图块替换为 `[image omitted — this model does not support image input]`，如实可见。
+
+**survey 证据**：ACP v1 schema（agentclientprotocol.com/protocol/schema，2026-10-19 取）：`ImageContent.required = ["data","mimeType"]`、判别值 `type:"image"`；`PromptCapabilities.image` 默认 false、「Requires the image prompt capability when included in prompts」。
+外仓（2026-10-19 实读）：`client-caps.mjs:59-61`（`promptCapabilities.image: true`——已接原生 image 块；audio / embeddedContext 仍 false）；`handlers-session.mjs:374-395`（`session/prompt` 走 `buildPromptContent`：有图 ⇒ `session.run({text, images})`，无图 ⇒ 单串）；
+`resource-link.mjs:144-171`（`buildPromptContent`：text = 首个合法 text 块 + resource_link 内联；images = 按数组序的合法 image 块，mimeType 白名单 + 单图 / 回合限额，畸形 ∥ 超阈弃 + 日志）；`session.mjs:78-90`（`execTurn` 透传到 `runAgent`）；
+`thincoder-core/agent/setup.mjs:53-57`（`input` 可为 `{text, images}`——检索只取 `input.text`）· `:188-199`（`pushReal` 的 content = text part + `image_url` parts；只发图 ⇒ 不发空 text）；
+`bridge.mjs:406-414`（重放跳过 image 块 + 日志）；`suspension.mjs:96-101` / `:154-170`（窗内轮透传富对象——批 11 ⑤ 已落）。
+结论：**原生图 = CLI 侧三层改动**（能力声明 + 内容构造 + 富输入透传）；批 11 CLI 半已落（§22.2 表 ①–⑤）；桌面半（能力位探测 + 两路分支）纯客户端、可独立验收。
+
+### 22.1 做法：能力位 ∥ 两路 prompt ∥ 一处回退
+
+```text
+initialize 回包 agentCapabilities.promptCapabilities.image == true ?
+  ├─ 是（新 CLI）⇒ _deliver：prompt = [ {type:"text", text: 正文+编辑器 note} ,
+  │                                      {type:"image", mimeType, data: base64} × N ]
+  │                  不落盘；限额同今天（15 MB/图 · 30 MB/回合）
+  └─ 否 / 缺位（旧 CLI）⇒ 今天逐字：_attachImages 落盘 <cwd>/.thincoder/tmp/paste-… +
+                         正文尾附 [Attached images: …] + 单 text 块（T94 钉住）
+```
+
+- 能力位读取点 = `_handshake`（`thincoder_kernel.dart:378-391`）；存 `bool _nativeImages`（缺省 false = 旧形）。
+- 分支点 = `_deliver`（`:567-644`）：`_nativeImages` 时用 `_nativePrompt(turn)`（新私有方法）替代 `_attachImages`；两路共用同一限额判据（单项 15 MB / 回合 30 MB / 扩展名白名单）与同一丢弃计数 + `NoticeItem(warning)`（文案同今天，`:596-600`）。
+- 原生路不写盘：不建 `.thincoder/tmp/`、不产生路径行；`UserMessageItem.images` 仍是校验后的图片（气泡照常显示）。
+- 文本 = 用户正文 + 编辑器上下文 note（§20 既有拼接），无图片路径行。
+- 图片块顺序 = `turn.images` 顺序；正文里的 `[Image #N]` 行内标记保留（模型可按号对图）。
+- 回退判据 = **能力位在场且为 true**；其余一切（旧 CLI / 未声明 / 字段畸形）⇒ 今天路径，逐字不变（需求「CLI 不支持时回退既有路径且行为同今天」）。
+
+### 22.2 契约（线形、限额、错面）
+
+**线上形（`session/prompt` 的 `prompt` 数组，原生路）**
+
+```json
+[{"type": "text", "text": "<用户正文>\n\n<system-reminder>…编辑器上下文…</system-reminder>"},
+ {"type": "image", "mimeType": "image/png", "data": "<base64>"}]
+```
+
+- `mimeType` 取 `ImageAttachment.mediaType`（白名单 png/jpeg/gif/webp，`_imageExtension` 同源判据）；`data` = 原始字节 base64（无 data URL 前缀）。
+- 块序 = 图序；text 块恒在首位（CLI 侧取首个合法 text 块作检索文本）。
+- 只发图、无正文：text 块 = 编辑器 note；两者都空 ⇒ 不发空 text 块（CLI 现行 `-32602` 判据是「无 text 且无 resource_link」，B1 侧扩为「…且无图」）。
+- 限额：单项 ≤ 15 MB（`imageMaxBytes`，`:1074`）、回合合计 ≤ 30 MB（`turnMaxBytes`，`:1077`）；超阈项弃并计数。
+
+**CLI 半（B1 最小改动面；已裁定 A：用户 2026-10-19 01:37）**
+
+| # | 文件 | 改动 | 量 |
+|---|---|---|---|
+| ① | `thincoder-cli/src/acp/client-caps.mjs:55-63` | `promptCapabilities.image: true`（注释改述：image 已接；audio / embeddedContext 仍 false） | +1 / 1 行改 |
+| ② | `thincoder-cli/src/acp/resource-link.mjs` | 新增 `buildPromptContent(blocks, {cwd})` → `{ text, images }`：text = 既有 `buildPromptText` 结果；images = `type:"image"` 块按序，`mimeType` 白名单 + base64 解码 + 15 MB/图 ∥ 30 MB/回合（直引 `attachments.mjs:31-36` 常量）；畸形 / 超阈 ⇒ 弃 + 一行日志 | ≈ +45 |
+| ③ | `thincoder-cli/src/acp/handlers-session.mjs:374-393` | 改用 `buildPromptContent`；有图 ⇒ `session.run({ text, images })`，无图 ⇒ 仍传字符串（零行为变化）；空判据扩为「无 text ∧ 无 resource_link ∧ 无图」 | ≈ +8 |
+| ④ | `thincoder-core/agent/setup.mjs:53-57` / `:188-199` | `input` 可为 `{ text, images }`：`docSearch` / `memorySearch` 用 `input.text`；`pushReal` 的 content = `[{type:"text", text}] + image_url parts`（`data:<mime>;base64,<b64>`）；多模态退化交 `provider/core.mjs:133` 既有剥除 | ≈ +12 |
+| ⑤ | `thincoder-cli/src/acp/suspension.mjs:96-101` / `:154-170` | 窗内轮透传富对象（只留 `.text` 的旧形会让窗内到达的图静默丢） | ≈ +4 |
+| ⑥ | `thincoder/docs/cli/design/ACP-CLIENT.md` | `promptCapabilities` 事实行改 true（能力位表）；`session/prompt` 内容块说明补 image 块（块形；空判据扩为「无 text ∧ 无 resource_link ∧ 无图」） | 文档面 |
+| ⑦ | `thincoder-cli/CHANGELOG.md` 顶部 | 新增 `## [Unreleased]` + `### Added` 一行（原生 image 块随 prompt 发送；能力位转 true） | 文档面 |
+| ⑧ | 该仓测试档 | `buildPromptContent` 单测（白名单 / 超阈 / 混块）+ 一轮带图 prompt 到达 `runAgent` 的输入形 | 测试面另计 |
+
+- 合计 ≈ +70 行 + 测试；单点新增、可上游合并（无格式噪声）。
+- ⑥–⑦ 是契约档与 CHANGELOG 的**同拍义务**：代码改了而契约档不改，就是把一份说反的契约留在仓里（该仓对文档与代码同拍的通行做法；形同 §16.1 f–k）。
+- **替代方案（已查实不可行）**：`resource_link` 指向图片 ⇒ CLI 读盘按文本处理（NUL ⇒ `binary (NUL byte)` 标记，`resource-link.mjs:84`），不产生图像 part；`embeddedContext`（Resource 块）⇒ CLI 声明 false 且未实现。
+- **不做 B1 的后果**：F19 实质验收（模型直接看图）不成立；桌面半照常可落（能力位探测 + 分支 + 回退），但恒走旧路——与今天零差异。
+
+### 22.3 桌面半受影响文件清单（E2 增量；行数 = 2026-10-19 `wc -l` 实测）
+
+| # | 坐标 | 改动 | 增量 |
+|---|---|---|---|
+| ① | `lib/kernel/thincoder/thincoder_kernel.dart`（1055） | `_handshake` 读 `promptCapabilities.image`；`_deliver` 原生分支 / `_nativePrompt`；限额判据复用 | ≤ +30（⇒ ≤1085） |
+| ② | `test/kernel/thincoder_kernel_test.dart`（3395） | T93–T95（§22.6）；mock 增 `promptImage` 能力位开关（缺省 false = 今天） | ≤ +163（⇒ ≤3558；T95② 于实施期补入，+53） |
+| ③ | `lib/kernel/thincoder/thincoder_mock.dart`（632） | `initialize` 回包按构造参数给 `promptCapabilities.image`（缺省 false） | ≤ +6（⇒ ≤638） |
+
+- **体量**：`thincoder_kernel.dart` 在 >800 名单（§5.2 体量立场 = 不续拆）。§21.3 的拆分（批 10 第三波）已落：基线 **1055**；本批 +36（§22 + ≤30、§23 + ≤6）⇒ ≤1091，余量 57（§21.3「实现后 ≤1148」）。
+- **>500 层**：`thincoder_mock.dart`（632 → ≤638）在 >500 且 <800 区间——体量立场只跟 >800（§5.2 末段），不立缝。
+- **零改动**：宿主层（`AcceptsImageFiles` 不变，D82）· `chat_session.dart` / composer（收图判据不变）· Claude / Codex 内核 · `thincoder_events.dart` · 固件。
+
+### 22.4 关键决策记录（含被否）
+
+| # | 决策 | 理由 / 被否 |
+|---|---|---|
+| D82 | 能力位随握手（`promptCapabilities.image`），**不**按编译期接口翻牌；内核仍只声明 `AcceptsImageFiles` | 同一内核连新旧 CLI 都可能；编译期 `AcceptsImages` 会在旧 CLI 上虚报（E3）。宿主只需「收图」一个判据（composer / `ChatSession.acceptsImages`），行为差异留在内核。被否：新增 `AcceptsImages`（宿主判据两处、且旧 CLI 下假报） |
+| D83 | 原生路**不落盘**、不发路径行 | 需求「不再只依赖落盘路径告知」；落盘只会多一份无主副本（终端按 3 天窗扫除 `.thincoder/tmp`，`attachments.mjs:14-17`）。被否：两路都发（重复内容、模型两处引用同一图） |
+| D84 | 非多模态模型退化交 CLI（`stripImagesForTextModel`），桌面不做视觉判据 | 桌面不读 provider 规格（B3 / E3）；CLI 每次请求前统一剥图并留 `[image omitted — …]` 可见文本（`provider/core.mjs:133` / `normalize.mjs:100-121`）。被否：桌面按模型名判视觉（模型清单不可靠、且要维护规格副本） |
+| D85 | 回退判据 = 能力位在场且为 true；其余一律今天路径 | 需求「CLI 不支持时回退既有路径且行为同今天」；能力位 = 协议唯一权威（ACP：omitted ⇒ UNSUPPORTED）。被否：按版本号判（E3 不加版本门） |
+| D86 | B1 例外面 = 5 档 ≈ +70 行（§22.2 表）；替代通道已查实不可行 | 不改 CLI ⇒ 图块到不了模型（`buildPromptText` 丢块、`run` 只收文本）。被否：桌面自建第二条旁路（协议无通道） |
+
+### 22.5 验收对照（回指需求档 F19）
+
+| 需求条目（F19） | 本档落点 | 判据（机检 / 走查） |
+|---|---|---|
+| 发送图片 ⇒ `session/prompt` 的 prompt 数组含原生 image 块（与 text 并存） | §22.1 / §22.2 | T93：prompt = 1 text 块 + N image 块；`type` / `mimeType` / `data` 逐值（base64 解码 == 原字节）；正文无 `[Attached images:` |
+| 模型回答能引用图片内容 | §22.1（CLI 半）· §22.9（真机 provider 面） | T1 / T1b（块形逐值；provider body 无 `image_url`）+ 走查 2（桌面）∥ S1（终端 Claude 族，问图中内容） |
+| CLI 不支持 image 时回退既有路径且行为同今天 | §22.1 回退判据 | T94：mock 不声明 image ⇒ prompt 单 text 块、含 `[Attached images: <路径>]`、文件已落盘（今天形） |
+| （派生）限额与丢弃不回归 | §22.2 限额 | T95① / T95②：超阈图（单图 ∥ 回合合计）⇒ 不进块 + `NoticeItem(warning)`；其余照发 |
+| （派生）桌面半不依赖 CLI 改动可验 | §22.3 ② | T93–T95 全在 mock 层（`promptImage` 开关），不装真 CLI |
+
+### 22.6 用例表（T93–T95，`test/kernel/thincoder_kernel_test.dart`）
+
+| # | 场景 | 输入 | 期望 |
+|---|---|---|---|
+| T93 | 原生路（新 CLI） | `ThincoderMock(promptImage: true)`；`KernelTurn(text:'看图', images:[png 3 字节])`；`KernelContext(cwd: 临时目录)` | `session/prompt.prompt` == `[{type:'text', text: 含'看图'}, {type:'image', mimeType:'image/png', data: base64}]`；text 不含 `[Attached images:`；`UserMessageItem.images` 一条；`<cwd>/.thincoder/tmp` 不存在 |
+| T94 | 回退路（旧 CLI） | `ThincoderMock()`（缺省 image:false）；同图 | prompt 单 text 块，含 `[Attached images: <cwd>/.thincoder/tmp/paste-…]`；文件存在且字节一致（今天形） |
+| T95① | 原生路超阈（单图） | `promptImage:true`；一张 15 MB+1 字节 + 一张合法 | 只有合法图进块；`NoticeItem(warning)` 一条（文案同今天）；丢弃计数 1 |
+| T95② | 原生路超阈（回合合计） | `promptImage:true`；三张 [15 MB, 14 MB, 2 MB]（每张合法，合计 31 MB > 30 MB） | 前两张进块、第三张被弃（回合合计判据）；`NoticeItem(warning)` 一条（文案同今天）；丢弃计数 1 |
+
+- 既有 T15 / T16 / T27（图片替代 / 超阈 / 合计超阈）保持绿 = 回退路不回归。
+
+### 22.7 边界与登记（判定条件）
+
+1. **不做图片编辑 / OCR / 远程项目图片**（需求边界）。
+2. **不改 Claude / Codex 内核图片面**（需求边界）。
+3. **重放不带图**：CLI `session/load` 重放跳过 image 块（`bridge.mjs:406-414`，日志一行）⇒ 桌面切回时气泡图仍在（宿主自持 transcript）；终端侧历史里的图不重放。判定条件：产品要求重放也带图 ⇒ CLI 侧补 `user_message_chunk` 的 image 块（另立）。
+4. **挂起窗内的图**：窗内轮已透传富对象（批 11 ⑤ 已落：`suspension.mjs:96-101` / `:154-170`）；窗退 idle 的残余补发径现按富对象补发（§22.11，批 12 已落）。判定条件：走查见到窗退 idle 后补发的回合丢图 ⇒ §22.11 未生效，按该节判据补。
+5. **不做视觉能力探测**：非多模态模型的退化在 CLI（D84）；桌面不发「模型不支持图」提示（CLI 的 `[image omitted — …]` 文本是唯一可见面）。
+6. **B1 已裁（A）**：桌面半与 CLI 半一并实施；新 CLI 合入前生产行为 = 今天（旧 CLI 恒 false），T93–T95 以 mock 能力位驱动。
+7. **CLI 会话存档里的图块（口径 = 剥离；落地 = §22.10 / 批 12）**：CLI 按回合保存会话（`thincoder-cli/src/acp/session.mjs:111` 每回合 `save`）。人读线已剥图（`slimForDisplay`，`session-segments.mjs:35-39`）。
+   机器线 `contextHistory`（`thincoder-core/session.mjs:144`，进槽 `:199-200`）原样进槽 ⇒ 原生路经 `pushReal` 入 `agent.history` 的 base64 图随每回合整写槽 JSON（单回合可达 30 MB × 4/3 ≈ 40 MB）。
+   **口径 = 剥离**：存档前丢 `image_url` parts、只留 text 与 `[Image #N]` 行内标记（与重放跳过同判据，`bridge.mjs:406-414`）；落地设计 = §22.10（`stripImagesForArchive`，单入口 = 核 `saveSession`）。
+   判定条件：带图回合后槽文件仍随图膨胀 / `save` 报错或变慢 ⇒ 剥离未生效，按 §22.10 补。
+8. **握手完成前的首条消息走回退路**：能力位在 `_deliver` 开头快照（`final native = _nativeImages`，`thincoder_kernel.dart:592`），握手在 `_ensureStarted()`（`:629`）才发生 ⇒ 冷启动首条消息（含图）在握手完成前发出时，即使 CLI 支持 image 也走回退路（落盘 + 路径行）。回退安全、窗口窄（仅首条）。判定条件：走查见到冷启动首条图走回退路而 CLI 已声明 image ⇒ 评估把附件判定移到 `_ensureStarted()` 之后（改变消息即时回显时机）⇒ 单独立项。
+9. **全部图被弃 + 无正文 ⇒ 空 `prompt` 数组**：原生路图全被弃（超阈 / 畸形）且正文为空 ⇒ 无 text 块、无 image 块 ⇒ `prompt` 数组为空（`thincoder_kernel.dart:650-659`）⇒ CLI 按空判据回 `-32602`；回退路同场景同样发不出有效文本（无路径行、正文为空）。判定条件：走查见到用户未发出任何图却收到参数错 ⇒ 桌面补空判据（无有效内容 ⇒ 本地 error 提示，不发请求）。
+
+### 22.8 真机走查步骤
+
+1. 装含 B1 的 CLI + 桌面；新建 thincoder 会话，选视觉模型。
+2. 发一张截图 + 一句「这张图里是什么」⇒ 模型直接答出图中内容（不调 `read_image`）。
+3. 换非视觉模型 ⇒ 同一张图：模型看到 `[image omitted — this model does not support image input]`，不崩。
+4. 把 `thincoder.path` 指回旧版 ⇒ 发图：与今天一致（落盘 + `[Attached images: …]`，模型可 `read_image`）。
+5. 对照终端：终端贴图走 `read_image <path>`（`clipboard.mjs:188-223`），桌面原生路是增量——终端行为不变。
+6. 超阈图（>15 MB）⇒ 会话内 warning 一条，其余图照发。
+
+### 22.9 真机 provider 面（`image_url` 与 tool 消息 → Anthropic 原生块）
+
+> 回指：需求档 F19「模型回答能引用图片内容」。核内历史是 OpenAI 形（`{type:"image_url",image_url:{url:"data:<mime>;base64,<b64>"}}`），`format:"anthropic"` 时原样下发 ⇒ Anthropic 收到未知 part，图到不了模型；既有 `read_image` 同病（`provider/anthropic.mjs:41-49` 只抽 system，其余消息原样进 `body.messages`）。
+
+**最近先例（对齐 ∥ 偏离及理由）**
+
+- 对齐 ①：转换点 = transport 边界，同 `provider/google.mjs:53-61`（`image_url` → `inlineData{mimeType,data}`）与 `provider/responses-request.mjs:100-104`（→ `input_image`）；copy-on-write 形同。设计档对位 = 核 PROVIDER 设计档 §6.8（消息块形按 Anthropic 原生块下发；tool 块同节）。
+- 对齐 ②：不可转换的图 ⇒ 原位换可见文本（`normalize.mjs:100-121` 的 `[image omitted — …]` 形），不静默删 part。
+- 对齐 ③：`read_image` 的图 = 同一 user 消息 parts（`agent/record-results.mjs:54-69` 注入 `[{type:"text"}, ...images]`）⇒ 本转换一次，工具面与原生图两路同享（工具面零改）。
+- 偏离 ①：google 对解析失败的 data URL 静默丢 part；本处在丢弃时留一行 `logEvent`（真机排障要能看见「哪一单丢了几张」）。被否：静默丢（无痕）。
+
+**survey 证据**：Anthropic 官方 TypeScript SDK 类型定义（`@anthropic-ai/sdk` latest · `resources/messages/messages.d.ts` · 2026-10-19 经 unpkg 取）逐字——
+`ImageBlockParam { type:'image'; source: Base64ImageSource | URLImageSource | FileImageSource }`；`Base64ImageSource { type:'base64'; media_type: 'image/jpeg'|'image/png'|'image/gif'|'image/webp'; data: string }`。
+官方文档站（docs.anthropic.com / platform.claude.com）本机 region-blocked，未取到页面；**未对真 API 实测（unverified）**。
+同仓实测：`provider/core.mjs:128-140`（分派前剥图——`stripImagesForTextModel` 只留 `multimodal` 的栅格 data URL；`capHistoryImages` 32 MB 预算）· `provider/normalize.mjs:11`（`RASTER_IMAGE_URL` 四型，含别名 `image/jpg`）· `provider/anthropic.mjs:52-59`（`body.messages = chatMessages` 原样）。
+
+**做法**：`anthropic.mjs` 新增导出纯函数 `convertMessages(messages)`；`chat()` 以它生成 `body.messages`。
+
+- `content` 字符串 ⇒ 原样；数组 ⇒ 逐 part：`text` 原样；`image_url` 按 data URL 形状转换；其余 part 原样。
+- 转换 = `{type:"image",source:{type:"base64",media_type,data}}`；`data` = data URL 逗号后原文（不解码 / 不重编码）；`media_type` = mime，`image/jpg` 归一为 `image/jpeg`（核内放行该别名，Anthropic 只收四型）。
+- 不可转换（非 data URL / 白名单外 mime / payload 为空 / 形状不符）⇒ 该 part 原位换 `{type:"text",text:"[image omitted — unsupported image source for the Anthropic transport]"}`，并 `logEvent("llm:image-drop", {transport:"anthropic", count})` 一行（每请求至多一行，count = 本请求丢弃数）。
+  **二选一写死 = 丢弃换占位**（保留原样 = 整单 400，模型仍看不到图）。
+- copy-on-write：无 `image_url` ⇒ 原数组 / 原消息引用返回；有 ⇒ 只重建涉及对象（`agent.history` 零触）。占位保证 `content` 不为空数组。
+- `provider/rate.mjs` 的 `estimateText` part 判据补 `type:"image"`（同计 85 tokens）：转换先于 `estimateRequestTokens(body)`，不补则图从限流估算里消失。
+
+**工具消息（同一 `convertMessages`）**：assistant 的 `tool_calls` ⇒ `tool_use` 块（`id` / `function.name` / `function.arguments` 解成对象；坏 JSON 或非对象 ⇒ `{}`）；
+`role:"tool"` ⇒ 一条 user 消息里的 `tool_result` 块（`tool_call_id` → `tool_use_id`，content 串原样、非串 `JSON.stringify`）；相邻的 `role:"tool"` 合进同一条 user 消息（Anthropic 的 user/assistant 交替）。
+copy-on-write：无图、无工具 ⇒ 原数组引用；命中只重建该消息对象（`anthropic.mjs:36-109`）。
+tool 块形按官方 SDK 类型定义与核 PROVIDER 设计档 §6.8 写死，**未对真 API 实测（unverified）**；判定条件 = 真机 Claude 族多轮工具会话（`tool_use` → `tool_result` 往返）不出现 4xx、工具照跑。
+
+**契约（`messages[i].content[j]` 的块形）**
+
+```json
+{"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "<base64>"}}
+```
+
+- 转换只发生在消息块形上：role / 条数 / 其它字段零改；未命中（无图、无工具）的消息原引用返回，入参数组与 `agent.history` 不被修改。
+
+**决策**
+
+| # | 决策 | 理由 / 被否 |
+|---|---|---|
+| D91 | 转换点住 anthropic transport（`convertMessages`），不进 `normalize.mjs` 共用层 | 两个 in-repo 先例都在 transport 边界转换；共用层会把 OpenAI 形当成「已归一」的假前提，三个 transport 的块形互相污染。被否：normalize 统一转（改坏 OpenAI / Google 通路） |
+| D92 | 不可转换 ⇒ 丢弃换文本占位 + 一行 `logEvent`；不保留原样 | 保留 = 整单 400（图仍不可见）；占位与 `stripImagesForTextModel` 同形，模型可见「有一张图没进去」。被否：静默删 part（消息可能变空 / 语义无痕）；被否：转 `source.type:"url"`（依赖 Anthropic 侧抓取，未验证；历史里只有 data URL） |
+
+**验收**
+
+| 判据 | 手段 |
+|---|---|
+| 图像块逐值正确（png / jpg 别名归一） | T1（纯函数）+ T1b（假服务器抓 `POST /v1/messages` body） |
+| 坏源 ⇒ 占位 + 一行日志、消息不空 | T1 |
+| copy-on-write 两半边：无图 ⇒ 原引用返回；有图 ⇒ 入参数组与 `agent.history` 引用 / 内容均不变，只有返回的新数组含 image 块 | T1 |
+| 真机 Claude 族能看图 | 走查 S1（发图提问） |
+| tool 消息逐形正确（`tool_calls` ⇒ `tool_use`；`role:"tool"` ⇒ `tool_result`；相邻结果合并） | T1c；真 API 面未实测，判定条件见 §22.9「工具消息」 |
+
+**用例**
+
+| # | 场景 | 输入 | 期望 |
+|---|---|---|---|
+| T1 | 纯函数逐形 | user 消息含 `text` + `data:image/png;base64,AAAA`；`data:image/jpg;base64,AAAA`（别名）；`https://x/y.png`；`data:image/bmp;base64,AA`；另备无图数组一条 | png ⇒ `{type:"image",source:{type:"base64",media_type:"image/png",data:"AAAA"}}`；jpg 别名 ⇒ `image/jpeg`（data 同 `AAAA`）；后两例 ⇒ text 占位、丢弃计数 2；text part 原位原样；有图输入：返回数组 ≠ 入参数组 ∧ 入参数组与 `agent.history` 的引用 / 内容均不变；无图数组 === 原引用 |
+| T1b | provider 级 body | 本地假 Anthropic SSE 服务；`chat()` 带一张图 | 收到的 `body.messages[0].content[1]` 逐值 = image 块；body 序列化不含 `image_url` |
+| T1c | tool 消息逐形 | assistant 带 `tool_calls`（arguments 为合法 JSON / 坏 JSON）；两条相邻 `role:"tool"`；无工具消息 | `tool_use` 块的 `input` 为对象（坏 JSON ⇒ `{}`）；两条相邻结果合进同一条 user 消息、顺序不变；`tool_call_id` → `tool_use_id`；无工具消息 === 原引用 |
+
+**边界（本节不做）**：不改 `stripImagesForTextModel` / `capHistoryImages` 判据 · 不做 URL 图源 / 缩放 / 转码 / 去重 · 不做图像 token 精算（85/块沿用粗估）· 不改 Google / responses 两 transport。
+
+### 22.10 槽文件剥离（存档机器线只丢图）
+
+> 回指：批 11 §22.7-7 的既定口径（剥离）+ 台账 #87。原生图经 `pushReal` 入 `agent.history`；CLI / 桌面 / TUI 每回合 `saveSession` 把机器线整写槽 JSON（`thincoder-cli/src/acp/session.mjs:111` 每回合 `save`；单回合 ≤30 MB 原始字节 ×4/3 ≈ 40 MB）。
+
+**最近先例（对齐 ∥ 偏离及理由）**
+
+- 对齐 ①：人读线先例 `session-segments.mjs:35-39`（`slimForDisplay`：多模态 user 保留 text、丢 `image_url`）——同一口径搬到机器线。
+- 对齐 ②：占位形 = `normalize.mjs:86-98`（`stripRejectedImages`：坏图原位换文本，消息不空）。
+- 偏离 ①：**不复用** `slimForDisplay`——它同时截断 tool args（300 字符）与 tool content（500 字符），机器线其余部分须逐字节保持（恢复前缀缓存契约，`session.mjs:134-141`）。被否：直接复用（恢复后上下文静默缩水）。
+- 偏离 ②：不在 CLI 的 `save` 调用点过滤——只覆盖 ACP，TUI / 桌面的 `saveSession` 漏；且该档载他批未提交改动（对齐步骤见 §22.12）。被否：调用点过滤。
+
+**survey 证据**：外仓档 `thincoder/docs/core/design/SESSION.md`（双线结构 = `history` 人读 / `contextHistory` 机读；`slimForDisplay` 人读线丢 `image_url`；机读线保留 transient——`:119-139`，决策 D-SE6 / D-SE7 / D-SE8 `:1010-1012`）；
+`thincoder/docs/cli/design/ACP-CLIENT.md` §6.3（每回合末存档）；`thincoder/docs/core/design/API-CONTRACT.md:1815`（`saveSession` 出口坐标）。结论：剥离只该动机读线、人读线已有先例——本节断言与上列档一致；同仓代码实读见上文先例坐标（`session.mjs:134-147` · `session-segments.mjs:35-39` · `normalize.mjs:86-98`）。
+
+**做法**：`thincoder-core/session.mjs` 导出纯函数 `stripImagesForArchive(messages)`（`:77-88`），`saveSession` 的机器线生成点（`:144`）用它；占位常量 `IMAGES_STRIPPED_PLACEHOLDER` 单源住 `session-segments.mjs:33`，人读线 `slimForDisplay` 与机器线同用（`:38-45`），`session.mjs:73-74` import + re-export 保既有 import 面。
+
+- 只丢 `type === "image_url"` 的 part；text（含 composer 的 `[Image #N]` 行内标记）与其余 part 原样。
+- copy-on-write：未命中消息原引用；命中只重建该消息对象（`agent.history` / `_fullHistory` 零触）。
+- 丢后 `content` 为空数组（只含图的 user 消息）⇒ 换单 text part `IMAGES_STRIPPED_PLACEHOLDER`（`[image omitted — stripped from the session archive]`）；人读线对同一消息同给这个占位（`slimForDisplay`），两线同文。
+- 两条线都在源头剥图（人读 `slimForDisplay` / 机器 `stripImagesForArchive`）；未绑定模式（`legacyHistory`）同样已剥；槽写面两条路（`saveProjectedSlot` / `writeSessionFile`）同收一个 `contextHistory`，改在生成点 ⇒ 两路同效。
+- 恢复语义：重开 / 恢复后不再持有旧图（模型见占位文本），与 §22.7-3「重放不带图」同口径；活会话内存历史不动。
+
+**决策**
+
+| # | 决策 | 理由 / 被否 |
+|---|---|---|
+| D93 | 剥离住核 `saveSession` 的机器线生成点（单入口：CLI / 桌面 / TUI 同享） | 三端都走 `saveSession`（桌面 `session-io.mjs:40` 直调）；调用点过滤只覆盖一端且碰他批在改的档。被否：CLI save 调用点过滤；被否：复用 `slimForDisplay`（截断机器线） |
+
+**验收**
+
+| 判据 | 手段 |
+|---|---|
+| 槽 JSON 的 `contextHistory` 无 `image_url` / `data:image/`，text 与 `[Image #N]` 在 | T3（`_setSessionsDirForTest` 临时目录 + `saveSession` + 读槽） |
+| 机器线其余内容逐字节保持（tool args / content 不截断） | T2（纯函数：只丢图 part、顺序不变） |
+| 活会话图不丢（copy-on-write） | T2 / T3：`agent.history` 原引用仍含图 |
+| 只含图的消息两线都见占位（无空 `content`） | 行为检查：`slimForDisplay` / `stripImagesForArchive` 各喂只含图消息 ⇒ 单 text 占位、两线同文 |
+| 每回合写盘不随图膨胀 | S2：带图回合后槽 JSON 的 `data:image/` 计数 = 0，文件字节数与无图回合同量级 |
+
+**T3 两键来源**：`contextHistory` = 机器线单入口（`saveSession` 的 `:144` 生成，`stripImagesForArchive` 用它）；`history` = 人读线——绑定态由 `saveProjectedSlot` 从记录存储段拼（段 = `slimForDisplay(m)`，`session-store.mjs:339`），
+未绑定时 `writeSessionFile(p, { history: legacyHistory(agent) })`（`session.mjs:64-69` / `:200`）；两路都在源头剥图 ⇒ `history` 的断言 = 零回归哨兵。
+
+**用例**
+
+| # | 场景 | 输入 | 期望 |
+|---|---|---|---|
+| T2 | 纯函数 | 含 `[Image #1]` text + 图 part 的 user 消息；只含图的消息；无图消息 | 图 part 消失、text 顺序不变；只含图 ⇒ 单 text 占位；无图消息 === 原引用；原数组未被改 |
+| T3 | 槽写面 | `_setSessionsDirForTest(临时目录)`；history / `_fullHistory` 带一张 data URL 图；`saveSession(agent)` | 槽文件 `contextHistory` / `history` 均不含 `image_url` / `data:image/`；`[Image #1]` 在场；`agent.history[0].content` 仍含图；`_resetSessionsDirForTest()` 收尾 |
+
+**边界**：只丢 `image_url` parts · 不删消息（空 ⇒ 占位，人读线与机器线同文）· 两线剥图都在源头（人读 `slimForDisplay` / 机器 `stripImagesForArchive`）· VSC 面同口径（`thincoder-vscode/src/extension/panel-session-write.mjs:83` 的机器线过 `stripImagesForArchive`；`session-io.mjs:57` re-export 核面）· 不做旧槽回扫（已落盘的旧图不回收）。
+
+### 22.11 挂起窗残余输入（idle 竞态补发保图）
+
+> 回指：F19 + 批 11 §22.7-4 的残余口。窗内到达 prompt 的主径已闭合（批 11 ⑤：窗内轮透传 `{text, images}`，`suspension.mjs:96-101` / `:154-170`）；**窗退 idle 的残余补发径**现按富对象补发（本节 `residualTurnInput`，批 12 已落）——`submit` 放进 `residualInput` 的条目仍带 `images`，入参形取之。
+
+**最近先例（对齐 ∥ 偏离及理由）**
+
+- 对齐 ①：富对象入参 = 窗内轮（`suspension.mjs:96-101`）与 `setup.mjs:53-57` 的 `{text, images}` 消费形；判据同（有图 ⇒ 富对象，无图 ⇒ 字符串）。
+- 对齐 ②：残余逐条补发 = 既有循环（逐条 `runNormal`、逐条应答 `done`）——只改入参形，不改调度。
+- 偏离：无。字符串路径逐字零变。
+
+**survey 证据**：外仓档 `thincoder/docs/cli/design/ACP-CLIENT.md` §12.8（挂起窗回合边界契约：`done` 载荷带原始错误、`submit` 以原始错误拒绝、窗关残余以取消形应答；**无**「窗退 idle 残余补发」措辞）与本档 §19（窗内轮富对象透传 = 批 11 ⑤）；
+`thincoder/docs/core/design/AGENT-LOOP.md:78` / `:92`（核 `startSuspension` 句柄 `{pushInput, wake, done}`；退出回执 `{reason, residualInput}`）。结论：idle 残余补发的入参形无外部档约束 ⇒ 断言以代码实读为准（`thincoder-cli/src/acp/session.mjs:72-78` · `suspension.mjs:96-101` / `:154-170` · `setup.mjs:53-57`）。
+
+**做法**：`thincoder-cli/src/acp/session.mjs` 新增导出纯函数 `residualTurnInput(item)`；idle 残余循环用它（现 `thincoder-cli/src/acp/session.mjs:72-78` 的 `else` 支）：
+
+```js
+for (const item of residual) {
+  const input = residualTurnInput(item)
+  if (input !== null) runNormal(input).then(() => item?.done?.({ ok: true }), () => item?.done?.({ ok: false }))
+}
+```
+
+- 空条目（`{}` / `{text:""}`）⇒ `null` 支：不补发、也不应答（入参形变，调度不变）。
+
+- 映射：字符串 ⇒ 原串（空串 ⇒ `null`——同空残余项）；对象且 `images` 非空 ⇒ `{ text: String(item.text ?? ""), images }`（text 空也发——只发图合法）；对象只有 text ⇒ 该串（空串 ⇒ `null`）；两者皆无 ⇒ `null`（保持今天：不补发、不应答）。
+- 中止径（`reason === "aborted"`）零改：逐条以 `AbortError` 取消应答。
+- 窗内轮 / 普通队列 / 字符串 prompt 零改。
+
+**决策**
+
+| # | 决策 | 理由 / 被否 |
+|---|---|---|
+| D94 | 残余补发按富对象透传（图照发），不做「只补文本 + 日志」 | 图是用户输入的一部分；静默丢与窗内轮口径不一致（同一会话两种行为）。富形已被 `runAgent` / `setup.mjs` 接收（批 11 实测）。被否：丢图 + 日志（用户可见面为零） |
+
+**验收**
+
+| 判据 | 手段 |
+|---|---|
+| 残余含图 ⇒ 补发回合入参为富对象；纯文字 ⇒ 字符串 | T4 |
+| 空残余项保持今天（不补发 / 不应答） | T4（`null` 支） |
+| 窗内轮 / 中止径不回归 | 代码核（`suspension.mjs` 零改）+ 批 11 单测面不触 |
+
+**用例**
+
+| # | 场景 | 输入 | 期望 |
+|---|---|---|---|
+| T4 | 映射逐形 | `"hi"`；`""`；`{text:"hi"}`；`{text:"看图",images:[{…}]}`；`{text:"",images:[{…}]}`；`{}`；`{text:""}` | 依次 = `"hi"`、`null`、`"hi"`、`{text:"看图",images}`、`{text:"",images}`、`null`、`null` |
+
+**边界**：只改 idle 残余补发径 · 不合并 / 不重排残余（逐条）· 图随回合入 history，随后由 §22.10 从存档剥离 · 不做窗内图持久化 / 重放。
+
+### 22.12 本批（批 12）受影响文件、行数预算与测试策略
+
+**B1 依据（core / CLI 改动在例外内）**：用户 2026-10-19 01:37「运行改thincoder仓库」已概准 B1 例外（范围仓 = `thincoder/`，保持上游可合并）；需求档 F19「依赖」行的现行口径 = 批 11 CLI 侧 5 档 ≈ +70 行 + 批 12 的 core/CLI 4 档 ≈ +64（同裁，out-of-repo 轮）。
+本批落其中 4 档 = core 3（`anthropic.mjs` / `rate.mjs` / `session.mjs`）+ CLI 1（`acp/session.mjs`），逐档见下表；批 11 的 CLI 半 5 档已交，本批零改。
+
+**受影响文件（行数 = 2026-10-19 `wc -l` 实测）**
+
+| # | 坐标 | 改动 | 增量 |
+|---|---|---|---|
+| ① | `thincoder-core/provider/anthropic.mjs`（239） | `convertMessages` + `chat()` 调用 + `logEvent` import | ≤ +36（⇒ ≤275） |
+| ①' | `thincoder-core/provider/rate.mjs`（168） | `estimateText` part 判据加 `type:"image"` | 1 行改（净增 0） |
+| ② | `thincoder-core/session.mjs`（275） | `stripImagesForArchive` + `:144` 调用（占位常量住 `session-segments.mjs`） | ≤ +16（⇒ ≤291） |
+| ③ | `thincoder-cli/src/acp/session.mjs`（180） | `residualTurnInput` + idle 残余循环（现 `:72-78`） | ≤ +12（⇒ ≤192） |
+| ④ | `thincoder/docs/batches/2026-10-19-f19-cli-closure.test.mjs`（新增） | T1 / T1b / T2 / T3 / T4 | ~+150（零留存） |
+| ⑤ | 核的 PROVIDER 设计档 §6.8 · `thincoder-core/CHANGELOG` `[Unreleased]` · `thincoder-cli/CHANGELOG` `[Unreleased]` | 事实行 + 条目（同拍义务） | 文档面 |
+
+- 四档均 <500 行，无拆分议题。零改动：`session-store.mjs` · `normalize.mjs` · `google.mjs` · `responses-request.mjs` · `suspension.mjs` · `agent/setup.mjs` · `agent/record-results.mjs` · `agent/image-heal.mjs` · baocode `lib/**`。
+- **开工前对齐（③ 必做；② 所在档现干净）**：
+  1. `cd thincoder && git status --porcelain -- thincoder-cli/src/acp/session.mjs`（现 = ` M`）+ `git diff -- <该档>` 存基线；diff 摘要落批档 §5。
+  2. 只改 `trackWindow` 的 idle 残余支（现 `:72-78`）与文件头部新增导出函数；不重排 / 不删他批注释 / 不整档格式化。
+  3. 写后 `git diff -- <该档>` 逐 hunk 核对 = 基线 hunk + 本批 hunk；基线零变化。提交面由父侧裁定（不 `checkout` / 不 `add -A`）。
+  4. `thincoder-core/session.mjs` 现无未提交改动；开工时若出现改动，按同法先对齐。
+- **UI**：无新增 UI 面；有模型面行为变更（§22.9 使终端 Claude 族图从「到不了模型」变为真发出 image 块；§22.10 使重开会话后模型见占位文本）。桌面零改；CLI 日志面一行；无 UI 决策项。
+
+**测试策略**
+
+- 单元测试档 = `thincoder/docs/batches/2026-10-19-f19-cli-closure.test.mjs`（该仓惯例：随批次档、零留存、不进任何门）；跑法 `cd thincoder && node --test docs/batches/2026-10-19-f19-cli-closure.test.mjs`；收口删除。
+- `npm test`（`test/run.mjs`）只收 `test/**`——本档不进，读数保持「空清单 = 绿」（该仓既有面）。
+- 集成测试：无业务场景变更（baocode 零改；ACP 只在窄竞态下补图）⇒ 不新增、不修既有无。
+- T3 的测试缝 = `session-slots.mjs` 既有 `_setSessionsDirForTest` / `_resetSessionsDirForTest`（不碰真实会话目录）。
+
+**真机走查（S1–S4）**
+
+- S1（①）：Claude 族 provider（`format:"anthropic"`）+ 视觉模型；发一张截图 + 「这张图里是什么」⇒ 答出图中内容、不调 `read_image`；同一会话再跑一轮工具调用 ⇒ `tool_use` / `tool_result` 往返不 4xx、工具照跑（tool 转换的真 API 面未实测，见 §22.9）。
+- S2（②）：同一会话再发一张图 ⇒ 回合尾 `saveSession` 后槽 JSON 无 `data:image/`、`[Image #N]` 在；槽文件字节数与无图回合同量级；重开会话模型见占位文本、不崩。
+- S3（③）：挂起窗在（后台子代理 live）时发一条带图 prompt 并留在残余；窗退 idle ⇒ 补发回合的 user 消息 content 含 image 块（日志 / 断点核 `pushReal` 入参）。
+- S4（终端侧对照）：同一 CLI 在终端会话让模型 `read_image <path>` 一张图（终端贴图走该工具）⇒ 回合成功、答出图中内容（工具结果的 image 块与原生图同源，均经 §22.9 转换）；日志见 4xx 且带核 PROVIDER 设计档 §6.26 的全剥注记 ⇒ 命中限额自愈（重发一次仍失败 ⇒ 按 U2 记录、另立缩放）。
+
+**未核实 / 需裁**
+
+| # | 项 | 现状 | 处置 |
+|---|---|---|---|
+| U1 | Anthropic 真 API 对转换块形的接受 | 块形 = 官方 SDK 类型定义逐字；未对真 API 实测 | S1 判；失败 ⇒ 按真实错误修形，不改判据 |
+| U2 | Anthropic 单图字节 / 像素上限 | 官方文档 region-blocked，未取到一手来源（unverified） | 超限走核 PROVIDER 设计档 §6.26 自愈（4xx + 史含图 ⇒ 全剥 + 注记 + 重发一次）；走查见二次失败 ⇒ 另立缩放 |
+| U5 | 需求档 F19 事实行的现行原文 = 「CLI 的 provider vision = `anthropic.mjs` 的 `image_url` 未转 image 块（批 12 的 #85 修）」 | 该事实已指向本批 §22.9（批 11 的 provider vision 待查句已不在盘） | 已闭合、本批不需再动需求档（判据 = §22.9 的 T1 / T1b + S1） |
+
+
+---
+
+## 23. 用量（F20）
+
+> 需求档 F20（同上）：桌面展示 thincoder 会话的用量——按回合与会话的 token、上下文占用，与终端状态行 ↑+↓ 口径对齐（终端无 `/usage`；context% 不作对照）；成本本批不做。
+> 一句结论：**数据源 = ACP `usage_update`（CLI 逐请求上报 `used = prompt+completion`、`size = 上下文窗口`）**；回合用量 = 本回合各条 `used` 之和（喂 turn footer），会话累计 = 全会话之和（上下文面板新增一行），上下文占用沿用今天（最新一条 `used/size`）。**成本本批不做**（CLI 无价目表、从不上报 `cost`；登记 §14-25）。「与终端同口径」= 同一 `onUsage` 来源的 token 合计（终端状态行 ↑+↓）；终端无 `/usage` 命令（登记 §14-26）。
+
+**最近先例（对齐 ∥ 偏离及理由）**
+
+- 对齐 ①：回合用量 = 既有 `TurnEnded.usage`（`kernel_event.dart:34-52`）+ turn footer（`turn_footer.dart:121-148`，Claude 已有 tokens / speed / cost）——本批只把 thincoder 的 `usage` 填上，不新造展示面。
+- 对齐 ②：上下文占用 = 既有 `UsageReported` / `ContextUsage` / `ContextUsagePanel`（`thincoder_events.dart:421-434`；`kernel_types.dart:126-140`；`context_usage_panel.dart:50-167`）——F10 已接，本批不改语义。
+- 对齐 ③：会话累计 = 面板里新增一行（形同既有 `_Legend` 行，`context_usage_panel.dart:141-153`）。
+- 偏离 ①：**不**在桌面重算成本（无价目表、B3 不代管 provider）——成本缺席并在登记里给判定条件。
+- 偏离 ②：**不**把终端 context%（`estimateTokens(history)` 估算，`render-loop.mjs:89-90`）当对照口径——不同仪器；对照只对 token 合计（同 `onUsage` 源）。
+
+**survey 证据**：外仓 `bridge.mjs:254-261`（每条 `onUsage` 发一条 `usage_update`：`used = prompt_tokens + completion_tokens`、`size = providerSpec(agent.provider).context`）；
+`tool-events.mjs:413-418`（终端把同一回调的 prompt / completion / cacheHit / cacheMiss / reasoning 累加进 `state.tokens`）；`status-line.mjs:122-143`（状态行累计 ↑prompt ↓completion + hit% + context%）；
+`render-loop.mjs:89-90` 与 `status-line.mjs:139-143`（context% 分子 = `estimateTokens(agent.history)`，估算）；`slash-commands.mjs:44-106`（**无 `/usage` 命令**）；
+core 无价目表（全仓唯一 `cost` 是 web-deepseek 的按次计费常量 `tools/web-deepseek.mjs:29`）。
+ACP v1 schema：`UsageUpdate.required = ["used","size"]`，`cost?: Cost{amount,currency}`「Cumulative session cost」（可选）。
+结论：token 合计可从 `usage_update` 精确累计（与终端同源）；上下文占用沿用最新快照；成本无来源。
+
+### 23.1 做法：两条累计 ∥ 三个落点
+
+```text
+CLI onUsage（每 LLM 请求一次）→ usage_update {used, size}
+  ▼ ThincoderEvents._usage
+  ├─ 回合累计 _turnSpent += used ──► _endTurn ⇒ TurnEnded.usage = TurnUsage(spentTokens)
+  │                                    ⇒ turn footer「N tokens」（回合用量）
+  ├─ 会话累计 _spent += used ──────► ContextUsage.sessionSpent
+  │                                    ⇒ ContextUsagePanel 新增「本会话累计」一行
+  └─ 快照（今天）used / size ───────► UsageReported(ContextUsage)（上下文占用，F10 不变）
+```
+
+- 回合边界 = `_beginTurn`（`thincoder_kernel.dart:646-652` 的 `_events.begin()` 处清 `_turnSpent`）；回合收尾 = `_endTurn`（`:694-712`）填 `TurnEnded.usage`。
+- 回合外的 `usage_update`（无在飞回合）只进会话累计（不回填任何回合）。
+- **无提示轮的口径**：自动轮自成回合（§19.2 表 `start`（无在飞回合）行：`_beginTurn('auto:<n>', unprompted: true)`）⇒ 其 `usage_update` 计入**自己的** `TurnEnded.usage`（`_beginTurn` 已清 `_turnSpent`）。
+  D62 的撤暂存轮在桌面不成轮（§19.2 表 `end`（暂存位非空）行）⇒ 该轮用量落在在飞用户回合内、并进该回合的 `_turnSpent`（不另开回合、不回填已收回合）。
+  用例：**不补**——两条边由既有回合边界决定，T96 / T98 已覆盖「回合内 / 回合外」；走查见归属错误 ⇒ 补 T99（自动轮自成回合 ∥ 撤暂存轮并入在飞回合各一条）。
+- `speed` 保持缺省（不伪造：桌面只有字符数增量、非 token；Claude 的 `tokensPerSecond` 来自其 CLI 结果面）。
+- 面板显示：会话累计行（`_format` 同源，`context_usage_panel.dart:44-48`）；无 `sessionSpent`（Claude 等）⇒ 不显示（负向锁：零字节注入）。`ContextUsage` 其它构造点（`chat_session.dart:516`、`mock_conversation.dart:10`）零改（缺省 null）。
+
+### 23.2 契约（数据形）
+
+```dart
+class TurnUsage {                      // lib/chat/chat_models.dart:133-159
+  const TurnUsage({..., this.spentTokens});
+  final int? spentTokens;              // 本回合 input+output 合计（内核只报合计时）
+  int? get totalTokens => spentTokens ?? ((inputTokens == null && outputTokens == null)
+      ? null : (inputTokens ?? 0) + (outputTokens ?? 0));
+}
+
+class ContextUsage {                   // lib/kernel/kernel_types.dart:126-140
+  const ContextUsage({required this.window, required this.used,
+                      this.segments = const [], this.sessionSpent});
+  final int? sessionSpent;             // 本会话累计 token（同一来源的逐请求 used 之和）
+}
+```
+
+- `usage_update.used` 语义（逐字对 CLI）：`used = prompt_tokens + completion_tokens`（该次请求）；合计 = 各条之和——**不重算**、不拆分（拆分行只有终端面有，ACP 线上无）。
+- `size` = 上下文窗口（CLI 侧 `providerSpec.context`，随模型切换变）；桌面不猜窗口。
+- 会话累计 = 随聊天会话存活：同一内核实例（一次聊天会话）内收到的全部 `usage_update.used` 之和（与终端 `state.tokens` 同源）；`restart()` / release 后重新 attach 不清零（`_spent` 只在内核构造时置 0，`thincoder_events.dart:45`）；新建聊天会话（新内核实例）从 0 起（终端进程重开同形：`tui-state.mjs:38` 初始化 0）。
+- `cost` 不读（CLI 不发；§14-25）。
+
+### 23.3 受影响文件清单与 `thincoder_events.dart` 拆分方案（E2 增量；行数 = 批 11 编制日（2026-10-19）快照——勿与 §24.3 的现值互校）
+
+| # | 坐标 | 改动 | 增量 |
+|---|---|---|---|
+| ① | `lib/kernel/thincoder/thincoder_events.dart`（799） | `_usage` 累加 `_spent` / `_turnSpent`；`begin()` 清 `_turnSpent`；`ContextUsage(sessionSpent:)`；`int get turnSpent` | ≤ +8（⇒ ≤807；入 >800 名单，见下） |
+| ② | `lib/kernel/thincoder/thincoder_kernel.dart`（1055） | `_endTurn` 带 `usage: TurnUsage(spentTokens: _events.turnSpent)`（无用量 ⇒ null） | ≤ +6（⇒ ≤1091；与 §22.3 合计 ≤ +36） |
+| ③ | `lib/kernel/kernel_types.dart`（610） | `ContextUsage.sessionSpent`（可选） | ≤ +4（⇒ ≤614） |
+| ④ | `lib/chat/chat_models.dart`（806） | `TurnUsage.spentTokens` + `totalTokens` 取值 + 文档 | ≤ +8（⇒ ≤814；>800 名单，行级） |
+| ⑤ | `lib/chat/widgets/turn_footer.dart`（348） | `_stats`：spent 无拆分时换新 hint 键 | ≤ +6（⇒ ≤354） |
+| ⑥ | `lib/chat/panels/context_usage_panel.dart`（530） | 会话累计行（有值才显示） | ≤ +14（⇒ ≤544） |
+| ⑦ | `lib/l10n/app_en.arb`（7026）· `app_zh.arb`（2703） | 2 键：`turnTokensSpentHint` / `usageSessionTotal`；生成档与两源档同拍（无 SDK ⇒ 手改，保持 `test/l10n_test.dart` 绿；§18.8 / 登记 §14-27） | 各 +2（⇒ 7028 / 2705） |
+| ⑧ | `test/kernel/thincoder_kernel_test.dart`（3395） | T96–T98（§23.6） | ≤ +90（⇒ ≤3485；与 §22.3 合计 ≤ +253 ⇒ ≤3648） |
+
+- **体量**：`thincoder_events.dart` 799 → ≤807 进入 >800 名单（缝候选 / 触发见 §5.2；拆分方案见下）；`chat_models.dart`（806）已在名单（§5.2），本批行级新增。
+- **>500 层**：`kernel_types.dart`（610 → ≤614）· `context_usage_panel.dart`（530 → ≤544）在 >500 且 <800 区间——体量立场只跟 >800（§5.2 末段），不立缝。
+
+**`thincoder_events.dart` 拆分方案（硬要求：拆后 ≤800；批 11 后 ≤807；先例形同 §21.3）**
+
+| 步 | 动作 | 迁移面 | 行数 |
+|---|---|---|---|
+| 1 | 新档 `thincoder_agents.dart`，以 `part of 'thincoder_events.dart'` 接入 | 子代理段：段头 `:436` 起的子代理卡片 / 报告翻译；`_putSubagent` / `_card` 的调用点在 `:682` / `:741`，**不随迁**（段界由拆分批按段头 / 段尾注释勘定） | −N（拆分批实测；判据 N ≥ 32） |
+| 2 | 拆后核读 | 两档 `wc -l` 实测：`thincoder_events.dart` ≤ 775（807 − 32；留 ≥25 行余量）；新档 < 300 | ✅ |
+| — | **预算** | 判据 = 拆后 `thincoder_events.dart` ≤ 775；子代理段实测 < 32 行 ⇒ 缝沿段界向相邻段扩（段界重勘，仍以 ≤775 收束） | |
+
+- 排期 = 独立拆分批（本批只行级 +8、不动结构）；拆分批开工时按实测段界核 N，结论回灌本节与 §5.2。
+- **零改动**：`UsageReported` 事件与 `transcript.dart`（快照语义不变）· Claude / Codex 内核（`TurnUsage` 新字段缺省向后兼容）· 固件（`usage_update` 帧形不变）· `chat_session.dart`。
+
+### 23.4 关键决策记录（含被否）
+
+| # | 决策 | 理由 / 被否 |
+|---|---|---|
+| D87 | 回合用量 = 本回合各条 `usage_update.used` 之和；会话累计 = 全会话之和 | 需求验收「会话级累计 = 各回合之和」；`used` = 该请求 prompt+completion（CLI 定义，`bridge.mjs:254-259`），求和即消耗合计 = 终端状态行 ↑+↓ 同源。被否：取回合最后一条 `used`（那是上下文快照、不是消耗，且与「累计 = 之和」矛盾） |
+| D88 | 会话累计挂 `ContextUsage.sessionSpent`，不新增事件 / 接口 | 面板已有 `ContextUsage` 与 `stats` 两条数据路；加字段零新机制、Claude 面零影响（缺省 null）。被否：实现 `ReportsUsage`（`accountLimits` / `refreshUsage` 对 thincoder 是假面，E3）；被否：新事件 `SessionUsageReported`（宿主与翻译面双改，E2 违规） |
+| D89 | 成本本批不做（无来源）；登记判定条件 | CLI 不上报 `cost`（`bridge.mjs:258-261` 只发 used/size），core 无价目表 ⇒ 桌面要显示只能自建价目表 = 重算（违「口径 = CLI 上报值，不重算」+ B3）。被否：桌面按 provider 价目表估算（第二判据源） |
+| D90 | 「与终端同口径」= 同一 `onUsage` 来源的 token 合计；context% 不作对照 | 终端 context% = `estimateTokens(history)` 估算（`render-loop.mjs:89-90`）、非 CLI 上报值；终端也无 `/usage` 命令 ⇒ 对照面 = 状态行累计 ↑+↓（同源）。被否：把 context% 差异当缺陷（不同仪器） |
+
+### 23.5 验收对照（回指需求档 F20）
+
+| 需求条目（F20） | 本档落点 | 判据（机检 / 走查） |
+|---|---|---|
+| 多回合 ⇒ 会话级累计 = 各回合之和 | §23.1 / §23.2 | T96：两回合 4 条 usage_update（100 / 50 + 70）⇒ 回合 150 / 70、`sessionSpent = 220`；面板显示 220 |
+| 上下文占用随 `usage_update` 更新 | §23.1 快照路 | T97：最新一条 `used/size` 进 `ContextUsage`（今天形，F10 不回归） |
+| 同一会话与终端读数一致（口径 = CLI 上报值，不重算） | §23.4 D90 | 走查 4：**逐回合 delta** 对照——同一批 turn 前（起算点）后各记一次终端状态行 ↑+↓，差值 == 桌面该批回合 footer 之和；两进程各持自己的累计（§23.2：累计随聊天会话存活，新建会话归零）⇒ 「一致」= 同源同算法，不是同数值；T96 = 机检侧（同源求和） |
+| 按回合 token 可见 | §23.1 turn footer | T96：两回合 footer 各显示 150 / 70（`TurnUsage.spentTokens`） |
+| 成本 / 上下文占用展示 | §23.4 D89 / F10 既有 | 成本本批不做（登记 §14-25）；上下文占用 = 既有面板（T97） |
+
+### 23.6 用例表（T96–T98，`test/kernel/thincoder_kernel_test.dart`）
+
+| # | 场景 | 输入 | 期望 |
+|---|---|---|---|
+| T96 | 两回合累计 | 回合 1 推两条 `usage_update`（used 100 / size 1000；used 50）⇒ `end_turn`；回合 2 推一条（used 70）⇒ `end_turn` | `TurnEnded` 的 `usage?.spentTokens` 序列 == `[150, 70]`；`UsageReported` 最后一条 `ContextUsage.sessionSpent == 220`、`window == 1000` |
+| T97 | 快照语义不回归 | 单回合两条 usage_update（used 900 → 950，size 1000） | 最新 `ContextUsage.used == 950`、`window == 1000`；`sessionSpent == 1850`（两条之和） |
+| T98 | 回合外用量 | 无在飞回合时推一条 used 30；再起回合推 used 20 ⇒ 收尾 | 会话累计 50；该回合 spent == 20（回合外的不回填） |
+
+- 断言面：按既有测试手段（`_Session` / mock 直驱）取 `TurnEnded` 与 `UsageReported` 事件逐值断言；不新增固件（`usage_update` 帧形不变）。
+
+### 23.7 边界（本批不做）与登记（判定条件）
+
+1. **不做账号 / 账单用量**（B3，需求边界）。
+2. **不改 CLI 的 usage 计算**（需求边界）：桌面只消费 `usage_update`。
+3. **不做跨会话历史统计**（需求边界）：会话累计只随聊天会话存活，新建聊天会话从 0 起。
+4. **成本不做**：§14-25。
+5. **拆分行 input / output 不做**：ACP 线上只有合计（`used`）；终端的拆分来自 TUI 自己的 `onUsage` 字段（`prompt_tokens` / `completion_tokens`），ACP 未携。
+6. **缓存命中 / 推理 token 不做**：同上，ACP 未携。
+7. **重放不带 usage、重连不清零**：`session/load` 重放不带 usage；`restart()` / release 后重新 attach 不清会话累计（随聊天会话存活，`thincoder_events.dart:45`）；新建聊天会话（新内核实例）从 0 起。判定条件：产品要求跨聊天会话延续累计（桌面重启后仍接续）⇒ CLI 侧给会话级累计帧或重放 usage（另立）。
+
+### 23.8 真机走查步骤
+
+1. 新建 thincoder 会话，发两轮消息（每轮含工具调用，触发多次 LLM 请求）。
+2. 每轮结束看 turn footer：出现「N tokens」（无 speed / cost）——N = 该轮请求的 `used` 之和。
+3. 打开上下文面板：上下文占用随最新 `usage_update` 变；「本会话累计」= 各回合 footer 之和。
+4. 同一会话在终端发两轮：**记起算点**（发前）与收尾（发后）的状态行 ↑prompt ↓completion，差值 == 桌面这两轮 footer 之和——逐回合 delta 对照（两进程各持自己的累计，不要求总量相等；口径 = CLI 上报值）。
+5. 切模型（上下文窗口变）⇒ 面板 window 随 `size` 变（今天形）；累计不跳。
+
+## 24. 模型切换后置应用（批 14；F5 具体化）
+
+> 回指：需求档 F21（F5 的模型面具体化）——回合在飞时切换不丢，回合结束自动应用；显示以 thincoder 回报为准，不乐观假报。
+> 一句结论：**客户端后置应用**。回合在飞（`_turn != null`）/ 暂存自动轮在 / 上一条写未答时点模型只记目标（last-wins；回合在飞时等待态可见）；回合收尾（`_endTurn`，且无暂存自动轮、无在飞写）在下一趟 prompt 之前重发 `session/set_config_option(model)`：成功 ⇒ 以回报换成新模型；失败 ⇒ 界面仍是旧模型 + 会话内一条可见 error。**CLI 零改**——入站 FIFO 是既有协议语义（`transport.mjs:13-19`），发送时机归客户端。
+
+**最近先例（对齐 ∥ 偏离及理由）**
+
+- 对齐 ①：显示只认回报（D20 / F5）——`model` 的 `selected` 读 `_events.selected('model')`（`thincoder_choices.dart:46-51`）；本批不改这条判据，等待目标只是附加状态。
+- 对齐 ②：写路径与失败留痕复用既有 `_config` 的请求形与 `appEvent` 留痕（`thincoder_choices.dart:119-139`）。
+- 对齐 ③：后置动作挂在 `_endTurn` 的收尾链——先例 = 批 7 的 `_drain()` 排水（§18.1）与批 8 的暂存自动轮（§19.2）；一处收尾覆盖完成 / 取消 / 错误三条结束路。
+- 对齐 ④：可见状态住既有模型 pill 的 label 位（`session_model_picker.dart:44-58`）与既有 `tooltip`——不新增控件 / 弹窗。
+- 偏离 ①：等待目标不显示成「已生效」——pill 主 label 仍是回报的模型（D20）。被否：把等待目标当 `selected`（失败要回滚，且等于先假装成功）。
+- 偏离 ②：不改 CLI 的豁免表——把 `model` 放行会让写落在在飞回合里、改变该回合用的模型，语义未定；客户端等收尾再发，FIFO 自然不拦。被否：把 `model` 加进 `isInboundExempt`（CLI 行为变更，且回合内切换另立）。
+
+**survey 证据**：外仓 `thincoder-cli/src/acp/transport.mjs:13-19` / `:31-40` / `:91-126`——入站 FIFO 串行；豁免集 = `session/cancel` / `session/close` / `session/list` + `configId === "autoApprove"`；注释逐字「Every other configId (model / mode / thinkingLevel / …) stays queued」。
+`handlers-session.mjs:425-452`：handler 同步、纯内存（`applyConfigOption`）；成功既回全量 `configOptions`，又派发 `config_option_update`（`:447-450`）。
+本仓 `thincoder_protocol.dart:59-119`：连接缺省超时 60s；`session/prompt` 走 `noTimeout`，其余请求照缺省。
+实测（2026-10-19 03:09，`events.log`）：回合在飞时点模型 ⇒ 写排在 prompt 之后、超 60s 被桌面丢弃（`-32603 … got no answer`）；1.1s 后迟到应答到（`an answer to no request of ours: id c6`）——CLI 在回合收尾时确实执行了那次写，同拍 `config_option_update` 也已发出；桌面显示会因此自愈，但切换时机不受用户掌握，超时窗口内也无任何可见状态。
+ACP v1 schema：`session/set_config_option` 请求 `{sessionId, configId, value}`、响应 `{configOptions}`；`ConfigOptionUpdate` = 全量 `configOptions`（§3.4 已列）。
+外仓设计档 `thincoder/docs/cli/design/ACP-CLIENT.md` §5.3（`:302-313` configOption 映射：`model` = 运行期清单投影 + last-write-wins 于内部状态）与 §3.1（`:92-103` FIFO 豁免判据 = 只有 `autoApprove`、其余 configId 留队）——相关且同向：本批的 last-wins / 后置应用跟 §5.3 同口径；§3.1 确认 `model` 不在豁免内（与 §24 的「CLI 零改」一致）。
+结论：症结在发送时机，不在协议；客户端在回合收尾后重发 = 队列空闲时的一次普通写。
+
+### 24.1 状态机与触发点
+
+```text
+点模型（ThincoderKernel.model.select）
+  ▼ _selectModelOf(kernel, id)
+  ├─ 同值且无待应用目标（id == selected('model') && _modelTarget == null）
+  │     ⇒ 直接返回（不置目标、不发；旧 CLI 单项清单点它 = 这条）
+  ├─ 等待态下点已生效模型（_modelDeferred && id == selected('model')）
+  │     ⇒ _modelTarget = null + _modelDeferred = false + emitInfoChanged（取消等待，不发）
+  ├─ 回合在飞（_turn != null）∥ 暂存自动轮在（_pendingAuto != null）
+  │     ⇒ _modelTarget = id + _modelDeferred = true（last-wins）+ emitInfoChanged（pill 后缀可见；不发）
+  ├─ 发送中（_modelSending）
+  │     ⇒ _modelTarget = id（last-wins；不新发——在飞那条应答回来后再发）
+  └─ 空闲
+        ⇒ _modelTarget = id; _modelDeferred = false; _modelSending = true
+              ▼ session/set_config_option {sessionId, configId:"model", value:id}
+              ├─ 应答（全量 configOptions）⇒ _events.optionsFrom(应答) ⇒ 新模型
+              ├─ 同拍 config_option_update ⇒ _events.optionsFrom（同源，幂等）
+              └─ 错误 ∥ 60s 超时 ⇒ NoticeItem(error)（旧模型保持）+ appEvent 一行
+              ▼ 应答 / 错误落地：_modelSending = false；目标已换（_modelTarget != 刚落地的值）⇒ 再发一次（last-wins）
+```
+
+| 态 | 进入 | `_modelTarget` | `_modelDeferred` | pill |
+|---|---|---|---|---|
+| 空闲 | 初始 / 成功 / 失败收束 / 同值早退 / `dispose` / `_teardown` | null | false | 回报的模型 |
+| 等待回合 | 回合在飞或暂存自动轮在时点模型（再点覆盖；点已生效模型 = 取消） | 目标 id | true | 主 label + 「回合结束后切换到 <目标>」 |
+| 发送中 | 空闲点选 ∥ 回合收尾触发 ∥ 发送中再点（只记目标） | 目标 id（到应答） | false | 主 label（应答到即换） |
+
+触发点：
+
+1. **回合收尾**：`_endTurn`（`thincoder_kernel.dart:745-780`）在 `_pendingAuto` 分支之前（`:768`；pump 自带 `_pendingAuto != null` 守卫，行为等价）、`_drain()` 之前（`:778`）调 `_pumpModelOf`（`_modelDeferred = false`、`_modelSending = true`）。线的顺序 = CLI 的入站顺序：配置行先写、下一趟 prompt 后写 ⇒ 下一回合起就用新模型。
+2. **空闲点选**：直接走同一 pump（今天的行为，只是同一条路径）。
+3. **应答落地时目标已换**：再发一次（last-wins 的兑现点；发送中再点就靠这条兑现）。
+
+- 发送前置判据：`_turn == null && _pendingAuto == null && !_modelSending && !_releaseWanted`；不满足 ⇒ 只记目标（不新发）。`_pendingAuto` 非空时 `_endTurn` 先起自动轮、本轮不发；自动轮收尾再走同一触发。视图离开（`_releaseWanted`，`release()` 置位）⇒ 不补发：目标随收尾的 `_teardown` 清，与 §24.7-4 同口径（`thincoder_choices.dart:82-83`）。
+- 发送位一次只有一条：`_modelSending` 在写发出时置真、应答 / 错误落地时置假。发送中再点只改 `_modelTarget`，由应答落地后的 last-wins 兑现（不叠第二条写；§24.6 T101②）。
+- 同值早退：`id == _events.selected('model')` 且 `_modelTarget == null` ⇒ 不置目标、不发（旧 CLI 单项清单点当前项 = 这条；§24.6 T105）。
+- 等待态下点**已生效**的模型（`_modelDeferred && id == selected('model')`）⇒ 清目标、不发（取消等待；`_Choice` 对 model 用 `always` 放开「同值不回调」的短路，让这次点击到达本判据）。
+- 错误落地：`_modelSending = false`；清目标（含发送中记下的后点目标）+ 一条 error；不自动重试 ⇒ 后点目标要再生效须用户再点（D98 同口径）。
+- 会话不在（`_connection == null || _slot == null`）⇒ 清目标、不发（今天 `_config` 的静默返回；等待态不留在无会话处）。
+- `_teardown()` / `dispose()` ⇒ 清 `_modelTarget` / `_modelDeferred` / `_modelSending`（会话切换 / 关窗；§24.7-4）。
+- 应答落地前校验连接身份（`identical(connection, _connection)`）：teardown 后到的应答不落状态、不发 error。
+
+### 24.2 契约
+
+```dart
+/// lib/kernel/agent_kernel.dart：选模型时回合在飞、切换留到回合结束的内核。
+abstract interface class DefersModelSwitch {
+  /// 回合在飞时点下的模型，尚未生效；null = 无等待。
+  String? get pendingModel;
+}
+```
+
+- `ThincoderKernel` 增 `implements DefersModelSwitch`；getter = `_modelDeferred ? _modelTarget : null`（发送中不显示等待标记；应答到即按回报换模型）。
+- 宿主投影（`lib/chat/chat_session.dart`）：
+
+```dart
+/// 回合在飞时点下、等回合结束生效的模型；null = 无。
+String? get pendingModel => switch (_kernel) {
+  final DefersModelSwitch kernel => kernel.pendingModel,
+  _ => null,
+};
+```
+
+- 可见文案（`lib/chat/composer/session_model_picker.dart`）：pill 的 label = 既有 `_label(...)` + `' · '` + `l10n.modelsSwitchPending(targetLabel)`；tooltip 有等待态时追加同句。目标 label 按 id 在 `model.options` 里取，取不到回落 id。
+- 新 l10n 键（两源档 + 生成档）：
+
+| 键 | en | zh |
+|---|---|---|
+| `modelsSwitchPending`（占位 `{model}`） | `Switches to {model} when this turn ends` | `回合结束后切换到 {model}` |
+
+- 超时 = 连接缺省 **60s**（不新设常量）。判据：发送点只在「桌面无在飞回合、无暂存自动轮、无在飞写」（§24.1），CLI 入站链此时空闲、handler 同步纯内存（`handlers-session.mjs:426-451`）⇒ 正常一趟往返即答（毫秒级）；60s 只兜病理竞态（CLI 侧自动轮在帧与写之间起跑 ∥ 子代理消化轮占队列）。
+  兜底：超时 / 错误 ⇒ 目标清空 + 一条 error notice；显示保持最后一次回报（从未乐观改过，无可回滚）。若 CLI 迟到执行并发出 `config_option_update`，通知照常应用（`thincoder_protocol.dart:124-134` 按方法分流、不配对我方请求 id）⇒ 显示自愈；error 文案只说「未确认」，不说「未生效」。**不自动重试**（同一竞态下重试只会再等一次 60s；用户可再点）。
+- 失败文案 = 内核口英文、带原始错误（形同 `thincoder stopped unexpectedly`；登记 §14-28）；等待态文案是宿主文案 ⇒ 走 l10n。
+
+### 24.3 受影响文件清单（E2 增量；行数 = 2026-10-19 实测）
+
+| # | 坐标 | 改动 | 增量 |
+|---|---|---|---|
+| ① | `lib/kernel/thincoder/thincoder_kernel.dart`（1091） | `implements DefersModelSwitch` + `pendingModel` getter；字段 `_modelTarget` / `_modelDeferred` / `_modelSending`；`model` 委托改 `_selectModelOf`；`_endTurn` 触发一行；`dispose` / `_teardown` 各清三字段 | ≤ +24（⇒ ≤1115；§21.3 预算 ≤1148，余量 33） |
+| ② | `lib/kernel/thincoder/thincoder_choices.dart`（203） | `_Choice` 加 `always`（model 用）；`_modelOf.select` 改 `_selectModelOf`；新增 `_selectModelOf` / `_pumpModelOf`（状态机 + 同值早退 + 发送位 + last-wins 重发） | ≤ +70（⇒ ≤273；实交 273 = +70，来源 = 状态机 / pump / `always`；<500，不立缝） |
+| ③ | `lib/kernel/agent_kernel.dart`（472） | 新增 `DefersModelSwitch` 接口（文档 + getter） | ≤ +10（⇒ ≤482） |
+| ④ | `lib/chat/chat_session.dart`（1215） | `pendingModel` 投影（switch on interface） | ≤ +8（⇒ ≤1223；>800 名单，行级） |
+| ⑤ | `lib/chat/composer/session_model_picker.dart`（170） | label 后缀 + tooltip 追加 + 目标 label 查找 | ≤ +18（⇒ ≤188） |
+| ⑥ | `lib/l10n/app_en.arb`（7133）· `app_zh.arb`（2748） | 1 键 `modelsSwitchPending`（en 带 `@` 元数据与占位声明；zh 只值） | en +7 / zh +1 |
+| ⑦ | `lib/l10n/app_localizations.dart`（16563）· `_en`（10120）· `_zh`（9569） | 生成档：抽象 getter + 两实现；无 SDK ⇒ ARB 与生成档同拍手改、保持 `test/l10n_test.dart` 绿，SDK 就位轮 `flutter gen-l10n` 重产（§18.8；登记 §14-14 / §14-24 / §14-27） | 各 +3 |
+| ⑧ | `test/kernel/thincoder_kernel_test.dart`（3644） | T100–T105（§24.6）；mock 零改（既有 `hold` / `configError` / `models` 够用） | ≤ +215（⇒ ≤3859；>800 名单，只加用例） |
+| ⑨ | `test/chat/pending_model_test.dart`（新增） | T106 宿主投影（`ChatSession.pendingModel`）：假内核 `implements AgentKernel, DefersModelSwitch` | ~ +60（新档，<300） |
+
+> 行数复核口径：① 的 1091 为本批（批 14）编制日起点（2026-10-19 实测），与 §5.2 体量行的现值 1121 差 30 行（两批各记了当时的实测）——**实施首轮 `wc -l` 复核，以复核值为准**。
+
+- **零改动**：`thincoder_protocol.dart` · `thincoder_events.dart`（`optionsFrom` / `selected` 已是通用读面）· `thincoder_mock.dart` · Claude / Codex 内核 · 固件（无新帧）· `thincoder/`（CLI 零改）。
+- **体量**：`thincoder_choices.dart`（203 → ≤273）· `agent_kernel.dart`（472 → ≤482）· `session_model_picker.dart`（170 → ≤188）均 <500；`thincoder_kernel.dart` 在 >800 名单（§5.2 体量立场 = 不续拆），本批 +≤24 后 ≤1115 < 1148；`chat_session.dart` / 测试档在 >800 名单，本批只行级新增 / 加用例，不动结构。
+
+### 24.4 关键决策记录（含被否）
+
+| # | 决策 | 理由 / 被否 |
+|---|---|---|
+| D95 | 客户端后置应用；CLI 的 FIFO 与豁免表零改 | 回合在飞时写会排在 prompt 之后（`transport.mjs:91-126`），没有有界应答；桌面知道回合何时结束（`_endTurn` 覆盖三条结束路）⇒ 时机是本端的事。被否：把 `model` 加进豁免表（回合内切换的模型归属未定，且改 CLI 违 B1 默认）；被否：放大 60s（回合时长无上界，切换落在不确定时刻且仍无可见状态） |
+| D96 | 触发 = `_endTurn` 收尾、`_pendingAuto == null`、`_modelSending == false`、`_drain()` 之前 | 线的顺序 = CLI 的入站顺序：配置先于下一趟 prompt ⇒ 下一回合就用新模型；有暂存自动轮时先让它收尾，否则配置排在它后面。被否：`_drain()` 之后发（配置排在下一趟 prompt 后，切换推迟到再下一回合）；被否：起下一回合时发（同一问题） |
+| D97 | 可见状态 = 模型 pill 的 label 后缀 + tooltip；等待目标不进 `selected` | 显示只认回报（F5 / D20）：把目标当已生效，失败就得回滚，且等于先假装成功。pill 是用户点选发生处，状态放这里不新增控件（§24.9）。被否：菜单里给等待目标打勾（假报）；被否：弹窗 / toast（本应用没有这种面，且打断无关） |
+| D98 | 重发沿用连接缺省 60s；失败 = error notice + 保持旧模型；不自动重试 | 正常路径队列空闲、handler 同步纯内存 ⇒ 毫秒级应答；60s 只兜病理竞态。超时后若 CLI 迟到执行，`config_option_update` 让显示自愈 ⇒ 文案只说「未确认」。自动重试在同一竞态下只会再等一次 60s。被否：缩短到 10s（新常量无证据，病理竞态下更易误报）；被否：`noTimeout`（写卡住会永久占住发送位） |
+| D99 | 状态住内核（`_modelTarget` / `_modelDeferred` / `_modelSending`），宿主只读投影 | 「回合在飞 / 暂存自动轮 / 连接在」全在内核；宿主按 `isStreaming` 轮询再补发会与自动轮、队列、teardown 竞态。被否：宿主定时器（重复判定 + 时序不可测） |
+
+### 24.5 验收对照（回指需求档 F21 + 本批三条）
+
+| 需求条目 | 本档落点 | 判据（机检 / 走查） |
+|---|---|---|
+| 回合在飞时点模型 ⇒ 记下目标，回合收尾自动重发并生效 | §24.1 / §24.2 | T100：在飞期间零 `set_config_option`；`pendingModel == 目标`；收尾后恰 1 条，`params = {sessionId, configId:"model", value:目标}`；`kernel.model.selected == 目标` |
+| 等待期间二次改选 ⇒ last-wins | §24.1 触发点 3 | T101：① 等待态连点两个模型 ⇒ 收尾后只 1 条（后点目标）；② 发送中再点另一个 ⇒ 首条应答落地前零新增写、落地后恰再 1 条（value = 后点） |
+| 失败 / 被丢弃不得假装成功：显示仍是旧模型 + 一条可见错误 | §24.1 失败面 / D98 | T102：`configError` ⇒ `selected` 仍是旧模型；恰 1 条 `NoticeItem(error)`；`pendingModel == null`；health ready |
+| （派生）会话切换 / 关窗 ⇒ 清等待，不把 A 的模型设到 B | §24.1 / §24.7-4 | T103：① `dispose()` ⇒ `pendingModel == null`、放行后零写；② 视图离开 ⇒ `kernel.release()` ⇒ 收尾 teardown ⇒ 零补发、无 error |
+| （派生）可见状态 = pill 后缀「回合结束后切换到 <目标>」 | §24.2 / §24.9 | 走查 2（label + tooltip）；T104 键面哨兵（两源档含 `modelsSwitchPending`）；T106 宿主投影（等待态非空 / 收尾归空 / 非接口内核恒 null） |
+| （派生）旧 CLI 兼容：行为不变 | §24.1 同值早退 | T105：单项清单（`models` 未给 ⇒ 只有当前项）点它 ⇒ `requests('session/set_config_option')` 为空、无 notice；有清单的旧 CLI 走同一路径（不加版本门） |
+
+### 24.6 用例表（T100–T106；T100–T105 = `test/kernel/thincoder_kernel_test.dart`，T106 = `test/chat/pending_model_test.dart`）
+
+T99 已被 §23.1 预留给用量归属的补项（自动轮 ∥ 撤暂存轮），本批从 T100 起编号。
+
+| # | 场景 | 输入 | 期望 |
+|---|---|---|---|
+| T100 | 回合在飞时点模型 ⇒ 收尾重发 | `ThincoderMock(models: ['anthropic:claude-sonnet-5','b'])`；`hold = Completer()`；`send('go')`；点 `b` | 在飞期间 `requests('session/set_config_option')` 为空；`kernel.pendingModel == 'b'`；`kernel.model.selected` 仍是缺省模型；`agent.release()` 后 settle ⇒ 恰 1 条写，`params == {sessionId:'1', configId:'model', value:'b'}`；`selected == 'b'`；`pendingModel == null` |
+| T101 | last-wins（① 等待态改选 ② 发送中改选） | ① `models: [缺省,'b','c']`；在飞点 `b` 再点 `c`；`agent.release()` 收尾。② 同清单；空闲点 `b`（写 1 在飞）⇒ 同拍再点 `c` | ① 收尾后只 1 条写，value = `'c'`；`selected == 'c'`。② 首条应答落地前仍只 1 条写（value `'b'`）；落地后恰再 1 条（value `'c'`），总计 2 条；`selected == 'c'`；`pendingModel == null` |
+| T102 | 失败回显 + 可见错误 | `ThincoderMock(models: [缺省,'b'], configError: true)`；在飞点 `b`；收尾 | `selected` 仍是缺省；`pendingModel == null`；恰 1 条 error `NoticeItem`；health ready |
+| T103 | 会话离开清等待 | ① 在飞点 `b` ⇒ `kernel.dispose()` ⇒ `agent.release()`。② 在飞点 `b` ⇒ `kernel.release()`（视图离开）⇒ `agent.release()` 放行回合 ⇒ 一个 macrotask | ① `pendingModel == null`；`requests('session/set_config_option')` 为空（放行后也不补发）。② `pendingModel == null`；`requests('session/set_config_option')` 为空；无 error `NoticeItem`（丢弃时可见面为零，§24.7-4） |
+| T104 | l10n 键在两源档 | 读 `lib/l10n/app_en.arb` / `app_zh.arb` | 两档都含 `"modelsSwitchPending"`；zh 值含 `{model}`（形同 T82 的 ARB 直读） |
+| T105 | 同值点击零写（旧 CLI 单项清单） | `ThincoderMock()`（`models` 未给 ⇒ 清单只有当前项 `anthropic:claude-sonnet-5`）⇒ 点它 | `requests('session/set_config_option')` 为空；`pendingModel == null`；无 `NoticeItem` |
+| T106 | 宿主投影（`ChatSession.pendingModel`） | 测试档自建 descriptor：假内核 `implements AgentKernel, DefersModelSwitch`，`pendingModel` 先 `'b'` 再 `null`；另一内核不实现该接口 | 等待态 ⇒ `session.pendingModel == 'b'`；归空（收尾）⇒ `null`；非 `DefersModelSwitch` ⇒ 恒 `null`（负向锁）。投影只测投影——内核状态机 = T100–T103 |
+
+- 不加固件：线形是既有 `session/set_config_option`，无新帧；既有固件保持绿 = 回归哨兵。
+- 断言面：`_Session` 直驱内核（`events` / `items<NoticeItem>()` / `agent.requests(...)` / `kernel.pendingModel`），与 T51 / T63 同手段；T106 用 `ChatSession(kernel: descriptor)` + 假内核（形同 `turn_marks_test.dart` 的 `_Kernel`）。
+
+### 24.7 边界（本批不做）与登记（判定条件）
+
+1. **不改 CLI**：`transport.mjs` 的 FIFO / 豁免表零改；`thincoder/` 零改动（B1 默认）。
+2. **只对 thincoder 内核的 `model`**：Claude 的 `ConfirmsModelSwitch`（切 provider 重启对话）语义不变；不扩大到 provider 切换后置。
+3. **不做回合内生效**：在飞回合用旧模型跑完；目标从收尾后的下一回合起生效。
+4. **不持久化等待态**：`dispose()` / `_teardown()` 即清；关窗 / 切会话 / 进程重启后不补发（不得把 A 会话的模型设到 B）。
+   视图离开的退径同这条：视图离开 ⇒ `release()`（`thincoder_kernel.dart:493-504` 置 `_releaseWanted`）⇒ 回合收尾后一个 macrotask ⇒ `_closeSession()` + `_teardown()`（`:518-534`；`_canClose`（`:508-512`）不计等待目标）⇒ 等待目标随 `_teardown` 清。
+   若收尾那次写已在飞，其应答被连接身份校验丢弃（§24.1 末条）⇒ **用户可见面为零**（无 error、无 notice；pill 随视图一起消失）。
+   不把 `_canClose` 绑到等待目标：写卡住时会把关窗拖到 60s 超时，与「等待态不持久」相抵。判定条件：视图离开后重开同一会话仍见等待态 ⇒ 该路径没清。
+5. **不自动重试、不缩短超时**：见 D98。判定条件：现场见到收尾后一次写仍 60s 未答 ⇒ 取 `events.log` 与 CLI 侧 `agent.busy` 时序；确属队列竞态 ⇒ 评估收尾后延迟一个 macrotask 再发（本批不做）。
+6. **不做「模型不支持视觉」的桌面判据**：非视觉模型的降级在 CLI（`stripImagesForTextModel`，§22.7-5）；本批只保证切换不丢。
+7. **不改 `mode` / `thinking` 的写路径**：同一条 FIFO 语义同样适用，但本批只修用户报告的那一项。判定条件：现场见到 `mode` / `thinking` 在飞时切换被丢 ⇒ 按 §24.1 同一状态机扩 configId（另立）。
+
+### 24.8 真机走查步骤
+
+1. thincoder 会话，选一个**能看图**的模型（F19 原生链路已在）；发一条会跑一阵的消息（带工具调用 ∥ 长任务）。
+2. 回合在飞时点另一个模型 ⇒ pill 仍显示旧模型 + 「回合结束后切换到 <目标>」；tooltip 同句；菜单里旧模型仍是勾选态；无弹窗。
+3. 回合收尾 ⇒ pill 换成新模型；`events.log` 无 `set_config_option(model) failed`；此后第一条 `session/prompt` 已用新模型（终端同槽 `/model` 同值）。
+4. 在飞时连点两个模型 ⇒ 只有后点那个生效（日志一条写）。
+5. 切到视觉模型后发一张图 ⇒ 模型能看图（判据同 §22.8）；若切到非视觉模型发图 ⇒ CLI 的 `[image omitted — …]` 表现，不是「not support」崩溃。
+6. 旧 CLI（模型清单只有当前一项）⇒ 点它零写、零报错（同值早退）。
+7. 失败面不做真机（UI 构不出被拒的 model 值）；判据 = T102。
+
+### 24.9 UI / 交互决定（全部落地，无 open）
+
+- 位置 = 既有模型 pill（composer 左簇；plan 起始选择器同一组件）——不新增控件、不新增弹窗。
+- 等待态 = pill label 追加 ` · 回合结束后切换到 <目标>`；tooltip 追加同句（原 tooltip = 「选择模型 (⌘.)」）。
+- 主 label 仍是**已生效**模型（D20）；菜单勾选仍按回报（等待目标不勾选）。
+- 点已生效模型 = 取消等待（有等待态时后缀随即消失）；无等待时点它 = 零写零反馈（§24.1 同值早退）。
+- 失败 = 会话内既有 error notice（`NoticeRow` 的 error 样式），pill 回到旧模型；不弹窗、不 toast。
+- 非 thincoder 内核 / 无等待 ⇒ label 与 tooltip 逐字不变（负向锁：零字节注入）。
+- 文案走 l10n（`modelsSwitchPending`）；失败 notice 为内核口英文（登记 §14-28）。
 

@@ -19,7 +19,7 @@ typedef ThincoderConnector = Future<ThincoderTransport> Function(String cwd);
 /// again: nothing stays running between refreshes (D4). One call at a
 /// time: a refresh asks for each project, and a process each at once is
 /// what D6 refused.
-class ThincoderCatalog implements SessionCatalog {
+class ThincoderCatalog implements SessionCatalog, RenamesStoredSessions {
   ThincoderCatalog({ThincoderConnector? connect}) : _connect = connect ?? _start;
 
   final ThincoderConnector _connect;
@@ -62,6 +62,25 @@ class ThincoderCatalog implements SessionCatalog {
       } on ThincoderRpcError catch (error) {
         // One that is gone (or never was): nothing to do.
         if (error.code != -32602) rethrow;
+      } finally {
+        await brief.close();
+      }
+    });
+  }
+
+  @override
+  Future<void> rename(SessionRecord session, String title) {
+    final ref = ThincoderSessionRef.split(session.id);
+    // Not an id of ours: nothing to rename.
+    if (ref == null) return Future.value();
+    final (cwd, slot) = ref;
+    return _serial(() async {
+      final brief = await _open(cwd);
+      try {
+        await brief.connection.request('session/set_title', {
+          'sessionId': slot,
+          'title': title,
+        });
       } finally {
         await brief.close();
       }

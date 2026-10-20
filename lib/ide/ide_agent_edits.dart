@@ -13,6 +13,7 @@ import 'package:bao_editor/monaco/vs/editor/common/diff/range_mapping.dart';
 
 import '../chat/chat_models.dart' show FileChangeKind;
 import '../chat/chat_session.dart';
+import '../chat/panels/revert_dialog.dart';
 import '../chat/review/change_reviews.dart';
 import '../l10n/l10n.dart';
 import '../theme/app_theme.dart';
@@ -859,6 +860,9 @@ class IdeAgentEditActions extends StatelessWidget {
     final box = context.findRenderObject();
     if (box is! RenderBox || !box.hasSize) return;
     final undoAll = session.undoAllChanges;
+    // A kernel that plans its reverts is asked first, the plan shown (§9);
+    // the host's own undo stays for the others.
+    final revertTurn = session.canPlanRevert ? session.revertTurn : null;
     unawaited(
       showIdeMenu(
         context,
@@ -868,8 +872,10 @@ class IdeAgentEditActions extends StatelessWidget {
           IdeMenuAction(l10n.stripKeepAll, onSelected: session.keepAllChanges),
           IdeMenuAction(
             l10n.stripUndoAll,
-            enabled: undoAll != null,
-            onSelected: undoAll,
+            enabled: revertTurn != null || undoAll != null,
+            onSelected: revertTurn != null
+                ? () => unawaited(revertFilesFrom(context, session, revertTurn))
+                : undoAll,
           ),
         ],
       ),

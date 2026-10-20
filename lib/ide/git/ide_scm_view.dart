@@ -31,6 +31,7 @@
 // keeps no history of messages (`scm.viewPreviousCommit`).
 
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -65,8 +66,11 @@ import '../ide_panes.dart';
 import '../ide_spinning.dart';
 import '../save_copy.dart';
 import 'commit_message.dart';
+import 'git_autofetch.dart';
+import 'git_autofetch_engine.dart';
 import 'git_graph_painter.dart';
 import 'git_model.dart';
+import 'git_pull.dart';
 import 'git_repository.dart';
 import 'git_service.dart';
 import 'scm_host.dart';
@@ -884,10 +888,12 @@ class IdeScmViewState extends State<IdeScmView>
   /// with the keyboard.
   Future<void> commit() => _commit(repo: _inputRepository);
 
-  /// `git.fetch` (Git: Fetch): every remote of the repository shown.
+  /// `git.fetch` (Git: Fetch): the repository shown fetches and pulls its
+  /// upstream (§12.2/§12.3): the remote's commits come down, merged where
+  /// the branch diverged.
   Future<void> fetch() async {
     final git = _git;
-    if (git != null) await _run(git.fetch);
+    if (git != null) await _pullFromUpstream(git);
   }
 
   /// `git.fetchAll` (Git: Fetch From All Remotes).
@@ -2011,15 +2017,51 @@ class IdeScmViewState extends State<IdeScmView>
     }
   }
 
-  /// Git: Fetch From All Remotes (`git.fetchAll`): every remote of every
-  /// repository in the workspace.
+  /// Git: Fetch From All Remotes (`git.fetchAll`): every repository of the
+  /// workspace fetches and pulls its upstream (§12.3),
+  /// [IdeGitAutoFetch.workers] at a time; one failing leaves the others
+  /// alone, each failure told with its own name.
   Future<void> _fetchAll() async {
     final repositories = widget.host.repositories;
     if (repositories.isEmpty) {
       _report(const IdeGitException('No Git repositories to fetch from.'));
       return;
     }
-    await Future.wait([for (final (_, git) in repositories) _run(git.fetch)]);
+    var next = 0;
+    Future<void> worker() async {
+      while (next < repositories.length) {
+        final (_, git) = repositories[next++];
+        await _pullFromUpstream(git);
+      }
+    }
+
+    await Future.wait([
+      for (
+        var i = 0;
+        i < math.min(IdeGitAutoFetch.workers, repositories.length);
+        i++
+      )
+        worker(),
+    ]);
+  }
+
+  /// The Get action (fetch + merge, §12.2): a failure is told with the
+  /// repository's name and Git's own words; what the merge updated is read
+  /// again in the open files.
+  Future<void> _pullFromUpstream(IdeGitRepository git) async {
+    try {
+      final outcome = await git.pullFromUpstream(mode: IdeGitPullMode.merge);
+      if (outcome.updated.isNotEmpty) {
+        try {
+          await widget.host.reload(outcome.updated);
+        } catch (_) {
+          // The workspace could not read them again (it may be going): the
+          // files on disk are updated all the same.
+        }
+      }
+    } catch (error) {
+      _report('${p.basename(git.service.root)}: $error');
+    }
   }
 
   /// Refresh (the CHANGES pane's): reads the status of every shown
@@ -2083,7 +2125,7 @@ class IdeScmViewState extends State<IdeScmView>
         [
           IdeMenuAction(
             l10n.scmFetch,
-            onSelected: () => unawaited(_run(git.fetch)),
+            onSelected: () => unawaited(_pullFromUpstream(git)),
           ),
           // This repository's every remote, as its Fetch: not the others'.
           IdeMenuAction(
@@ -2167,6 +2209,8 @@ class IdeScmViewState extends State<IdeScmView>
     final key = 'repo:$root';
     final collapsed = widget.host.scmCollapsedRepositories.contains(root);
     final l10n = context.l10n;
+    final state = git.state;
+    final behind = state?.head.behind ?? 0;
     return IdeListRow(
       key: ValueKey(key),
       selected: _isSelected(key),
@@ -2183,7 +2227,7 @@ class IdeScmViewState extends State<IdeScmView>
       },
       onContextMenu: (position) =>
           unawaited(_repositoryMenu(git, position, null)),
-      tooltip: root,
+      tooltip: _repositoryTooltip(git),
       builder: (context, hovered) => LayoutBuilder(
         builder: (context, constraints) {
           // Narrow: the actions would overflow the header — they wait in its
@@ -2221,9 +2265,14 @@ class IdeScmViewState extends State<IdeScmView>
                           ),
                         ),
                       ),
-                      if (git.state case final state?)
+                      if (state != null)
                         if (_headLabel(state) case final label?)
-                          Flexible(child: _RepositoryBranch(label)),
+                          Flexible(
+                            child: _RepositoryBranch(
+                              label,
+                              behind: roomy ? 0 : behind,
+                            ),
+                          ),
                     ],
                   ),
                 ),
@@ -2234,9 +2283,21 @@ class IdeScmViewState extends State<IdeScmView>
                     onPressed: () => unawaited(_commit(repo: git)),
                   ),
                   _InlineAction(
+                    key: ValueKey('fetch:$root'),
                     icon: Codicons.repoFetch,
-                    tooltip: l10n.scmFetch,
-                    onPressed: () => unawaited(_run(git.fetch)),
+                    iconWidget: behind > 0 ? _fetchWithBehind(behind) : null,
+                    width: behind > 0
+                        ? _fetchWithBehindWidth(
+                            behind,
+                            MediaQuery.textScalerOf(context),
+                          )
+                        : null,
+                    tooltip: behind > 0
+                        ? '${l10n.scmFetchAndPull}\n${l10n.scmBehindCommits(behind)}'
+                        : l10n.scmFetchAndPull,
+                    onPressed: git.busy
+                        ? null
+                        : () => unawaited(_pullFromUpstream(git)),
                   ),
                   _InlineAction(
                     icon: Codicons.refresh,
@@ -2261,7 +2322,8 @@ class IdeScmViewState extends State<IdeScmView>
 
   /// The Git extension's `Repository.headLabel`: the branch, `*` when it
   /// has changes in the working tree, `+` staged ones, `!` conflicts; null
-  /// off a branch.
+  /// off a branch. The commits the branch is behind its upstream show as
+  /// the count inside the Get action (roomy) or after the name (narrow).
   static String? _headLabel(IdeGitState state) {
     final branch = state.head.branch;
     if (branch == null) return null;
@@ -2269,6 +2331,21 @@ class IdeScmViewState extends State<IdeScmView>
         '${state.group(IdeGitGroup.workingTree).isNotEmpty ? '*' : ''}'
         '${state.group(IdeGitGroup.staged).isNotEmpty ? '+' : ''}'
         '${state.group(IdeGitGroup.merge).isNotEmpty ? '!' : ''}';
+  }
+
+  /// A repository's header tooltip: its root, when its remote last came in,
+  /// and why the automatic fetch did not pull.
+  String _repositoryTooltip(IdeGitRepository git) {
+    final l10n = context.l10n;
+    final root = git.service.root;
+    final fetchedAt = git.lastFetchAt;
+    final issue = git.autoFetchIssue;
+    return [
+      root,
+      if (fetchedAt != null) l10n.gitLastFetched(ideGitFetchedAt(fetchedAt)),
+      if (issue != null)
+        ideGitAutoFetchTooltip(l10n, issue, repository: p.basename(root)),
+    ].join('\n');
   }
 
   /// [git]'s commit box under its header when several repositories show
@@ -2860,7 +2937,7 @@ class IdeScmViewState extends State<IdeScmView>
       ),
       const IdeMenuSeparator(),
       IdeMenuAction(
-        l10n.scmFetchFromAllRemotes,
+        l10n.scmFetchAndPullAll,
         onSelected: () => unawaited(_fetchAll()),
       ),
       IdeMenuAction(l10n.scmPull, onSelected: () => unawaited(_pull())),
@@ -3409,18 +3486,30 @@ class _Action {
 /// A row's inline action: a 16px icon with a 2px padding.
 class _InlineAction extends StatelessWidget {
   const _InlineAction({
+    super.key,
     required this.icon,
     required this.tooltip,
     required this.onPressed,
+    this.iconWidget,
+    this.width,
   });
 
   final IconData icon;
+
+  /// Drawn instead of [icon]: the Get action carries the commits it would
+  /// pull inside the button.
+  final Widget? iconWidget;
   final String tooltip;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
+
+  /// Wider than the icon alone (see [iconWidget]).
+  final double? width;
 
   @override
   Widget build(BuildContext context) => IdeActionButton(
     icon: icon,
+    iconWidget: iconWidget,
+    width: width,
     tooltip: tooltip,
     size: 20,
     onPressed: onPressed,
@@ -4068,9 +4157,13 @@ class _RenderReportHeight extends RenderProxyBox {
 /// branch icon and label, only as wide as they are, the label cut short
 /// when there is no room.
 class _RepositoryBranch extends StatelessWidget {
-  const _RepositoryBranch(this.branch);
+  const _RepositoryBranch(this.branch, {this.behind = 0});
 
   final String branch;
+
+  /// Shown after the name where the actions do not fit; the roomy header
+  /// carries it inside the Get action instead.
+  final int behind;
 
   @override
   Widget build(BuildContext context) {
@@ -4091,8 +4184,75 @@ class _RepositoryBranch extends StatelessWidget {
               style: TextStyle(fontSize: 12, color: color),
             ),
           ),
+          if (behind > 0) _RepositoryBehind(behind),
         ],
       ),
     );
   }
+}
+
+/// The Get action's face, as measured: its icon, the gap after it, and the
+/// room the button leaves on each side of them.
+const double _fetchFaceIcon = 16;
+const double _fetchFaceGap = 2;
+const double _fetchFaceSlack = 4;
+
+/// The Get action's face with the commits it would pull: its icon and the
+/// count in one button (the count is not a second arrow beside it).
+Widget _fetchWithBehind(int behind) => Row(
+  mainAxisSize: MainAxisSize.min,
+  children: [
+    Icon(
+      Codicons.repoFetch,
+      size: _fetchFaceIcon,
+      color: IdeActionButton.foreground,
+    ),
+    const SizedBox(width: _fetchFaceGap),
+    Text(
+      '$behind',
+      style: TextStyle(
+        fontSize: 11,
+        height: 1,
+        color: IdeActionButton.foreground,
+      ),
+    ),
+  ],
+);
+
+/// [_fetchWithBehind]'s width, measured the way the digits are drawn: the
+/// icon, the gap, the digits at [textScaler], and the button's room on each
+/// side (the button's own box has no padding to add).
+double _fetchWithBehindWidth(int behind, TextScaler textScaler) {
+  final painter = TextPainter(
+    text: TextSpan(
+      text: '$behind',
+      style: const TextStyle(fontSize: 11, height: 1),
+    ),
+    textDirection: TextDirection.ltr,
+    textScaler: textScaler,
+  )..layout();
+  return _fetchFaceIcon + _fetchFaceGap + painter.width + _fetchFaceSlack * 2;
+}
+
+/// The commits a repository's branch is behind its upstream: `↓N` after the
+/// branch name, where the actions do not fit.
+class _RepositoryBehind extends StatelessWidget {
+  const _RepositoryBehind(this.behind);
+
+  final int behind;
+
+  @override
+  Widget build(BuildContext context) => IdeHover(
+    message: context.l10n.scmBehindCommits(behind),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: Text(
+        '↓$behind',
+        style: TextStyle(
+          fontSize: 12,
+          color: themeColors['descriptionForeground'],
+        ),
+      ),
+    ),
+  );
 }

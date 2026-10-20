@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+import 'package:path/path.dart' as p;
+
 /// UI-only view models for the conversation history.
 sealed class ChatItem {
   const ChatItem();
@@ -12,6 +14,7 @@ class UserMessageItem extends ChatItem {
     required this.text,
     this.queued = false,
     this.images = const [],
+    this.contexts = const [],
     this.worked,
     this.usage,
   });
@@ -20,6 +23,9 @@ class UserMessageItem extends ChatItem {
 
   /// Pictures sent with it (screenshots, mockups…).
   final List<ImageAttachment> images;
+
+  /// The editor's context sent with it: shown as the message's chips.
+  final List<EditorContext> contexts;
 
   /// Sent while the agent was busy: waits for its turn, and can be taken
   /// back until then.
@@ -37,9 +43,91 @@ class UserMessageItem extends ChatItem {
         text: text,
         queued: queued,
         images: images,
+        contexts: contexts,
         worked: worked ?? this.worked,
         usage: usage ?? this.usage,
       );
+}
+
+/// The file open in the editor beside a conversation, as a message is sent:
+/// its path, the cursor's line and what is selected.
+class EditorContext {
+  const EditorContext(
+    this.path, {
+    this.line,
+    this.selectedLines,
+    this.selectedText,
+  });
+
+  /// The most of [selectedText] the agent is told: a selection of a whole
+  /// long file would weigh on every message after.
+  static const maxSelectedText = 10000;
+
+  /// Where the file is, absolute.
+  final String path;
+
+  /// The cursor's line, from 1; null with a file open but no cursor (the
+  /// editor's state not up, a selection that is not valid, a media
+  /// document).
+  final int? line;
+
+  /// The first and last lines selected, from 1, where something is.
+  final (int, int)? selectedLines;
+
+  /// The text selected, where something is.
+  final String? selectedText;
+
+  /// The file's name, for the chip the message shows.
+  String get name => p.basename(path);
+
+  /// [path] absolute and normalized: one file is one context a turn.
+  String get dedupeKey => p.normalize(p.absolute(path));
+
+  /// What Claude Code is told of it: the selection where there is one, the
+  /// cursor line where there is no selection, the path alone otherwise.
+  String get note {
+    final opened = switch ((line, _lines)) {
+      (_, final lines?) => 'The user selected $lines of $path in the editor',
+      (final line?, null) =>
+        'The user has $path open in the editor, the cursor on line $line',
+      _ => 'The user has $path open in the editor',
+    };
+    return _reminder(opened, _selectedText());
+  }
+
+  /// What thincoder is told of it: the cursor's line with a selection too;
+  /// with no cursor, the path alone.
+  String get editorNote {
+    if (line == null) {
+      return _reminder('The user has $path open in the editor', '. ');
+    }
+    final opened = switch (_lines) {
+      final lines? =>
+        'The user has $path open in the editor, the cursor on line $line; '
+            'the user selected $lines of $path in the editor',
+      null => 'The user has $path open in the editor, the cursor on line $line',
+    };
+    return _reminder(opened, _lines == null ? '. ' : _selectedText());
+  }
+
+  String? get _lines => switch (selectedLines) {
+    (final first, final last) when first == last => 'line $first',
+    (final first, final last) => 'lines $first-$last',
+    null => null,
+  };
+
+  String _selectedText() => switch (selectedText) {
+    final text? when text.length > maxSelectedText =>
+      ':\n${text.substring(0, maxSelectedText)}\n'
+          '[${text.length - maxSelectedText} more characters selected, '
+          'not shown: read the file for them]\n\n',
+    final text? when text.isNotEmpty => ':\n$text\n\n',
+    _ => '. ',
+  };
+
+  static String _reminder(String opened, String selected) =>
+      '<system-reminder>$opened$selected'
+      'This may or may not be related to the current task.</system-reminder>';
 }
 
 /// What a turn spent, as its kernel reported at its end.
@@ -47,6 +135,7 @@ class TurnUsage {
   const TurnUsage({
     this.inputTokens,
     this.outputTokens,
+    this.spentTokens,
     this.tokensPerSecond,
     this.costUsd,
   });
@@ -58,16 +147,20 @@ class TurnUsage {
   /// Tokens it wrote, all its requests together.
   final int? outputTokens;
 
+  /// Tokens it spent in all, when the kernel reports only the sum.
+  final int? spentTokens;
+
   /// How fast it wrote, while it did.
   final double? tokensPerSecond;
 
   /// What the turn cost, in dollars.
   final double? costUsd;
 
-  /// Read and written, when either is known.
-  int? get totalTokens => inputTokens == null && outputTokens == null
-      ? null
-      : (inputTokens ?? 0) + (outputTokens ?? 0);
+  /// Read and written, when either is known; else the sum the kernel gave.
+  int? get totalTokens => spentTokens ??
+      (inputTokens == null && outputTokens == null
+          ? null
+          : (inputTokens ?? 0) + (outputTokens ?? 0));
 }
 
 /// One turn, as the folds see it: its id, where its first item is, the

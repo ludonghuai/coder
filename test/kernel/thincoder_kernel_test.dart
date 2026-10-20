@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -8,13 +9,21 @@ import 'package:path/path.dart' as p;
 
 import 'package:baocode/browser/browser_steps.dart';
 import 'package:baocode/chat/chat_models.dart';
+import 'package:baocode/chat/chat_session.dart';
+import 'package:baocode/chat/editor_context_setting.dart';
+import 'package:baocode/chat/open_editor.dart';
 import 'package:baocode/host_tools/host_mcp_server.dart';
 import 'package:baocode/host_tools/host_tools.dart';
+import 'package:baocode/ide/file_service.dart';
+import 'package:baocode/ide/ide_kernel_files.dart';
+import 'package:baocode/ide/ide_workspace.dart';
 import 'package:baocode/kernel/agent_kernel.dart';
 import 'package:baocode/kernel/kernel_event.dart';
 import 'package:baocode/kernel/kernel_registry.dart';
 import 'package:baocode/kernel/kernel_types.dart';
 import 'package:baocode/kernel/mock/mock_kernels.dart';
+import 'package:baocode/kernel/thincoder/thincoder_catalog.dart';
+import 'package:baocode/kernel/thincoder/thincoder_files.dart';
 import 'package:baocode/kernel/thincoder/thincoder_options.dart';
 import 'package:baocode/kernel/thincoder/thincoder_kernel.dart';
 import 'package:baocode/kernel/thincoder/thincoder_locator.dart';
@@ -41,7 +50,7 @@ class _Session {
     KernelContext context = const KernelContext(cwd: '/project'),
     ThincoderMock Function()? make,
     ThincoderLauncher? launch,
-  }) : _make = make ?? ThincoderMock.new {
+  }) : _make = make ?? (() => ThincoderMock(serialInbound: true)) {
     kernel = ThincoderKernel(
       _descriptor,
       context,
@@ -76,8 +85,15 @@ class _Session {
     String id = 'turn-1',
     List<ImageAttachment> images = const [],
     List<String> notes = const [],
+    List<EditorContext> contexts = const [],
   }) => kernel.send(
-    KernelTurn(id: id, text: text, images: images, notes: notes),
+    KernelTurn(
+      id: id,
+      text: text,
+      images: images,
+      notes: notes,
+      contexts: contexts,
+    ),
   );
 
   void dispose() {
@@ -303,7 +319,10 @@ void main() {
       expect(s.kernel, isNot(isA<RunsBackgroundTasks>()));
       expect(s.kernel, isA<QueuesMessages>());
       expect(s.kernel, isNot(isA<RewindsConversation>()));
-      expect(s.kernel, isNot(isA<RenamesSession>()));
+      expect(s.kernel, isA<RenamesSession>());
+      expect(s.kernel, isA<PlansReverts>());
+      expect(s.kernel, isA<GeneratesTitles>());
+      expect(s.kernel, isA<DefersRename>());
     });
 
     test('a turn streams a thought, text, a tool card and the usage', () async {
@@ -318,6 +337,7 @@ void main() {
 
       expect(s.agent.requests('session/prompt').single['params'], {
         'sessionId': '1',
+        'turnId': 'turn-1',
         'prompt': [
           {'type': 'text', 'text': 'hi'},
         ],
@@ -434,8 +454,8 @@ void main() {
         ..push({
           'jsonrpc': '2.0',
           'id': 'rpc-9',
-          'method': 'fs/read_text_file',
-          'params': {'sessionId': '1', 'path': '/project/a.dart'},
+          'method': 'terminal/create',
+          'params': {'sessionId': '1'},
         });
       await settle();
 
@@ -668,6 +688,7 @@ void main() {
       await settle();
       expect(s.agent.requests('session/prompt').single['params'], {
         'sessionId': '1',
+        'turnId': 'turn-1',
         'prompt': [
           {'type': 'text', 'text': 'hi'},
         ],
@@ -1283,24 +1304,74 @@ void main() {
       await s.kernel.stopped;
     });
 
-    test('a turn takes the notes with it, apart from the message', () async {
+    test('a turn carries the editor context, not the notes (D68)', () async {
       final s = _Session();
       addTearDown(s.dispose);
       s.kernel.prepare();
       await settle();
-      s.send('look', notes: const ['The user has a.dart open']);
+      s.send(
+        'look',
+        notes: const ['a note the kernel no longer carries'],
+        contexts: const [EditorContext('/p/a.dart', line: 3)],
+      );
       await s.agent.finished.future;
       await settle();
 
       final params = s.agent.requests('session/prompt').single['params'] as Map;
-      expect((params['prompt'] as List).single, {
-        'type': 'text',
-        'text': 'look\n\nThe user has a.dart open',
-      });
-      expect(
-        s.items<UserMessageItem>().single.text,
-        'look\n\nThe user has a.dart open',
+      final text = ((params['prompt'] as List).single as Map)['text'] as String;
+      // The editor's context goes as its own system reminder; the notes
+      // are not thincoder's to carry any more.
+      expect(text, startsWith('look\n\n<system-reminder>'));
+      expect(text, contains('cursor on line 3'));
+      expect(text, isNot(contains('a note the kernel no longer carries')));
+      final item = s.items<UserMessageItem>().single;
+      expect(item.text, 'look');
+      expect(item.contexts, hasLength(1));
+    });
+
+    test('a turn carries the file open, its cursor and selection (T77)',
+        () async {
+      final s = await _ready();
+      s.send(
+        'look',
+        contexts: [
+          const EditorContext(
+            '/p/a.dart',
+            line: 10,
+            selectedLines: (3, 5),
+            selectedText: 'x\ny\nz',
+          ),
+        ],
       );
+      await s.agent.finished.future;
+      await settle();
+
+      final prompt = _prompts(s).single;
+      expect(prompt, startsWith('look\n\n<system-reminder>The user has'));
+      expect(prompt, contains('/p/a.dart'));
+      expect(prompt, contains('cursor on line 10'));
+      expect(prompt, contains('lines 3-5'));
+      expect(prompt, contains('x\ny\nz'));
+      expect(prompt, endsWith('</system-reminder>'));
+      final item = s.items<UserMessageItem>().single;
+      expect(item.text, 'look');
+      expect(item.contexts, hasLength(1));
+    });
+
+    test('the same file is said once a turn (T80)', () async {
+      final s = await _ready();
+      s.send(
+        'look',
+        contexts: const [
+          EditorContext('/p/a.dart', line: 10),
+          EditorContext('/p/./a.dart', line: 10),
+        ],
+      );
+      await s.agent.finished.future;
+      await settle();
+
+      expect('The user has'.allMatches(_prompts(s).single), hasLength(1));
+      expect(s.items<UserMessageItem>().single.contexts, hasLength(1));
     });
 
     test('pictures are saved where the agent runs, and named in the text',
@@ -1384,6 +1455,254 @@ void main() {
             'a message 30 MB.'],
       );
       expect(s.items<UserMessageItem>().single.images, hasLength(3));
+    });
+
+    test('T93: a new agent takes the pictures as native image blocks',
+        () async {
+      final root = await Directory.systemTemp.createTemp('baocode-thincoder-');
+      addTearDown(() => root.delete(recursive: true));
+      final s = _Session(
+        context: KernelContext(cwd: root.path),
+        make: () => ThincoderMock(promptImage: true),
+      );
+      addTearDown(s.dispose);
+      s.kernel.prepare();
+      await settle();
+
+      final bytes = Uint8List.fromList(const [1, 2, 3]);
+      s.send(
+        '看图',
+        images: [ImageAttachment(bytes: bytes, mediaType: 'image/png')],
+      );
+      await s.agent.finished.future;
+      await settle();
+
+      final params = s.agent.requests('session/prompt').single['params'] as Map;
+      final prompt = (params['prompt'] as List).cast<Map>();
+      expect(prompt, hasLength(2));
+      expect(prompt.first, {'type': 'text', 'text': '看图'});
+      expect(prompt.last['type'], 'image');
+      expect(prompt.last['mimeType'], 'image/png');
+      expect(base64Decode(prompt.last['data'] as String), bytes);
+      // The picture shows in the message, and nothing was written down.
+      expect(s.items<UserMessageItem>().single.images, hasLength(1));
+      expect(
+        Directory(p.join(root.path, '.thincoder', 'tmp')).existsSync(),
+        isFalse,
+      );
+    });
+
+    test('T94: an old agent gets the picture saved and named, as today',
+        () async {
+      final root = await Directory.systemTemp.createTemp('baocode-thincoder-');
+      addTearDown(() => root.delete(recursive: true));
+      final s = _Session(context: KernelContext(cwd: root.path));
+      addTearDown(s.dispose);
+      s.kernel.prepare();
+      await settle();
+
+      final bytes = Uint8List.fromList(const [1, 2, 3]);
+      s.send(
+        '看图',
+        images: [ImageAttachment(bytes: bytes, mediaType: 'image/png')],
+      );
+      await s.agent.finished.future;
+      await settle();
+
+      final saved = Directory(p.join(root.path, '.thincoder', 'tmp'))
+          .listSync()
+          .whereType<File>()
+          .single;
+      expect(saved.readAsBytesSync(), bytes);
+      final params = s.agent.requests('session/prompt').single['params'] as Map;
+      expect((params['prompt'] as List).single, {
+        'type': 'text',
+        'text': '看图\n\n[Attached images: ${saved.path}]',
+      });
+    });
+
+    test('T95: a picture over the limit is dropped, the rest go native',
+        () async {
+      final root = await Directory.systemTemp.createTemp('baocode-thincoder-');
+      addTearDown(() => root.delete(recursive: true));
+      final s = _Session(
+        context: KernelContext(cwd: root.path),
+        make: () => ThincoderMock(promptImage: true),
+      );
+      addTearDown(s.dispose);
+      s.kernel.prepare();
+      await settle();
+
+      final bytes = Uint8List.fromList(const [1, 2, 3]);
+      s.send(
+        'two of them',
+        images: [
+          ImageAttachment(
+            bytes: Uint8List(ThincoderKernel.imageMaxBytes + 1),
+            mediaType: 'image/png',
+          ),
+          ImageAttachment(bytes: bytes, mediaType: 'image/gif'),
+        ],
+      );
+      await s.agent.finished.future;
+      await settle();
+
+      final params = s.agent.requests('session/prompt').single['params'] as Map;
+      final prompt = (params['prompt'] as List).cast<Map>();
+      expect(prompt, hasLength(2));
+      expect(prompt.last['mimeType'], 'image/gif');
+      expect(base64Decode(prompt.last['data'] as String), bytes);
+      expect(
+        s.shown.where((line) => line.startsWith('notice warning:')),
+        ['notice warning: 1 image(s) went unsent: one may be at most 15 MB, '
+            'a message 30 MB.'],
+      );
+      expect(s.items<UserMessageItem>().single.images, hasLength(1));
+      expect(
+        Directory(p.join(root.path, '.thincoder', 'tmp')).existsSync(),
+        isFalse,
+      );
+    });
+
+    test('T95②: pictures over the turn budget are dropped, the rest go native',
+        () async {
+      final root = await Directory.systemTemp.createTemp('baocode-thincoder-');
+      addTearDown(() => root.delete(recursive: true));
+      final s = _Session(
+        context: KernelContext(cwd: root.path),
+        make: () => ThincoderMock(promptImage: true),
+      );
+      addTearDown(s.dispose);
+      s.kernel.prepare();
+      await settle();
+
+      // The first two take 29 of the 30 MB a message may carry (one may be
+      // 15): the third comes over the 1 MB left.
+      s.send(
+        'three of them',
+        images: [
+          ImageAttachment(
+            bytes: Uint8List(ThincoderKernel.imageMaxBytes),
+            mediaType: 'image/png',
+          ),
+          ImageAttachment(
+            bytes: Uint8List(14000000),
+            mediaType: 'image/gif',
+          ),
+          ImageAttachment(
+            bytes: Uint8List(2000000),
+            mediaType: 'image/webp',
+          ),
+        ],
+      );
+      await s.agent.finished.future;
+      await settle();
+
+      final params = s.agent.requests('session/prompt').single['params'] as Map;
+      final prompt = (params['prompt'] as List).cast<Map>();
+      expect(prompt, hasLength(3));
+      expect(prompt.first, {'type': 'text', 'text': 'three of them'});
+      expect(
+        [for (final image in prompt.skip(1)) image['mimeType']],
+        ['image/png', 'image/gif'],
+      );
+      expect(
+        s.shown.where((line) => line.startsWith('notice warning:')),
+        ['notice warning: 1 image(s) went unsent: one may be at most 15 MB, '
+            'a message 30 MB.'],
+      );
+      expect(s.items<UserMessageItem>().single.images, hasLength(2));
+      expect(
+        Directory(p.join(root.path, '.thincoder', 'tmp')).existsSync(),
+        isFalse,
+      );
+    });
+  });
+
+  group('thincoder usage', () {
+    /// A kernel over an agent running [script], which the test may change
+    /// between turns.
+    Future<_Session> ready(List<Map<String, Object?>> script) async {
+      final s = _Session(make: () => ThincoderMock(turn: script));
+      addTearDown(s.dispose);
+      s.kernel.prepare();
+      await settle();
+      return s;
+    }
+
+    test('T96: two turns add up, in the footer and the session total',
+        () async {
+      final script = <Map<String, Object?>>[];
+      final session = await ready(script);
+
+      script.addAll([
+        {'sessionUpdate': 'usage_update', 'used': 100, 'size': 1000},
+        {'sessionUpdate': 'usage_update', 'used': 50},
+      ]);
+      session.send('one', id: 'turn-1');
+      await session.agent.finished.future;
+      await settle();
+
+      script
+        ..clear()
+        ..add({'sessionUpdate': 'usage_update', 'used': 70});
+      session.send('two', id: 'turn-2');
+      await session.agent.finished.future;
+      await settle();
+
+      final ended = session.events.whereType<TurnEnded>().toList();
+      expect(ended.map((event) => event.usage?.spentTokens), [150, 70]);
+      final messages = session.items<UserMessageItem>();
+      expect(messages.first.usage?.spentTokens, 150);
+      expect(messages.last.usage?.spentTokens, 70);
+      final usage = session.events.whereType<UsageReported>().last.usage;
+      expect(usage.sessionSpent, 220);
+      expect(usage.window, 1000);
+    });
+
+    test('T97: the context is the latest snapshot, the session the sum',
+        () async {
+      final s = _Session(
+        make: () => ThincoderMock(
+          turn: const [
+            {'sessionUpdate': 'usage_update', 'used': 900, 'size': 1000},
+            {'sessionUpdate': 'usage_update', 'used': 950, 'size': 1000},
+          ],
+        ),
+      );
+      addTearDown(s.dispose);
+      s.kernel.prepare();
+      await settle();
+
+      s.send('one');
+      await s.agent.finished.future;
+      await settle();
+
+      final usage = s.transcript.usage!;
+      expect(usage.used, 950);
+      expect(usage.window, 1000);
+      expect(usage.sessionSpent, 1850);
+    });
+
+    test('T98: usage outside a turn adds to the session, not to one',
+        () async {
+      final script = <Map<String, Object?>>[];
+      final session = await ready(script);
+
+      session.agent.push(
+        _update({'sessionUpdate': 'usage_update', 'used': 30, 'size': 1000}),
+      );
+      await settle();
+      expect(session.transcript.usage?.sessionSpent, 30);
+
+      script.add({'sessionUpdate': 'usage_update', 'used': 20});
+      session.send('go');
+      await session.agent.finished.future;
+      await settle();
+
+      final ended = session.events.whereType<TurnEnded>().single;
+      expect(ended.usage?.spentTokens, 20);
+      expect(session.transcript.usage?.sessionSpent, 50);
     });
   });
 
@@ -2844,6 +3163,466 @@ void main() {
     });
   });
 
+  group('the editor context on the host side', () {
+    /// A chat session over a scripted thincoder agent, and that agent.
+    ({ChatSession session, ThincoderMock agent}) chat() {
+      final agent = ThincoderMock();
+      late final KernelDescriptor descriptor;
+      descriptor = KernelDescriptor(
+        id: 'thincoder',
+        label: 'thincoder',
+        icon: Icons.smart_toy_outlined,
+        description: '',
+        create: (context) => ThincoderKernel(
+          descriptor,
+          context,
+          start: (_) async => agent,
+          launch: (cwd) async =>
+              ThincoderLaunch(cwd: cwd, executable: '/mock/thincoder'),
+        ),
+      );
+      final session = ChatSession(
+        kernel: descriptor,
+        kernels: [descriptor],
+        historyCount: 0,
+        kernelContext: const KernelContext(cwd: '/p'),
+      );
+      addTearDown(session.dispose);
+      return (session: session, agent: agent);
+    }
+
+    /// What the agent was asked, in order.
+    List<String> promptsOf(ThincoderMock agent) => [
+      for (final request in agent.requests('session/prompt'))
+        (((request['params'] as Map)['prompt'] as List).single as Map)['text']
+            as String,
+    ];
+
+    /// The last message the conversation shows.
+    UserMessageItem lastSent(ChatSession session) => [
+      for (var i = 0; i < session.itemCount; i++)
+        if (session.itemAt(i) case final UserMessageItem item) item,
+    ].last;
+
+    /// Makes [send] a turn, and waits for it to reach the agent.
+    Future<void> sent(
+      ChatSession session,
+      ThincoderMock agent,
+      void Function() send,
+    ) async {
+      final before = agent.requests('session/prompt').length;
+      send();
+      for (var i = 0; i < 60; i++) {
+        if (agent.requests('session/prompt').length > before) break;
+        await pumpEventQueue(times: 1);
+      }
+      await settle();
+      expect(agent.requests('session/prompt'), hasLength(before + 1));
+    }
+
+    test('the setting off leaves the context out (T78)', () async {
+      final (:session, :agent) = chat();
+      final setting = EditorContextSetting.current;
+      EditorContextSetting.current = () => false;
+      addTearDown(() => EditorContextSetting.current = setting);
+      await sent(
+        session,
+        agent,
+        () => session.send(
+          const ComposerMessage(text: 'look'),
+          editor: () => const OpenEditor(
+            '/p/a.dart',
+            line: 10,
+            selectedLines: (3, 5),
+            selectedText: 'x\ny\nz',
+          ),
+        ),
+      );
+      expect(promptsOf(agent), ['look']);
+      expect(lastSent(session).contexts, isEmpty);
+    });
+
+    test('with no file open the message is as it was (T79)', () async {
+      final (:session, :agent) = chat();
+      await sent(
+        session,
+        agent,
+        () => session.send(
+          const ComposerMessage(text: 'hi'),
+          editor: () => null,
+        ),
+      );
+      expect(promptsOf(agent), ['hi']);
+      expect(lastSent(session).contexts, isEmpty);
+    });
+
+    test('a file open with no cursor is its path alone (T79②)', () async {
+      final (:session, :agent) = chat();
+      await sent(
+        session,
+        agent,
+        () => session.send(
+          const ComposerMessage(text: 'look'),
+          editor: () => const OpenEditor('/p/a.dart'),
+        ),
+      );
+      final prompt = promptsOf(agent).single;
+      expect(
+        prompt,
+        startsWith(
+          'look\n\n<system-reminder>The user has /p/a.dart open in the '
+          'editor.',
+        ),
+      );
+      expect(prompt, isNot(contains('cursor on line')));
+      expect(prompt, isNot(contains('selected')));
+      expect(lastSent(session).contexts.single.name, 'a.dart');
+    });
+
+    test('dismissed for a draft, a new editor brings it back (T81)', () async {
+      final (:session, :agent) = chat();
+      OpenEditor open = const OpenEditor('/p/a.dart', line: 10);
+      await sent(
+        session,
+        agent,
+        () => session.send(
+          const ComposerMessage(text: 'one'),
+          editor: () => open,
+          editorContext: false,
+        ),
+      );
+      expect(promptsOf(agent), ['one']);
+      expect(lastSent(session).contexts, isEmpty);
+
+      // The editor moves: the next message carries the new context again.
+      open = const OpenEditor('/p/a.dart', line: 20);
+      await sent(
+        session,
+        agent,
+        () => session.send(
+          const ComposerMessage(text: 'two'),
+          editor: () => open,
+        ),
+      );
+      expect(promptsOf(agent).last, contains('cursor on line 20'));
+      expect(lastSent(session).contexts.single.line, 20);
+    });
+
+    test('the setting is on unless off, and its keys are in both ARBs (T82)',
+        () {
+      expect(EditorContextSetting.settingKey, 'chat.editorContext');
+      expect(EditorContextSetting.off, isFalse);
+      // Unset, or anything but false: on.
+      expect(EditorContextSetting.enabled(null), isTrue);
+      expect(EditorContextSetting.enabled(true), isTrue);
+      expect(EditorContextSetting.enabled(false), isFalse);
+
+      const keys = [
+        'generalSettingsEditorContext',
+        'generalSettingsEditorContextDescription',
+        'editorContextLine',
+        'editorContextLines',
+      ];
+      for (final name in ['app_en.arb', 'app_zh.arb']) {
+        final text = File('lib/l10n/$name').readAsStringSync();
+        for (final key in keys) {
+          expect(text, contains('"$key"'), reason: '$name: $key');
+        }
+      }
+
+    });
+  });
+
+  group('the files the agent reads and writes (F18)', () {
+    /// A temp folder that goes when the test does.
+    Directory temp() {
+      final dir = Directory.systemTemp.createTempSync('thincoder-fs');
+      addTearDown(() => dir.deleteSync(recursive: true));
+      return dir;
+    }
+
+    /// An open workspace over [dir], its files this machine's own.
+    IdeWorkspace spaceOver(Directory dir) {
+      final space = IdeWorkspace(dir.path, files: IdeFileService(dir.path));
+      addTearDown(space.dispose);
+      return space;
+    }
+
+    /// A file opened in [space], with [buffer] unsaved when given.
+    Future<({String path, IdeDocument doc})> opened(
+      IdeWorkspace space, {
+      String disk = 'on disk\n',
+      String? buffer,
+    }) async {
+      final path = p.join(space.root, 'a.dart');
+      File(path).writeAsStringSync(disk);
+      await space.open(path);
+      final doc = space.documentOf(path)!;
+      if (buffer != null) doc.text = buffer;
+      return (path: path, doc: doc);
+    }
+
+    /// What the agent wrote under [id]: its answer, waited for (a write to
+    /// the disk takes its time).
+    Future<Map<String, Object?>> answered(_Session s, Object? id) async {
+      for (var i = 0; i < 400; i++) {
+        final answer = s.agent.written
+            .where((message) => message['id'] == id)
+            .firstOrNull;
+        if (answer != null) return answer;
+        await Future<void>.delayed(const Duration(milliseconds: 5));
+      }
+      fail('no answer to $id');
+    }
+
+    void pushWrite(_Session s, Object? id, String path, String content) =>
+        s.agent.push({
+          'jsonrpc': '2.0',
+          'id': id,
+          'method': 'fs/write_text_file',
+          'params': {'sessionId': '1', 'path': path, 'content': content},
+        });
+
+    void pushRead(_Session s, Object? id, String path) => s.agent.push({
+      'jsonrpc': '2.0',
+      'id': id,
+      'method': 'fs/read_text_file',
+      'params': {'sessionId': '1', 'path': path},
+    });
+
+    test('T83: a write over unsaved changes is refused, nothing written',
+        () async {
+      final dir = temp();
+      final space = spaceOver(dir);
+      final (:path, :doc) = await opened(space, buffer: 'my buffer\n');
+      final log = _log();
+      final s = _Session(
+        context: KernelContext(cwd: dir.path, files: IdeKernelFiles()),
+      );
+      addTearDown(s.dispose);
+      s.kernel.prepare();
+      await settle();
+
+      pushWrite(s, 'fs-1', path, 'the agent\n');
+      await settle();
+
+      final answer = await answered(s, 'fs-1');
+      expect((answer['error']! as Map)['code'], -32603);
+      // The user's buffer and the disk are as they were; nothing says a
+      // change was made.
+      expect(doc.text, 'my buffer\n');
+      expect(doc.savedText, 'on disk\n');
+      expect(File(path).readAsStringSync(), 'on disk\n');
+      expect(s.events.whereType<FileEdited>(), isEmpty);
+      expect(
+        s.items<NoticeItem>().where((item) => item.kind == NoticeKind.error),
+        hasLength(1),
+      );
+      expect(_saidTimes(log, 'fs: a write was refused'), 1);
+    });
+
+    test('T84: the buffer and the agent text are shown side by side, read-only',
+        () async {
+      final dir = temp();
+      final space = spaceOver(dir);
+      final (:path, :doc) = await opened(space, buffer: 'my buffer\n');
+      final s = _Session(
+        context: KernelContext(cwd: dir.path, files: IdeKernelFiles()),
+      );
+      addTearDown(s.dispose);
+      s.kernel.prepare();
+      await settle();
+
+      pushWrite(s, 'fs-1', path, 'the agent\n');
+      await settle();
+
+      final diff = space.documents.singleWhere((doc) => doc.diff != null);
+      expect(diff.readOnly, isTrue);
+      expect(diff.label, "Agent's change (not applied)");
+      expect(diff.text, 'the agent\n');
+      expect(diff.diff!.text.value, 'my buffer\n');
+      expect(doc.text, 'my buffer\n');
+    });
+
+    test('T85: a file not open is written, the disk as the agent said',
+        () async {
+      final dir = temp();
+      final s = _Session(
+        context: KernelContext(cwd: dir.path, files: IdeKernelFiles()),
+      );
+      addTearDown(s.dispose);
+      s.kernel.prepare();
+      await settle();
+
+      final path = p.join(dir.path, 'new.dart');
+      pushWrite(s, 'fs-1', path, 'made\n');
+      await settle();
+
+      expect((await answered(s, 'fs-1'))['result'], <String, Object?>{});
+      expect(File(path).readAsStringSync(), 'made\n');
+      expect(s.events.whereType<FileEdited>(), hasLength(1));
+    });
+
+    test('T86: a path outside the project is refused, said and logged',
+        () async {
+      final dir = temp();
+      final root = Directory(p.join(dir.path, 'project'))..createSync();
+      final outside = p.join(dir.path, 'outside', 'x.txt');
+      final log = _log();
+      final s = _Session(
+        context: KernelContext(cwd: root.path, files: IdeKernelFiles()),
+      );
+      addTearDown(s.dispose);
+      s.kernel.prepare();
+      await settle();
+
+      pushWrite(s, 'fs-1', outside, 'nope');
+      await settle();
+
+      expect(((await answered(s, 'fs-1'))['error']! as Map)['code'], -32602);
+      expect(File(outside).existsSync(), isFalse);
+      expect(
+        s.items<NoticeItem>().where((item) => item.kind == NoticeKind.error),
+        hasLength(1),
+      );
+      expect(_saidTimes(log, 'fs: refused a path outside the project'), 1);
+    });
+
+    test('T87: the kernel declares fs, the catalog does not', () async {
+      final s = _Session(
+        context: KernelContext(cwd: '/p', files: IdeKernelFiles()),
+      );
+      addTearDown(s.dispose);
+      s.kernel.prepare();
+      await settle();
+      expect(
+        (s.agent.requests('initialize').single['params']
+            as Map)['clientCapabilities'],
+        ThincoderFiles.capabilities,
+      );
+      expect(ThincoderFiles.capabilities, {
+        'fs': {'readTextFile': true, 'writeTextFile': true},
+      });
+
+      final catalogAgent = ThincoderMock(cwd: '/p');
+      final catalog = ThincoderCatalog(connect: (cwd) async => catalogAgent);
+      await catalog.sessionsIn('/p');
+      expect(
+        (catalogAgent.requests('initialize').single['params']
+            as Map)['clientCapabilities'],
+        <String, Object?>{},
+      );
+    });
+
+    test('T88: a read is the editor buffer, unsaved changes and all',
+        () async {
+      final dir = temp();
+      final space = spaceOver(dir);
+      final (:path, :doc) = await opened(space, buffer: 'my buffer\n');
+      final s = _Session(
+        context: KernelContext(cwd: dir.path, files: IdeKernelFiles()),
+      );
+      addTearDown(s.dispose);
+      s.kernel.prepare();
+      await settle();
+
+      pushRead(s, 'fs-1', path);
+      await settle();
+
+      expect((await answered(s, 'fs-1'))['result'], {'content': 'my buffer\n'});
+      expect(doc.text, 'my buffer\n');
+    });
+
+    test('T89: a clean open file is written, and its editor follows', () async {
+      final dir = temp();
+      final space = spaceOver(dir);
+      final (:path, :doc) = await opened(space);
+      final s = _Session(
+        context: KernelContext(cwd: dir.path, files: IdeKernelFiles()),
+      );
+      addTearDown(s.dispose);
+      s.kernel.prepare();
+      await settle();
+
+      pushWrite(s, 'fs-1', path, 'new text\n');
+      await settle();
+
+      expect((await answered(s, 'fs-1'))['result'], <String, Object?>{});
+      expect(doc.text, 'new text\n');
+      expect(doc.savedText, 'new text\n');
+      expect(doc.dirty, isFalse);
+      expect(File(path).readAsStringSync(), 'new text\n');
+      expect(s.events.whereType<FileEdited>(), hasLength(1));
+    });
+
+    test('T90: the change is the review surface\'s, with what it was',
+        () async {
+      final dir = temp();
+      final space = spaceOver(dir);
+      final (:path, :doc) = await opened(space);
+      final s = _Session(
+        context: KernelContext(cwd: dir.path, files: IdeKernelFiles()),
+      );
+      addTearDown(s.dispose);
+      s.kernel.prepare();
+      await settle();
+
+      // While a turn runs, the change is that turn's.
+      s.agent.hold = Completer<void>();
+      s.send('go');
+      await settle();
+      pushWrite(s, 'fs-1', path, 'new text\n');
+      await answered(s, 'fs-1');
+      await settle();
+
+      final edited = s.events.whereType<FileEdited>().single;
+      expect(edited.change.path, path);
+      expect((edited.original! as OriginalText).text, 'on disk\n');
+      expect(edited.turnId, 'turn-1');
+      expect(doc.text, 'new text\n');
+
+      s.agent.release();
+      await settle();
+    });
+
+    test('T91: a method that is not one of the two is still -32601', () async {
+      final s = _Session(
+        context: KernelContext(cwd: '/p', files: IdeKernelFiles()),
+      );
+      addTearDown(s.dispose);
+      s.kernel.prepare();
+      await settle();
+
+      s.agent.push({
+        'jsonrpc': '2.0',
+        'id': 'fs-1',
+        'method': 'fs/something_else',
+        'params': const <String, Object?>{},
+      });
+      await settle();
+
+      expect(((await answered(s, 'fs-1'))['error']! as Map)['code'], -32601);
+      expect(s.events.whereType<FileEdited>(), isEmpty);
+    });
+
+    test('T92: a file that cannot be read says why, as -32603', () async {
+      final s = _Session(
+        context: KernelContext(cwd: '/p', files: _BinaryFiles()),
+      );
+      addTearDown(s.dispose);
+      s.kernel.prepare();
+      await settle();
+
+      pushRead(s, 'fs-1', '/p/a.bin');
+      await settle();
+
+      final error = (await answered(s, 'fs-1'))['error']! as Map;
+      expect(error['code'], -32603);
+      expect('${error['message']}', contains('Binary'));
+      expect(s.events.whereType<FileEdited>(), isEmpty);
+    });
+  });
+
   group('the registered kernel', () {
     test('is named as the terminal\'s, and the scripted one stays out of the '
         'kernels on offer', () {
@@ -2855,4 +3634,510 @@ void main() {
       expect(MockKernels.all, isNot(contains(MockKernels.thincoder)));
     });
   });
+
+  group('the model picked while a turn runs (F21)', () {
+    const sonnet = 'anthropic:claude-sonnet-5';
+
+    _Session session({
+      List<String>? models,
+      bool configError = false,
+      bool held = false,
+    }) {
+      final s = _Session(
+        make: () => ThincoderMock(models: models, configError: configError)
+          ..hold = held ? Completer<void>() : null,
+      );
+      addTearDown(s.dispose);
+      return s;
+    }
+
+    test('a pick waits for the turn, then goes before the next (T100)',
+        () async {
+      final s = session(models: const [sonnet, 'b'], held: true);
+      s.kernel.prepare();
+      await settle();
+      s.send('go');
+      await settle();
+      expect(s.transcript.activeTurn, 'turn-1');
+
+      s.kernel.model.select('b');
+      expect(s.agent.requests('session/set_config_option'), isEmpty);
+      expect(s.kernel.pendingModel, 'b');
+      expect(s.kernel.model.selected, sonnet);
+
+      s.agent.release();
+      await s.agent.finished.future;
+      await settle();
+
+      final writes = s.agent.requests('session/set_config_option');
+      expect(writes, hasLength(1));
+      expect(writes.single['params'], {
+        'sessionId': '1',
+        'configId': 'model',
+        'value': 'b',
+      });
+      expect(s.kernel.model.selected, 'b');
+      expect(s.kernel.pendingModel, isNull);
+    });
+
+    test('the last of two picks while the turn runs wins (T101①)',
+        () async {
+      final s = session(models: const [sonnet, 'b', 'c'], held: true);
+      s.kernel.prepare();
+      await settle();
+      s.send('go');
+      await settle();
+
+      s.kernel.model.select('b');
+      s.kernel.model.select('c');
+      expect(s.kernel.pendingModel, 'c');
+      expect(s.agent.requests('session/set_config_option'), isEmpty);
+
+      s.agent.release();
+      await s.agent.finished.future;
+      await settle();
+
+      final writes = s.agent.requests('session/set_config_option');
+      expect(writes, hasLength(1));
+      expect(writes.single['params'], {
+        'sessionId': '1',
+        'configId': 'model',
+        'value': 'c',
+      });
+      expect(s.kernel.model.selected, 'c');
+    });
+
+    test('a pick made while a switch is out goes after its answer (T101②)',
+        () async {
+      final s = session(models: const [sonnet, 'b', 'c']);
+      s.kernel.prepare();
+      await settle();
+
+      s.kernel.model.select('b');
+      s.kernel.model.select('c');
+      // The first write is out; the second waits for its answer.
+      expect(s.agent.requests('session/set_config_option'), hasLength(1));
+      expect(s.kernel.pendingModel, isNull);
+
+      await settle();
+      final writes = s.agent.requests('session/set_config_option');
+      expect(writes, hasLength(2));
+      expect(writes.first['params'], {
+        'sessionId': '1',
+        'configId': 'model',
+        'value': 'b',
+      });
+      expect(writes.last['params'], {
+        'sessionId': '1',
+        'configId': 'model',
+        'value': 'c',
+      });
+      expect(s.kernel.model.selected, 'c');
+      expect(s.kernel.pendingModel, isNull);
+    });
+
+    test('a switch the agent refuses keeps the model shown and says so '
+        '(T102)', () async {
+      final s = session(
+        models: const [sonnet, 'b'],
+        configError: true,
+        held: true,
+      );
+      s.kernel.prepare();
+      await settle();
+      s.send('go');
+      await settle();
+
+      s.kernel.model.select('b');
+      s.agent.release();
+      await s.agent.finished.future;
+      await settle();
+
+      expect(s.kernel.model.selected, sonnet);
+      expect(s.kernel.pendingModel, isNull);
+      final errors = [
+        for (final item in s.items<NoticeItem>())
+          if (item.kind == NoticeKind.error) item,
+      ];
+      expect(errors, hasLength(1));
+      expect(errors.single.text, contains('not confirmed'));
+      expect(s.kernel.health.status, KernelHealthStatus.ready);
+    });
+
+    test('a conversation closed forgets the model waiting (T103①)',
+        () async {
+      final s = session(models: const [sonnet, 'b'], held: true);
+      s.kernel.prepare();
+      await settle();
+      s.send('go');
+      await settle();
+
+      s.kernel.model.select('b');
+      expect(s.kernel.pendingModel, 'b');
+      s.kernel.dispose();
+      expect(s.kernel.pendingModel, isNull);
+
+      s.agent.release();
+      await settle();
+      expect(s.agent.requests('session/set_config_option'), isEmpty);
+    });
+
+    test('a view left while waiting writes nothing at the end (T103②)',
+        () async {
+      final s = session(models: const [sonnet, 'b'], held: true);
+      s.kernel.prepare();
+      await settle();
+      s.send('go');
+      await settle();
+
+      s.kernel.model.select('b');
+      expect(s.kernel.pendingModel, 'b');
+      s.kernel.release();
+      s.agent.release();
+      await settle();
+
+      expect(s.kernel.pendingModel, isNull);
+      expect(s.agent.requests('session/set_config_option'), isEmpty);
+      expect(
+        [
+          for (final item in s.items<NoticeItem>())
+            if (item.kind == NoticeKind.error) item,
+        ],
+        isEmpty,
+      );
+    });
+
+    test('the waiting sentence is in both ARB files (T104)', () {
+      for (final name in ['app_en.arb', 'app_zh.arb']) {
+        final text = File('lib/l10n/$name').readAsStringSync();
+        expect(text, contains('"modelsSwitchPending"'), reason: name);
+      }
+      expect(
+        File('lib/l10n/app_zh.arb').readAsStringSync(),
+        contains('回合结束后切换到 {model}'),
+      );
+    });
+
+    test('the model in effect, picked with nothing waiting, writes nothing '
+        '(T105)', () async {
+      final s = session();
+      s.kernel.prepare();
+      await settle();
+      expect(s.kernel.model.options.map((o) => o.id), [sonnet]);
+
+      s.kernel.model.select(sonnet);
+      await settle();
+
+      expect(s.agent.requests('session/set_config_option'), isEmpty);
+      expect(s.kernel.pendingModel, isNull);
+      expect(s.items<NoticeItem>(), isEmpty);
+    });
+  });
+
+  group('renaming and reverting (A1)', () {
+    Future<_Session> ready({ThincoderMock Function()? make}) async {
+      final s = _Session(make: make);
+      addTearDown(s.dispose);
+      s.kernel.prepare();
+      await settle();
+      return s;
+    }
+
+    List<NoticeItem> errors(_Session s) => [
+      for (final item in s.items<NoticeItem>()) if (item.kind == NoticeKind.error) item,
+    ];
+
+    test('G1: a title given with the session up goes out once (§3.4)',
+        () async {
+      final s = await ready();
+      expect(s.kernel, isA<RenamesSession>());
+      expect(s.kernel.sessionId, isNotNull);
+
+      s.kernel.rename('New name');
+      await settle();
+
+      final writes = s.agent.requests('session/set_title');
+      expect(writes, hasLength(1));
+      expect(writes.single['params'], {'sessionId': '1', 'title': 'New name'});
+      expect(s.kernel.pendingTitle, isNull);
+      expect(errors(s), isEmpty);
+    });
+
+    test('G1: a title given before the session is made goes out once it is '
+        '(§3.4)', () async {
+      final s = _Session();
+      addTearDown(s.dispose);
+      s.kernel.rename('Named early');
+      await settle();
+      expect(s.agents, isEmpty);
+      expect(s.kernel.pendingTitle, isNull);
+
+      s.kernel.prepare();
+      await settle();
+
+      final writes = s.agent.requests('session/set_title');
+      expect(writes, hasLength(1));
+      expect(writes.single['params'], {'sessionId': '1', 'title': 'Named early'});
+      expect(s.kernel.pendingTitle, isNull);
+    });
+
+    test('G1c: a title with no connection: said, not dropped (§3.5)', () async {
+      final s = await ready();
+      s.kernel.release();
+      await settle();
+      expect(s.kernel.canRevertNow, isFalse);
+      s.kernel.rename('Renamed');
+      await settle();
+      expect(s.agent.requests('session/set_title'), isEmpty);
+      expect(errors(s).single.text, contains('not confirmed'));
+    });
+
+    test('G1b: a title picked while a turn runs waits for its end, last wins '
+        '(§3.5)', () async {
+      final s = await ready(
+        make: () => ThincoderMock(serialInbound: true)
+          ..hold = Completer<void>(),
+      );
+      s.send('go');
+      await settle();
+      expect(s.transcript.activeTurn, 'turn-1');
+
+      s.kernel.rename('a');
+      s.kernel.rename('b');
+      expect(s.agent.requests('session/set_title'), isEmpty);
+      expect(s.kernel.pendingTitle, 'b');
+      expect(s.kernel.canRevertNow, isFalse);
+
+      s.agent.release();
+      await s.agent.finished.future;
+      await settle();
+
+      final writes = s.agent.requests('session/set_title');
+      expect(writes, hasLength(1));
+      expect(writes.single['params'], {'sessionId': '1', 'title': 'b'});
+      expect(s.kernel.pendingTitle, isNull);
+      expect(s.kernel.canRevertNow, isTrue);
+    });
+
+    test('G1b: a title the agent refuses at the turn\'s end says so once '
+        '(§3.5)', () async {
+      final s = await ready(
+        make: () => ThincoderMock(serialInbound: true)
+          ..hold = Completer<void>()
+          ..titleError = true,
+      );
+      s.send('go');
+      await settle();
+      s.kernel.rename('a');
+      s.kernel.rename('b');
+
+      s.agent.release();
+      await s.agent.finished.future;
+      await settle();
+
+      final writes = s.agent.requests('session/set_title');
+      expect(writes, hasLength(1));
+      expect(writes.single['params'], {'sessionId': '1', 'title': 'b'});
+      expect(s.kernel.pendingTitle, isNull);
+      expect(errors(s), hasLength(1));
+      expect(errors(s).single.text, contains('not confirmed'));
+    });
+
+    test('G1b: picked again while a write is out, the last goes after it '
+        '(§3.5)', () async {
+      final s = await ready();
+      s.kernel.rename('a');
+      expect(s.agent.requests('session/set_title'), hasLength(1));
+
+      s.kernel.rename('b');
+      expect(s.kernel.pendingTitle, 'b');
+      await settle();
+
+      final writes = s.agent.requests('session/set_title');
+      expect(writes, hasLength(2));
+      expect(writes.first['params'], {'sessionId': '1', 'title': 'a'});
+      expect(writes.last['params'], {'sessionId': '1', 'title': 'b'});
+      expect(s.kernel.pendingTitle, isNull);
+    });
+
+    test('G1b: picked while a failing write is out, the last still goes '
+        '(§3.5)', () async {
+      final s = await ready(
+        make: () => ThincoderMock(serialInbound: true)..titleError = true,
+      );
+      s.kernel.rename('a');
+      s.kernel.rename('b');
+      await settle();
+      expect(s.agent.requests('session/set_title').map((w) => w['params']), [
+        {'sessionId': '1', 'title': 'a'},
+        {'sessionId': '1', 'title': 'b'},
+      ]);
+      expect(errors(s), hasLength(1));
+      expect(s.kernel.pendingTitle, isNull);
+    });
+
+    test('G4: a title the agent refuses is one error, nothing left pending',
+        () async {
+      final s = await ready(
+        make: () => ThincoderMock(serialInbound: true)..titleError = true,
+      );
+      s.kernel.rename('a');
+      await settle();
+
+      expect(s.agent.requests('session/set_title'), hasLength(1));
+      expect(s.kernel.pendingTitle, isNull);
+      expect(errors(s), hasLength(1));
+      expect(errors(s).single.text, contains('not confirmed'));
+    });
+
+    test('G5: the plan is asked for with the turn, and carried out with it '
+        '(§3.1)', () async {
+      final s = await ready(
+        make: () => ThincoderMock(serialInbound: true)
+          ..revertPlan = const {
+            'files': [
+              {'path': '/p/a.txt', 'displayPath': 'a.txt', 'action': 'restore'},
+              {'path': '/p/b.txt', 'displayPath': 'b.txt', 'action': 'restore'},
+              {'path': '/p/c.txt', 'displayPath': 'c.txt', 'action': 'delete'},
+            ],
+            'skipped': [], 'unrevertable': [],
+          },
+      );
+      final plan = await s.kernel.revertPlan(sinceTurn: 'turn-9');
+      expect(s.agent.requests('session/revert'), hasLength(1));
+      expect(s.events.whereType<ChangesReverted>(), isEmpty);
+      expect(plan.files.map((f) => (f.path, f.displayPath, f.action)), [
+        ('/p/a.txt', 'a.txt', RevertAction.restore),
+        ('/p/b.txt', 'b.txt', RevertAction.restore),
+        ('/p/c.txt', 'c.txt', RevertAction.delete),
+      ]);
+
+      final outcome = await s.kernel.applyRevert(sinceTurn: 'turn-9');
+      final writes = s.agent.requests('session/revert');
+      expect(writes, hasLength(2));
+      expect(writes.first['params'],
+          {'sessionId': '1', 'sinceTurn': 'turn-9', 'dryRun': true});
+      expect(writes.last['params'],
+          {'sessionId': '1', 'sinceTurn': 'turn-9', 'dryRun': false});
+      expect(outcome.files, hasLength(3));
+      expect(s.items<NoticeItem>(), isEmpty); // The summary is the host's (§9).
+      expect(s.events.whereType<ChangesReverted>(), hasLength(1));
+    });
+
+    test('G6: a file changed since the turn is skipped, the host touching '
+        'nothing (D-SG3)', () async {
+      final s = await ready(
+        make: () => ThincoderMock(serialInbound: true)
+          ..revertPlan = const {
+            'files': [], 'unrevertable': [],
+            'skipped': [
+              {'path': '/p/b.txt', 'displayPath': 'b.txt', 'reason': 'changed'},
+            ],
+          },
+      );
+      final outcome = await s.kernel.applyRevert(sinceTurn: 'turn-1');
+
+      expect(outcome.skipped, hasLength(1));
+      expect((outcome.skipped.single.path, outcome.skipped.single.displayPath),
+          ('/p/b.txt', 'b.txt'));
+      expect(outcome.skipped.single.reason, 'changed');
+      expect(outcome.files, isEmpty);
+      expect(s.events.whereType<FileEdited>(), isEmpty);
+      expect(s.events.whereType<ChangesReverted>(), isEmpty);
+      expect(s.transcript.revertedSeq, -1);
+    });
+
+    test('G7: oversize and evicted are listed as unrevertable, files kept',
+        () async {
+      final s = await ready(
+        make: () => ThincoderMock(serialInbound: true)
+          ..revertPlan = const {
+            'files': [
+              {'path': '/p/a.txt', 'displayPath': 'a.txt', 'action': 'restore'},
+            ],
+            'skipped': [], 'unrevertable': [
+              {'path': '/p/c.bin', 'displayPath': 'c.bin', 'reason': 'oversize'},
+              {'path': '/p/d.txt', 'displayPath': 'd.txt', 'reason': 'evicted'},
+            ],
+          },
+      );
+      final outcome = await s.kernel.applyRevert(sinceTurn: 'turn-1');
+
+      expect(outcome.files.single.action, RevertAction.restore);
+      expect(outcome.unrevertable.map((item) => item.reason),
+          ['oversize', 'evicted']);
+      expect(outcome.unrevertable.map((item) => item.displayPath),
+          ['c.bin', 'd.txt']);
+    });
+
+    test('G8: a turn the kernel does not know is one error, no revert',
+        () async {
+      final s = await ready(
+        make: () => ThincoderMock(serialInbound: true)..revertUnknown = true,
+      );
+      await expectLater(s.kernel.revertPlan(sinceTurn: 'nope'),
+          throwsA(isA<ThincoderRpcError>()));
+
+      expect(s.agent.requests('session/revert'), hasLength(1));
+      expect(errors(s), hasLength(1));
+      expect(errors(s).single.text, contains('Could not revert'));
+      expect(s.events.whereType<ChangesReverted>(), isEmpty);
+    });
+
+    test('G11: a partly successful revert lists what it restored and what '
+        'failed (D-SG11)', () async {
+      final s = await ready(
+        make: () => ThincoderMock(serialInbound: true)
+          ..revertApply = const {
+            'files': [
+              {'path': '/p/a.txt', 'displayPath': 'a.txt', 'action': 'restore'},
+            ],
+            'skipped': [], 'unrevertable': [],
+            'failed': [
+              {'path': '/p/b.txt', 'displayPath': 'b.txt', 'error': 'EACCES'},
+            ],
+          },
+      );
+      final outcome = await s.kernel.applyRevert(sinceTurn: 'turn-1');
+
+      expect(outcome.files, hasLength(1));
+      expect(outcome.files.single.path, '/p/a.txt');
+      expect(outcome.failed, hasLength(1));
+      expect(outcome.failed.single.path, '/p/b.txt');
+      expect(outcome.failed.single.error, 'EACCES');
+      expect(s.events.whereType<ChangesReverted>(), hasLength(1));
+    });
+
+    test('an automatic turn reverts from the prompt turn it belongs to '
+        '(§3.3)', () async {
+      final s = await ready();
+      s.send('go');
+      await s.agent.finished.future;
+      await settle();
+
+      s.agent.push(_turn('start'));
+      await settle();
+      expect(s.transcript.activeTurn, 'auto:1');
+
+      await s.kernel.revertPlan(sinceTurn: 'auto:1');
+      expect(
+        (s.agent.requests('session/revert').single['params'] as Map)['sinceTurn'],
+        'turn-1',
+      );
+
+      s.agent.push(_turn('end', ok: true));
+      await settle();
+    });
+  });
+}
+
+/// The host's files as one that cannot be read at all: a binary file's.
+class _BinaryFiles implements KernelFiles {
+  @override
+  Future<String> readText(String path) async =>
+      throw IdeBinaryFileException(path);
+
+  @override
+  Future<String?> writeText(String path, String text) async =>
+      throw IdeBinaryFileException(path);
 }

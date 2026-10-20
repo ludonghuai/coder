@@ -6938,6 +6938,30 @@ abstract class AppLocalizations {
   /// **'Fetch From All Remotes'**
   String get scmFetchFromAllRemotes;
 
+  /// A warning when the project's subfolders could not be scanned for repositories; the panel would otherwise say there is none.
+  ///
+  /// In en, this message translates to:
+  /// **'Can\'t look for repositories here right now; trying again shortly.'**
+  String get scmScanFailed;
+
+  /// The workspace menu's Fetch: fetches every repository and merges its upstream.
+  ///
+  /// In en, this message translates to:
+  /// **'Fetch and Pull All Repositories'**
+  String get scmFetchAndPullAll;
+
+  /// The Get action's tooltip: it fetches the branch's upstream and merges it in.
+  ///
+  /// In en, this message translates to:
+  /// **'Fetch and pull remote commits'**
+  String get scmFetchAndPull;
+
+  /// The ↓N badge's tooltip in a repository's header: the commits its upstream has that it does not.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} remote commits to pull'**
+  String scmBehindCommits(int count);
+
   /// No description provided for @scmPull.
   ///
   /// In en, this message translates to:
@@ -11343,6 +11367,12 @@ abstract class AppLocalizations {
   /// **'Switch'**
   String get modelsSwitchConfirm;
 
+  /// No description provided for @modelsSwitchPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Switches to {model} when this turn ends'**
+  String modelsSwitchPending(String model);
+
   /// No description provided for @modelsAuxiliary.
   ///
   /// In en, this message translates to:
@@ -14976,7 +15006,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsSectionAccounts.
   ///
   /// In en, this message translates to:
-  /// **'Git Accounts'**
+  /// **'Accounts'**
   String get settingsSectionAccounts;
 
   /// No description provided for @settingsAccountsKeywords.
@@ -16766,6 +16796,294 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Open'**
   String get aboutOpen;
+
+  /// No description provided for @turnTokensSpentHint.
+  ///
+  /// In en, this message translates to:
+  /// **'This turn: input and output tokens together'**
+  String get turnTokensSpentHint;
+
+  /// No description provided for @usageSessionTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Session total'**
+  String get usageSessionTotal;
+
+  /// Settings → General switch: whether the file open in the editor goes with each message, for thincoder.
+  ///
+  /// In en, this message translates to:
+  /// **'Editor Context'**
+  String get generalSettingsEditorContext;
+
+  /// No description provided for @generalSettingsEditorContextDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'The file open in the editor goes with each message: its path, the cursor\'s line and the selection. Once per message; dismiss it for a draft with the chip below the message box.'**
+  String get generalSettingsEditorContextDescription;
+
+  /// The chip over a message: the file open in the editor and the cursor's line.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} · line {line}'**
+  String editorContextLine(String name, int line);
+
+  /// The chip's close button, read out: it takes the editor's context off the next message.
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss Editor Context'**
+  String get editorContextDismiss;
+
+  /// The chip over a message: the file open in the editor and the lines selected.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} · lines {first}–{last}'**
+  String editorContextLines(String name, int first, int last);
+
+  /// Title of the read-only diff tab of a change an agent could not write: the editor has unsaved changes.
+  ///
+  /// In en, this message translates to:
+  /// **'Agent\'s change (not applied)'**
+  String get agentChangeNotApplied;
+
+  /// Said in the conversation, and returned to the agent, when a write was refused because the editor has unsaved changes.
+  ///
+  /// In en, this message translates to:
+  /// **'The file has unsaved changes in the editor; the write was not applied.'**
+  String get agentWriteRefusedUnsaved;
+
+  /// No description provided for @generalSettingsGit.
+  ///
+  /// In en, this message translates to:
+  /// **'Git'**
+  String get generalSettingsGit;
+
+  /// No description provided for @generalSettingsGitAutofetch.
+  ///
+  /// In en, this message translates to:
+  /// **'Fetch Remote Updates Automatically'**
+  String get generalSettingsGitAutofetch;
+
+  /// No description provided for @generalSettingsGitAutofetchDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Every 3 minutes, and once when the window comes back to the front: fetches every repository of the workspace.'**
+  String get generalSettingsGitAutofetchDescription;
+
+  /// No description provided for @generalSettingsGitAutoPull.
+  ///
+  /// In en, this message translates to:
+  /// **'Pull Automatically'**
+  String get generalSettingsGitAutoPull;
+
+  /// No description provided for @generalSettingsGitAutoPullDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Only when the working tree is clean, the branch can fast-forward, and no unsaved buffer covers the files the remote changed; otherwise the number of remote commits alone shows.'**
+  String get generalSettingsGitAutoPullDescription;
+
+  /// No description provided for @generalSettingsGitAutofetchPeriod.
+  ///
+  /// In en, this message translates to:
+  /// **'Fetch Period'**
+  String get generalSettingsGitAutofetchPeriod;
+
+  /// The fetch period's choice in Settings: how many minutes.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes} min'**
+  String gitPeriodMinutes(String minutes);
+
+  /// In the branch's tooltip: when the remote's commits last came in.
+  ///
+  /// In en, this message translates to:
+  /// **'Last fetched: {time}'**
+  String gitLastFetched(String time);
+
+  /// The automatic fetch's tooltip: the working tree has changes, so nothing was pulled.
+  ///
+  /// In en, this message translates to:
+  /// **'Not pulled: there are uncommitted changes'**
+  String get gitAutoFetchDirty;
+
+  /// The automatic fetch's tooltip: the branch and its upstream diverged, so nothing was pulled.
+  ///
+  /// In en, this message translates to:
+  /// **'Not pulled: the branch and its upstream have both changed'**
+  String get gitAutoFetchDiverged;
+
+  /// The automatic fetch's tooltip: the status has more changes than are read, so nothing was pulled.
+  ///
+  /// In en, this message translates to:
+  /// **'Not pulled: there are more changes than are checked'**
+  String get gitAutoFetchLimit;
+
+  /// The automatic fetch's notification and tooltip: files the remote changed have unsaved changes in the editor.
+  ///
+  /// In en, this message translates to:
+  /// **'{repository}: not pulled, unsaved changes in {files}'**
+  String gitAutoFetchBuffered(String repository, String files);
+
+  /// After the first three files an issue names: there are more.
+  ///
+  /// In en, this message translates to:
+  /// **'{files} and more'**
+  String gitAutoFetchFilesMore(String files);
+
+  /// The automatic fetch's tooltip after a network failure, which is not notified.
+  ///
+  /// In en, this message translates to:
+  /// **'The network is not available: retrying automatically'**
+  String get gitAutoFetchNetwork;
+
+  /// The automatic fetch's tooltip after a proxy failure, which is not notified.
+  ///
+  /// In en, this message translates to:
+  /// **'The proxy is not available: retrying automatically'**
+  String get gitAutoFetchProxy;
+
+  /// The automatic fetch's notification: Git wants a sign-in the app cannot give.
+  ///
+  /// In en, this message translates to:
+  /// **'{repository}: sign-in is needed to fetch'**
+  String gitAutoFetchAuth(String repository);
+
+  /// The automatic fetch's notification: Git refused to fast-forward, for the user to look at.
+  ///
+  /// In en, this message translates to:
+  /// **'{repository}: cannot be pulled without your attention'**
+  String gitAutoFetchConflict(String repository);
+
+  /// The automatic fetch's tooltip for a failure that is not one of the known kinds.
+  ///
+  /// In en, this message translates to:
+  /// **'{repository}: the automatic fetch failed'**
+  String gitAutoFetchOther(String repository);
+
+  /// The title field's hint when the title is empty.
+  ///
+  /// In en, this message translates to:
+  /// **'A title is required'**
+  String get renameTitleRequired;
+
+  /// The title field's hint when the title is over 80 characters.
+  ///
+  /// In en, this message translates to:
+  /// **'A title is at most 80 characters'**
+  String get renameTitleTooLong;
+
+  /// The user message's context menu: reverts every file the turn and the ones after it changed.
+  ///
+  /// In en, this message translates to:
+  /// **'Revert files from this turn…'**
+  String get revertFromTurn;
+
+  /// The confirmation's title before a turn's files are reverted.
+  ///
+  /// In en, this message translates to:
+  /// **'Revert files from this turn?'**
+  String get revertTitle;
+
+  /// The confirmation's warning: changes made after the turn are lost.
+  ///
+  /// In en, this message translates to:
+  /// **'Changes made after this turn will be lost.'**
+  String get revertWarning;
+
+  /// The confirmation's button: it carries the revert out.
+  ///
+  /// In en, this message translates to:
+  /// **'Revert'**
+  String get revertConfirm;
+
+  /// The result's title once the revert is done.
+  ///
+  /// In en, this message translates to:
+  /// **'Revert complete'**
+  String get revertDone;
+
+  /// The confirmation's count of the files the revert brings back.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No files} =1{1 file} other{{count} files}}'**
+  String revertFileCount(int count);
+
+  /// The result's group of the files the revert brought back.
+  ///
+  /// In en, this message translates to:
+  /// **'Restored'**
+  String get revertGroupRestored;
+
+  /// The result's group of the files left as they are, having changed after the turn.
+  ///
+  /// In en, this message translates to:
+  /// **'Skipped'**
+  String get revertGroupSkipped;
+
+  /// The result's group of the files the kernel cannot revert.
+  ///
+  /// In en, this message translates to:
+  /// **'Cannot be reverted'**
+  String get revertUnrevertable;
+
+  /// The result's group of the files the revert could not write.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed'**
+  String get revertGroupFailed;
+
+  /// Why a file was skipped: it changed after the turn.
+  ///
+  /// In en, this message translates to:
+  /// **'Changed after the turn'**
+  String get revertReasonChanged;
+
+  /// Why a file cannot be reverted: it is too large for a copy to be kept.
+  ///
+  /// In en, this message translates to:
+  /// **'Too large to revert'**
+  String get revertReasonOversize;
+
+  /// Why a file cannot be reverted: its copy is no longer kept, the undo history having dropped it.
+  ///
+  /// In en, this message translates to:
+  /// **'No longer kept'**
+  String get revertReasonEvicted;
+
+  /// Why a file cannot be reverted: the state it was left in is unknown, so whether it changed cannot be told.
+  ///
+  /// In en, this message translates to:
+  /// **'Cannot tell if it changed'**
+  String get revertReasonAfterUnknown;
+
+  /// The conversation's notice: how many files the revert brought back.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{Reverted no files} =1{Reverted 1 file} other{Reverted {count} files}}'**
+  String revertSummaryRestored(int count);
+
+  /// The conversation's notice: how many files were skipped.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{Skipped no files} =1{Skipped 1 file} other{Skipped {count} files}}'**
+  String revertSummarySkipped(int count);
+
+  /// The conversation's notice: how many files cannot be reverted.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No files are unrevertable} =1{1 file cannot be reverted} other{{count} files cannot be reverted}}'**
+  String revertSummaryUnrevertable(int count);
+
+  /// Said when the turn has no changes to revert.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing to revert.'**
+  String get revertNothingToRevert;
+
+  /// The tooltip of a revert entry while a turn runs: the revert has to wait.
+  ///
+  /// In en, this message translates to:
+  /// **'Unavailable while a turn is running'**
+  String get revertTurnInFlight;
 }
 
 class _AppLocalizationsDelegate

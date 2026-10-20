@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 import 'package:bao_editor/monaco/flutter/editor_document_model.dart';
 import 'package:bao_editor/monaco/flutter/editor_surface.dart';
 import 'package:bao_editor/monaco/vs/editor/common/core/range.dart';
@@ -261,12 +262,13 @@ void main() {
     tester,
   ) async {
     const root = '/repo';
-    const path = '/repo/a.dart';
+    final absoluteRoot = p.absolute(root);
+    final path = p.join(absoluteRoot, 'a.dart');
     final git = FakeGit(root)
       ..refs['HEAD'] = _head
       ..blame['a.dart'] = _blameOutput();
     final workspace = IdeWorkspace(
-      root,
+      absoluteRoot,
       files: TreeFiles({path: 'one\ntwo\nthree\nfour\n'}),
       git: git.repository(),
     );

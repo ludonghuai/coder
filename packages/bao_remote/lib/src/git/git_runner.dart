@@ -15,6 +15,64 @@ const _gitEnvironment = {
   'GIT_OPTIONAL_LOCKS': '0',
 };
 
+/// What a caller adds to every Git process's environment: the app's proxy,
+/// read once per process; null for none (a remote host's Git runs with its
+/// own).
+Map<String, String> Function()? _gitProcessEnvironment;
+
+/// Makes [runGit] start Git with [value]'s variables over the ones it
+/// inherits: the app's proxy, read again as each process starts, so a
+/// change of it is used from the next one; null, to stop.
+void setGitProcessEnvironment(Map<String, String> Function()? value) =>
+    _gitProcessEnvironment = value;
+
+/// The environment every Git process gets: the variables [runGit] sets,
+/// and those [setGitProcessEnvironment] adds over them (a variable set to
+/// the empty string clears the one inherited).
+Map<String, String> gitProcessEnvironmentMap() => {
+  ..._gitEnvironment,
+  ...?_gitProcessEnvironment?.call(),
+};
+
+/// How long Git may take for a command that does not leave the machine.
+const gitLocalTimeout = Duration(seconds: 60);
+
+/// How long Git may take for a command on the long tier: a large
+/// repository through a slow proxy takes minutes, and a fetch killed at
+/// the minute could never succeed.
+const gitRemoteTimeout = Duration(seconds: 300);
+
+/// The commands on the long tier: those that talk to a remote (`git fetch`,
+/// `git ls-remote`...), and merge, which writes the working tree.
+const _remoteCommands = {
+  'fetch',
+  'pull',
+  'push',
+  'ls-remote',
+  'clone',
+  'submodule',
+  'merge', // Writes the working tree: killed early, a merge is left half done.
+};
+
+/// How long Git may take for [arguments]: [gitRemoteTimeout] for the
+/// commands on the long tier, [gitLocalTimeout] for the others. The
+/// command is the first argument that is not a global option, with the
+/// values of `-c` and `-C` skipped.
+Duration gitTimeoutFor(List<String> arguments) {
+  for (var i = 0; i < arguments.length; i++) {
+    final argument = arguments[i];
+    if (argument == '-c' || argument == '-C') {
+      i++;
+      continue;
+    }
+    if (argument.startsWith('-')) continue;
+    return _remoteCommands.contains(argument)
+        ? gitRemoteTimeout
+        : gitLocalTimeout;
+  }
+  return gitLocalTimeout;
+}
+
 List<String> _gitArguments(List<String> arguments) => [
   '--no-optional-locks',
   '-c',
@@ -33,6 +91,7 @@ Future<IdeGitOutput> runGit(
   required String workingDirectory,
   int? limit,
 }) async {
+  final timeout = gitTimeoutFor(arguments);
   try {
     if (limit != null) {
       return await _runLimited(arguments, workingDirectory, limit);
@@ -41,10 +100,10 @@ Future<IdeGitOutput> runGit(
       'git',
       _gitArguments(arguments),
       workingDirectory: workingDirectory,
-      environment: _gitEnvironment,
+      environment: gitProcessEnvironmentMap(),
       stdoutEncoding: utf8,
       stderrEncoding: utf8,
-    ).timeout(const Duration(seconds: 60));
+    ).timeout(timeout);
     return IdeGitOutput(
       result.exitCode,
       result.stdout as String,
@@ -59,7 +118,9 @@ Future<IdeGitOutput> runGit(
       'Git is not installed or could not be started: ${error.message}',
     );
   } on TimeoutException {
-    throw const IdeGitException('Git did not respond within 60 seconds.');
+    throw IdeGitException(
+      'Git did not respond within ${timeout.inSeconds} seconds.',
+    );
   } on FormatException {
     throw const IdeGitException('Git returned text that is not UTF-8.');
   }
@@ -72,11 +133,12 @@ Future<IdeGitOutput> _runLimited(
   int limit,
 ) async {
   assert(limit > 0);
+  final timeout = gitTimeoutFor(arguments);
   final process = await Process.start(
     'git',
     _gitArguments(arguments),
     workingDirectory: workingDirectory,
-    environment: _gitEnvironment,
+    environment: gitProcessEnvironmentMap(),
   );
   final stdout = BytesBuilder(copy: false);
   final stderr = BytesBuilder(copy: false);
@@ -114,16 +176,14 @@ Future<IdeGitOutput> _runLimited(
   );
   final errors = process.stderr.listen(stderr.add).asFuture<void>();
   try {
-    final truncated = await more.future.timeout(const Duration(seconds: 60));
+    final truncated = await more.future.timeout(timeout);
     if (truncated) {
       final bytes = stdout.takeBytes();
       return IdeGitOutput.truncated(
         utf8.decode(Uint8List.sublistView(bytes, 0, end)),
       );
     }
-    final exitCode = await process.exitCode.timeout(
-      const Duration(seconds: 60),
-    );
+    final exitCode = await process.exitCode.timeout(timeout);
     await errors.timeout(const Duration(seconds: 5), onTimeout: () {});
     return IdeGitOutput(
       exitCode,

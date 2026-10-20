@@ -1257,8 +1257,15 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
   List<PaletteAction> _paletteActions() {
     final l10n = context.l10n;
     final commands = _chatCommands();
+    // The focused chat's own commands (rename and the like) live on the
+    // chat screen, not the window: the palette reads them the way the keys do.
+    final thread = _agentThread ?? _workspace.current;
+    final chat = thread == null
+        ? const <ChatKeyTarget>[]
+        : ChatKeys.targetsOf(_chatKey(thread).currentContext);
+    final chatCommands = ChatKeys.commandsOf(chat);
     PaletteAction? action(String id, IconData icon, [VoidCallback? run]) {
-      final command = run ?? commands[id];
+      final command = run ?? commands[id] ?? chatCommands[id];
       if (command == null) return null;
       return PaletteAction(
         id: id,
@@ -1273,6 +1280,7 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
 
     return [
       ?action(ChatCommandIds.newChat, Codicons.add),
+      ?action(ChatCommandIds.renameAgent, Codicons.edit),
       ?action(_customizeCommand, Codicons.plug),
       ?action(openSettingsCommandId, Codicons.settingsGear),
       ?action(openKeybindingsCommandId, Codicons.keyboard),
@@ -3551,7 +3559,8 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
           );
         } catch (error) {
           // Tried again in a while (see the wait above), not never; the reason
-          // is logged, the panel has nothing to say it with.
+          // is logged, and told once so the panel's "no repository" is not
+          // taken for the truth.
           appEvent('sidePanel', 'repository scan failed: $error');
           if (!mounted) return;
           setState(() {
@@ -3560,6 +3569,12 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
               const Duration(seconds: 30),
             );
           });
+          if (_scanWarned.add(location)) {
+            _notifications.notify(
+              IdeSeverity.warning,
+              context.l10n.scmScanFailed,
+            );
+          }
           // The wait alone would leave it to unrelated rebuilds: ask for a
           // frame of our own when it is up.
           _sidePanelRetryTimer?.cancel();
@@ -3571,6 +3586,7 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
         }
         if (!mounted) return;
         _sidePanelRetryAt.remove(location);
+        _scanWarned.remove(location);
         if (paths.isEmpty) return;
         setState(() {
           _sidePanelFound[location] = [
@@ -3601,6 +3617,9 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
   /// When a failed scan of a project's subfolders may be tried again, by
   /// project.
   final Map<String, DateTime> _sidePanelRetryAt = {};
+
+  /// The projects whose failed scan was told: once until it works again.
+  final Set<String> _scanWarned = {};
 
   /// Asks for the frame that looks again once a failed scan's wait is up.
   Timer? _sidePanelRetryTimer;

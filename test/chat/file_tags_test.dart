@@ -5,6 +5,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 import 'package:baocode/chat/chat_feed.dart';
 import 'package:baocode/chat/chat_history_view.dart';
 import 'package:baocode/chat/chat_models.dart';
@@ -53,6 +54,9 @@ final _png = base64Decode(
 final _desktop = TargetPlatformVariant.only(TargetPlatform.macOS);
 
 void main() {
+  // The scope resolves a relative link against its root with the host's path
+  // context: the expectations are built the same way (a Windows host's `\`).
+  final root = p.normalize('/p');
   final opened = <String>[];
   final requests = <FileOpenRequest>[];
   final read = <String>[];
@@ -78,7 +82,7 @@ void main() {
         theme: buildAppTheme(),
         home: Scaffold(
           body: FileOpenScope(
-            root: '/p',
+            root: root,
             onOpen: (request) {
               opened.add(request.path);
               requests.add(request);
@@ -131,7 +135,7 @@ void main() {
     await tester.tap(find.text('旧版截图'));
     await tester.pumpAndSettle();
     expect(find.byType(InteractiveViewer), findsOneWidget);
-    expect(read.last, '/p/shots/old.png');
+    expect(read.last, p.join(root, 'shots', 'old.png'));
     expect(opened, isEmpty);
   }, variant: _desktop);
 
@@ -163,8 +167,8 @@ void main() {
   testWidgets('an image too big to show small is not read for its tag', (
     tester,
   ) async {
-    await pump(tester, screenshots, sizes: {'/p/shots/old.png': 1 << 30});
-    expect(read, ['/p/shots/new.png']);
+    await pump(tester, screenshots, sizes: {p.join(root, 'shots', 'old.png'): 1 << 30});
+    expect(read, [p.join(root, 'shots', 'new.png')]);
   }, variant: _desktop);
 
   testWidgets('its right click has the file\'s menu, with the image\'s '
@@ -178,7 +182,7 @@ void main() {
     }
     await tester.tap(find.text('Open'));
     await tester.pumpAndSettle();
-    expect(opened, ['/p/shots/new.png']);
+    expect(opened, [p.join(root, 'shots', 'new.png')]);
 
     // Where files open in the side panel, an image does too, and in the
     // IDE.
@@ -188,7 +192,7 @@ void main() {
     expect(find.text('Open in Side Panel'), findsOneWidget);
     await tester.tap(find.text('Open in Fast Ide'));
     await tester.pumpAndSettle();
-    expect(inIde, ['/p/shots/new.png']);
+    expect(inIde, [p.join(root, 'shots', 'new.png')]);
   }, variant: _desktop);
 
   testWidgets('a web page here opens in the browser, from its menu too', (
@@ -211,12 +215,12 @@ void main() {
     addTearDown(() => FileViews.unregisterOpener(webPageOpener.id));
     await pump(tester, report);
     final scope = tester.widget<FileOpenScope>(find.byType(FileOpenScope));
-    expect(scope.openerOf('/p/out/report.html')?.id, webPageOpener.id);
+    expect(scope.openerOf(p.join(root, 'out', 'report.html'))?.id, webPageOpener.id);
     await tester.tapAt(
       tester.getCenter(find.byType(FileIcon)) + const Offset(30, 0),
     );
     await tester.pumpAndSettle();
-    expect(browsed, ['/p/out/report.html']);
+    expect(browsed, [p.join(root, 'out', 'report.html')]);
     expect(opened, isEmpty);
     await rightClick(
       tester,
@@ -234,19 +238,19 @@ void main() {
     expect(find.text('Open in Browser'), findsOneWidget);
     await tester.tap(find.text('Open in Side Panel'));
     await tester.pumpAndSettle();
-    expect(opened, ['/p/out/report.html']);
+    expect(opened, [p.join(root, 'out', 'report.html')]);
     await rightClick(
       tester,
       tester.getCenter(find.byType(FileIcon)) + const Offset(30, 0),
     );
     await tester.tap(find.text('Open in Fast Ide'));
     await tester.pumpAndSettle();
-    expect(inIde, ['/p/out/report.html']);
+    expect(inIde, [p.join(root, 'out', 'report.html')]);
 
     // A remote project's opens as other files.
     await pump(tester, report, local: false);
     final remote = tester.widget<FileOpenScope>(find.byType(FileOpenScope));
-    expect(remote.openerOf('/p/out/report.html'), isNull);
+    expect(remote.openerOf(p.join(root, 'out', 'report.html')), isNull);
 
     // Nothing registered for it: it opens as other files.
     FileViews.unregisterOpener(webPageOpener.id);
@@ -255,7 +259,7 @@ void main() {
       tester.getCenter(find.byType(FileIcon)) + const Offset(30, 0),
     );
     await tester.pumpAndSettle();
-    expect(opened, ['/p/out/report.html']);
+    expect(opened, [p.join(root, 'out', 'report.html')]);
   }, variant: _desktop);
 
   testWidgets('an attached image\'s right click offers to show and copy '

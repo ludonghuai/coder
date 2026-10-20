@@ -336,6 +336,7 @@ class _ChatTabsState extends State<_ChatTabs> {
                   key: _keys.putIfAbsent(thread, GlobalKey.new),
                   thread: thread,
                   title: thread.localizedTitle(l10n),
+                  renameInitial: thread.pendingTitle,
                   active: identical(thread, widget.current),
                   closeTooltip: l10n.commonClose,
                   renaming: identical(thread, _renaming),
@@ -468,12 +469,16 @@ class _ChatTab extends StatelessWidget {
     required this.onSelect,
     required this.onClose,
     required this.onMenu,
+    this.renameInitial,
   });
 
   final AgentThread thread;
   final String title;
   final bool active;
   final String closeTooltip;
+
+  /// What the rename field opens with; [title] when null.
+  final String? renameInitial;
 
   /// Its title edited in place; [onRename] takes the new one, or null when
   /// the edit was cancelled.
@@ -494,6 +499,7 @@ class _ChatTab extends StatelessWidget {
       active: active,
       renaming: renaming,
       onRenamed: onRename,
+      renameInitial: renameInitial,
       mark: switch (status) {
         ThreadStatus.needsInput ||
         ThreadStatus.unread => (_) => Center(child: ThreadStatusMark(status)),

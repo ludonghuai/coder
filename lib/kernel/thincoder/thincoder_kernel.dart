@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 
@@ -15,11 +16,14 @@ import '../agent_kernel.dart';
 import '../kernel_event.dart';
 import '../kernel_types.dart';
 import 'thincoder_events.dart';
+import 'thincoder_files.dart';
 import 'thincoder_locator.dart';
 import 'thincoder_process.dart';
 import 'thincoder_protocol.dart';
 import 'thincoder_session_ref.dart';
 import 'thincoder_transport.dart';
+
+part 'thincoder_choices.dart';
 
 /// Adapts `thincoder acp` to [AgentKernel].
 ///
@@ -27,7 +31,7 @@ import 'thincoder_transport.dart';
 /// over its stdin and stdout, one JSON object per line. Its sessions are
 /// the ones the user's terminal keeps (the same slots in the same folder),
 /// its modes and settings are what it reports them to be, and pictures go
-/// to files the agent is told of — which its protocol cannot carry (F6).
+/// to files the agent is told of, or as native image blocks (F6 / F19).
 ///
 /// What it does not have — plans as cards, forks, rewind, background
 /// tasks — it does not declare, and the UI leaves those parts out.
@@ -35,6 +39,7 @@ class ThincoderKernel
     with KernelEventSource
     implements
         AgentKernel,
+        DefersModelSwitch,
         ThincoderSink,
         SelectsMode,
         SelectsModel,
@@ -43,7 +48,12 @@ class ThincoderKernel
         ReportsContext,
         LoadsHistory,
         AcceptsImageFiles,
-        QueuesMessages {
+        AcceptsEditorContext,
+        QueuesMessages,
+        RenamesSession,
+        PlansReverts,
+        GeneratesTitles,
+        DefersRename {
   ThincoderKernel(
     this.descriptor,
     this._context, {
@@ -98,6 +108,9 @@ class ThincoderKernel
   bool _httpMcp = false;
   String? _mcpToken;
 
+  /// Whether the handshake took pictures as native image blocks (F19).
+  bool _nativeImages = false;
+
   /// The turn under way: its id, when it began, whether the agent took it
   /// up on its own (§19.2); automatic turns, and one held for a turn's end.
   String? _turn;
@@ -106,6 +119,26 @@ class ThincoderKernel
   int _autoTurns = 0;
   ({String id, Object? kind})? _pendingAuto;
   final Set<String> _sent = {};
+
+  /// The model picked while a turn runs or a switch is out (F21): written
+  /// once neither is in the way.
+  String? _modelTarget;
+  bool _modelDeferred = false;
+  bool _modelSending = false;
+
+  /// The title picked while a turn runs or a write is out (§3.5): written
+  /// once neither is in the way.
+  String? _titleTarget;
+  bool _titleDeferred = false;
+  bool _titleSending = false;
+
+  /// A title picked before the session was made (§3.4): sent once it is.
+  String? _pendingTitle;
+
+  /// The turn the latest prompt was sent under, and the automatic turns
+  /// that belong to it (§3.3): a revert from one starts at the prompt's.
+  String? _lastPromptTurn;
+  final Map<String, String> _autoTurnOf = {};
 
   /// Messages sent while a turn runs, in the order sent; [_next] first.
   final List<KernelTurn> _queue = [];
@@ -125,6 +158,16 @@ class ThincoderKernel
   /// Pending approvals: our request id → the agent's request to answer.
   final Map<String, ThincoderRequest> _approvals = {};
 
+  /// The files the agent reads and writes through the host (F18).
+  late final ThincoderFiles _files = ThincoderFiles(
+    cwd: () => _cwd,
+    folders: () => _context.workspace?.call()?.folders ?? const [],
+    files: () => _context.files,
+    emit: emit,
+    nextSeq: () => nextSeq,
+    turnId: () => _turn,
+  );
+
   // --- Lifecycle --------------------------------------------------------------
 
   @override
@@ -132,6 +175,12 @@ class ThincoderKernel
 
   @override
   String? get sessionId => _sessionId;
+
+  @override
+  String? get pendingModel => _modelDeferred ? _modelTarget : null;
+
+  @override
+  String? get pendingTitle => _titleDeferred ? _titleTarget : null;
 
   @override
   Future<void> get stopped => _stopped;
@@ -189,10 +238,13 @@ class ThincoderKernel
       _handshake(
         await connection.request('initialize', {
           'protocolVersion': 1,
-          // Nothing but the protocol's basics: no `fs` routing (the
-          // agent's own reads and writes stay local), no terminal login
-          // (D12). What is not said is unsupported.
-          'clientCapabilities': <String, Object?>{},
+          // The files the agent edits go through the editor where a host
+          // gives one (F18); otherwise nothing but the protocol's basics,
+          // and no terminal login ever (D12). What is not said is
+          // unsupported.
+          'clientCapabilities': _context.files == null
+              ? const <String, Object?>{}
+              : ThincoderFiles.capabilities,
         }),
       );
       await _openSession();
@@ -255,6 +307,11 @@ class ThincoderKernel
       final String slot => ThincoderSessionRef.combine(_cwd, slot),
       null => null,
     };
+    // Named before it was made: sent now that it is (§3.4).
+    if (_pendingTitle case final title? when _slot != null) {
+      _pendingTitle = null;
+      rename(title);
+    }
   }
 
   /// The host tools' server for the agent, when its handshake takes HTTP
@@ -360,6 +417,12 @@ class ThincoderKernel
       final Object id => '$id',
       _ => null,
     };
+    // The grant went out with the empty session id session/new was made
+    // with: give it the one the session got, so its calls are keyed by it
+    // (two new sessions could otherwise collide on a request id).
+    if (_mcpToken case final token? when _slot != null) {
+      HostMcpServer.rebind(token, _slot!);
+    }
     _events.optionsFrom(created);
   }
 
@@ -381,6 +444,8 @@ class ThincoderKernel
     final caps =
         (answer['agentCapabilities'] as Map?)?.cast<String, Object?>();
     _httpMcp = (caps?['mcpCapabilities'] as Map?)?['http'] == true;
+    final promptCaps = caps?['promptCapabilities'];
+    _nativeImages = promptCaps is Map && promptCaps['image'] == true;
     appEvent(
       'thincoder',
       'handshake: protocol ${answer['protocolVersion']} · '
@@ -429,6 +494,10 @@ class ThincoderKernel
     _queue.clear();
     _next = null;
     _pendingAuto = null;
+    _dropModelOf();
+    _dropTitleOf();
+    _lastPromptTurn = null;
+    _autoTurnOf.clear();
     _watching = false;
     _events.closePiece();
     // The subagents it ran are gone with it (F11): nothing is left saying
@@ -520,6 +589,7 @@ class ThincoderKernel
     _queue.clear();
     _next = null;
     _pendingAuto = null;
+    _dropModelOf(); _dropTitleOf();
     // The panel is gone: what it was asked is answered as cancelled (D66).
     _resolveApprovals(refuse: true);
     closeEvents(); // The host's surface goes at once (D66).
@@ -565,14 +635,26 @@ class ThincoderKernel
 
   Future<void> _deliver(KernelTurn turn) async {
     // The pictures go where the agent runs, as the terminal keeps them
-    // (F6), before anything is said of the message.
-    final attached = _attachImages(turn);
+    // (F6), or as native image blocks where the agent takes them (F19).
+    final native = _nativeImages;
+    final attached = native ? _nativePrompt(turn) : _attachImages(turn);
+    // The files open in the editor, each one once (F17): said after the
+    // user's own words, as system reminders.
+    final contexts = _contexts(turn.contexts);
+    final text = [
+      if (attached.text.trim().isNotEmpty) attached.text,
+      for (final context in contexts) context.editorNote,
+    ].join('\n\n');
     if (_disposed) return;
     emit(
       ItemUpserted(
         nextSeq,
         turn.id,
-        UserMessageItem(text: attached.text, images: attached.images),
+        UserMessageItem(
+          text: attached.text,
+          images: attached.images,
+          contexts: contexts,
+        ),
       ),
     );
     if (attached.dropped > 0) {
@@ -607,13 +689,22 @@ class ThincoderKernel
     }
     final slot = _slot;
     if (_turn != turn.id || slot == null) return;
+    _lastPromptTurn = turn.id;
     try {
       // A turn's answer comes only when the turn ends, and a turn has no
       // upper bound: this request is not on the connection's clock (§3.4).
       final answer = await _connection!.request('session/prompt', {
         'sessionId': slot,
+        'turnId': turn.id,
         'prompt': [
-          {'type': 'text', 'text': attached.text},
+          if (!native || text.isNotEmpty) {'type': 'text', 'text': text},
+          if (native)
+            for (final image in attached.images)
+              {
+                'type': 'image',
+                'mimeType': image.mediaType,
+                'data': base64Encode(image.bytes),
+              },
         ],
       }, ThincoderConnection.noTimeout);
       if (_turn != turn.id) return;
@@ -632,6 +723,10 @@ class ThincoderKernel
   }
 
   void _beginTurn(String id, {bool unprompted = false}) {
+    // An automatic turn is its prompt turn's for a revert (§3.3).
+    if (unprompted && _lastPromptTurn != null) {
+      _autoTurnOf[id] = _lastPromptTurn!;
+    }
     _events.begin();
     _turn = id;
     _turnUnprompted = unprompted;
@@ -677,8 +772,17 @@ class ThincoderKernel
     }
   }
 
+  /// Forgets the model picked while a turn ran: none applies any more
+  /// (F21).
+  void _dropModelOf() {
+    _modelTarget = null;
+    _modelDeferred = false;
+    _modelSending = false;
+    emitInfoChanged();
+  }
+
   /// Ends the turn under way: its item done, the approvals the agent was
-  /// left waiting on resolved, and how long it took.
+  /// left waiting on resolved, and how long it took and what it spent.
   void _endTurn({required bool interrupted}) {
     final turn = _turn;
     if (turn == null) return;
@@ -688,6 +792,7 @@ class ThincoderKernel
     _resolveApprovals();
     final started = _turnStarted;
     _turnStarted = null;
+    final spent = _events.turnSpent;
     emit(
       TurnEnded(
         nextSeq,
@@ -696,8 +801,13 @@ class ThincoderKernel
         worked: started == null
             ? null
             : DateTime.now().difference(started),
+        usage: spent == 0 ? null : TurnUsage(spentTokens: spent),
       ),
     );
+    // The model picked while this turn ran goes before the next prompt
+    // (F21): the config line first, so the next turn runs on it.
+    unawaited(_pumpModelOf(this));
+    unawaited(_pumpTitle(this));
     // An automatic turn reported while this one ran goes first (D57).
     if (_pendingAuto case final pending?) {
       _pendingAuto = null;
@@ -765,11 +875,87 @@ class ThincoderKernel
     }
   }
 
+  // --- Renaming and reverting ---------------------------------------------------
+
+  /// No turn under way, none reported, and a live connection to ask (§3.5).
+  @override
+  bool get canRevertNow => _turn == null && _pendingAuto == null && _running;
+
+  @override
+  void rename(String title) {
+    // Before the session is made: kept for when it is (§3.4).
+    if (_slot == null) {
+      _pendingTitle = title;
+      return;
+    }
+    _titleTarget = title;
+    // A turn under way keeps the write back: it would land behind it (§3.5).
+    if (_turn != null || _pendingAuto != null || _titleSending) {
+      _titleDeferred = true;
+      emitInfoChanged();
+      return;
+    }
+    _titleDeferred = false;
+    unawaited(_pumpTitle(this));
+  }
+
+  void _dropTitleOf() {
+    _titleTarget = null; _titleDeferred = false; _titleSending = false;
+    emitInfoChanged();
+  }
+
+  @override
+  Future<RevertPlan> revertPlan({required String sinceTurn}) async =>
+      _planOf(await _revert(sinceTurn, true));
+
+  @override
+  Future<RevertOutcome> applyRevert({required String sinceTurn}) async {
+    final answer = await _revert(sinceTurn, false);
+    final outcome = RevertOutcome(
+      files: _revertFiles(answer['files']),
+      skipped: _revertSkips(answer['skipped']),
+      unrevertable: _revertSkips(answer['unrevertable']),
+      failed: _revertFailures(answer['failed']),
+    );
+    // The host words the summary in its own language (§9, D-SG12); only
+    // files put back clear its pending list (D-SG11).
+    if (outcome.files.isNotEmpty) emit(ChangesReverted(nextSeq));
+    return outcome;
+  }
+
+  /// `session/revert` for [sinceTurn]: its plan ([dryRun]), else what it did
+  /// (§3.1). An automatic turn is the prompt turn it belongs to (§3.3).
+  Future<Map<String, Object?>> _revert(String sinceTurn, bool dryRun) async {
+    final connection = _connection, slot = _slot;
+    final turn = _autoTurnOf[sinceTurn] ?? sinceTurn;
+    if (connection == null || slot == null) {
+      _revertFailed(sinceTurn, 'no session to revert in');
+      throw StateError('no session to revert in');
+    }
+    try {
+      return await connection.request('session/revert', {
+        'sessionId': slot,
+        'sinceTurn': turn,
+        'dryRun': dryRun,
+      });
+    } on Object catch (error) {
+      appEvent('thincoder', 'session/revert($turn) failed: $error');
+      _revertFailed(sinceTurn, '$error');
+      rethrow;
+    }
+  }
+
+  void _revertFailed(String sinceTurn, String reason) => emit(
+    ItemUpserted(nextSeq, 'revert:$sinceTurn',
+        NoticeItem(NoticeKind.error, 'Could not revert: $reason')),
+  );
+
   // --- Approvals --------------------------------------------------------------
 
   /// The agent asks leave for a tool (`session/request_permission`): put to
   /// the user as it asked, and answered by [answer].
   bool _serverRequest(ThincoderRequest request) {
+    if (_files.handle(request)) return true;
     if (request.method != 'session/request_permission') return false;
     final toolCall =
         (request.params['toolCall'] as Map?)?.cast<String, Object?>() ??
@@ -924,136 +1110,22 @@ class ThincoderKernel
   // --- The choices ------------------------------------------------------------
 
   @override
-  late final KernelChoiceSource mode = _Choice(
-    options: () => _events.optionsOf('mode', _modeIcon),
-    // The mode last reported — by the session's own word, or by
-    // `current_mode_update` (§3.6); never one it has not taken up (D20).
-    selected: () => _events.mode,
-    select: (id) {
-      if (id != 'plan' && id != 'normal') return;
-      unawaited(_setMode(id));
-    },
-  );
+  late final KernelChoiceSource mode = _modeOf(this);
 
   /// The approval switch the agent reports (F13): the terminal's `/auto`.
   @override
-  late final KernelChoiceSource permission = _Choice(
-    options: () => _events.configOf('autoApprove') == null
-        ? const []
-        : const [
-            KernelOption(
-              'ask',
-              'Ask',
-              Icons.front_hand_outlined,
-              'Ask before each tool call',
-            ),
-            KernelOption(
-              'auto',
-              'Auto',
-              Icons.fast_forward_rounded,
-              'Tools run without asking — the same switch as /auto in the '
-                  'terminal',
-              caution: true,
-            ),
-          ],
-    // What the agent last reported; never what was asked for (D20).
-    selected: () => _events.configOf('autoApprove')?['currentValue'] == true
-        ? 'auto'
-        : 'ask',
-    select: (id) => unawaited(_config('autoApprove', id == 'auto')),
-  );
+  late final KernelChoiceSource permission = _permissionOf(this);
 
   @override
-  late final KernelChoiceSource model = _Choice(
-    options: () => _events.optionsOf('model', (value) => Icons.bolt_rounded),
-    selected: () => _events.selected('model'),
-    select: (id) => unawaited(_config('model', id)),
-  );
-
-  /// Whether the agent reports thinking levels (F14; an empty list is none).
-  bool get _hasThinkingLevels =>
-      (_events.configOf('thinkingLevel')?['options'] as List?)
-          ?.isNotEmpty ??
-      false;
-
-  List<KernelOption> _thinkingLevels() => [
-    for (final option
-        in _events.optionsOf('thinkingLevel', (_) => Icons.speed_rounded))
-      KernelOption(option.id, effortLabel(option.id), option.icon, ''),
-  ];
-
-  String? _thinkingChoice() => _hasThinkingLevels
-      ? _events.selected('thinkingLevel')
-      : _events.thinking
-      ? 'on'
-      : 'off';
+  late final KernelChoiceSource model = _modelOf(this);
 
   @override
-  late final ModelSetting effort = _ModelSetting(
-    toggles: () => !_hasThinkingLevels,
-    optionsFor: (_) => _hasThinkingLevels
-        ? _thinkingLevels()
-        : _events.configOf('thinking') == null
-        ? const []
-        : const [
-            KernelOption(
-              'on',
-              'Thinking',
-              Icons.psychology_outlined,
-              'Let the model think before it answers',
-            ),
-          ],
-    selected: _thinkingChoice,
-    selectedFor: (_) => _thinkingChoice(),
-    // A switch flips; a level is picked as named (the agent's word, D20).
-    select: (model, id) {
-      if (_hasThinkingLevels) {
-        unawaited(_config('thinkingLevel', id));
-        return;
-      }
-      if (id != 'on') return;
-      unawaited(_config('thinking', !_events.thinking));
-    },
-  );
+  late final ModelSetting effort = _effortOf(this);
 
-  static IconData _modeIcon(String value) => switch (value) {
-    'plan' => Icons.checklist_rounded,
-    'normal' => Icons.all_inclusive_rounded,
-    _ => Icons.tune_rounded,
-  };
+  Future<void> _setMode(String mode) => _setModeOf(this, mode);
 
-  Future<void> _setMode(String mode) async {
-    final connection = _connection;
-    final slot = _slot;
-    // Let go of the session (its view left): there is nothing to set it on.
-    if (connection == null || slot == null) return;
-    try {
-      await connection.request('session/set_mode', {
-        'sessionId': slot,
-        'mode': mode,
-      });
-    } on Object catch (error) {
-      appEvent('thincoder', 'set_mode($mode) failed: $error');
-    }
-  }
-
-  Future<void> _config(String configId, Object? value) async {
-    final connection = _connection;
-    final slot = _slot;
-    // As in [_setMode]: the menu may outlive the session it was opened on.
-    if (connection == null || slot == null) return;
-    try {
-      final answer = await connection.request('session/set_config_option', {
-        'sessionId': slot,
-        'configId': configId,
-        'value': value,
-      });
-      _events.optionsFrom(answer);
-    } on Object catch (error) {
-      // Shown as it stands: the report is the agent's (D20).
-      appEvent('thincoder', 'set_config_option($configId) failed: $error');
-    }
-  }
+  Future<void> _config(String configId, Object? value) =>
+      _configOf(this, configId, value);
 
   // --- Pictures ---------------------------------------------------------------
 
@@ -1067,6 +1139,16 @@ class ThincoderKernel
   static const _letters = '0123456789abcdefghijklmnopqrstuvwxyz';
   static final _random = math.Random();
 
+  /// The turn's [contexts], one per file (its canonical absolute path):
+  /// the same file said twice is said once.
+  static List<EditorContext> _contexts(List<EditorContext> contexts) {
+    final seen = <String>{};
+    return [
+      for (final context in contexts)
+        if (seen.add(context.dedupeKey)) context,
+    ];
+  }
+
   /// The pictures of [turn] as the message to send: each saved where the
   /// agent runs (`<cwd>/.thincoder/tmp/paste-<runId>-<i>.<ext>`, the
   /// terminal's own naming) and named in the text; what is too big, or
@@ -1076,7 +1158,6 @@ class ThincoderKernel
   ) {
     final parts = [
       if (turn.text.trim().isNotEmpty) turn.text,
-      ...turn.notes,
     ];
     var dropped = 0;
     final images = <ImageAttachment>[];
@@ -1112,6 +1193,26 @@ class ThincoderKernel
     return (text: parts.join('\n\n'), images: images, dropped: dropped);
   }
 
+  /// [turn]'s pictures as native image blocks (F19), under the same limits.
+  ({String text, List<ImageAttachment> images, int dropped}) _nativePrompt(
+    KernelTurn turn,
+  ) {
+    var dropped = 0;
+    final images = <ImageAttachment>[];
+    var budget = turnMaxBytes;
+    for (final image in turn.images) {
+      final ext = _imageExtension(image.mediaType);
+      final bytes = image.bytes.length;
+      if (ext == null || bytes == 0 || bytes > imageMaxBytes || bytes > budget) {
+        dropped++;
+        continue;
+      }
+      budget -= bytes;
+      images.add(image);
+    }
+    return (text: turn.text, images: images, dropped: dropped);
+  }
+
   /// The extension of a picture of [mediaType], as the terminal names it;
   /// null for one it does not take.
   static String? _imageExtension(String mediaType) => switch (mediaType) {
@@ -1130,66 +1231,65 @@ class ThincoderKernel
   ].join();
 }
 
-/// A choice over state the kernel holds: options and selection read live
-/// (the form Claude Code's adapter keeps).
-class _Choice implements KernelChoiceSource {
-  _Choice({
-    required this._options,
-    required this._selected,
-    required this._select,
-  });
-
-  final List<KernelOption> Function() _options;
-  final String? Function() _selected;
-  final void Function(String id) _select;
-  List<KernelOption> _cache = const [];
-
-  /// The same list while unchanged, so pickers keep their identity.
-  @override
-  List<KernelOption> get options {
-    final fresh = _options();
-    if (!listEquals(fresh, _cache)) _cache = fresh;
-    return _cache;
+Future<void> _pumpTitle(ThincoderKernel kernel) async {
+  final target = kernel._titleTarget;
+  if (target == null || kernel._titleSending || kernel._turn != null ||
+      kernel._pendingAuto != null || kernel._releaseWanted) {
+    return;
   }
-
-  @override
-  String? get selected => _selected();
-
-  @override
-  void select(String id) {
-    if (id != selected) _select(id);
+  final connection = kernel._connection, slot = kernel._slot;
+  if (connection == null || slot == null) {
+    // Nothing to write it through (§3.5): said, not silently dropped.
+    appEvent('thincoder', 'set_title: no connection');
+    kernel.emit(ItemUpserted(kernel.nextSeq, 'error:title',
+        NoticeItem(NoticeKind.error,
+            'The title was not confirmed: no connection')));
+    return kernel._dropTitleOf();
+  }
+  kernel._titleDeferred = false; kernel._titleSending = true;
+  try {
+    await connection.request('session/set_title', {
+      'sessionId': slot,
+      'title': target,
+    });
+    if (!identical(connection, kernel._connection)) return;
+    kernel._titleSending = false;
+    if (kernel._titleTarget != target) return unawaited(_pumpTitle(kernel));
+    kernel._dropTitleOf();
+  } on Object catch (error) {
+    if (!identical(connection, kernel._connection)) return;
+    appEvent('thincoder', 'set_title failed: $error');
+    kernel.emit(ItemUpserted(kernel.nextSeq, 'error:title',
+        NoticeItem(NoticeKind.error, 'The title was not confirmed: $error')));
+    kernel._titleSending = false;
+    if (kernel._titleTarget != target) return unawaited(_pumpTitle(kernel));
+    kernel._dropTitleOf();
   }
 }
 
-/// A setting that goes with the model, read live.
-class _ModelSetting implements ModelSetting {
-  _ModelSetting({
-    required this._optionsFor,
-    required this._selected,
-    required this._selectedFor,
-    required this._select,
-    this._toggles,
-  });
+RevertPlan _planOf(Map<String, Object?> answer) => RevertPlan(
+    files: _revertFiles(answer['files']),
+    skipped: _revertSkips(answer['skipped']),
+    unrevertable: _revertSkips(answer['unrevertable']));
 
-  final List<KernelOption> Function(String model) _optionsFor;
-  final String? Function() _selected;
-  final String? Function(String model) _selectedFor;
-  final void Function(String model, String id) _select;
+List<RevertFile> _revertFiles(Object? list) => [
+  for (final entry in list as List? ?? const [])
+    if (entry is Map)
+      RevertFile('${entry['path']}',
+          entry['action'] == 'delete' ? RevertAction.delete : RevertAction.restore,
+          displayPath: entry['displayPath'] as String?),
+];
 
-  final bool Function()? _toggles;
+List<RevertSkip> _revertSkips(Object? list) => [
+  for (final entry in list as List? ?? const [])
+    if (entry is Map)
+      RevertSkip('${entry['path']}', '${entry['reason']}',
+          displayPath: entry['displayPath'] as String?),
+];
 
-  @override
-  bool get toggle => _toggles?.call() ?? false;
-
-  @override
-  List<KernelOption> optionsFor(String model) => _optionsFor(model);
-
-  @override
-  String? get selected => _selected();
-
-  @override
-  String? selectedFor(String model) => _selectedFor(model);
-
-  @override
-  void select(String model, String id) => _select(model, id);
-}
+List<RevertFailure> _revertFailures(Object? list) => [
+  for (final entry in list as List? ?? const [])
+    if (entry is Map)
+      RevertFailure('${entry['path']}', '${entry['error']}',
+          displayPath: entry['displayPath'] as String?),
+];

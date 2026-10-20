@@ -88,6 +88,9 @@ String? fileUriToPath(Uri uri, OperatingSystem os) {
     return value;
   } on ArgumentError {
     return null;
+  } on FormatException {
+    // A valid escape whose bytes are not UTF-8 (`%E4`): no path.
+    return null;
   }
 }
 

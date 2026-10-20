@@ -57,6 +57,7 @@ class KernelContext {
     this.resume,
     this.settings = const {},
     this.workspace,
+    this.files,
   });
 
   /// The project directory.
@@ -69,9 +70,42 @@ class KernelContext {
   /// An earlier session to continue, as its catalog listed it.
   final SessionRecord? resume;
 
+  /// The host's files, for an agent that reads and writes through them
+  /// (F18); null when the host gives none — no such capability is declared
+  /// then.
+  final KernelFiles? files;
+
   /// Initial choices by [KernelChoiceKind] name, e.g. the permission mode
   /// new agents start in.
   final Map<String, String> settings;
+}
+
+/// The host's files, for an agent that reads and writes them (F18): the
+/// editor's open documents, unsaved changes and all, or the file service of
+/// the project.
+abstract interface class KernelFiles {
+  /// [path]'s text: the editor's own where it is open, else the file's.
+  Future<String> readText(String path);
+
+  /// Writes [text] to [path], completing with its text before the write
+  /// (null when there was no file). Throws [KernelFilesException] when it
+  /// was not written — e.g. the editor has unsaved changes.
+  Future<String?> writeText(String path, String text);
+}
+
+/// A file read or write the host would not do, with what to tell the agent:
+/// the message becomes the tool call's error (F18).
+class KernelFilesException implements Exception {
+  const KernelFilesException(this.message, {this.code = -32603});
+
+  final String message;
+
+  /// The JSON-RPC error code: -32603 (the default) for a file that cannot be
+  /// read or a write refused, -32602 for a path this host will not take.
+  final int code;
+
+  @override
+  String toString() => message;
 }
 
 // --- Capabilities -----------------------------------------------------------
@@ -99,6 +133,14 @@ enum KernelChoiceKind { model, mode, permission, effort, context, fast }
 
 abstract interface class SelectsModel {
   KernelChoiceSource get model;
+}
+
+/// Holds a model picked while a turn runs, and applies it once the turn is
+/// over rather than lose it to the agent's queue.
+abstract interface class DefersModelSwitch {
+  /// The model picked while a turn ran, not in effect yet; null when none
+  /// waits.
+  String? get pendingModel;
 }
 
 /// A model whose pick restarts the agent to go on with its conversation,
@@ -257,6 +299,40 @@ abstract interface class RenamesSession {
   void rename(String title);
 }
 
+/// Reverts what a turn changed, shown first as a plan rather than done at
+/// once: what goes back, what is left alone and why, then the doing.
+/// Throws when it cannot plan or apply; the kernel says why in the chat.
+abstract interface class PlansReverts {
+  /// Whether a plan can be made and carried out now: no turn under way,
+  /// none reported and not taken up yet, and a live connection to ask.
+  bool get canRevertNow;
+
+  /// What a revert from turn [sinceTurn] on would do; nothing is written.
+  Future<RevertPlan> revertPlan({required String sinceTurn});
+
+  /// Does what [revertPlan] planned for [sinceTurn], each file on its own:
+  /// what it did, and what it did not manage to.
+  Future<RevertOutcome> applyRevert({required String sinceTurn});
+}
+
+/// Names its sessions itself (a title at the end of a turn): the host
+/// generates no second title.
+abstract interface class GeneratesTitles {}
+
+/// Holds a title picked while a turn runs, applying it once the turn is
+/// over rather than lose it to the agent's queue.
+abstract interface class DefersRename {
+  /// The title picked while a turn ran, not in effect yet; null when none
+  /// waits.
+  String? get pendingTitle;
+}
+
+/// Renames a session it keeps without opening one: the catalog's record,
+/// written where the kernel keeps it.
+abstract interface class RenamesStoredSessions {
+  Future<void> rename(SessionRecord session, String title);
+}
+
 /// Takes pictures with a message ([KernelTurn.images]).
 abstract interface class AcceptsImages {}
 
@@ -265,6 +341,10 @@ abstract interface class AcceptsImages {}
 /// from there): for a kernel whose protocol carries none, which would
 /// otherwise have to claim a capability it does not have.
 abstract interface class AcceptsImageFiles {}
+
+/// Takes the files open in the editor with a message ([KernelTurn.contexts]):
+/// their paths, cursor lines and selections, as system reminders.
+abstract interface class AcceptsEditorContext {}
 
 /// Reads the conversation it continues ([KernelContext.resume]) before
 /// showing it.

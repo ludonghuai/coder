@@ -1,4 +1,5 @@
 import 'package:bao_editor/monaco/flutter/document_snapshot.dart';
+import 'package:baocode/chat/chat_models.dart';
 import 'package:baocode/chat/chat_session.dart';
 import 'package:baocode/chat/open_editor.dart';
 import 'package:baocode/kernel/agent_kernel.dart';
@@ -81,6 +82,38 @@ void main() {
         contains('/p/a open in the editor.'),
       );
     });
+    test('is a context a message carries, its note as told today', () {
+      const open = OpenEditor(
+        '/p/a',
+        line: 4,
+        selectedLines: (2, 3),
+        selectedText: 'two\nthree',
+      );
+      final context = open.toContext();
+      expect(context.path, '/p/a');
+      expect(context.line, 4);
+      expect(context.selectedLines, (2, 3));
+      expect(context.selectedText, 'two\nthree');
+      expect(context.name, 'a');
+      // Claude is told exactly what it was told before.
+      expect(context.note, open.note);
+      expect(open.note, contains('The user selected lines 2-3 of /p/a'));
+
+      // thincoder is told the cursor's line too, the selection with it.
+      expect(context.editorNote, contains('cursor on line 4'));
+      expect(context.editorNote, contains('lines 2-3'));
+      expect(context.editorNote, contains('two\nthree'));
+
+      // A file open with no cursor: the path alone.
+      const noCursor = EditorContext('/p/a');
+      expect(noCursor.name, 'a');
+      expect(
+        noCursor.editorNote,
+        '<system-reminder>The user has /p/a open in the editor. This may or '
+        'may not be related to the current task.</system-reminder>',
+      );
+      expect(noCursor.note, contains('/p/a open in the editor.'));
+    });
   });
 
   testWidgets('the agent is told of the file open as it changes', (
@@ -108,10 +141,14 @@ void main() {
       session.send(ComposerMessage(text: text), editor: () => open);
       await tester.pump(const Duration(milliseconds: 100));
       final content = cli.users.last['message']! as Map;
-      return [
+      final texts = [
         for (final block in content['content']! as List)
           (block as Map)['text']! as String,
       ];
+      // The CLI's result ends the turn; the next send starts another.
+      cli.push({'type': 'result', 'subtype': 'success'});
+      await tester.pump(const Duration(milliseconds: 100));
+      return texts;
     }
 
     // No file open, none ever was: nothing to tell.

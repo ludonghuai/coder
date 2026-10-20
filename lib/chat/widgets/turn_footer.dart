@@ -118,6 +118,9 @@ class TurnFooter extends StatelessWidget {
     final speed = usage?.tokensPerSecond;
     final cost = usage?.costUsd;
     final tokens = usage?.totalTokens;
+    final spentOnly = usage != null &&
+        usage!.inputTokens == null &&
+        usage!.outputTokens == null;
     return [
       if (worked case final worked?)
         _Stat(
@@ -135,10 +138,12 @@ class TurnFooter extends StatelessWidget {
       if (tokens != null && tokens > 0)
         _Stat(
           text: l10n.turnTokens(AgentStep.formatTokens(tokens, decimals: 2)),
-          hint: l10n.turnTokensHint(
-            AgentStep.formatTokens(usage?.inputTokens ?? 0),
-            AgentStep.formatTokens(usage?.outputTokens ?? 0),
-          ),
+          hint: spentOnly
+              ? l10n.turnTokensSpentHint
+              : l10n.turnTokensHint(
+                  AgentStep.formatTokens(usage?.inputTokens ?? 0),
+                  AgentStep.formatTokens(usage?.outputTokens ?? 0),
+                ),
         ),
     ];
   }
