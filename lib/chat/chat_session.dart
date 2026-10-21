@@ -420,6 +420,13 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
     _turns.clear();
     _prependedSeen = 0;
     _connect(descriptor);
+    // The view never went away, so its attach will not come again: the new
+    // kernel is started here, or it would sit unstarted and say nothing of
+    // what it offers (mode, model) until the first message.
+    if (_views > 0) {
+      _kernel.prepare();
+      _startReview();
+    }
     notifyListeners();
   }
 
