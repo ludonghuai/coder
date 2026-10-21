@@ -1,3 +1,9 @@
+// The fixtures install POSIX packages: `chmod` really runs, and the
+// registry's entries are `/`-separated. What this file checks is that
+// installer, not what Windows does with it — so it runs where it can.
+@TestOn('!windows')
+library;
+
 import 'dart:convert';
 import 'dart:io';
 

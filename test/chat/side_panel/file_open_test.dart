@@ -5,9 +5,11 @@ import 'package:baocode/chat/side_panel/file_link.dart';
 import 'package:baocode/chat/side_panel/file_open.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-const _root = '/Users/me/Desktop';
-const _read = '/Users/me/Documents/app/lib/chat/step_folds.dart';
+import 'package:path/path.dart' as p;
+/// The project and what its agent read, in the host's spelling (the tests
+/// run on Windows too).
+final _root = p.normalize('/Users/me/Desktop');
+final _read = p.normalize('/Users/me/Documents/app/lib/chat/step_folds.dart');
 
 void main() {
   /// The scope of a conversation in [_root] whose agent read [_read].
@@ -15,7 +17,7 @@ void main() {
     root: _root,
     onOpen: opened.add,
     existence: FileExistence((path) async => path == _read),
-    seen: const [_read],
+    seen: [_read],
     child: const SizedBox(),
   );
 
@@ -49,7 +51,7 @@ void main() {
   test('only whole names match, and only files read', () async {
     final files = scope([]);
     await pumpEventQueue();
-    expect(files.resolve('_folds.dart'), '$_root/_folds.dart');
+    expect(files.resolve('_folds.dart'), p.join(_root, '_folds.dart'));
     expect(files.resolve('lib/other/step_folds.dart'), isNot(_read));
   });
 }

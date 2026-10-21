@@ -55,14 +55,14 @@ class _Files implements IdeFileService {
   dynamic noSuchMethod(Invocation invocation) => throw UnimplementedError();
 }
 
-const _workspace = '/data/workspaces/w1';
-const _site = '/code/site';
-const _api = '/code/api';
+final _workspace = p.normalize('/data/workspaces/w1');
+final _site = p.normalize('/code/site');
+final _api = p.normalize('/code/api');
 
 final _files = _Files({
-  '$_site/index.html': '<html>',
-  '$_api/main.go': 'package main',
-  '$_api/new.go': 'package main',
+  p.join(_site, 'index.html'): '<html>',
+  p.join(_api, 'main.go'): 'package main',
+  p.join(_api, 'new.go'): 'package main',
 });
 
 /// A conversation in the workspace `web` of [roots], its side panel shown
@@ -70,7 +70,7 @@ final _files = _Files({
 Future<({AgentSidePanel panel, ChatSession session})> _pump(
   WidgetTester tester, {
   required SidePanelSection section,
-  List<String> roots = const [_site, _api],
+  List<String>? roots,
   List<(String, IdeGitRepository)> repositories = const [],
   String? workspaceName = 'web',
   IdeGitRepository? git,
@@ -82,7 +82,7 @@ Future<({AgentSidePanel panel, ChatSession session})> _pump(
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   final session = ChatSession(
-    kernelContext: const KernelContext(cwd: _workspace),
+    kernelContext: KernelContext(cwd: _workspace),
     openReview: (root, {session}) async => null,
   );
   addTearDown(session.dispose);
@@ -121,7 +121,7 @@ Future<({AgentSidePanel panel, ChatSession session})> _pump(
               watchDirectory: (_) => const Stream.empty(),
               workspaceName: workspaceName,
               git: git,
-              roots: roots,
+              roots: roots ?? [_site, _api],
               repositories: repositories,
               onAddFolder: onAddFolder,
               onRemoveFolder: onRemoveFolder,
@@ -191,7 +191,7 @@ void main() {
     // A file of either opens beside the tree.
     await tester.tap(_inList('main.go'));
     await tester.pumpAndSettle();
-    expect(panel.tabsOf(session).active?.path, '$_api/main.go');
+    expect(panel.tabsOf(session).active?.path, p.join(_api, 'main.go'));
 
     await tester.tap(
       find.ancestor(of: _inList('api'), matching: find.byType(IdeListRow)),
@@ -346,7 +346,7 @@ void main() {
     /// [_files] has them.
     FileOpenScope scope(List<FileOpenRequest> opened) => FileOpenScope(
       root: _workspace,
-      roots: const [_site, _api],
+      roots: [_site, _api],
       onOpen: opened.add,
       existence: FileExistence(fileExistsIn(_files)),
       child: const SizedBox(),
@@ -356,12 +356,12 @@ void main() {
       final opened = <FileOpenRequest>[];
       final files = scope(opened);
       // Not known yet: the first folder's, while each is asked.
-      expect(files.resolve('main.go'), '$_site/main.go');
+      expect(files.resolve('main.go'), p.join(_site, 'main.go'));
       await pumpEventQueue();
-      expect(files.resolve('main.go'), '$_api/main.go');
-      expect(files.resolve('index.html'), '$_site/index.html');
+      expect(files.resolve('main.go'), p.join(_api, 'main.go'));
+      expect(files.resolve('index.html'), p.join(_site, 'index.html'));
       // An absolute path in any folder; none outside them.
-      expect(files.resolve('$_api/new.go'), '$_api/new.go');
+      expect(files.resolve(p.join(_api, 'new.go')), p.join(_api, 'new.go'));
       expect(files.resolve('/elsewhere/a.go'), isNull);
     });
 
@@ -372,7 +372,7 @@ void main() {
         isTrue,
       );
       await pumpEventQueue();
-      expect(opened.single.path, '$_api/new.go');
+      expect(opened.single.path, p.join(_api, 'new.go'));
       expect(opened.single.range, FileLineRange(3));
     });
   });

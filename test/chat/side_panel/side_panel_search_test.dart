@@ -2,11 +2,9 @@
 // search in place of the tree, the results come from the engine the IDE
 // searches with, and a result opens its file at its line.
 
-import 'package:bao_editor/monaco/flutter/editor_surface.dart';
 import 'package:baocode/ide/ide_notifications.dart';
 import 'package:baocode/chat/chat_session.dart';
 import 'package:baocode/chat/side_panel/file_link.dart';
-import 'package:baocode/chat/side_panel/file_open.dart';
 import 'package:baocode/chat/side_panel/side_panel_controller.dart';
 import 'package:baocode/chat/side_panel/side_panel_view.dart';
 import 'package:baocode/ide/file_service.dart';
@@ -53,11 +51,11 @@ class _Files implements IdeFileService {
   dynamic noSuchMethod(Invocation invocation) => throw UnimplementedError();
 }
 
-const _project = '/code/site';
+final _project = p.normalize('/code/site');
 
 final _files = _Files({
-  '$_project/index.html': '<html>\nhello world\n</html>',
-  '$_project/app.js': 'const greeting = "hello";\n',
+  p.join(_project, 'index.html'): '<html>\nhello world\n</html>',
+  p.join(_project, 'app.js'): 'const greeting = "hello";\n',
 });
 
 /// The engine the IDE searches with, over [_files]: what the panel is
@@ -81,7 +79,7 @@ Future<({AgentSidePanel panel, ChatSession session})> _pump(
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   final session = ChatSession(
-    kernelContext: const KernelContext(cwd: _project),
+    kernelContext: KernelContext(cwd: _project),
     openReview: (root, {session}) async => null,
   );
   addTearDown(session.dispose);
@@ -218,7 +216,7 @@ void main() {
     final tab = panel.tabsOf(session).current;
     expect(
       tab?.request.path,
-      anyOf('$_project/index.html', '$_project/app.js'),
+      anyOf(p.join(_project, 'index.html'), p.join(_project, 'app.js')),
     );
     expect(tab?.request.range, isA<FileLineRange>());
   });
