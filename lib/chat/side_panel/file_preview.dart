@@ -476,50 +476,55 @@ class _FilePreviewState extends State<FilePreview> {
       decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: AppColors.partBorder)),
       ),
-      child: Row(
-        children: [
-          FileIcon(path, size: 14),
-          const SizedBox(width: 6),
-          Expanded(
-            // The whole path, which the bar may cut short.
-            child: IdeHover(
-              message: path,
-              followMouse: true,
-              child: Text.rich(
-                TextSpan(
-                  children: [
-                    TextSpan(text: shown),
-                    if (range != null &&
-                        !_request.diff &&
-                        !_request.agentChange)
-                      TextSpan(
-                        text: '  ${range.label}',
-                        style: TextStyle(color: AppColors.textFaint),
-                      ),
-                  ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final tight = constraints.maxWidth < 420;
+          return Row(
+            children: [
+              FileIcon(path, size: 14),
+              const SizedBox(width: 6),
+              Expanded(
+                // The whole path, which the bar may cut short.
+                child: IdeHover(
+                  message: path,
+                  followMouse: true,
+                  child: Text.rich(
+                    TextSpan(
+                      children: [
+                        TextSpan(text: shown),
+                        if (range != null &&
+                            !_request.diff &&
+                            !_request.agentChange)
+                          TextSpan(
+                            text: '  ${range.label}',
+                            style: TextStyle(color: AppColors.textFaint),
+                          ),
+                      ],
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+                  ),
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: AppColors.textMuted, fontSize: 12),
               ),
-            ),
-          ),
-          if (!_image && widget.language)
-            _TextButton(
-              label: IdeLanguageNames.forPath(path),
-              tooltip: l10n.languageModeChange,
-              onPressed: () => unawaited(changeLanguageMode(context, path)),
-            ),
-          if (_isMarkdown && _markdown != null)
-            _TextButton(
-              label: _source ? l10n.sidePanelPreview : l10n.sidePanelEdit,
-              onPressed: () => setState(() => _source = !_source),
-            ),
-          if ((widget.agentEdit, _agent) case (final edit?, _?)
-              when !_isMarkdown || _source)
-            IdeAgentEditActions(edit: edit, hunks: _hunks),
-          ...widget.actions,
-        ],
+              if (!tight && !_image && widget.language)
+                _TextButton(
+                  label: IdeLanguageNames.forPath(path),
+                  tooltip: l10n.languageModeChange,
+                  onPressed: () => unawaited(changeLanguageMode(context, path)),
+                ),
+              if (!tight && _isMarkdown && _markdown != null)
+                _TextButton(
+                  label: _source ? l10n.sidePanelPreview : l10n.sidePanelEdit,
+                  onPressed: () => setState(() => _source = !_source),
+                ),
+              if ((widget.agentEdit, _agent) case (final edit?, _?)
+                  when !_isMarkdown || _source)
+                IdeAgentEditActions(edit: edit, hunks: _hunks),
+              ...widget.actions,
+            ],
+          );
+        },
       ),
     );
   }

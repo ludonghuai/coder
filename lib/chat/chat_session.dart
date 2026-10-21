@@ -163,8 +163,27 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
   final Map<String, int> _keptPaths = {};
 
   void _connect(KernelDescriptor descriptor) {
-    _kernel = descriptor.create(kernelContext);
+    final warm = _warm.remove(descriptor.id);
+    if (warm != null && warm.health.status == KernelHealthStatus.failed) {
+      warm.dispose();
+      _kernel = descriptor.create(kernelContext);
+    } else {
+      _kernel = warm ?? descriptor.create(kernelContext);
+    }
     _subscription = _kernel.events.listen(_apply);
+  }
+
+  /// The kernels switched away from before the conversation started, kept
+  /// warm: switching back to one skips its start and the handshake its
+  /// choices wait for. Dropped once the conversation starts (the kernel is
+  /// then the conversation's own) and with the session.
+  final Map<String, AgentKernel> _warm = {};
+
+  void _dropWarm() {
+    for (final kernel in _warm.values) {
+      kernel.dispose();
+    }
+    _warm.clear();
   }
 
   void _apply(KernelEvent event) {
@@ -179,6 +198,7 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
       _cache.clear();
       _timeQuiet();
       _reviewEvent(event);
+      if (kernelLocked) _dropWarm();
       notifyListeners();
     }
   }
@@ -415,7 +435,9 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
   void setKernel(KernelDescriptor descriptor) {
     if (kernelLocked || descriptor.id == kernel.id) return;
     unawaited(_subscription?.cancel());
-    _kernel.dispose();
+    // Kept warm rather than disposed: before the first message there is no
+    // conversation to protect, and the switch back skips the start.
+    _warm[_kernel.descriptor.id] = _kernel;
     _transcript = Transcript(
       changes: [for (final edit in _transcript.edits) edit.change],
     );
@@ -1296,6 +1318,7 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
       ..dispose();
     unawaited(_subscription?.cancel());
     _kernel.dispose();
+    _dropWarm();
     super.dispose();
   }
 }
