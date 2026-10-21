@@ -138,7 +138,7 @@
 ## GitHub / GitLab 的 issue 与 PR
 
 **账号**（设置 → 账号）
-- 支持 GitHub（github.com、GitHub Enterprise）和 GitLab（gitlab.com、自建）。
+- 支持 GitHub（github.com、GitHub Enterprise）、GitLab（gitlab.com、自建）和 Gitee（gitee.com；只用令牌登录，没有设备码流程）。
 - 登录方式：浏览器设备码登录（OAuth Device Flow，只带公开的 client id；BaoCode 的 OAuth 应用注册好、填进 `lib/forge/forge_accounts.dart` 之前不显示），或者粘贴自己建的令牌（GitHub：`repo` + `read:user`；GitLab：`api`），填地址就能连公司自己的实例。
 - 令牌存系统钥匙串，账号信息存全局存储（`forge.accounts`）；GitLab 的令牌过期前自动续。退出登录删除本机令牌，并可以直接打开对应网站的授权设置页去撤销。
 
