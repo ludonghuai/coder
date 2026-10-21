@@ -36,6 +36,8 @@ import 'customize/customization_store.dart';
 import 'customize/customizations.dart';
 import 'customize/customize_view.dart';
 import 'extensions/theme_extensions.dart';
+import 'ide/git/git_autofetch.dart';
+import 'ide/git/git_autofetch_engine.dart';
 import 'ide/git/git_repository.dart';
 import 'ide/git/repository_scan.dart';
 import 'ide/file_views.dart';
@@ -529,8 +531,12 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
       _workspace.addListener(_syncRecentMenu);
       _syncRecentMenu();
       _lifecycle = AppLifecycleListener(
-        onResume: () => unawaited(_workspace.refresh()),
+        onResume: () {
+          unawaited(_workspace.refresh());
+          _autoFetch?.resume();
+        },
       );
+      _attachAutoFetch();
       WidgetsBinding.instance.addPostFrameCallback((_) => _afterFirstFrame());
       _stopUpdateOffers = widget.settings?.updates?.listen(
         _notifications,
@@ -756,6 +762,7 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
       git.dispose();
     }
     _drag.dispose();
+    _autoFetch?.dispose();
     _width.dispose();
     _looseChatFolder.dispose();
     _ideHistory.dispose();
@@ -812,6 +819,9 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
   /// The workbench's own notifications, over both layouts: a settings file
   /// that does not parse.
   final IdeNotifications _notifications = IdeNotifications();
+  /// The workspace's automatic fetch and fast-forward: the window's, not a
+  /// view's — it runs while the chat shows and no IDE is open.
+  IdeGitAutoFetch? _autoFetch;
 
   /// The error last told of, per file, whether its notification is still
   /// open or not; and those open.
@@ -3559,6 +3569,81 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
       onRemoveFolder: multi == null
           ? null
           : (folder) => _workspace.removeWorkspaceFolder(multi, folder),
+    );
+  }
+
+  /// Attaches the automatic fetch over what the window shows: the IDE's
+  /// repositories where one is open, the side panel's where none is (the
+  /// panel finds them as Source Control does, so a chat-only window fetches
+  /// too).
+  void _attachAutoFetch() {
+    _autoFetch?.dispose();
+    final settings = widget.settings?.files?.settings;
+    _autoFetch = IdeGitAutoFetch(
+      repositories: _autoFetchRepositories,
+      documents: _autoFetchDocuments,
+      reload: _autoFetchReload,
+      setting: (key) => settings?[key],
+      paths: _ideSpaces.values.firstOrNull?.paths ?? p.context,
+      settingsChanges: settings ?? Listenable.merge(const []),
+      workspaceChanges: _workspace,
+      onNeedsAttention: _gitNeedsAttention,
+    )..start();
+  }
+
+  List<(String, IdeGitRepository)> _autoFetchRepositories() {
+    final seen = <String>{};
+    final out = <(String, IdeGitRepository)>[];
+    void add(Iterable<(String, IdeGitRepository)> repositories) {
+      for (final (root, git) in repositories) {
+        if (seen.add(git.service.root)) out.add((root, git));
+      }
+    }
+
+    for (final space in _ideSpaces.values) {
+      add(space.repositories);
+    }
+    if (_workspace.current case final thread?) {
+      final multi = _workspace.workspaceAt(thread.project.path);
+      add(
+        multi == null
+            ? _sidePanelFolderRepositories(thread)
+            : _sidePanelRepositories(multi),
+      );
+    }
+    return out;
+  }
+
+  List<IdeGitAutoFetchDocument> _autoFetchDocuments() => [
+    for (final space in _ideSpaces.values)
+      for (final document in space.documents)
+        (path: document.path, dirty: document.dirty, isFile: document.isFile),
+  ];
+
+  /// Reads the files a fast-forward updated again in the IDE that has them
+  /// open; none open, there is nothing to read.
+  Future<void> _autoFetchReload(Iterable<String> paths) async {
+    final updated = paths.toList();
+    for (final space in _ideSpaces.values) {
+      final mine = [
+        for (final path in updated)
+          if (space.paths.isWithin(space.root, path)) path,
+      ];
+      if (mine.isEmpty) continue;
+      try {
+        await space.reload(mine);
+      } catch (_) {
+        // The view may be going: the files on disk are updated all the same.
+      }
+    }
+  }
+
+  void _gitNeedsAttention(IdeGitAutoFetchIssue issue, String root) {
+    if (!mounted) return;
+    _notifications.notify(
+      IdeSeverity.warning,
+      ideGitAutoFetchMessage(context.l10n, issue, repository: p.basename(root)),
+      source: 'Git',
     );
   }
 

@@ -61,7 +61,6 @@ import 'file_service.dart'
     show IdeFileListing, IdeHostFiles, localizedFileError, readFileBytes;
 import 'git/commit_message.dart';
 import 'git/git_autofetch.dart';
-import 'git/git_autofetch_engine.dart';
 import 'git/git_change_editor.dart';
 import 'git/git_checkout.dart';
 import 'git/git_model.dart';
@@ -513,10 +512,6 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
   int _gitBehind = 0;
   DateTime? _gitFetchedAt;
   IdeGitAutoFetchIssue? _gitIssue;
-
-  /// The workspace's automatic fetch and fast-forward: it fetches every
-  /// repository as the app runs, and where it can be done safely, pulls.
-  IdeGitAutoFetch? _autoFetch;
 
   /// The quick input's text while it is open (its prefix picks the mode).
   String? _quickInput;
@@ -1089,12 +1084,9 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
     }
     _restoreView();
     _attach();
-    _attachAutoFetch();
     _lifecycle = AppLifecycleListener(
       onResume: () {
         unawaited(_git?.refresh());
-        // Back to the front: what the remote got meanwhile, now.
-        _autoFetch?.resume();
       },
       // The window left: `onFocusChange` and `onWindowChange` save.
       onInactive: () =>
@@ -1458,11 +1450,6 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
     if (oldWidget.settings != widget.settings) {
       oldWidget.settings?.removeListener(_settingsChanged);
       widget.settings?.addListener(_settingsChanged);
-      // The engine listens to the file it was made with.
-      if (_autoFetch != null) {
-        _autoFetch!.dispose();
-        _attachAutoFetch();
-      }
     }
     if (oldWidget.remote != widget.remote) {
       oldWidget.remote?.removeListener(_remoteChanged);
@@ -1474,9 +1461,6 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
     if (oldWidget.workspace != widget.workspace) {
       _detach(oldWidget.workspace);
       _attach();
-      // The engine follows the workspace it was made over.
-      _autoFetch?.dispose();
-      _attachAutoFetch();
       _readBranch();
     }
     if (widget.visible && !oldWidget.visible) {
@@ -1500,7 +1484,6 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
     _statusMessageTimer?.cancel();
     _autoSaveTimer?.cancel();
     _lifecycle?.dispose();
-    _autoFetch?.dispose();
     // A quick pick or input box going with the workbench hides (the color
     // themes one applies the theme it started with again).
     _quickModel?.onDidHide?.call();
@@ -4777,36 +4760,6 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
       if (fetchedAt != null) l10n.gitLastFetched(ideGitFetchedAt(fetchedAt)),
       if (issue != null) ideGitAutoFetchTooltip(l10n, issue, repository: root),
     ].join('\n');
-  }
-
-  /// Makes the automatic fetch over [widget]'s workspace and starts it. The
-  /// engine follows the workspace it is made over: another workspace, or
-  /// another settings file, gets another.
-  void _attachAutoFetch() {
-    _autoFetch = IdeGitAutoFetch(
-      repositories: () => widget.workspace.repositories,
-      documents: () => [
-        for (final doc in widget.workspace.documents)
-          (path: doc.path, dirty: doc.dirty, isFile: doc.isFile),
-      ],
-      reload: widget.workspace.reload,
-      setting: (key) => widget.settings?[key],
-      paths: widget.workspace.paths,
-      settingsChanges: widget.settings ?? Listenable.merge(const []),
-      workspaceChanges: widget.workspace,
-      onNeedsAttention: _gitNeedsAttention,
-    )..start();
-  }
-
-  /// An issue of the automatic fetch that needs the user: told once, in the
-  /// notification center.
-  void _gitNeedsAttention(IdeGitAutoFetchIssue issue, String root) {
-    if (!mounted) return;
-    _notifications.notify(
-      IdeSeverity.warning,
-      ideGitAutoFetchMessage(context.l10n, issue, repository: p.basename(root)),
-      source: 'Git',
-    );
   }
 
   @override
