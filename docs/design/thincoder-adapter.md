@@ -3392,6 +3392,7 @@ T99 已被 §23.1 预留给用量归属的补项（自动轮 ∥ 撤暂存轮）
 2. **等待可见**：起进程 / 装配期间，首条消息的回合已经开着（`_beginTurn`）却没有内容帧 ⇒ 界面必须能说清「它在准备」。
    **唯一路径**（实读关闭 U2）：宿主侧没有任何消费 `KernelHealthStatus.starting` 的呈现（`lib/chat/panels/health_banner.dart:27-28` 的 `shows` 只在 `failed` 为真；全仓仅 `ready` / `failed` 比较）。
    ⇒ 发一条 `NoticeItem(NoticeKind.warning, 'thincoder is starting…')`，并在 `_setHealth(ready)` 处 `ItemRemoved` 撤掉（形同 `_teardown` 的清理先例 `:495-499`）。
+**发点 = `_deliver`（`thincoder_kernel.dart:707`，回合等进程时），不在 `_setHealth(starting)`**：宿主 `kernelLocked = _transcript.length > 0`（`chat_session.dart:423-424`）会把这条 Notice 计成「会话已开始」⇒ `_apply` 的 `if (kernelLocked) _dropWarm()`（`:204`）会在每次起内核时丢掉温存内核，`setKernel` 也被挡住。代价：只打开不发送的那段没有等待行（实施实读）。
    文案按 §14-28 的惯例取**内核口英文**，登记 §14-29（本地化归既有的内核文案本地化项，不在本批）。
 3. **失败可见**：起不来时既有 `_fail`（`:461-470`）+ `_deliver` 的错误 `NoticeItem`（`:681-693`）已经把回合收尾成 interrupted ⇒ 不新增路径；补一条断言即可（T107 ②）。
 
@@ -3409,7 +3410,7 @@ T99 已被 §23.1 预留给用量归属的补项（自动轮 ∥ 撤暂存轮）
 ### 25.5 切内核路径：只读数、只回归
 
 - 既有实现：`_warm` 表（`chat_session.dart:440`）把离开的内核实例留着，切回时 `_connect` 复用同一实例，`prepare()`（`:450-453`）走 `_ensureStarted`（`thincoder_kernel.dart:220-224`）——进程与 `initialize` 都还在，**不再付 364 ms**；`session/new` 也不付（`_slot` 在内存，走 `session/resume`，`_pickUpKept :401-408`）。
-- 本批**不改**这条路径。只加一处打点：`setKernel`（`:435`）记 `t0`，新内核 `_setHealth(ready)` 落 `t1` ⇒ `timing: kernel-switch`（门槛 ≤200 ms，A11 第 3 项）。
+- 本批**不改**这条路径。只加一处打点：`setKernel`（`:435`）记 `t0`，新内核在其自身 `_setHealth(ready)` 后由宿主落 `t1`（`chat_session.dart:466-471`）⇒ `timing: kernel-switch`（门槛 ≤200 ms，A11 第 3 项）。落点取宿主的理由：切回 `_warm` 保留内核时内核侧无 health 迁移，落点在内核会永不触发。
 - 回归判据：T111（切走再切回，第二次 `prepare` 不产生新的 `initialize` 请求）。
 
 ### 25.6 打点表（供实施与走查共用）
@@ -3423,7 +3424,7 @@ T99 已被 §23.1 预留给用量归属的补项（自动轮 ∥ 撤暂存轮）
 | `timing: warm hit <N>ms` / `warm miss` | `thincoder_kernel.dart:231`（领池处） | 命中 ⇒ 省 ≥300 ms；miss ⇒ 走原路 |
 | `timing: session-new <N>ms` | `thincoder_kernel.dart:415`（`session/new` 前后） | 现状 1501 ms（属主探测 1358 + 装配 138；只读数，不改） |
 | `timing: first-frame <N>ms` | 首个内容帧落点：`thincoder_kernel.dart` 的 `_notification` 分流入口（`:1140` 附近）与 `_deliver` 的 prompt 发出处（`:697` 之后）配对 | **≤600 ms**（A11 第 2 项） |
-| `timing: kernel-switch <N>ms` | `chat_session.dart:435` / `thincoder_kernel.dart:270` | **≤200 ms**（A11 第 3 项） |
+| `timing: kernel-switch <N>ms` | `chat_session.dart:445`（t0）/ `:466-471`（t1） | **≤200 ms**（A11 第 3 项）；t1 在宿主而非内核——切回 `_warm` 保留的内核时 `_ensureStarted` 走 `_running` 短路（`thincoder_kernel.dart:222`），**没有 health 迁移** |
 | `warm: held` | 新档池内（`initialize` 回包落地、住户入池） | 只留痕（走查 §25.14-1） |
 | `warm: dropped <reason>` | 新档池内（TTL / 进程退出 / 切项目） | 只留痕 |
 
@@ -3450,11 +3451,11 @@ T99 已被 §23.1 预留给用量归属的补项（自动轮 ∥ 撤暂存轮）
 |---|---|---|---|
 | ① | `lib/kernel/thincoder/thincoder_warm.dart`（新增） | 保温池：`warm(cwd, files)` / `take(key)` / `drop(reason)` / TTL / 冷却；进程退出监听；`handshake` 回包原样保存 | ~ +170（新档，<300） |
 | ② | `lib/kernel/thincoder/thincoder_kernel.dart`（1353） | `_launch`（`:226-297`）拆出「领池 ∥ 起进程」两条入口；`_ensureStarted`（`:220`）不变签名；打点 4 处（`:229` / `:231` / `:270` / `:415`）；首个内容帧打点 1 处 | ≤ +55（⇒ ≤1408；>800 名单，本批只行级） |
-| ③ | `lib/chat/chat_session.dart`（1324） | `attach`（`:402`）打 `timing: open`；`setKernel`（`:435`）打 `timing: kernel-switch` 起点；`timing: input-ready` 落点一处 | ≤ +8（⇒ ≤1332） |
+| ③ | `lib/chat/chat_session.dart`（1324） | `attach`（`:402`）打 `timing: open`；`setKernel`（`:435`）打 `timing: kernel-switch` 起点与落点；`timing: input-ready` 落点一处 | ≤ +16（⇒ ≤1340；实测 = 两条读数的最小事实成本） |
 | ④ | `lib/kernel/agent_kernel.dart`（530） | 无改（`prepare` 语义不变；等待面走 `NoticeItem`，不新增 `preparing` 投影——无消费者、无用例，U2 已实读关闭） | 0 |
 | ⑤ | `lib/workspace/workspace.dart`（2940） | 打开项目处调 `ThincoderWarm.warm(...)`（默认内核为 thincoder 时）；项目切换 / 关闭调 `drop` | ≤ +12（⇒ ≤2952） |
 | ⑥ | `lib/chat/composer/composer.dart`（2416） | 若 composer 存在健康门（未核实 U1）⇒ 只在「未 ready」时不禁用发送 | 0 ~ +6 |
-| ⑦ | `test/kernel/thincoder_kernel_test.dart`（3644） | T107–T111（§25.11） | ≤ +150（⇒ ≤3794） |
+| ⑦ | `test/kernel/thincoder_kernel_test.dart`（4299） | T107–T111（§25.11） | ≤ +318（⇒ 4617；>800 名单，只加用例） |
 | ⑧ | `test/kernel/thincoder_warm_test.dart`（新增） | T108 / T109 的池单测（不启真进程：注入假 transport 工厂） | ~ +110（新档，<300） |
 
 - **零改动**：`thincoder_protocol.dart` · `thincoder_events.dart` · `thincoder_mock.dart` · `thincoder/`（B1 默认，见 §25.13）· `lib/kernel/claude_code/**` · 审批 / 取消 / 队列代码面 · 固件（无新帧）。

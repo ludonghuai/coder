@@ -19,6 +19,7 @@ import '../ide/ide_kernel_files.dart';
 import '../kernel/agent_kernel.dart';
 import '../kernel/kernel_registry.dart';
 import '../kernel/kernel_types.dart';
+import '../kernel/thincoder/thincoder_warm.dart';
 import '../l10n/l10n.dart';
 import '../models/model_providers.dart';
 import '../theme/workbench_theme.dart' show ColorThemeStorage;
@@ -439,7 +440,17 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
       }
       unawaited(_listKept(project));
     }
+    _warmThincoder(path);
     return project;
+  }
+
+  /// Starts thincoder's process for [path] ahead of its first session (§25.2).
+  void _warmThincoder(String path) {
+    if (_preferredKernel.id != KernelRegistry.thincoder.id ||
+        RemoteLocation.hostOf(path) != null) {
+      return ThincoderWarm.instance.drop('project-switch');
+    }
+    unawaited(ThincoderWarm.instance.warm(path, files: true)); // Agents here take the files.
   }
 
   /// Lists the sessions the kernels keep in [project]: [kernels], all of
@@ -1289,6 +1300,7 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
   /// Takes [project] off the sidebar; nothing of it is deleted.
   void hideProject(Project project) {
     _hiddenProjects[project.path] = DateTime.now();
+    if (ThincoderWarm.instance.cwd == project.path) ThincoderWarm.instance.drop('project-closed'); // For it alone (§25.2).
     _save();
     notifyListeners();
   }

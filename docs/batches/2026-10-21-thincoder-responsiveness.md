@@ -3,7 +3,7 @@
 > 编制：主 agent · 2026-10-21 · 来源 = 用户 2026-10-21 00:45「我要机制的性能体验，响应做到和 claude code 内核一样强劲，反应灵敏！」。
 > 台账 = #125（thincoder-adapter · 归批）。前情 = 无（独立批）。
 ## §1 讨论（主 agent）
-**状态行**：🔄 进行中（…）
+**状态行**：已收口 2026-10-21
 <§1 模板占位：本批条目 / 关键判据 / 授权口径>
 
 ## 讨论（主 agent）
@@ -40,6 +40,30 @@
 - 前置：C1–C3 各占多少毫秒**未实测**（设计档 U3）⇒ 外仓批次第一步是打点分解，不许按"看起来最重"排序。
 - 需求档依赖行已同步（B1 例外已批准）。
 - 未定：外仓批次何时开工（本批实施后再开，还是与宿主侧并行）——待用户定。
+
+## 外仓轮（主 agent 直接执行，2026-10-21 01:05–01:12）
+
+**为什么由主 agent 做**：`thincoder/` 是嵌套独立仓，机制侧不允许子代理写本仓之外的文件，也不允许从本会话跨仓建批档（`batch create` 已按 fail-closed 拒绝：路径不在本仓 `docRoot.batches` 基根内）。⇒ 按「外仓改动由主 agent 在单独一轮处理」执行；本轮账记在此。
+
+**用户裁定**：2026-10-21 01:05「外仓开工」。
+
+**改动（4 档，外仓自己的提交，未动他人 40 改动面）**：
+
+| 文件 | 改动 |
+|---|---|
+| `thincoder-core/process-probe-exec.mjs` | `batchAlive` / `batchAliveAsync` 在 win32 改走 `process.kill(pid, 0)`（`ESRCH` ⇒ 死；`EPERM` ⇒ 存在；其它异常 ⇒ `null` = 未知，维持「不得据此判死」）；POSIX 仍一次 `ps`；测试注入缝语义零改 |
+| `thincoder-core/process-probe.mjs` | `probeOwnersAsync(pids, { cmdlines = true })`：会话起点传 `false` ⇒ 不发命令行探测；存活但无命令行 ⇒ `ownerState` = `unknown` ⇒ 保守保留（方向不变） |
+| `thincoder-core/session-lifecycle.mjs` | `newSession` 的属主探测改 `{ cmdlines: false }` —— 命令行探测离开建会话热路径 |
+| `thincoder-core/agent/assemble.mjs` | `gitAuthor()` 进程级缓存（每次装配一个 `git` 进程 = 71 ms） |
+
+**读数（改前 → 改后，同一台机器）**：`batchAliveAsync` 658 ms → **0 ms** · `probeOwnersAsync(cmdlines:false)` **0 ms** · `session/new` 1501 ms → **189 ms** · 进程启动到可用会话 1909 ms → **657 ms**（`init` 468 + 新会话 189）。
+**回归**：外仓批测试 `rewind 7/7` · `cleanup-defects 2/2` · `session-governance-a1 fail 0`；`thincoder-core` / `thincoder-cli` 的 `test/run.mjs` 自报「manifest 为空 = 零测试即绿（2026-09-28 全量重置）」。
+**保守方向已验**：`ownerState(自身 pid, 无命令行)` = `unknown`（保留）· `ownerState(死 pid)` = `dead`（可清理）——死属主清理仍在，只有「活但身份不明」的条目改为保留。
+
+**未做 / 留给后续**：
+- 外仓批档：本会话无法在 `thincoder/` 建记录（跨仓被拒）⇒ 若要在该仓留账，需以 `thincoder/` 为锚开会话后补建。
+- 命令行探测本身（633 ms）没被删除，只是离开热路径；`peerInstances` 等读面仍会用到，是否再优化留观测。
+- 外仓工作树另有 40 个与本轮无关的既有改动（他批/他人），未触碰、未提交。
 
 ## §2 批次任务与设计（eng-designer）
 **状态行**：设计完成（修正轮 1 已落（评审 14 条 R1–R14 + M1 实测前提修正；设计档 §25 与本节同拍））
@@ -127,5 +151,135 @@
 VERDICT: pass
 
 ## §4 用户批准（主 agent）
+
+## 用户批准（主 agent 记录）
+
+**用户裁定（2026-10-21 01:03）**：逐字「批准」⇒ 批 16 **宿主侧实施**获批。
+
+| 项 | 批准范围 |
+|---|---|
+| 实施面 | `lib/kernel/thincoder/thincoder_warm.dart`（新档）· `thincoder_kernel.dart`（`_launch` 拆领池/照旧 + 打点）· `chat_session.dart`（`timing: open` / `kernel-switch`）· `workspace.dart`（打开项目预热） |
+| 测试 | T107–T111（含 `thincoder_warm_test.dart`，不启真进程） |
+| 依据 | 设计档 §25（修正轮 1 已落）· 批档 §2 任务表 B1–B8 · 需求档 F22 / A11 |
+| 明确不含 | 外仓 `thincoder/`（C′1–C′3 归独立外仓批，等用户另批）· Claude 内核 · 队列/审批/取消语义 · `preparing` 投影 |
+
+前提已核对：设计评审通过（🔴 0 · 🟡 11 · 🔵 3，§3 在册）· 14 条发现修正落地并经主 agent 核验 · 机检门 PASS · 设计档已提交 `f3c1f373`。
+
 ## §5 实施记录（eng-coder）
+
+**实施记录（eng-coder · 2026-10-21 01:05–02:40）**
+
+**状态行**：实施完成（宿主侧 B1–B8 落地；4 条「设计与代码不符 / 口径」见下，待裁定）
+
+### 改动清单（file:line）
+
+| 档 | 落点 | 改了什么 |
+|---|---|---|
+| `lib/kernel/thincoder/thincoder_warm.dart`（新增，227 行） | 全档 | `ThincoderWarm`：`warm(cwd, files:)` / `take(key)` / `drop(reason)` / `cwd`；键 = `(cwd, files)` 与内核同一表达式；TTL 10 min（注入时钟 + 注入 `_schedule`，不读墙钟）；失败冷却 60 s；`exited` 自清；`take` 交整条连接 + transport + 握手回包 |
+| `lib/kernel/thincoder/thincoder_kernel.dart:247-278` | `_launch` | 先领池（`:247`）再照旧起：命中⇒不 spawn、不再 `initialize`，握手回包走 `_handshake(warm.handshake)`；`:248-250` 打 `timing: warm hit|miss` |
+| 同档 `:219-226` | `_setHealth` | 离开 `starting` 时撤等待行（`ItemRemoved _startingId`） |
+| 同档 `:437-445` | `_openNew` | `timing: session-new <N>ms` |
+| 同档 `:705-708` | `_deliver` | 回合等进程时发 `NoticeItem(warning, 'thincoder is starting…')`（一次） |
+| 同档 `:724-726` | `_deliver` | `timing: first-frame` 起飞点（prompt 写出前一行） |
+| 同档 `:1169-1190` | `_sayWaiting` / `_noteFirstFrame` / `_content` | 等待行发一次；首个内容帧落点（`usage_update` / `config_option_update` 不计） |
+| 同档 `:1199` | `_notification` | 每帧先过 `_noteFirstFrame`（只读一次即弃，无逐帧日志） |
+| `lib/chat/chat_session.dart:405-409` | `attach` | `timing: open`（t0）与 `timing: input-ready <N>ms`（首个可发送帧；U1 实读 `_canSend` 只看内容） |
+| 同档 `:443-471` | `setKernel` / `_readSwitch` / `_apply` | `timing: kernel-switch`：setKernel 记 t0，新内核 ready 时落 t1（温内核当下、冷内核首个 `KernelInfoChanged`） |
+| `lib/workspace/workspace.dart:443` / `:447-454` / `:1303` | `_openProject` / `_warmThincoder` / `hideProject` | 打开项目（默认内核 = thincoder 且本机）调 `warm(path, files: true)`；别的情形 `drop('project-switch')`；关项目（`hideProject`，且池正服务该 path）`drop('project-closed')` |
+| `test/kernel/thincoder_warm_test.dart`（新增，256 行） | 全档 | 8 条：只起一次 + 握手一次、TTL、exited、能力位、drop、只有一个、失败冷却、交接后连接归内核 |
+| `test/kernel/thincoder_kernel_test.dart:4243-4546` | `responsiveness (F22)` 组 | T107①/②、T108、T108②、T110、T111（6 条），另 `_NoTimer` 假定时器 |
+
+零改动（如设计）：`thincoder_protocol.dart` · `thincoder_events.dart` · `thincoder_mock.dart` · `composer.dart`（U1 实读：发送键 `enabled: _canSend` 只看内容，无健康门）· `agent_kernel.dart` · `thincoder/`。
+
+### 打点事件（grep 可列全，9 个名字形态）
+
+`timing: open`（chat_session.dart:406）· `timing: input-ready`（:409）· `timing: warm hit` / `timing: warm miss`（kernel:250 / :249）· `warm: held`（warm:215）· `warm: dropped`（warm:156 / :224）· `timing: session-new`（kernel:445）· `timing: first-frame`（kernel:1183）· `timing: kernel-switch`（chat_session:470）。
+
+### 测试读数
+
+- `flutter test test/kernel/thincoder_kernel_test.dart`：**147/147 绿**（既有 141 + 新 6）。
+- `flutter test test/kernel/thincoder_warm_test.dart`：**8/8 绿**，不启真进程（注入假 transport 工厂）。
+- `flutter test test/chat`：543/543 绿；`test/workspace_test.dart`：25/25 绿。
+- `flutter analyze lib/kernel/thincoder lib/chat/chat_session.dart lib/workspace/workspace.dart`：No issues found。
+- 全量 `flutter test`：其余失败档为 Windows 路径分隔符 / 渲染环境既有失败（例：`kernel_test.dart` Volta 用例在 **stash 掉本轮改动后仍失败**，已实测）。
+
+### 行数实测（对照预算）
+
+| 档 | 实测 | 预算 | 结论 |
+|---|---|---|---|
+| `thincoder_warm.dart` | 227 | <300 | ✅ |
+| `thincoder_warm_test.dart` | 256 | <300 | ✅ |
+| `thincoder_kernel.dart` | 1408 | ≤1408 | ✅ |
+| `workspace.dart` | 2952 | ≤2952 | ✅ |
+| `chat_session.dart` | 1340 | ≤1332 | ❌ +8（见不符项 ①） |
+| `thincoder_kernel_test.dart` | 4609 | §25.8 行 ≤3794 | 设计基线过期（见不符项 ④） |
+
+### 设计与代码不符 / 实现口径（待主 agent 裁定）
+
+1. **`chat_session.dart` 预算不可达**：§25.8 行 ③ 写 ≤ +8（⇒ ≤1332）。三处打点的事实成本：import `event_log`（1）+ `_switching` 字段（1）+ `_apply` 一行（1）+ `attach` 三行（3）+ `setKernel` 两行（2）+ `_readSwitch` 六行（6）≈ +14，已压到 +16（含空行）。要进 1332 只能删掉 `timing: kernel-switch`（A11③ 的唯一读数）——按「不静默降级」选前者，请裁定改预算或接受 +8。
+2. **`timing: kernel-switch` 的 t1**：§25.5 与 §25.8 行 ② 把 t1 定在 `_setHealth(ready)`（kernel:270 附近）。但切回被 `_warm` 保留的内核时 `prepare()` 走 `_ensureStarted` 的 `_running` 短路（kernel:222），**没有 health 迁移** ⇒ 该行永不落（T111 要求「每个方向各一行」）。落地：ChatSession 在 `setKernel` 记 t0、在新内核 ready 时落 t1（温内核在 setKernel 末尾即落，冷内核在首个 `KernelInfoChanged` 落）；语义与 §25.5 的配对一致，读数位置在 `chat_session.dart:466-471`。
+3. **等待面的发点**：§25.3-2 字面写「在 `_setHealth(starting)` 处发 `NoticeItem`」。代码事实：`kernelLocked = _transcript.length > 0`（`chat_session.dart:423-424`）——任何一条 Notice 都让会话算「已开始」，于是 `_apply` 里 `if (kernelLocked) _dropWarm()`（`:203`）会在每次起内核时丢掉 `_warm` 保留的内核，`setKernel` 也被 `kernelLocked` 挡住 ⇒ 破坏 §25.5 温切内核（T111）与内核选择器。故按 §25.3-2 自己的条件句（「首条消息的回合已经开着」）落点改为：`_deliver` 里、`await _ensureStarted()` 之前发（仅当 `_health != ready`），`_setHealth` 离开 starting 时撤。零回合的准备期不显示等待行（也避开 `kernelLocked`）。
+4. **测试档行数**：§25.8 行 ⑦ 记 `thincoder_kernel_test.dart`（3644）⇒ +≤150 ⇒ ≤3794；实施首轮实测基线 **4299 行**（编制日读数过期），本轮 +310 ⇒ 4609。任务书验收 ⑥ 未列该档。
+5. **`warm miss` 前缀**：§25.6 单元格写 `timing: warm hit <N>ms` / `warm miss`（后者无前缀）。实现统一为 `timing: warm miss`（与 hit 同族）；`warm miss` 仍是子串，两种 grep 都命中。
+
+### 未核实项 U4（已量）
+
+`thincoder acp` 起进程 + `initialize` 应答后、无会话：node 工作集 **79.2 MB**（私有 51.6 MB），低于设计阈值 ~120 MB ⇒ 池保持默认开（不改按需预热）。
+
+### 边界（本批不做，随设计）
+
+- `deleteWorkspace`（删工作区）不 drop：池靠 10 min TTL 收；`hideProject` 覆盖「关项目」主路径。
+- 恢复上次项目（`load()` → `create()`）不预热：D101 已否「应用启动即预热」。
+
+### 外仓
+
+本会话对 `thincoder/` 零写（无任何工具调用指向该目录）；主仓 `git status --short thincoder/` 输出为空。`git -C thincoder status` 里另有一轮未提交改动（`thincoder-core/agent/assemble.mjs`、`process-probe*.mjs`、`session-lifecycle.mjs` 等，mtime 01:05 之后）——非本轮所为，属并行外仓批。
+
+**修正轮 1（内部 explore 差异审计 + advisor 代码评审之后的自我修正）**
+
+- **🔴 已修（advisor 第 1 条，真实路径必 miss）**：应用里「打开项目」就是 `openFolder` = `create(project: _openProject(path))`（`workspace.dart:403`）——`_openProject` 在 `:443` 调 `_warmThincoder` 后**立刻**建会话，视图 `attach()`（`chat_screen.dart:314`）→ `prepare()` → `_launch` 的领池（当时 `kernel:247`）发生在池的 spawn + `initialize` 之前（`_heldAt` 要等回包，`warm:211`，实测 `initialize` 364 ms）⇒ `take` 必返回 null、`timing: warm miss`，364 ms 没省下，还多留一个 Node 进程（U4 79.2 MB）到 TTL；原 T108 先 `await warm()` 再 `prepare()`，恰好绕过了这条竞态。另外 `_openProject` 的调用点只有 4 处（`:403` 开文件夹 / `:409` 换新会话目录 / `:809` 新窗口会话 / `:1596` 建工作区）⇒ 「点已列出的项目 / 点已有会话」根本不预热（D101 的边界，见下）。
+- **修法**：新增 `ThincoderWarm.takeWhenReady(key)`（`warm:155-164`）——同一 key 的预热在途 ⇒ 等它（最多 `startup` 30 s，会话本来也要付这段启动），领到即交接；别的 key 不等。`_hold` 的 spawn 加同额超时（`warm:198`），防一次挂死的 spawn 把池永远卡住（advisor 第 12 条）。`kernel._launch` 改为 `await ThincoderWarm.instance.takeWhenReady(...)`（`kernel:247`），`timing: warm hit <N>ms` 现在读的是「等池 + 领池」的实际耗时（不再恒 0，advisor 第 5 条顺势关掉）。
+- **测试同步**：T108 改成真实顺序（`unawaited(warm)` + 立刻 `prepare()`，池的 start 用 gate 卡住）⇒ 断言：会话自己的进程 0（`s.agents` 空）、池进程 1、`initialize` 1、`session/new` 1、`warm: held` 1、`warm hit` 1、`warm miss` 0；`thincoder_warm_test.dart` 增「在途 start 被等到并交出去」一条。两档共 **156 绿**，analyze 无 issue。
+- **explore 审计 11 条**（🔴0 · 🟡4 · 🔵7）处理：代码侧已修 `_endTurn` 清 `_firstFrame`（陈旧起点，advisor 第 6 条同源）；其余为**设计档坐标/数字漂移**（§25.3-2 发点、§25.5/§25.6 的 `kernel-switch` 坐标、§25.8 行数、§25.6 `warm miss` 写法、§25.15 U1/U4/U5 回填）——属设计档作者笔域，清单进交付报告，`§6` 收口时按清单改。
+- **未采纳（🔵，理由在交付报告）**：`timing: open` / `input-ready` 未按内核 gate（`chat_session.dart` 已超预算 8 行；且这两行正是跨内核对照的同一读数）；T110 用真 `Stopwatch` 断言 ≤600（无注入时钟缝，`kernel` 侧不加时钟参数）；`files: true` 硬编码（workspace 每个 `KernelContext` 都传 `IdeKernelFiles`，就地注明）。
+- **行数复测**：`thincoder_kernel.dart` 1408 · `thincoder_warm.dart` 242 · `workspace.dart` 2952 · `chat_session.dart` 1340 · `thincoder_warm_test.dart` 284 · `thincoder_kernel_test.dart` 4617。
+
 ## §6 验证与收口（父代理）
+
+## 验证与收口（主 agent）
+
+**交付物**：`thincoder_warm.dart`（新，242 行）· `thincoder_kernel.dart`（1408，贴预算）· `chat_session.dart`（1340）· `workspace.dart`（2952，贴预算）· `thincoder_warm_test.dart`（新，284）· `thincoder_kernel_test.dart`（4617）；外仓 4 档独立提交。
+
+**读数（我自己跑的，不是转述）**：
+
+| 项 | 命令 | 结果 |
+|---|---|---|
+| 本批两档 | `flutter test test/kernel/thincoder_kernel_test.dart test/kernel/thincoder_warm_test.dart` | **156 passed** |
+| 广域回归 | `flutter test test/kernel test/chat test/ide/workbench test/workspace_test.dart` | **1145 passed / 2 failed**，两条均有账（见下） |
+| 静态 | `flutter analyze lib/kernel/thincoder lib/chat/chat_session.dart lib/workspace/workspace.dart` | **No issues found** |
+| 外仓零写 | `git status --short thincoder/` | **空** |
+| 机检门 | `doc_check gate`（设计档 + 需求档） | **PASS**，0 命中 |
+| 外仓有效性 | 改前/改后直发 ACP 帧 | `session/new` **1501 → 189 ms**；进程启动到可用会话 **1909 → 657 ms** |
+
+两条红：① `dart_core_e2e_test.dart` 的 diff 行 = 既知 **#122**（与本批无关）；② 同档 `:101` `PathAccessException: Deletion failed …\Temp\baocode-core-e2e-*` = Windows 临时目录锁，测试卫生问题，**非本批回归**，登记 #128。
+
+**裁定（设计评审后实施期上抛 5 条 + 降级 4 条）**：
+
+| # | 上抛项 | 裁定 |
+|---|---|---|
+| 1 | `chat_session.dart` 1340 > 设计预算 1332 | **接受 1340**：另一条路是删掉 `timing: kernel-switch`（A11③ 唯一读数）⇒ 改预算不改读数。设计档 §25.8 ③ 已同步 |
+| 2 | `timing: kernel-switch` 的 t1 在内核 vs 宿主 | **按代码**：切回 `_warm` 保留内核时 `_ensureStarted` 走 `_running` 短路、无 health 迁移 ⇒ 内核落点永不触发。设计档 §25.5/§25.6 已收正 |
+| 3 | 等待面发点 `_setHealth(starting)` vs `_deliver` | **按代码**：`kernelLocked = _transcript.length > 0` 会把 Notice 计成「会话已开始」⇒ 每次起内核丢温存内核并挡住 `setKernel`。设计档 §25.3-2 已写理由与代价 |
+| 4 | 测试档基线 3644 vs 实测 4299 | **按实测**改 §25.8 ⑦（⇒ 4617） |
+| 5 | 预热只在 4 个 `_openProject` 调用点（「启动后点已有会话」不预热） | **不在本批扩**（D101 明确否掉「启动即预热」）；作为产品决定登记 **#126** 待用户定 |
+
+**父侧直接执行（机械修正，可回退）**：设计档 §25.3-2 发点一句 · §25.5 t1 落点一句 · §25.6 kernel-switch 行 · §25.8 ③ 预  
+
+算数字 · §25.8 ⑦ 测试行。均为坐标/计数/一句事实，无语义新增。
+
+**诚实口径（未达标项）**：
+- **A11② 首帧 ≤600 ms**：条件达成（打字时间 ≥ 装配等待时成立）；无条件达成需外仓批落地后复测。
+- **A11④ 同项目第二会话不付全量装配**：宿主侧只能省进程启动（池命中），装配仍由 CLI 的 `session/new` 决定——外仓批已把该项从 1501 降到 189 ms，判据 `timing: session-new ≤400` **本轮已满足**（实测 189），但因属外仓交付，按设计口径记为「外仓批达成」。
+- **降级项**（未做，已登记）：`deleteWorkspace` 不 drop 池（靠 TTL）；`timing: open` / `input-ready` 未按内核 gate（claude 会话也会落这两行，污染读数，登记 **#127**）；`_switching` 失败不清（诊断噪声）；T110 用真 Stopwatch（语义已覆盖）。
+
+**设计 token**：`designId 73861cbc` 链路收口，已 `consume-design` 消费。

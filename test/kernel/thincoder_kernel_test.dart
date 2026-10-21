@@ -31,6 +31,7 @@ import 'package:baocode/kernel/thincoder/thincoder_mock.dart';
 import 'package:baocode/kernel/thincoder/thincoder_protocol.dart';
 import 'package:baocode/kernel/thincoder/thincoder_session_ref.dart';
 import 'package:baocode/kernel/thincoder/thincoder_transport.dart';
+import 'package:baocode/kernel/thincoder/thincoder_warm.dart';
 import 'package:baocode/kernel/transcript.dart';
 import 'package:baocode/l10n/l10n.dart';
 import 'package:baocode/platform/event_log.dart';
@@ -4238,6 +4239,323 @@ void main() {
       expect(refused.calls, ['send', 'stop', 'rewind']);
     });
   });
+
+  group('responsiveness (F22)', () {
+    late Directory logs;
+
+    setUp(() {
+      logs = Directory.systemTemp.createTempSync('thincoder-timing');
+      EventLog.current = EventLog(logs.path);
+    });
+
+    tearDown(() {
+      EventLog.current = null;
+      if (logs.existsSync()) logs.deleteSync(recursive: true);
+    });
+
+    /// What the terminal's log says, the lines with [text].
+    List<String> logged(String text) {
+      final file = File(p.join(logs.path, 'events.log'));
+      if (!file.existsSync()) return const [];
+      return [
+        for (final line in file.readAsLinesSync())
+          if (line.contains(text)) line,
+      ];
+    }
+
+    /// A session over a kernel whose start waits for [gate] — or fails — as
+    /// the wait between a view opening and its agent being there (§25.11).
+    (ChatSession, List<ThincoderMock>) slow({
+      Completer<void>? gate,
+      bool fail = false,
+    }) {
+      final agents = <ThincoderMock>[];
+      late final KernelDescriptor descriptor;
+      descriptor = KernelDescriptor(
+        id: 'thincoder',
+        label: 'thincoder',
+        icon: Icons.smart_toy_outlined,
+        description: 'the test’s',
+        create: (_) => ThincoderKernel(
+          descriptor,
+          const KernelContext(cwd: '/project'),
+          start: (_) async {
+            if (fail) {
+              throw const ThincoderUnavailable('thincoder is not installed');
+            }
+            final agent = ThincoderMock(serialInbound: true);
+            agents.add(agent);
+            if (gate != null) await gate.future;
+            return agent;
+          },
+          launch: (cwd) async =>
+              ThincoderLaunch(cwd: cwd, executable: '/mock/thincoder'),
+        ),
+      );
+      final session = ChatSession(
+        kernel: descriptor,
+        kernels: [descriptor],
+        historyCount: 0,
+      );
+      addTearDown(session.dispose);
+      return (session, agents);
+    }
+
+    /// A pool of the test's, its processes scripted agents — behind [gate]
+    /// where the test wants the start to take its time; put back in `finally`
+    /// — that is, [addTearDown].
+    ThincoderWarm pool(List<ThincoderMock> agents, {Completer<void>? gate}) {
+      final previous = ThincoderWarm.instance;
+      addTearDown(() => ThincoderWarm.instance = previous);
+      return ThincoderWarm.instance = ThincoderWarm(
+        start: (_) async {
+          final agent = ThincoderMock(serialInbound: true);
+          agents.add(agent);
+          if (gate != null) await gate.future;
+          return agent;
+        },
+        launch: (cwd) async =>
+            ThincoderLaunch(cwd: cwd, executable: '/mock/thincoder'),
+        schedule: (_, _) => _NoTimer(),
+      );
+    }
+
+    test('T107①: a session being started takes the message, and says so '
+        '(§25.3)', () async {
+      final gate = Completer<void>();
+      final (session, agents) = slow(gate: gate);
+
+      session.attach();
+      await settle();
+      expect(session.health.status, KernelHealthStatus.starting);
+      expect(session.canSend, isTrue);
+      expect(logged('timing: open'), hasLength(1));
+      expect(logged('timing: input-ready'), hasLength(1));
+
+      session.send(const ComposerMessage(text: 'hi'));
+      await settle();
+      // Taken, not dropped: the turn is open, nothing written to the agent.
+      expect(session.isStreaming, isTrue);
+      expect(agents.single.requests('session/prompt'), isEmpty);
+
+      List<ChatItem> items() => [
+        for (var i = 0; i < session.itemCount; i++) session.itemAt(i),
+      ];
+      // The user's own line first, then the wait, said while it lasts.
+      expect(items().first, isA<UserMessageItem>());
+      final waiting = items().whereType<NoticeItem>().single;
+      expect(waiting.kind, NoticeKind.warning);
+      expect(waiting.text, 'thincoder is starting…');
+
+      gate.complete();
+      await settle();
+      expect(session.health.status, KernelHealthStatus.ready);
+      expect(agents.single.requests('session/prompt'), hasLength(1));
+
+      // The waiting line went with the start; the user's line stays ahead of
+      // the first frame that answered it.
+      expect(items().whereType<NoticeItem>(), isEmpty);
+      expect(items().first, isA<UserMessageItem>());
+      expect(
+        items().indexWhere(
+          (item) => item is AssistantTextItem || item is ToolCallItem,
+        ),
+        greaterThan(0),
+      );
+      expect(logged('timing: warm miss'), hasLength(1));
+      expect(logged('timing: session-new'), hasLength(1));
+      expect(logged('timing: first-frame'), hasLength(1));
+    });
+
+    test('T107②: a start that fails ends the turn, once, and leaves none open '
+        '(§25.11)', () async {
+      final kernel = ThincoderKernel(
+        _descriptor,
+        const KernelContext(cwd: '/project'),
+        start: (_) async =>
+            throw const ThincoderUnavailable('thincoder is not installed'),
+        launch: (cwd) async =>
+            ThincoderLaunch(cwd: cwd, executable: '/mock/thincoder'),
+      );
+      final events = <KernelEvent>[];
+      final subscription = kernel.events.listen(events.add);
+      addTearDown(() {
+        unawaited(subscription.cancel());
+        kernel.dispose();
+      });
+
+      kernel.send(const KernelTurn(id: 'turn-1', text: 'hi'));
+      await settle();
+
+      final shown = [
+        for (final event in events)
+          if (event case ItemUpserted(:final item)) item,
+      ];
+      expect(
+        shown
+            .whereType<NoticeItem>()
+            .where((item) => item.kind == NoticeKind.error),
+        hasLength(1),
+      );
+      expect(events.whereType<TurnEnded>().single.interrupted, isTrue);
+      expect(kernel.health.status, KernelHealthStatus.failed);
+      // The waiting line went with the failure: nothing says it still starts.
+      expect(
+        [
+          for (final event in events)
+            if (event case ItemRemoved(:final id)) id,
+        ],
+        contains('thincoder:starting'),
+      );
+    });
+
+    test('T108: a process made warm is taken over whole — one start, one '
+        'handshake (§25.2)', () async {
+      final warmed = <ThincoderMock>[];
+      final gate = Completer<void>();
+      final instance = pool(warmed, gate: gate);
+      // As the app opens a project: warmed and not waited for, the session
+      // created by the same action opening at once.
+      unawaited(instance.warm('/project', files: true));
+      final s = _Session(
+        context: KernelContext(cwd: '/project', files: _BinaryFiles()),
+      );
+      addTearDown(s.dispose);
+      s.kernel.prepare();
+      await settle();
+
+      // The start under way is waited for, not raced: nothing else was made.
+      expect(s.agents, isEmpty);
+      gate.complete();
+      await settle();
+
+      // No start of its own, and no second handshake: the pool's process is
+      // the session's — same folder, same capability bit.
+      expect(s.agents, isEmpty);
+      expect(warmed, hasLength(1));
+      expect(warmed.single.requests('initialize'), hasLength(1));
+      expect(warmed.single.requests('session/new'), hasLength(1));
+      expect(s.kernel.health.status, KernelHealthStatus.ready);
+      expect(s.kernel.sessionId, isNotNull);
+      expect(logged('warm: held'), hasLength(1));
+      expect(logged('timing: warm hit'), hasLength(1));
+      expect(logged('timing: warm miss'), isEmpty);
+    });
+
+    test('T108②: a process held for another handshake is not taken (§25.2)',
+        () async {
+      final warmed = <ThincoderMock>[];
+      final instance = pool(warmed);
+      await instance.warm('/project', files: true);
+
+      // This kernel has no host files: its key is the other bit.
+      final s = _Session();
+      addTearDown(s.dispose);
+      s.kernel.prepare();
+      await settle();
+
+      expect(warmed, hasLength(1));
+      expect(s.agents, hasLength(1));
+      expect(s.kernel.health.status, KernelHealthStatus.ready);
+      expect(logged('timing: warm miss'), hasLength(1));
+    });
+
+    test('T110: the first content frame is what is read, the state frames are '
+        'not (§25.6)', () async {
+      final s = _Session(
+        make: () => ThincoderMock(
+          serialInbound: true,
+          turn: const [
+            {
+              'sessionUpdate': 'agent_message_chunk',
+              'content': {'type': 'text', 'text': 'Here.'},
+            },
+          ],
+        )..hold = Completer<void>(),
+      );
+      addTearDown(s.dispose);
+      s.kernel.prepare();
+      await settle();
+
+      s.send('go');
+      await settle();
+      // The turn is out; the agent held before its first frame.
+      s.agent.push(_update({
+        'sessionUpdate': 'usage_update',
+        'used': 10,
+        'size': 100,
+      }));
+      await settle();
+      expect(logged('timing: first-frame'), isEmpty);
+
+      s.agent.release();
+      await settle();
+
+      final first = logged('timing: first-frame');
+      expect(first, hasLength(1));
+      final read = RegExp(r'first-frame (\d+)ms').firstMatch(first.single)!.group(1)!;
+      expect(int.parse(read), lessThanOrEqualTo(600));
+    });
+
+    test('T111: switching back to a kernel kept warm starts nothing (§25.5)',
+        () async {
+      final starts = <String, List<ThincoderMock>>{};
+      KernelDescriptor describe(String id) {
+        late final KernelDescriptor descriptor;
+        descriptor = KernelDescriptor(
+          id: id,
+          label: id,
+          icon: Icons.smart_toy_outlined,
+          description: 'the test’s',
+          create: (_) => ThincoderKernel(
+            descriptor,
+            const KernelContext(cwd: '/project'),
+            start: (_) async {
+              final agent = ThincoderMock(serialInbound: true);
+              (starts[id] ??= []).add(agent);
+              return agent;
+            },
+            launch: (cwd) async =>
+                ThincoderLaunch(cwd: cwd, executable: '/mock/thincoder'),
+          ),
+        );
+        return descriptor;
+      }
+
+      final a = describe('a'), b = describe('b');
+      final session = ChatSession(kernel: a, kernels: [a, b], historyCount: 0);
+      addTearDown(session.dispose);
+      session.attach();
+      await settle();
+      expect(starts['a'], hasLength(1));
+
+      session.setKernel(b);
+      await settle();
+      expect(starts['b'], hasLength(1));
+
+      session.setKernel(a);
+      await settle();
+
+      // Back on a: no new process, no new handshake, no new session.
+      expect(starts['a'], hasLength(1));
+      expect(starts['a']!.single.requests('initialize'), hasLength(1));
+      expect(starts['a']!.single.requests('session/new'), hasLength(1));
+      // One line each way (§25.5).
+      expect(logged('timing: kernel-switch'), hasLength(2));
+    });
+  });
+}
+
+/// A timer that never fires: the pool's TTL is moved by the test's clock.
+class _NoTimer implements Timer {
+  @override
+  void cancel() {}
+
+  @override
+  bool get isActive => false;
+
+  @override
+  int get tick => 0;
 }
 
 /// The host's files as one that cannot be read at all: a binary file's.

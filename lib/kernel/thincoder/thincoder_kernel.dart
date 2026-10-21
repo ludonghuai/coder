@@ -24,6 +24,7 @@ import 'thincoder_protocol.dart';
 import 'thincoder_session_ref.dart';
 import 'thincoder_suggestions.dart';
 import 'thincoder_transport.dart';
+import 'thincoder_warm.dart';
 
 part 'thincoder_choices.dart';
 
@@ -124,6 +125,13 @@ class ThincoderKernel
   ({String id, Object? kind})? _pendingAuto;
   final Set<String> _sent = {};
 
+  /// The prompt-to-first-content clock `timing: first-frame` reads (§25.6).
+  Stopwatch? _firstFrame;
+
+  /// The waiting line's item while a start is under way (§25.3-2), and whether it shows.
+  static const _startingId = 'thincoder:starting';
+  bool _waiting = false;
+
   /// The model picked while a turn runs or a switch is out (F21): written
   /// once neither is in the way.
   String? _modelTarget;
@@ -208,6 +216,11 @@ class ThincoderKernel
 
   void _setHealth(KernelHealth health) {
     _health = health;
+    // The waiting line is a start's own: it goes with it (§25.3-2).
+    if (_waiting && health.status != KernelHealthStatus.starting) {
+      _waiting = false;
+      emit(ItemRemoved(nextSeq, _startingId));
+    }
     emitInfoChanged();
   }
 
@@ -227,30 +240,42 @@ class ThincoderKernel
     // One process at a time on a session: the last one, if restarted.
     await _stopped;
     _setHealth(const KernelHealth(KernelHealthStatus.starting));
+    final clock = Stopwatch()..start();
     try {
-      final transport = await _start(await _launchFor(_cwd));
+      // A process the project started ahead of this session (§25.2), its
+      // handshake answered — or one on its way, waited for.
+      final warm = await ThincoderWarm.instance.takeWhenReady((_cwd, _context.files != null));
+      appEvent('thincoder', warm == null
+          ? 'timing: warm miss'
+          : 'timing: warm hit ${clock.elapsedMilliseconds}ms');
+      final transport = warm?.transport ?? await _start(await _launchFor(_cwd));
       if (_disposed) {
         transport.close();
         return;
       }
       _transport = transport;
-      final connection = _connection = ThincoderConnection(transport.write);
+      final connection = _connection =
+          warm?.connection ?? ThincoderConnection(transport.write);
       connection
         ..onRequest = _serverRequest
         ..onNotification = _notification;
       _subscription = transport.messages.listen(_receive);
-      _handshake(
-        await connection.request('initialize', {
-          'protocolVersion': 1,
-          // The files the agent edits go through the editor where a host
-          // gives one (F18); otherwise nothing but the protocol's basics,
-          // and no terminal login ever (D12). What is not said is
-          // unsupported.
-          'clientCapabilities': _context.files == null
-              ? const <String, Object?>{}
-              : ThincoderFiles.capabilities,
-        }),
-      );
+      if (warm != null) {
+        _handshake(warm.handshake);
+      } else {
+        _handshake(
+          await connection.request('initialize', {
+            'protocolVersion': 1,
+            // The files the agent edits go through the editor where a host
+            // gives one (F18); otherwise nothing but the protocol's basics,
+            // and no terminal login ever (D12).
+            // What is not said is unsupported.
+            'clientCapabilities': _context.files == null
+                ? const <String, Object?>{}
+                : ThincoderFiles.capabilities,
+          }),
+        );
+      }
       await _openSession();
       // Said of, never blocked (D13): the session goes on all the same.
       if (ThincoderLocator.belowVerified(_version)) {
@@ -412,10 +437,12 @@ class ThincoderKernel
     ThincoderConnection connection,
     List<Map<String, Object?>>? servers,
   ) async {
+    final clock = Stopwatch()..start();
     final created = await connection.request('session/new', {
       'cwd': _cwd,
       'mcpServers': ?servers,
     });
+    appEvent('thincoder', 'timing: session-new ${clock.elapsedMilliseconds}ms');
     _slot = switch (created['sessionId']) {
       final String id when id.isNotEmpty => id,
       final Object id => '$id',
@@ -676,6 +703,8 @@ class ThincoderKernel
       );
     }
     if (_turn != turn.id) return;
+    // The turn waits for the process: said, so that the wait is not silent.
+    if (_health.status != KernelHealthStatus.ready) _sayWaiting();
     try {
       await _ensureStarted();
     } on Object catch (error) {
@@ -694,6 +723,8 @@ class ThincoderKernel
     final slot = _slot;
     if (_turn != turn.id || slot == null) return;
     _lastPromptTurn = turn.id;
+    // `timing: first-frame` takes off where the prompt goes out (§25.6).
+    _firstFrame = Stopwatch()..start();
     try {
       // A turn's answer comes only when the turn ends, and a turn has no
       // upper bound: this request is not on the connection's clock (§3.4).
@@ -796,6 +827,7 @@ class ThincoderKernel
     _resolveApprovals();
     final started = _turnStarted;
     _turnStarted = null;
+    _firstFrame = null; // The turn's first frame is its own (§25.6).
     final spent = _events.turnSpent;
     emit(
       TurnEnded(
@@ -1134,6 +1166,28 @@ class ThincoderKernel
     );
   }
 
+  /// Says the turn waits for the process (§25.3-2), once.
+  void _sayWaiting() {
+    if (_waiting) return;
+    _waiting = true;
+    emit(ItemUpserted(nextSeq, _startingId,
+        const NoticeItem(NoticeKind.warning, 'thincoder is starting…')));
+  }
+
+  /// `timing: first-frame` (§25.6): the first frame carrying content, once.
+  void _noteFirstFrame(Map<String, Object?> update) {
+    final clock = _firstFrame;
+    if (clock == null) return;
+    if (!_content.contains(update['sessionUpdate'])) return;
+    _firstFrame = null;
+    appEvent('thincoder', 'timing: first-frame ${clock.elapsedMilliseconds}ms');
+  }
+
+  /// The frames that carry content, not the usage or the options (§25.6).
+  static const _content = {
+    'agent_message_chunk', 'agent_thought_chunk', 'tool_call', 'tool_call_update',
+  };
+
   /// The automatic turn's mark in a `session_info_update` (§19.2).
   static const _turnKey = 'thincoder.dev/turn';
 
@@ -1145,6 +1199,7 @@ class ThincoderKernel
     }
     final update = (params['update'] as Map?)?.cast<String, Object?>();
     if (update == null) return;
+    _noteFirstFrame(update);
     // A turn boundary's mark is this adapter's, not a subagent's (F16).
     final meta = update['_meta'];
     if (update['sessionUpdate'] == 'session_info_update' &&

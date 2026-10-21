@@ -9,6 +9,7 @@ import '../kernel/kernel_event.dart';
 import '../kernel/kernel_registry.dart';
 import '../kernel/kernel_types.dart';
 import '../kernel/transcript.dart';
+import '../platform/event_log.dart';
 import '../remote/remote_location.dart';
 import 'chat_feed.dart';
 import 'chat_models.dart';
@@ -178,6 +179,7 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
   /// choices wait for. Dropped once the conversation starts (the kernel is
   /// then the conversation's own) and with the session.
   final Map<String, AgentKernel> _warm = {};
+  Stopwatch? _switching; // A switch's t0 (§25.5): read once it is ready.
 
   void _dropWarm() {
     for (final kernel in _warm.values) {
@@ -199,6 +201,7 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
       _timeQuiet();
       _reviewEvent(event);
       if (kernelLocked) _dropWarm();
+      _readSwitch();
       notifyListeners();
     }
   }
@@ -399,8 +402,11 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
   /// A view shows the conversation: the kernel gets ready.
   void attach() {
     _views++;
+    final opened = Stopwatch()..start(); // A11's first read (§25.6).
+    appEvent('thincoder', 'timing: open');
     _kernel.prepare();
     _startReview();
+    if (canSend) appEvent('thincoder', 'timing: input-ready ${opened.elapsedMilliseconds}ms');
   }
 
   /// A view no longer shows it. With none left, an idle kernel frees what
@@ -434,6 +440,7 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
 
   void setKernel(KernelDescriptor descriptor) {
     if (kernelLocked || descriptor.id == kernel.id) return;
+    _switching = Stopwatch()..start(); // t0 (§25.5).
     unawaited(_subscription?.cancel());
     // Kept warm rather than disposed: before the first message there is no
     // conversation to protect, and the switch back skips the start.
@@ -451,7 +458,16 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
       _kernel.prepare();
       _startReview();
     }
+    _readSwitch();
     notifyListeners();
+  }
+
+  /// `timing: kernel-switch` (§25.5), once the kernel switched to is ready.
+  void _readSwitch() {
+    final clock = _switching;
+    if (clock == null || _kernel.health.status != KernelHealthStatus.ready) return;
+    _switching = null;
+    appEvent('thincoder', 'timing: kernel-switch ${clock.elapsedMilliseconds}ms');
   }
 
   // --- Facets: what the kernel declares ------------------------------------------
