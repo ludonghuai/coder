@@ -16,12 +16,13 @@
 一个工作台级的自动同步引擎：按周期 / 回到前台 / 仓库发现对工作区所有仓库并发 fetch；fetch 后用本地状态做「干净 + 可快进 + 远端改动与脏缓冲不相交」判定，满足则 `git merge --ff-only` 快进；网络失败静默重试，需用户动作的失败单次通知；git 子进程经 `runGit` 的环境注入口继承 Settings → Network 解析出的代理。
 
 ```text
-IdeWorkbenchState（每个 IDE 工作区一个，Offstage 时仍活着）
+_WorkbenchState（窗口级，聊天与 IDE 两种布局都常驻）
   └─ IdeGitAutoFetch（新，lib/ide/git/git_autofetch_engine.dart）
        ├─ 定时器 / 前台恢复 / 仓库发现 / 设置变化  → 单轮调度（有界并发 4）
-       ├─ 每仓：pullFromUpstream()（fetch → 现读 status → 否决/合并 → 待 reload 路径）→ workspace.reload(paths)
+       ├─ 仓源：IDE 空间的 repositories（开着时）+ 侧栏仓源（未开时）；documents 取各 IDE 空间
+       ├─ 每仓：pullFromUpstream()（fetch → 现读 status → 否决/合并 → 待 reload 路径）→ 各 IDE 空间 reload(paths)
        ├─ 失败与跳过：按「根 + 问题键」去重；网络类静默
-       └─ 读：workspace.repositories / documents；写：repository.lastFetchAt / autoFetchIssue
+       └─ 写：repository.lastFetchAt / autoFetchIssue；听：settings.json（周期 / 开关）
 ```
 
 ### 2.2 最近先例对照（对齐 ∥ 偏离及理由）
@@ -43,7 +44,7 @@ IdeWorkbenchState（每个 IDE 工作区一个，Offstage 时仍活着）
 
 偏离（逐条给理由）：
 
-1. **引擎放工作台，不放 `IdeScmViewState`**。视图随侧栏重建/卸载，定时器不能跟着视图生死；且多仓列表在 `IdeWorkspace`（`lib/ide/ide_workspace.dart:360-368`），不在视图里。工作台为每个 IDE 工作区常驻（`lib/workbench.dart:2479-2489` 的 `Offstage` + `TickerMode`；聊天模式下 `workbench.dart:2471-2475` 仍把各 IDE 面板留在树里），是唯一「工作区活着就活着」的挂点。
+1. **引擎放窗口级工作台（`_WorkbenchState`），不放 `IdeScmViewState`、也不放 IDE 视图**。视图随侧栏重建/卸载，定时器不能跟着视图生死；IDE 视图同样会缺席——聊天布局下 IDE 工作台根本不构建（缺陷轮 #115 实测：chat-only 时引擎从不 `start`）。挂点 = 主工作台，仓源 = IDE 工作区的仓（开着时）+ 侧栏的仓源（未开时，按 `git.autoRepositoryDetection` 自己找）；`documents` / `reload` / `paths` 由各 IDE 空间组合。
 2. **快进用 `merge --ff-only`，不用 `git pull`**。fetch 已经拿到远端 ref，再 `pull` 会二次联网；`pull` 还受 `pull.rebase` / `pull.ff` 配置影响。
    `merge --ff-only` 语义逐字（`Documentation/merge-options.adoc`，2026-10-19 读）：「resolve the merge as a fast-forward when possible. When not possible, refuse to merge and exit with a non-zero status.」——不产生合并提交、不产生冲突、分叉时干净失败。
 3. **代理走环境变量，不走 `-c http.proxy`**。`ProxyRoute.environment` 已是 app 与 Claude Code 共用的口径（`lib/network/network_proxy_io.dart:134-135`）；`-c` 会把代理（可能带凭据）写进进程命令行。
