@@ -427,11 +427,6 @@ class IdeGitRepository extends ChangeNotifier {
     _markFetched();
   });
 
-  /// The files [upstream] changes against the branch, as absolute paths:
-  /// what a fast-forward to it would update.
-  Future<List<String>> incomingPaths(String upstream) =>
-      service.changedPaths('HEAD', upstream);
-
   /// Git: Push (`Repository.push`): pushes the branch to its upstream.
   /// Throws when the branch has none.
   Future<void> push() => _operate(() async {

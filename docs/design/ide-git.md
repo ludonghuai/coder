@@ -82,7 +82,7 @@ IdeWorkbenchState
   ├─ IdeGitRepository（既有）
   │    ├─ fetch()         既有，成功后记 lastFetchAt
   │    ├─ fastForward()   新，_operate(() => service.fastForward(upstream))
-  │    ├─ incomingPaths()  已被 pullFromUpstream 取代，无调用点（路径清单在核内由 changedPaths 计算）
+  │    ├─ incomingPaths() 已删（清理批 #103）：路径清单本就由核内 changedPaths 计算，本方法无调用点
   │    ├─ pullFromUpstream() 新，一次操作完成 fetch → 判定/合并 → 待 reload 的路径（§12.2）
   │    └─ lastFetchAt / autoFetchIssue（新字段，notifyListeners 驱动 UI）
   └─ IdeGitService（既有）
@@ -478,7 +478,9 @@ IdeGitRepository.pullFromUpstream({
 ### 12.4 自动轮：A 口径不变 + 静默路径清零
 
 - 判定链（§4.3 步骤 2–8）原样保留：脏树（含未跟踪）整仓不拉、分叉不拉、命中上限不拉、脏缓冲相交不拉且提示文件名；只 `--ff-only`，永不产生合并提交。
-- **判定输入**改为 `pullFromUpstream` 内 fetch 之后现读的 `status`；`git.state` 不再是判定输入。旧实现的静默出口：判定读缓存 `git.state`（`git_repository.dart:42` 的 `_state`，getter 在 `:62`），`git_autofetch_engine.dart:315-316` 在 `state == null` 时直接 `return null`；`git.busy` 门在 `:252`。`status` 读不到 ⇒ `other` issue（tooltip 可见），不再返回 null 当作「无事可做」。
+- **判定输入**改为 `pullFromUpstream` 内 fetch 之后现读的 `status`；`git.state` 不再是判定输入。旧实现的静默出口：判定读缓存 `git.state`
+  （`git_repository.dart:42` 的 `_state`，getter 在 `:62`），`git_autofetch_engine.dart:315-316` 在 `state == null` 时直接 `return null`；
+  `git.busy` 门在 `:252`。`status` 读不到 ⇒ `other` issue（tooltip 可见），不再返回 null 当作「无事可做」。
 - **`git.busy` 门保留**（不与用户的前台操作交错）；fetch 与合并同在一次 `_operate` 内 ⇒ 一轮开始后不会有用户操作插进这两步之间。观测到的两轮 fetch 都已完成（`FETCH_HEAD` 更新），说明当轮已越过 busy 门；busy 不是这两轮的成因。
 - **轮内不重试**：每仓每轮最多一次 fetch + 一次合并；失败留到下一轮（周期 / 前台恢复 / 仓库发现）。`git.autofetch` 关 ⇒ 不发起合并（§4.6 不变）。
 - `git.autoPull` 关 ⇒ 只 fetch，不调用合并（引擎不调用 `pullFromUpstream`，走既有 `git.fetch()`）。
@@ -509,7 +511,9 @@ IdeGitRepository.pullFromUpstream({
 1. **计数位置**：多仓 CHANGES 的仓库头，动作组顺序 = `Commit` · `获取`（含计数）· `Refresh` · `...`；计数在获取按钮内（图标 + 数字同一按钮，宽度按数字实际绘制量出）；仅 `behind > 0` 时显示，tooltip 追加「N 个远端提交待拉取」。窄宽形态的 `↓N` 徽标（12px、`descriptionForeground`）见第 3 条。
 2. **单源（范围 = 仓库头内部）**：`_headLabel` 不再含 `↓N`（只留分支名与 `*` / `+` / `!`），计数只在获取按钮内渲染；仓库头内同一时刻只有一处计数（按钮内与窄宽徽标两种形态互斥，见第 3 条）。状态栏 branch 项保留自己的 `↓N`——这是对需求 §2.1（`↓N` 常显）与 §2.8（分支标签后不重复）张力的裁定：§2.8 的「不再重复」作用在**仓库头内部**，仓库头与状态栏是两个不同的面，两处并存是本批的有意结果。`_headLabel` 的权威描述只在本条。
 3. **窄宽回落**：`roomy = maxWidth >= 220` 不成立时动作组整组隐藏（获取在 `...` 菜单里），`↓N` 回落到分支名右侧；两种形态互斥，仓库头内同一时刻只渲染一处。
-4. **按钮**：图标与标题「获取」不变；tooltip 改为「获取并拉取远端提交」；`git.busy` 时禁用——唯一的禁用符号 = `_InlineAction.onPressed`（改为可空 `VoidCallback?`，`ide_scm_view.dart:3430-3448`），`busy` 时传 null；底层 `IdeActionButton.onPressed` 本就可空（`lib/ide/ide_hover.dart:380`）。点击成功无 toast / 无提示音；失败一条 error 通知（仓库名 + Git 原话）。不抢焦点、不切视图；合并后按既有 `reload` 刷新已打开文件。
+4. **按钮**：图标与标题「获取」不变；tooltip 改为「获取并拉取远端提交」；`git.busy` 时禁用——唯一的禁用符号 = `_InlineAction.onPressed`
+   （改为可空 `VoidCallback?`，`ide_scm_view.dart:3430-3448`），`busy` 时传 null；底层 `IdeActionButton.onPressed` 本就可空（`lib/ide/ide_hover.dart:380`）。
+   点击成功无 toast / 无提示音；失败一条 error 通知（仓库名 + Git 原话）。不抢焦点、不切视图；合并后按既有 `reload` 刷新已打开文件。
 5. **命令**：`git.fetch`（单仓获取）= 该仓 `pullFromUpstream(merge)`；`git.fetchAll`（`_fetchAll`，`ide_scm_view.dart:2017-2023`）= 工作区全仓遍历，本批逐仓走同一拉取（每仓 `fetch --all --tags` = 单仓全 remote，§3.3）——P9 覆盖全仓面。`Pull` / `Sync Changes` 不动。
    l10n 新增 3 键（`scmFetchAndPullAll` / `scmFetchAndPull` / `scmBehindCommits`），en / zh 两源。
    - **单仓 `...` 菜单**（`_repositoryMenu`，`ide_scm_view.dart:2089`）：「获取」（`scmFetch`，`:2126-2129`）= 该仓 `pullFromUpstream(merge)`，与仓库头获取按钮同一动作；紧邻的「从所有远程获取」（`scmFetchFromAllRemotes`，`:2131-2134`）= 该仓全部 remote 的 `fetch --all --tags`，只 fetch、不合并。

@@ -562,4 +562,92 @@ void main() {
       same(other),
     );
   });
+  // Every message in the sources reaches its getter in the generated files:
+  // those are hand-kept here (no gen tool), so a value edited on one side
+  // only would otherwise go unnoticed (the key sets alone would still match).
+  test('the generated localizations carry every source message', () {
+    /// Where [key]'s member starts in [dart], or -1.
+    int memberAt(String dart, String key) {
+      final getter = dart.indexOf('String get $key ');
+      final method = dart.indexOf('String $key(');
+      if (getter >= 0 && (method < 0 || getter < method)) return getter;
+      return method;
+    }
+
+    /// [value]'s literal texts: placeholders ([names]) and ICU syntax are not
+    /// text (a branch like `None` is).
+    List<String> fragmentsOf(String value, Set<String> names) {
+      if (!value.contains('{')) return [value];
+      const keywords = {
+        'plural', 'select', 'selectordinal', 'other', 'zero', 'one', 'two',
+        'few', 'many',
+      };
+      final parts = <String>[];
+      final buffer = StringBuffer();
+      for (final rune in value.runes) {
+        final ch = String.fromCharCode(rune);
+        if (ch == '{' || ch == '}') {
+          parts.add(buffer.toString());
+          buffer.clear();
+          continue;
+        }
+        buffer.write(ch);
+      }
+      parts.add(buffer.toString());
+      return [
+        for (final part in parts)
+          if (part.trim().isNotEmpty &&
+              !part.contains(',') &&
+              !keywords.contains(part.trim()) &&
+              !names.contains(part.trim()) &&
+              !RegExp(r'^=\d+$').hasMatch(part.trim()))
+            part,
+      ];
+    }
+
+    String asDart(String text) => text
+        .replaceAll('\\', '\\\\')
+        .replaceAll("'", "\\'")
+        .replaceAll('"', '\\"')
+        .replaceAll(r'$', r'\$')
+        .replaceAll('\n', r'\n')
+        .replaceAll('\r', r'\r')
+        .replaceAll('\t', r'\t');
+
+    for (final (source, generated) in [
+      ('lib/l10n/app_en.arb', 'lib/l10n/app_localizations_en.dart'),
+      ('lib/l10n/app_zh.arb', 'lib/l10n/app_localizations_zh.dart'),
+    ]) {
+      final messages =
+          jsonDecode(File(source).readAsStringSync()) as Map<String, dynamic>;
+      final dart = File(generated).readAsStringSync();
+      var checked = 0;
+      for (final entry in messages.entries) {
+        if (entry.key.startsWith('@')) continue;
+        final value = entry.value;
+        if (value is! String) continue;
+        final at = memberAt(dart, entry.key);
+        expect(at, isNot(-1), reason: '${entry.key} is missing from $generated');
+        var end = dart.indexOf('\n  String ', at + 1);
+        if (end < 0) end = dart.length;
+        final body = dart.substring(at, end);
+        final meta = messages['@${entry.key}'];
+        final names = meta is Map && meta['placeholders'] is Map
+            ? {...(meta['placeholders'] as Map).keys.cast<String>()}
+            : const <String>{};
+        for (final part in fragmentsOf(value, names)) {
+          final text = part.trim();
+          if (text.isEmpty) continue;
+          checked++;
+          expect(
+            body.contains(asDart(text)),
+            isTrue,
+            reason: '${entry.key}: $generated is missing "$text"',
+          );
+        }
+      }
+      expect(checked, greaterThan(500), reason: 'only $checked parts in $source');
+    }
+  });
+
 }

@@ -169,15 +169,20 @@ void main() {
 
   group('kept to the project', () {
     test('relative paths join it; those outside are refused', () {
+      // The POSIX spelling: the host's context would say `\p\lib\a.dart` on Windows.
+      final posix = p.Context(style: p.Style.posix);
       expect(
-        const FileLink('lib/a.dart').resolveIn('/p'),
-        p.join('/p', 'lib', 'a.dart'),
+        const FileLink('lib/a.dart').resolveIn('/p', paths: posix),
+        '/p/lib/a.dart',
       );
-      expect(const FileLink('/p/lib/a.dart').resolveIn('/p'), '/p/lib/a.dart');
-      expect(const FileLink('../etc/passwd').resolveIn('/p'), isNull);
-      expect(const FileLink('/etc/passwd').resolveIn('/p'), isNull);
-      expect(const FileLink('~/a.dart').resolveIn('/p'), isNull);
-      expect(const FileLink('lib/../../x').resolveIn('/p'), isNull);
+      expect(
+        const FileLink('/p/lib/a.dart').resolveIn('/p', paths: posix),
+        '/p/lib/a.dart',
+      );
+      expect(const FileLink('../etc/passwd').resolveIn('/p', paths: posix), isNull);
+      expect(const FileLink('/etc/passwd').resolveIn('/p', paths: posix), isNull);
+      expect(const FileLink('~/a.dart').resolveIn('/p', paths: posix), isNull);
+      expect(const FileLink('lib/../../x').resolveIn('/p', paths: posix), isNull);
     });
 
     test('a Windows project\'s paths, as its host spells them', () {
