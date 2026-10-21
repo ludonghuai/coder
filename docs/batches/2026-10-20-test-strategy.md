@@ -3,7 +3,7 @@
 > 编制：主 agent · 2026-10-20 · 来源 = 用户 2026-10-20 21:11「按原计划继续走测试」；台账 #109（上游 Windows 平台红 22 条）+ #101（workbench 13 + lsp/install 15）。
 > 台账 = #109 · #101（ide · 归批）。前情 = 无（独立批）。
 ## §1 讨论（主 agent）
-**状态行**：🔄 进行中（…）
+**状态行**：已收口 2026-10-20
 <§1 模板占位：本批条目 / 关键判据 / 授权口径>
 
 **条目**：#109（上游带入的 Windows 平台红）+ #101（workbench 13 / lsp 15）+ 本轮 `side_panel_test` 的 10 条。
@@ -62,10 +62,32 @@
 
 **范围外（未处置）**：`test/ide` 其余 ~50 条既有红（`ide_workspace_model` 10 · `native_editor_integration` 9 · `textmate_editor` 9 · `ide_editor_keys` 8 …），本轮未触碰；`ide_standalone` 单独跑绿、并跑红（并行共享状态），已入账 #118。
 
+> 不适用：§2 —— 本批为测试面 + 一处缺陷修（父侧直接改），无设计段；改动与理由见本 §1 各轮。
+> 不适用：§3 —— 无设计评审段；每档以「跑出来的读数」验收（见 §6）。
+
 ## §2 批次任务与设计（eng-designer）
 **状态行**：（eng-designer 写入时更新）
 <§2 模板占位：本批条目（覆盖） / 设计档落点 / 机制设计 / 受影响文件与测试覆盖 / 验收对照 / 关键决策 / 上抛项>
 ## §3 设计评审（评审子代理）
 ## §4 用户批准（主 agent）
+
+**用户批准（2026-10-20 23:20）**：用户逐字「收口」——含此前 22:05 对路径显示口径「A可以」的裁定。
+
 ## §5 实施记录（eng-coder）
 ## §6 验证与收口（父代理）
+
+**验收读数（逐档跑 + 合并跑）**
+
+| 范围 | 命令 | 结果 |
+|---|---|---|
+| 聊天面 | `flutter test test/chat` | **540/540 绿**（本批开始 17 红） |
+| 工作台面 | `flutter test test/ide/workbench` | **334/334 绿**（本批开始 14 红，含 1 个产品缺陷） |
+| LSP 安装面 | `flutter test test/ide/lsp/install` | **12 绿** + `mason_server_provider_test` 整档 `@TestOn('!windows')`（POSIX 夹具） |
+| 独立 IDE | `flutter test test/ide/ide_standalone_test.dart` | **15/15 绿**（单独跑） |
+| 静态 | `flutter analyze`（本批改动面） | No issues |
+
+**合并跑（四个范围一起）**：`+900 -2`，两条均为**并行 flake**（各自单跑全绿）：`ide_standalone` 的无文件夹用例、`content_image` 的点击放大用例 —— 同族（并行下异步/全局态），已入账 **#118**。
+
+**交付面**：测试 4 档平台化（`file_open` / `side_panel_search` / `side_panel_workspace` / `side_panel_test`）· `code_citation` / `content_image` / `ide_standalone` 路径归一 · 产品值 `displayPath` 统一 `/`（用户裁定 A）· 产品缺陷 `_holdsKeys` 修（chord 第二键被吞）· `mason_server_provider_test` 按平台跳过（带因）· `explorer_exclude` 夹具路径上下文修正。
+
+**遗留（已入账，不在本批）**：#116 聊天选区自愈 2/10 失败 · #117 code citation 着色用例 Windows 跳过（复启 = 下次触碰该面）· #118 两例并行 flake。**范围外未处置**：`test/ide` 其余约 50 条既有红（editor/textmate/workspace model 等，非本批清单）。
