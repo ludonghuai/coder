@@ -147,6 +147,19 @@ ACP schema v1 的 image 块形 = `{type:"image", mimeType, data}`（已查实）
 边界：不做非视觉模型自动借视觉子代理（用户 2026-10-19 03:30「E等一下」）；不改 CLI 的 FIFO 语义；不做 provider 级切换后置（除非证据要求）。
 依赖：ACP `set_config_option`；回合边界事件（`TurnEnded`）；模型选择器状态位。
 
+**F22 交互响应（与 Claude 内核同档）**（批 16；用户 2026-10-21 00:45「我要机制的性能体验，响应做到和 claude code 内核一样强劲，反应灵敏！」）：
+打开 thincoder 会话、发消息、切内核的手感必须与 claude-code 内核同档——**用户不等进程、不等装配**。
+事实（2026-10-21 实机计时，直发 ACP 帧到 `thincoder acp`）：进程启动 + `initialize` **364 ms**；`session/new` **1545 ms**
+（同进程第二次 **1507 ms** ⇒ 每会话都付，非一次性预热）；`session/prompt` → 首帧 **344 ms**；一句话回合总 3913 ms。
+`session/new` 的构成已逐层实测：**属主探测 ≈1.29 s**（`tasklist` 658 ms + PowerShell `Get-CimInstance` 633 ms）+ **装配 138 ms** + 其余 ≈5 ms。
+对照：claude-code 内核是同进程 isolate（`lib/kernel/claude_code/dart_core_transport_io.dart:14` `AgentIsolate.spawn`），无进程、无管道。
+⇒ 差距在**建会话的 1.9 秒**（0.37 起进程 + 1.29 扫全机进程表 + 0.14 装配），不在流式。
+验收（可机检，真机 `appEvent` 计时为证）：新建 thincoder 会话 **≤300 ms 可输入**（输入框已可用，首条消息排队）；**首帧 ≤600 ms**；**切内核 ≤200 ms**；同一项目连开第二个会话时**不再付全量装配**。
+边界：不改 Claude 内核路径；不做内核间会话迁移（B4）；不为性能牺牲既有正确性（审批 / 取消 / 队列语义不变）。
+依赖：宿主侧预热与乐观就绪（本仓）；CLI 侧装配瘦身（`thincoder/`，**B1 例外已获用户批准 2026-10-21 00:53**——判活改 `process.kill`、命令行探测移出热路径、`git config` 缓存），
+独立成外仓批次，保持上游可合并。
+
+
 ## 4. 扩展性要求（「双端更新留空间」）
 
 **E1 适配层单点**：thincoder 相关代码集中一个模块（建议 `lib/kernel/thincoder/`），其余部分只经 `AgentKernel` 接口交互。
@@ -212,6 +225,8 @@ thincoder 将来补能力 → 改能力映射表（§5）+ 适配层小改即可
 - **A8 Customize（批 3）**：对位类别可列出/打开/编辑生效；无对应面类别不显示。
 - **A9 测试**：mock ACP 对端覆盖 握手 / 会话 / 事件 / 审批 / 取消 路径；相关既有测试（含 claude 面）不回退。
 - **A10 扩展性**：设计档含既有文件改动点清单与升级核对说明；实现与 §5 映射表一致（抽查）。
+- **A11 交互响应**：thincoder 会话新建 ≤300 ms 可输入、首帧 ≤600 ms、切内核 ≤200 ms（真机 `appEvent` 计时）；同项目第二个会话不付全量装配。
+
 
 ## 8. 依赖
 

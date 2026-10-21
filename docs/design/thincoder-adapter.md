@@ -2,9 +2,9 @@
 
 > 板块：内核适配（thincoder 桌面接入）· 范围仓：baocode。
 > 配对需求档：`docs/requirements/thincoder-adapter.md`（用户已确认，2026-10-16）。
-> 分批：**批 1 = 本地内核全链路**（需求档 F1–F7、F10 + 扩展性 E1–E5，本档详写）；批 2 = 远程 SSH（F8）；批 3 = Customize 对接（F9）；**批 4 = 子代理活动可见（F11，§15）**；**批 5 = 子代理内容归属（F12，§16）**；**批 6 = 审批自动档 + 模型清单与思考档位（F13 / F14，§17）**；**批 7 = 工作中发送的消息（F15，§18）**；**批 8 = 回合结束后继续关注后台子代理（F16，§19）**；**批 10 = 编辑器上下文注入 + agent 编辑走 IDE 原生 diff（F17 / F18，§20 / §21）**；**批 11 = 原生图片块 + 用量（F19 / F20，§22 / §23）**；**批 12 = F19 CLI 收口（真机 provider 面 / 槽文件剥离 / 挂起窗残余，§22.9–§22.12）**；**批 14 = 模型切换后置应用（F21，§24）**；**批 15 = 会话治理 A1：重命名 + 回合级文件回退（独立板块档 `session-governance`，本档只留 ACP 方法面指针）**。
+> 分批：**批 1 = 本地内核全链路**（需求档 F1–F7、F10 + 扩展性 E1–E5，本档详写）；批 2 = 远程 SSH（F8）；批 3 = Customize 对接（F9）；**批 4 = 子代理活动可见（F11，§15）**；**批 5 = 子代理内容归属（F12，§16）**；**批 6 = 审批自动档 + 模型清单与思考档位（F13 / F14，§17）**；**批 7 = 工作中发送的消息（F15，§18）**；**批 8 = 回合结束后继续关注后台子代理（F16，§19）**；**批 10 = 编辑器上下文注入 + agent 编辑走 IDE 原生 diff（F17 / F18，§20 / §21）**；**批 11 = 原生图片块 + 用量（F19 / F20，§22 / §23）**；**批 12 = F19 CLI 收口（真机 provider 面 / 槽文件剥离 / 挂起窗残余，§22.9–§22.12）**；**批 14 = 模型切换后置应用（F21，§24）**；**批 15 = 会话治理 A1：重命名 + 回合级文件回退（独立板块档 `session-governance`，本档只留 ACP 方法面指针）**；**批 16 = 交互响应（预热池 + 乐观就绪可见性 + 打点，F22，§25）**。
 > 先例坐标对照基准：`lib/kernel/claude_code/`（完整适配）· `lib/kernel/codex/`（薄内核）。
-> 状态：设计稿 · 2026-10-19 · 本文档中行号 = 编制日快照（实施时按符号定位）。
+> 状态：设计稿 · 2026-10-21 · 本文档中行号 = 编制日快照（实施时按符号定位）。
 
 ---
 
@@ -394,8 +394,12 @@ server 由 `HostMcpServer` 签发（127.0.0.1 系统选端口 + 每会话 Bearer
 | F19 原生图片块（批 11） | §22（验收对照 = §22.5 · 用例 = §22.6 · 真机 provider 面 = §22.9） | 握手 `promptCapabilities.image` ⇒ prompt 数组带原生 image 块（不落盘）；旧 CLI ⇒ 今天逐字；B1 例外面 = §22.2（**已裁 A**）；「模型能看图」判据 = T1 / T1b + 走查 S1；走查 §22.8 / §22.12 |
 | F20 用量（批 11） | §23（验收对照 = §23.5 · 用例 = §23.6） | 回合 token = 本回合 `usage_update.used` 之和（turn footer）；会话累计 = 全会话之和（上下文面板）；成本无来源（§14-25）；走查 §23.8 |
 | F21 模型切换后置应用（批 14） | §24（验收对照 = §24.5 · 用例 = §24.6） | 回合在飞时点模型 ⇒ 回合收尾自动重发；pill 标「回合结束后切换到 <目标>」；失败 = 旧模型 + 一条 error；走查 §24.8 |
+| F22 交互响应（批 16） | §25（验收对照 = §25.10 · 用例 = §25.11） | 宿主侧：打开项目预热进程（领池即用）+ 乐观就绪可见（`NoticeItem` 等待面）+ 打点 8 类；CLI 侧瘦身归已批准的外仓批（§25.13 C′1–C′3）；走查 §25.14 |
 
-需求档条目覆盖（三方一致链）：F1–F7、F10–F20、E1–E5 全部有落点；F8/F9 只留接口（§13）；B1–B4 遵守——B1 默认不改 thincoder 仓，例外 = 经用户裁定的最小接口改动（F12 归属标 §16.1；F13 / F14 的 configOptions 投影 §17.1-① / §17.3-①②；F16 的 ACP 挂起窗 + 回合边界帧 §19.3；F19 的 `promptCapabilities.image` + 图像块内容 §22.2——**B1 已裁 A**；会话治理 A1 的 `session/set_title` / `session/revert` + 撤销栈回合化 / `prompt.turnId`——用户 2026-10-20 00:02 已准，落点见 `session-governance`）。
+需求档条目覆盖（三方一致链）：F1–F7、F10–F22、E1–E5 全部有落点；F8/F9 只留接口（§13）；B1–B4 遵守——
+B1 默认不改 thincoder 仓，例外 = 经用户裁定的最小接口改动（F12 归属标 §16.1；F13 / F14 的 configOptions 投影 §17.1-① / §17.3-①②；
+F16 的 ACP 挂起窗 + 回合边界帧 §19.3；F19 的 `promptCapabilities.image` + 图像块内容 §22.2——**B1 已裁 A**；
+会话治理 A1 的 `session/set_title` / `session/revert` + 撤销栈回合化 / `prompt.turnId`——用户 2026-10-20 00:02 已准，落点见 `session-governance`）。
 
 ---
 
@@ -452,12 +456,15 @@ server 由 `HostMcpServer` 签发（127.0.0.1 系统选端口 + 每会话 Bearer
 - 图片与用量面（批 11）：§22.6 / §23.6 的 T93–T98 入 `thincoder_kernel_test.dart`（mock 增 `promptImage` 能力位开关，缺省 false = 今天）；**不加固件**——F19 的线形是既有 `session/prompt`（块数变、方法不变），F20 的 `usage_update` 帧形不变；既有固件保持绿 = 回归哨兵。
 - 图片收口面（批 12）：本仓零新增（baocode 零改）；thincoder 侧单元测试档 = `thincoder/docs/batches/2026-10-19-f19-cli-closure.test.mjs`（T1 / T1b / T2 / T3 / T4），跑法 `cd thincoder && node --test <该档>`；零留存（收口删除），不进该仓 `npm test`（只收 `test/**`）。
 - 模型切换后置面（批 14）：§24.6 的 T100–T105 入 `thincoder_kernel_test.dart`（mock 的既有 `hold` / `configError` / `models` 直驱，零 mock 改动）；T106 宿主投影入 `test/chat/pending_model_test.dart`；**不加固件**——线形是既有 `session/set_config_option`（无新帧）；既有固件保持绿 = 回归哨兵。
+- 交互响应面（批 16）：§25.11 的 T107–T111 入 `thincoder_kernel_test.dart`；T108 / T109 另有 `test/kernel/thincoder_warm_test.dart`（不启真进程，时钟与 transport 工厂可注入）。**不加固件**——线形是既有 `initialize` / `session/new` / `session/prompt`；既有固件保持绿 = 回归哨兵。批 16 见 §25。
 
 ---
 
 ## 10. 边界（本批不做）
 
-- 需求档 B1–B4 全部沿用：B1 默认不改 `thincoder/`；例外 = 经用户裁定的最小接口改动（F12 归属标 §16.1；F13 / F14 的 configOptions 投影 §17.1-① / §17.3-①②；F16 的 ACP 挂起窗 + 回合边界帧 §19.3；会话治理 A1，见 `session-governance`）；❌ 各项不做（图片直传 / 多文件夹 / fork / 后台任务 / MCP 管理 / 账号用量 / 建议类 / `context` 与 `fast` 两个选择器档——指 context-size 与 fast 面；**回退 / 改名已由会话治理 A1 落地**）。
+- 需求档 B1–B4 全部沿用：B1 默认不改 `thincoder/`；例外 = 经用户裁定的最小接口改动（F12 归属标 §16.1；F13 / F14 的 configOptions 投影 §17.1-① / §17.3-①②；
+  F16 的 ACP 挂起窗 + 回合边界帧 §19.3；会话治理 A1，见 `session-governance`）；❌ 各项不做（图片直传 / 多文件夹 / fork / 后台任务 / MCP 管理 / 账号用量 / 建议类 / `context` 与 `fast` 两个选择器档——指 context-size 与 fast 面；
+  **回退 / 改名已由会话治理 A1 落地**）。
 - `effort` 档位面**不在上条边界内**：多档随批 6 落地（§17.3-③，`thinkingLevel` 上报即有列表）。
 - 本档新增不做：计划卡（D8）；终端登录动作（D12）；`checkpoint/*`·`memory/*`·`ledger/*`·`batch/*` 扩展族（不接）；审批「总是」= 会话级 auto（§17.1-④；与终端 `/auto` 同源），更细的作用域（按工具）不做。（子代理显示面 = 批 4、子代理内容归属 = 批 5 已接；边界见 §15.8 / §16.8。）
 - 队列面（工作中发送的消息）= 批 7 设计已定（§18）；本批边界见 §18.9。
@@ -467,6 +474,7 @@ server 由 `HostMcpServer` 签发（127.0.0.1 系统选端口 + 每会话 Bearer
 - 用量面（F20）= 批 11 设计已定（§23）：成本无来源（§14-25）、终端无 `/usage` 命令（§14-26）；边界见 §23.7。
 - 图片收口面（F19 CLI 半）= 批 12 设计已定（§22.9–§22.12）：core 3 档 + CLI 1 档属 B1 例外（依据 = §22.12 首段）；各节边界见 §22.9 / §22.10 / §22.11 末段。
 - 模型切换后置面（批 14）= 设计已定（§24）：只对 thincoder 内核的 `model` configId；不做回合内生效、不做 provider 后置、不做等待态持久化；边界见 §24.7。
+- 交互响应面（F22）= 批 16 设计已定（§25）：宿主侧 = 预热池 + 乐观就绪可见性 + 打点；CLI 侧瘦身归**已获批准**的外仓批（§25.13）；边界见 §25.12。批 16 见 §25。
 
 ---
 
@@ -483,6 +491,7 @@ server 由 `HostMcpServer` 签发（127.0.0.1 系统选端口 + 每会话 Bearer
 - 已落地（批 10，设计）：编辑器上下文 = composer 输入区下方的可撤销 chip + 已发消息气泡里的只读摘要（无新面板，§20.3）；agent 编辑的拒绝面 = 会话内 `NoticeItem(error)` + 编辑器只读 diff，不弹窗（§21.2 / D80）。
 - 已落地（批 11，设计）：图片保持既有 composer / 气泡面（收图判据不变，D82）——原生块与回退对用户零新增可见面；用量 = turn footer 的「N tokens」（无 speed / cost）+ 上下文面板新增「本会话累计」一行（§23.1）。
 - 已落地（批 14，设计）：模型切换的等待态 = 既有模型 pill 的 label 后缀 + tooltip（不新增控件 / 弹窗）；失败 = 会话内既有 error notice；等待态文案走 l10n（`modelsSwitchPending`），失败 notice 为内核口英文并登记 §14-28（§24.9）。
+- 已落地（批 16，设计）：准备中的等待面 = 会话内既有 `NoticeItem`（宿主侧无 `starting` 呈现，§25.3-2），不新增控件 / 弹窗；预热池对用户不可见（D104）。批 16 见 §25。
 
 ---
 
@@ -564,6 +573,7 @@ server 由 `HostMcpServer` 签发（127.0.0.1 系统选端口 + 每会话 Bearer
 | 26 | 终端 `/usage` 不存在 / context% 非同一仪器 | 终端斜杠命令表无 `/usage`（`slash-commands.mjs:44-106`）；终端用量面 = 状态行累计 ↑prompt ↓completion + context%（`status-line.mjs:122-143`），其中 context% 是 `estimateTokens(history)` 估算（`render-loop.mjs:89-90`），与 ACP `usage_update.used` 不同仪器。本批对照口径 = token 合计（同 `onUsage` 源，D90）。判定条件：终端后续加 `/usage`（CLI 面）⇒ 按该命令输出补对照项 |
 | 27 | F20 的 l10n 键与生成档 | 2 键（`turnTokensSpentHint` / `usageSessionTotal`）在两源档与生成档同拍在位——无 SDK ⇒ 生成档随 ARB 手改、保持 `test/l10n_test.dart` 绿（同 §18.8 / §14-14）；SDK 就位轮 `flutter gen-l10n` 重产。T96 只机检两源档。判定条件：重产结果与手改逐键一致 |
 | 28 | F21 后置切换的失败文案英文占位 | 回合收尾重发失败 ⇒ 会话内 error notice 为内核口英文（含原始错误），形同 `thincoder stopped unexpectedly`；等待态文案已走 l10n（`modelsSwitchPending`，§24.2）。内核层无 l10n 面（`lib/kernel/**` 零 `l10n` 引用，2026-10-19 实测）。判定条件：`KernelContext` 携本地化回调（内核 l10n 面）⇒ 该 notice 改走键 |
+| 29 | 批 16 的「准备中」等待面文案英文占位 | 会话内 `NoticeItem(warning, 'thincoder is starting…')`（§25.3-2）：宿主侧无 `starting` 呈现，故走内核口英文（形同 §14-28），无 l10n 键。判定条件：`KernelContext` 携本地化回调（内核 l10n 面就位）⇒ 改走键 |
 
 ---
 
@@ -589,11 +599,11 @@ server 由 `HostMcpServer` 签发（127.0.0.1 系统选端口 + 每会话 Bearer
 
 1. **身份 = `role#id`，不是工具调用 id**。信号不带 toolCallId（`bridge.mjs:71-78` 只投影 role / id / state / progress? / detail?）⇒ 卡片与任务都以 `subagent:<role>#<id>` 为记录 id；卡片 `AgentItem.id` = 同一记录 id（批 5 D35 起）⇒ 可点开该子代理的只读视图（`chat_history_view.dart:1464-1468` 按 `id != null` 给开启入口）；停止 / 转后台仍无动作（D22：任务无 `toolUseId`）。
 2. **活动条显示与停止能力解耦**（接线点 ⑫）：ACP 无子代理控制位 ⇒ 不声明 `RunsBackgroundTasks`；而 `ChatSession.tasks` 原按该接口整体门控（`chat_session.dart:626-635`），会把 thincoder 的在跑子代理整个挡在活动条外 ⇒ 门控拆开：显示只看「有没有在跑的后台任务」，控制仍只看接口。
-3. **children 有来源、其余五类无**：children = 该子代理的谈话（批 5 起由 §16.2 写入）；result / prompt / tokens / toolUses / model 无来源（子代理内容归属不在 ACP 契约内，ACP-CLIENT.md §12.6；批 5 只补了内容帧与工具帧的归属标）⇒ 这五类不填；嵌套按最内段扁平展示（父链不承载，同 §12.6）。
+3. **children 有来源、其余五类无**：children = 该子代理的谈话（批 5 起由 §16.2 写入）；result / prompt / tokens / toolUses / model 无来源（子代理内容归属不在 ACP 契约内，thincoder/docs/cli/design/ACP-CLIENT.md §12.6；批 5 只补了内容帧与工具帧的归属标）⇒ 这五类不填；嵌套按最内段扁平展示（父链不承载，同 §12.6）。
 
 ### 15.2 信号翻译（ACP → 既有面）
 
-**线形**：`session/update` 通知，`update.sessionUpdate = "session_info_update"`，载荷在 `update._meta["thincoder.dev/subagent"]`（发射 `bridge.mjs:228-232`；形状冻结 = ACP-CLIENT.md §12.2）：
+**线形**：`session/update` 通知，`update.sessionUpdate = "session_info_update"`，载荷在 `update._meta["thincoder.dev/subagent"]`（发射 `bridge.mjs:228-232`；形状冻结 = thincoder/docs/cli/design/ACP-CLIENT.md §12.2）：
 
 | 字段 | 域 | 缺席含义 |
 |---|---|---|
@@ -625,7 +635,8 @@ server 由 `HostMcpServer` 签发（127.0.0.1 系统选端口 + 每会话 Bearer
 | 未知 state | 已有卡不动（保 running）；无卡则建 | 不动 | —（留痕） |
 
 - 每次变动后 `TasksReported` 全量重报（同 Claude 形）；活动条只显示 `background && running`（`chat_session.tasks`），settled / done 后行即消失。
-- `cancelled` 契约语义 = 排队取消（从未启动，出队即终态；ACP-CLIENT.md §12.3）——上游唯一发射点 = queued 取消（`subagent-async.mjs:297`）；running 取消走 abort ⇒ `⟦ev⟧stopped` 冻结（同档 `:222-226`；TUI 守卫「cancelled 永不合法指向 running 块」`subagent-blocks.mjs:184-186`）⇒ 已建任务下收到属契约外失序：按终态移除处置（不残留 running；不判 failed——取消 ≠ 失败，D24 口径）。
+- `cancelled` 契约语义 = 排队取消（从未启动，出队即终态；thincoder/docs/cli/design/ACP-CLIENT.md §12.3）——
+  上游唯一发射点 = queued 取消（`subagent-async.mjs:297`）；running 取消走 abort ⇒ `⟦ev⟧stopped` 冻结（同档 `:222-226`；TUI 守卫「cancelled 永不合法指向 running 块」`subagent-blocks.mjs:184-186`）⇒ 已建任务下收到属契约外失序：按终态移除处置（不残留 running；不判 failed——取消 ≠ 失败，D24 口径）。
 - **终态 / 已移除后同键报告（契约外）**：一律忽略——卡片不回动（已移除的不重建）、活动条不复活（D31；判定条件 §15.8-7）。已定格（succeeded / failed）后：`queued` / `async` / `turn` / `approval` 四态忽略；卡片已移除（`cancelled` 墓碑）后：**不止四态——任何后续报告（含 `settled` / `stopped` / `done` / 未知态）同一忽略**。实现：墓碑集命中即直接返回（先于四态守卫，不落首见路径）。
 - `progress` 只用 `turn` / `maxTurns`（`turn` / `approval` 态在场）；`{position}`（仅 `queued` 在场，队列位次）**不展示**——排队态由卡片承载（D23）、原因文已由 `detail` 承载，不新增文案形（D28 枚举不动）。
 - 子代理的审批由父级审批面板承接（`session/request_permission`，桥剥前缀——F4 已接）；卡片只示 `approval` 状态与工具名，不另开面。
@@ -761,11 +772,11 @@ server 由 `HostMcpServer` 签发（127.0.0.1 系统选端口 + 每会话 Bearer
 | c | `thincoder-cli/src/acp/bridge.mjs:243` | `agent_thought_chunk` 加 `...frameMeta(path)` |
 | d | `thincoder-cli/src/acp/bridge.mjs:275-282` | `tool_call` 加 `...frameMeta(path)`（`path` = `:262` 已算的剥离结果） |
 | e | `thincoder-cli/src/acp/bridge.mjs:287-291` | `tool_call_update` 加 `...frameMeta(parseRelayPath(name))`（归属按**原样名**解析；配对键是 `toolCallId` 计数器值，不是名——`bridge.mjs:108` `t${++toolSeq}`、`:286` `takeToolId(name, toolId) ?? toolCallId()`） |
-| f | `docs/cli/design/ACP-CLIENT.md` §5 表（`:171-172`） | 内容两行各补一句：relay 前缀在场 ⇒ 同通知带 `_meta` 归属标（§12.7）；文本面零改 |
+| f | `thincoder/docs/cli/design/ACP-CLIENT.md` §5 表（`:171-172`） | 内容两行各补一句：relay 前缀在场 ⇒ 同通知带 `_meta` 归属标（§12.7）；文本面零改 |
 | g | 同档 §7.2（`:314`） | 「工具卡 title 不带归属标」句改写：title 仍不带（显示面剥离），帧级 `_meta` 已带（§12.7） |
 | h | 同档 §12.6（`:590`） | 「内容面归属不在本档」条改为指向 §12.7（该边界已闭合） |
 | i | 同档 §12 尾（§12.6 之后） | 新增 `### 12.7 归属帧标（内容帧与工具帧）`：承载体 / 形状 / 规则 / 嵌套 / 重放面 / 结果面口径 |
-| j | `docs/cli/requirements/ACP-CLIENT.md:90-91` | R-A5.11 补一句：归属标（与「文本面剥离」并列，同键同源；含工具帧） |
+| j | `thincoder/docs/cli/requirements/ACP-CLIENT.md:90-91` | R-A5.11 补一句：归属标（与「文本面剥离」并列，同键同源；含工具帧） |
 | k | `thincoder-cli/CHANGELOG.md` 顶部 | 新增 `## [Unreleased]` + `### Added` 一行（内容见下） |
 
 f–k 是契约档与需求档的**同拍义务**：代码改了而契约档不改，就是把一份说反的契约留在仓里（该仓对文档与代码同拍的通行做法）。
@@ -1198,12 +1209,14 @@ console.log(JSON.stringify(seen, null, 1))
 
 ### 17.2 P0（兜底）：桌面内核自答 — 不做，只留判据
 
-判据（一句）：**仅当 §17.1 的跨仓轮无法在用户要的时间窗内落地、且用户明确要先有自动档时**，才启用本地兜底——内核在自己的反向请求入口（`thincoder_kernel.dart:556-595` `_serverRequest`）对 autoApprove 为真时直接回 `{outcome:{outcome:'selected',optionId:'approve_once'}}`、不发 `InteractionRequested`，开关仍借 `SelectsPermission` 显示。
+判据（一句）：**仅当 §17.1 的跨仓轮无法在用户要的时间窗内落地、且用户明确要先有自动档时**，才启用本地兜底——
+内核在自己的反向请求入口（`thincoder_kernel.dart:556-595` `_serverRequest`）对 autoApprove 为真时直接回 `{outcome:{outcome:'selected',optionId:'approve_once'}}`、不发 `InteractionRequested`，开关仍借 `SelectsPermission` 显示。
 **互斥**：§17.1 在位时开关的真值在服务端，本地再自答 = 同一件事两个真相（且服务端已不问，本地分支永不可达）⇒ 二者不并存；真启用时另立用例与走查。
 
 ### 17.3 F14 · 模型清单与思考档位
 
-一句话：`configOptions.model.options[]` 从「当前一项」改为**运行期清单投影**（各渠道拉 `GET /models`，去重后 `provider:model`）；思考在布尔面之外**并行**投影一个档位面 `thinkingLevel`（select）。桌面：模型面**不再零改动**（2026-10-18 轻渠道轮起按供应商分组 + 默认只展开当前组 + thincoder 隐藏「管理模型」页脚，批次档 #70；新增 `lib/kernel/thincoder/thincoder_options.dart`；原「按 `options[]` 渲染」的接线不变）；档位面给 `effort` 加一条读取分支。
+一句话：`configOptions.model.options[]` 从「当前一项」改为**运行期清单投影**（各渠道拉 `GET /models`，去重后 `provider:model`）；思考在布尔面之外**并行**投影一个档位面 `thinkingLevel`（select）。
+桌面：模型面**不再零改动**（2026-10-18 轻渠道轮起按供应商分组 + 默认只展开当前组 + thincoder 隐藏「管理模型」页脚，批次档 #70；新增 `lib/kernel/thincoder/thincoder_options.dart`；原「按 `options[]` 渲染」的接线不变）；档位面给 `effort` 加一条读取分支。
 
 **① CLI 侧：模型清单（`sessionConfigOptions` 是同步的 ⇒ 缓存 + 预取，不在投影里拉网络）**
 
@@ -1389,10 +1402,10 @@ console.log(JSON.stringify(seen, null, 1))
 
 | # | 坐标（0.12.74 活树） | 改动 |
 |---|---|---|
-| d | `docs/cli/design/ACP-CLIENT.md:41`（方法表 `set_config_option` 行） | 「model / thinking / mode 分发」→「model / thinking / thinkingLevel / mode / autoApprove 分发（见 §5.3）」 |
+| d | `thincoder/docs/cli/design/ACP-CLIENT.md:41`（方法表 `set_config_option` 行） | 「model / thinking / mode 分发」→「model / thinking / thinkingLevel / mode / autoApprove 分发（见 §5.3）」 |
 | e | 同档 `:212-221`（§5.3 configOption 映射） | 表补两行（`thinkingLevel`：`"off"` ∥ 档名 ⇒ 开 / 关两形；`autoApprove`：boolean ⇒ `agent.autoApprove`，与会话槽同源）；`model` 行补一句 `options[]` = 运行期清单投影；表下补一段「清单投影：`agent._modelChoices` 缓存 / 会话装配后后台拉取一次 / 落地推 `config_option_update` / 拉不到的渠道只报当前项 / 失败不缓存」 |
 | f | 同档 `:223-231`（§5.4 审批通道） | 补一句：`agent.autoApprove` 为真 ⇒ 审批在核 `dispatch` 阶段短路（`dispatch.mjs:177`），**不进** `onPermissionRequest`——ACP 面零改 |
-| g | `docs/cli/requirements/ACP-CLIENT.md:80-81`（R-A5.4） | 补一句：`configOptions` 可含 `autoApprove`（boolean）与 `thinkingLevel`（select）；`model.options[]` = 运行期清单投影（拉不到的渠道退化为当前项）——新项对旧客户端**忽略即合规** |
+| g | `thincoder/docs/cli/requirements/ACP-CLIENT.md:80-81`（R-A5.4） | 补一句：`configOptions` 可含 `autoApprove`（boolean）与 `thinkingLevel`（select）；`model.options[]` = 运行期清单投影（拉不到的渠道退化为当前项）——新项对旧客户端**忽略即合规** |
 | h | `thincoder-cli/CHANGELOG.md` 顶部 `[Unreleased]` → `### Added` | 见下（逐字） |
 
 ```
@@ -1810,7 +1823,7 @@ ACP 挂起窗（acp/suspension.mjs，本批新增）
 
 ### 19.2 回合边界帧（线上形与桌面翻译）
 
-**线上形**（扩展契约；承 `_meta` 扩展位，同 `thincoder.dev/subagent` 先例，ACP-CLIENT.md §12.1）：
+**线上形**（扩展契约；承 `_meta` 扩展位，同 `thincoder.dev/subagent` 先例，thincoder/docs/cli/design/ACP-CLIENT.md §12.1）：
 
 ```json
 { "sessionId": "<会话 id>",
@@ -1872,7 +1885,9 @@ ACP 挂起窗（acp/suspension.mjs，本批新增）
 **`ok` 的宽容方向（D63）**：收轮的唯一信号是 `end` 本身，`ok` 只是中断标记。把「`ok` 非布尔」当坏帧忽略 ⇒ 在飞自动轮永不收（永久「正在续写」、队列永不排水），正是本批要消灭的停住态；按未中断收只丢一个中断标记。两个方向的代价不对称 ⇒ 取宽容。CLI 侧 `try … finally` 恒发布尔（§19.3-②），非布尔只可能来自别的写入者。
 
 - 暂存的必要性（D57）：CLI 在应答写出后才起挂起窗（§19.3-①），但桌面可能**同批**收到应答与 `start` 两帧——应答的 `TurnEnded` 在微任务里，`start` 的通知先到。暂存到该回合结束再起：不丢 `stopReason`，也不误结束活回合。
-- 暂存位的收尾（D62）：帧不带回合 id，配对只能按状态——挂起窗串行，同一时刻至多一个自动轮 ⇒ 暂存位非空 = 「该轮报过 `start`、还没起」，同一用户回合里到的 `end` 就是它的收尾，处置 = **撤暂存**：该轮在桌面不成轮（零 `TurnStarted(unprompted)`、零第二个 `TurnEnded`，`activeTurn` 仍是用户回合）。代价：那轮内容照样入 transcript，只是搭在用户回合的分组里（`lastTurnUnprompted` 保持 false）；用户回合收尾时暂存位已空 ⇒ `_drain()` 照常排水。撤暂存时 `auto:<n>` 的号照旧消耗（id 只需唯一，不要求连续）。
+- 暂存位的收尾（D62）：帧不带回合 id，配对只能按状态——挂起窗串行，同一时刻至多一个自动轮 ⇒ 暂存位非空 = 「该轮报过 `start`、还没起」，同一用户回合里到的 `end` 就是它的收尾，处置 = **撤暂存**：
+  该轮在桌面不成轮（零 `TurnStarted(unprompted)`、零第二个 `TurnEnded`，`activeTurn` 仍是用户回合）。代价：那轮内容照样入 transcript，只是搭在用户回合的分组里（`lastTurnUnprompted` 保持 false）；
+  用户回合收尾时暂存位已空 ⇒ `_drain()` 照常排水。撤暂存时 `auto:<n>` 的号照旧消耗（id 只需唯一，不要求连续）。
 - `_pendingAuto` 在 `_teardown` 清（进程死 / 重启不留幽灵自动轮）。
 - 自动轮 id = 客户端自持（`auto:1`、`auto:2`…），与用户 turn id 不冲突；item id 空间随 `_beginTurn` 的 `_events.begin()` 前进（`t<run>.<block>`）。
 - 自动轮期间 `send` = 进本地队列（§18：`_turn != null` 分支），结束帧 `TurnEnded` 后由 `_drain()` 发出——与今天「挂起期直接写服务端 FIFO」的差别 = 队列面板可见、可撤回；§15.3「挂起期再发消息」已按此加「无在飞回合时」的限定。
@@ -1974,7 +1989,10 @@ void _releaseWhenIdle() {
 - `release()` 因此**恒晚一个 macrotask 关会话**（含空闲释放）；既有用例经 `settle()`（`pumpEventQueue`；`test_api-0.7.12/lib/src/scaffolding/utils.dart:16-19` 逐轮 `Future(…)` = 0ms 计时）泵过 0ms 定时器，断言预期不变——以实现轮实跑为准。
 - `dispose()` 的代价（D66）：对象已 `disposed`（`_ensureStarted` 拒新启动、宿主事件面已关），关闭由 `_releaseCheck` 计时器持有，`stopped` 晚一拍兑现；在飞的轮 / 子代理继续跑完，关闭时 `_setHealth(idle)` 落在已 disposed 的对象上（无监听者，无害）。
 
-**静默期为什么保留（旧 CLI 兜底）**：新 CLI 由窗帧接管（D65）——窗在 ⇒ 不关，窗关帧到了才放行，不再赌时序。旧 CLI 没有窗帧：最后一个子代理 settle 的同一窗唤醒里，消化轮的 `start` 紧随其后（`async-settle.mjs:306` 先发 `⟦ev⟧settled`、`:311` 才唤醒；`acp/suspension.mjs` 的窗循环（`startSuspension` 的 `runTurn` 包装）发 start），settled 那一刻关会话 = 杀进程 ⇒ 消化轮被截、报告丢失（F16 的反面）。一个 macrotask 让同批在飞的帧先落地：`start` 一到 `_turn != null` ⇒ 本次不关，转由兑现点 1 在轮收尾后关；同批覆盖「一轮消化收尾、下一轮已在窗里」（两个子代理先后结算）。新 CLI 下静默期仍跑，但在窗开期间被 `_watching` 先挡住——它退化成「窗关后的一个 macrotask」，不再是判据本身。
+**静默期为什么保留（旧 CLI 兜底）**：新 CLI 由窗帧接管（D65）——窗在 ⇒ 不关，窗关帧到了才放行，不再赌时序。
+旧 CLI 没有窗帧：最后一个子代理 settle 的同一窗唤醒里，消化轮的 `start` 紧随其后（`async-settle.mjs:306` 先发 `⟦ev⟧settled`、`:311` 才唤醒；`acp/suspension.mjs` 的窗循环（`startSuspension` 的 `runTurn` 包装）发 start），
+settled 那一刻关会话 = 杀进程 ⇒ 消化轮被截、报告丢失（F16 的反面）。一个 macrotask 让同批在飞的帧先落地：`start` 一到 `_turn != null` ⇒ 本次不关，转由兑现点 1 在轮收尾后关；同批覆盖「一轮消化收尾、下一轮已在窗里」（两个子代理先后结算）。
+新 CLI 下静默期仍跑，但在窗开期间被 `_watching` 先挡住——它退化成「窗关后的一个 macrotask」，不再是判据本身。
 
 - **静默期不造回合边界**：边界仍只由帧界定（D26 的禁忌不变）——它只决定「关会话」的执行时机。
 - **`dispose()` 也按同一判据延后（D66）**：骨架见上，决策见 §19.5 D66。`restart()`（`:420-425`）与 `_launch` 尾的既有兑现（`:202-207`；启动中没有卡片可 live）不动。
@@ -2011,7 +2029,9 @@ void _releaseWhenIdle() {
 | 自动轮 | pending 非空 ∥ 上行 ask | `run(agent, "", digestCallbacks, {signal, autoTurn: true, upstreamTurn: <本轮是上行 ask>, suspDriven: true})` | start / end | 无（无请求） |
 | 用户唤醒轮 | 挂起期 `session/prompt` 到达 | `run(agent, text, callbacks, {signal, suspDriven: true})` | 不发（应答即边界） | 该 prompt 的应答 |
 
-- **普通用户回合（窗外）同带 `suspDriven: true`**（`session.mjs:106-109`：`runNormal` 的 `execTurn(input, { suspDriven: true })`；窗内两型轮由窗包装补同旗，`suspension.mjs:100-102`）：与终端同源（TUI 恒传 `tui/agent-turn.mjs:194`）。不传 ⇒ 用户回合进行中结算的子代理条目被该轮在回合尾收走（核 `run-stages.mjs:283` 的 fallback：直接注入并出池）⇒ 回合尾 `poolLive` 假、不开窗、桌面无自动续轮——F16 症状的最窄实例。影响面：用户回合的工具轮收尾不再注入到期 timer（`post-turn.mjs:23`）；交付面与判定条件见 §19.8-1。
+- **普通用户回合（窗外）同带 `suspDriven: true`**（`session.mjs:106-109`：`runNormal` 的 `execTurn(input, { suspDriven: true })`；窗内两型轮由窗包装补同旗，`suspension.mjs:100-102`）：与终端同源（TUI 恒传 `tui/agent-turn.mjs:194`）。
+  不传 ⇒ 用户回合进行中结算的子代理条目被该轮在回合尾收走（核 `run-stages.mjs:283` 的 fallback：直接注入并出池）⇒ 回合尾 `poolLive` 假、不开窗、桌面无自动续轮——F16 症状的最窄实例。
+  影响面：用户回合的工具轮收尾不再注入到期 timer（`post-turn.mjs:23`）；交付面与判定条件见 §19.8-1。
 - `digestCallbacks` = `{...callbacks, onPermissionRequest: undefined}`（D58）；`question` / secret 面本就无（装配期剔除 / 拒件）。
 - **回调缺席时的判决 = 直接拒绝**（D58）：需审批的工具调用不再挂起等面板，按拒绝答复模型；与终端手动档 digest 同判。ACP 桥侧「无回调 ⇒ 拒绝」的真实实现本仓不可读（`unverified`）——out-of-repo 轮先核对该位，W5② 钉住；若实际是放行 ⇒ 停，回主 agent（静默越权不落档）。
 - **自动轮失败**（模型 / 工具 / 注入抛错）：`try … finally { emit(end, ok: false) }` **必发收尾帧**，异常再上抛给窗执行器（窗随核语义收窗；下一次回合尾再进窗）。`end` 若漏发，桌面 `activeTurn` 永不收 ⇒ 永久「正在续写」，正是本批要消灭的停住态。
@@ -2067,7 +2087,7 @@ void _releaseWhenIdle() {
 | # | 决策 | 理由 / 被否 |
 |---|---|---|
 | D55 | 挂起驱动住在 ACP 会话层（CLI 内），不在桌面 | 池 / pending / `_daSession` 都在子进程的 agent 上，桌面拿不到；核状态机 `startSuspension` 直接复用（三端同源）。被否：桌面定时问「好了没」——无信号源且与终端不同形；被否：桌面按文本猜回合——D26 已否 |
-| D56 | 回合边界 = `session_info_update` 的 `_meta["thincoder.dev/turn"]`；不新增 `sessionUpdate` 变体、不加版本门 | ACP v1 无无提示回合的位置；`_meta` 是协议自带扩展位（ACP-CLIENT.md §12.1 先例）；未知变体对严格客户端是未知枚举，`_meta` 忽略即合规（E4 / E3）。被否：桌面按首个 chunk 合成回合（无收束信号，D26）；被否：新变体 `turn_started` / `turn_ended`（协议面越界） |
+| D56 | 回合边界 = `session_info_update` 的 `_meta["thincoder.dev/turn"]`；不新增 `sessionUpdate` 变体、不加版本门 | ACP v1 无无提示回合的位置；`_meta` 是协议自带扩展位（thincoder/docs/cli/design/ACP-CLIENT.md §12.1 先例）；未知变体对严格客户端是未知枚举，`_meta` 忽略即合规（E4 / E3）。被否：桌面按首个 chunk 合成回合（无收束信号，D26）；被否：新变体 `turn_started` / `turn_ended`（协议面越界） |
 | D57 | `start` 在用户回合在飞时**暂存**，由该回合 `TurnEnded` 起点；不从信号强制结束回合 | 应答与 `start` 可能同批到达（应答的 `TurnEnded` 在微任务里）；暂存不丢 `stopReason`、不误结束活回合。被否：按信号强制结束用户回合（取消态会丢 interrupted 标记） |
 | D58 | 自动轮剥 `onPermissionRequest`（手动档不弹审批）；回调缺席 ⇒ **直接拒绝** | 与终端 D-S7 同判（`tui/suspension-drive.mjs:100-112` 置 null）；无人值守的轮不得挂起等一个没人应答的面板（5 分钟超时也按拒绝）。回调缺席的判决 = 拒绝 ⇒ 自动轮不会静默越权执行需审批的工具。桥侧实现本仓不可读（`unverified`），W5② 钉住。ACP 其余交互位本就无面。被否：照常问审批（与终端不同形）；被否：缺席按放行（静默越权） |
 | D59 | `session/cancel` 射程 = 有轮在飞才 abort；空闲时零动作。`session/close` 无条件 abort | cancel 的协议语义 = 停「当前工作」；空闲窗没有工作可停，杀后台池会误伤在跑的兄弟任务。close = 会话收束，必须清场（终端 Ctrl+C 同形） |
@@ -2153,11 +2173,17 @@ W 侧判据不变：CLI 的 `end` 恒发布尔 `ok`（成功 = true；抛错 = f
 7. **空自动轮**：起止帧照发（D61），无项可显示；罕见的零输出失败会在侧栏留一个未读徽标而无新内容。判定条件：走查反复观察到「徽标在、没内容」⇒ 宿主侧对空回合抑制未读（宿主改动，另立）。
 8. **旧桌面 + 新 CLI**：本键的帧（`start` / `end` / `watch`）进旧翻译层 ⇒ E4 日志（`thincoder_events.dart:429-431` 形），显示零变化——登记；不做版本门（E3）。
 9. **进程强杀**：挂起随进程消失；后台 bash 树可能残留（与终端硬退同形）——沿用 §14-12 口径，不新增机制。
-10. **静默期只在旧 CLI 上是唯一判据**（D65）：新 CLI 有窗开关帧 ⇒ 释放由窗关帧确定（§19.2「释放规则」）；旧 CLI 无此帧 ⇒ `_watching` 恒假，仍靠一个 macrotask 让 `settled` 与消化轮 `start` 同批帧落地（`async-settle.mjs:306` → `:311` → 窗循环（`startSuspension` 的 `runTurn` 包装））；`start` 若晚于一个 macrotask 才到（帧分两次读入）⇒ 该轮消化被截。判定条件：旧 CLI 下走查见到「子代理卡片已 settled、对话里没有消化文本」⇒ 要求升级 CLI（能力按帧在场判定，不加版本门）；新 CLI 下同一现象 ⇒ 按窗帧链路复查（窗关帧是否先于最后一条 `end`，W8②）。
+10. **静默期只在旧 CLI 上是唯一判据**（D65）：新 CLI 有窗开关帧 ⇒ 释放由窗关帧确定（§19.2「释放规则」）；旧 CLI 无此帧 ⇒ `_watching` 恒假，
+    仍靠一个 macrotask 让 `settled` 与消化轮 `start` 同批帧落地（`async-settle.mjs:306` → `:311` → 窗循环（`startSuspension` 的 `runTurn` 包装））；
+    `start` 若晚于一个 macrotask 才到（帧分两次读入）⇒ 该轮消化被截。判定条件：旧 CLI 下走查见到「子代理卡片已 settled、对话里没有消化文本」⇒ 要求升级 CLI（能力按帧在场判定，不加版本门）；
+    新 CLI 下同一现象 ⇒ 按窗帧链路复查（窗关帧是否先于最后一条 `end`，W8②）。
 11. **释放延后只覆盖子代理面**：后台 bash / browser / ssh 任务没有 `⟦ev⟧` 帧（`thincoder-core/agent-tools` 三族零发射）⇒ 桌面看不见，切走仍按今天直接释放、随进程消失。判定条件：用户报告「切走丢了后台 bash / 浏览器 / SSH」⇒ 给三族补状态帧，再把谓词扩到它们。
 12. **切走再切回：子代理卡片 = 终态快照，不重建**：释放时 `_teardown` 调 `_events.endSubagents()`（`thincoder_events.dart:504-531`，清 `_subagents` / `_tasks`）；再开是 `session/resume`（`_loaded` 后不再 `session/load` 重放，`thincoder_kernel.dart:256-262`）⇒ 重放只有消息，卡片停在终态、不再随新会话更新。
     判定条件：产品要求切回后卡片仍可点开 / 看子代理详情 ⇒ 把子代理状态搬进会话存档并在重放面合成卡片（外仓 + 设计另立）。
-13. **`prepare()` 不清 `_watching`（裁定）**：窗在不在是服务端事实，视图回来不改变它；`attach()` 是引用计数（`chat_session.dart:302-309`），`prepare()` 每次附加都会被调到，若在此清位，「离开 → 回来 → 再离开」的同一窗内（窗一直开着、期间没有新帧）下一次 `release()` 就失去 `!_watching` 这一位，退回静默期兜底（与 10 同一段时序）——正是本批要消灭的东西。故 `_watching` 只由 `watch{on:false}`（四条退径都发）与 `_teardown()` 清。代价：`on:false` 帧若丢失（进程仍活着、帧未出线），`_watching` 停在真 ⇒ 桌面判忙、进程不释放，直到该会话下一次 `_teardown()`。判定条件：走查见到「窗早已退出（无子代理、无在飞轮）而桌面仍判忙」⇒ 说明 `on:false` 帧丢了，按 E4 留痕补（帧链路日志），并核 CLI 出站面（W8②）。
+13. **`prepare()` 不清 `_watching`（裁定）**：窗在不在是服务端事实，视图回来不改变它；`attach()` 是引用计数（`chat_session.dart:302-309`），`prepare()` 每次附加都会被调到，若在此清位，
+    「离开 → 回来 → 再离开」的同一窗内（窗一直开着、期间没有新帧）下一次 `release()` 就失去 `!_watching` 这一位，退回静默期兜底（与 10 同一段时序）——正是本批要消灭的东西。
+    故 `_watching` 只由 `watch{on:false}`（四条退径都发）与 `_teardown()` 清。代价：`on:false` 帧若丢失（进程仍活着、帧未出线），`_watching` 停在真 ⇒ 桌面判忙、进程不释放，直到该会话下一次 `_teardown()`。
+    判定条件：走查见到「窗早已退出（无子代理、无在飞轮）而桌面仍判忙」⇒ 说明 `on:false` 帧丢了，按 E4 留痕补（帧链路日志），并核 CLI 出站面（W8②）。
 14. **`dispose()` 延后无上界兜底**：谓词与 `release()` 同一套；卡片卡在 running（CLI 已无对应池项、不再发帧）⇒ 进程不释放（今天 dispose 立即杀）。判定条件：走查 / 现场见到「已关闭的会话进程残留」⇒ 给 release / dispose 共享一个上界（秒级计时），或按卡片 `updatedAt` 判超时。
 
 ### 19.9 UI / 交互决定（全部落地，无 open）
@@ -3282,4 +3308,245 @@ T99 已被 §23.1 预留给用量归属的补项（自动轮 ∥ 撤暂存轮）
 - 失败 = 会话内既有 error notice（`NoticeRow` 的 error 样式），pill 回到旧模型；不弹窗、不 toast。
 - 非 thincoder 内核 / 无等待 ⇒ label 与 tooltip 逐字不变（负向锁：零字节注入）。
 - 文案走 l10n（`modelsSwitchPending`）；失败 notice 为内核口英文（登记 §14-28）。
+
+## 25. 交互响应（批 16；F22）
+
+> 回指：需求档 F22 + A11（用户 2026-10-21 00:45「我要机制的性能体验，响应做到和 claude code 内核一样强劲，反应灵敏！」）。
+> 一句结论：**每次建会话的 1.5 s 不在装配，在属主探测**——`session/new` 1501 ms = `newSession`（认领槽）1358 ms
+> （`tasklist` 658 + PowerShell CIM 633）+ `createSession`（含 `assembleAgent` 95 ms）138 ms + 余 ≈5 ms；模型目录早已后台（`acp.mjs:97-111` 的 `refreshModelChoices` 不 await）。
+> ⇒ 宿主侧做两件事：把 364 ms 的进程起 + 握手**前移到打开项目**（预热池），把用户的可输入时刻与「准备中」**变成可见可测**（乐观就绪 + 打点）；
+> 1.36 s 的属主探测与 138 ms 的装配都在 CLI，归**已获批准的外仓批**（§25.13 C′1–C′3），C′1 + C′2 落地后 A11④ 可达（`session/new` ≤400 ms 可期）。
+
+**最近先例（对齐 ∥ 偏离及理由）**
+
+- 对齐 ①：**切内核温启动**（提交 `fe403e32`；`chat_session.dart:435-455` 的 `_warm` 表 + `:450-453` 挂视图即 `prepare()`）——本批的预热池是同一手法从「内核级」升到「进程级」：一个启动好、握过手的进程留着等下一位用户。不改动该路径，只加读数（§25.5）。
+- 对齐 ②：**队列**（§18；`thincoder_kernel.dart:614-638` 的 `_queue` / `_drain`）——「首条消息排队」直接复用这条既有队列：`_drain` 起回合后 `_deliver` 先落用户气泡（`:653-663`）再 `await _ensureStarted()`（`:680`），排队与等待已是既有形，本批不新造队列、不改排水顺序。
+- 对齐 ③：**挂起窗释放判据**（§19.2 D64 / D65；`thincoder_kernel.dart:558-584` 的 `_canClose` + 一个 macrotask 的 `_releaseWhenIdle`）——预热池不参与该判据：池里的进程没有会话、没有回合、没有子代理，`_canClose` 的四个条件本就不适用于它（它不在任何内核实例名下）。
+- 对齐 ④：**可见面**——等待/失败沿用既有 `NoticeItem` 面与既有健康位（`KernelHealthStatus.starting`，`thincoder_kernel.dart:229`），不新增控件、不新增弹窗。
+- 偏离 ①：**不做单进程多会话**（把同一 cwd 的多个聊天会话塞进一个 ACP 进程）——它只省 364 ms 的进程成本，对 1545 ms 的装配零作用（实测同进程第二次仍 1507 ms），却要改连接归属、`_teardown` 与释放语义（风险面远大于收益）。被否，判据见 §25.4。
+- 偏离 ②：**宿主侧不重试、不轮询补发**——预热池只做「有就领、没有就照旧起」，不引入定时器补位（同 §24.4 D99 的立场：时序不可测的东西不进状态机）。
+
+**survey 证据**：公开资料本批**未查**（`websearch` / `fetch` 未调起；本批无版本 / API / 协议精度问题需要外部核对，判据全部来自本仓与外仓代码实读）。
+已查的仓内 / 外仓来源：本仓 `lib/kernel/thincoder/thincoder_kernel.dart`（生命周期 `:219-297` · `:301-431` · 释放 `:544-609` · 发送 `:614-693`）、
+`lib/chat/chat_session.dart`（`attach` `:400-413` · 切内核 `:435-455` · `canSend` `:693` · `send` `:1189-1220`）、`lib/kernel/agent_kernel.dart`（`prepare` 语义）；
+外仓 `thincoder/thincoder-cli/src/acp/handlers-session.mjs:285` 起（`session/new` 处理链）与已知事实行的实测计时（2026-10-21 00:47，直发 ACP 帧）。
+实测分解（2026-10-21 00:55–00:58，本机直测、可复跑）：`session/new` 1501 ms = `newSession` 1358 + `createSession` 138 + 余 ≈5；
+`assembleAgent` 95 ms（`git config user.name` 71 / `createMemory` 7 / `assembleBuiltinTools` 9 / `loadConfig` 5 / `syncDir` 1 / `discoverRules` 0）；
+`process.kill(pid, 0)` = 0.19 ms/pid（死 pid 返 `ESRCH`，Windows 可用）。
+结论：**无外部公开来源可引用，本节断言以上列代码坐标为准**；上面 00:47 的 1545 ms 是端到端读数，其构成见 00:55 分解——**装配只占 138 ms**。
+
+### 25.1 三条方向的允许 / 禁止结论（含因果链）
+
+| 方向 | 结论 | 因果链（实测数字 → 机制 → 省哪一段） |
+|---|---|---|
+| A 预热进程 | **做**（本仓） | `initialize` 364 ms 与用户输入无关 ⇒ 在**打开项目时**就 spawn + 握手（进程空闲、不建会话、不认领槽位，`thincoder_kernel.dart:301-319` 的会话建立根本不会跑）⇒ 用户点开会话那次 `initialize` 已经付过，只剩 `session/new`（1501 ms，构成 = 属主探测 1358 + 装配 138，见 §25.13） |
+| B 乐观就绪 | **做**（本仓，主要是接线与可见性） | `canSend`（`chat_session.dart:693`）不含健康位 ⇒ 起进程期间输入本就可用；`send` → `_queue.add` → `_drain` → 用户气泡先落（`:653`）再等启动（`:680`）⇒ 「排队」已是既有形。本批补：可见的「准备中」面 + 「可输入时刻」打点 |
+| C CLI 侧瘦身 | **只设计，不实施**（B1 已获用户批准 2026-10-21 00:53 · 独立外仓批，§25.13） | `session/new` 1501 ms 已分解：属主探测 1358 ms（`tasklist` 658 + CIM 633）+ 装配 138 ms（`assembleAgent` 95）+ manifest / activeSlot 各 1 ms；模型目录已在后台 ⇒ 可省的是**判活**（C′1 / C′2，≈1.29 s）与 `git config user.name`（C′3，71 ms）；宿主侧无任何接口能影响它 |
+
+**每条的允许 / 禁止**：
+
+- A 允许：预热池新档、`_launch` 的一次改造（领池 vs 照旧起）；禁止：改 `session/new` 的调用时机（仍在 `_openSession` 里、仍由 `prepare()` 驱动）、改 ACP 握手内容（能力位仍按 `_context.files` 决定）、让池里的进程持有会话或槽位。
+- B 允许：`appEvent` 打点、`NoticeItem` 等待面、`prepare()` 之后的健康位呈现；禁止：改 `canSend` / `canQueue` / `_drain` / `_queue` 的语义（§18 与 F15 的验收面不动）、改回合归属、改审批与取消路径。
+- C 允许：已批准的外仓批按 §25.13 的 C′1–C′3 实施（该仓自己的批次档 + 测试）；禁止：**本轮**改 `thincoder/` 任何文件、在宿主侧伪造「第二会话免装配」的读数。
+
+### 25.2 预热进程（A）：一个池子，一位住户
+
+```text
+打开项目（默认内核 = thincoder）
+  ▼ ThincoderWarm.warm(cwd, files)          新档 lib/kernel/thincoder/thincoder_warm.dart
+  ├─ 已有住户（同 cwd 同能力位）⇒ 什么都不做
+  └─ 无 ⇒ spawn `thincoder acp` → initialize → 存 {connection, handshake}（整条 `ThincoderConnection`，含 `initialize` 回包）
+        · TTL 10 min（超时即关；池空）
+        · 进程 exited ⇒ 池自清
+        · 项目切换 / 关项目 ⇒ 关池
+用户点开会话 → ChatSession.attach（chat_session.dart:400）→ ThincoderKernel.prepare（:526）
+  ▼ _ensureStarted（:220）→ _launch（:226）
+  ├─ ThincoderWarm.take(key) 命中 ⇒ 领走整条 ThincoderConnection（不新建连接、不握手）
+  │     ⇒ 跳过 spawn（~90 ms）与 initialize（364 ms），从 _openSession（:254）起跑
+  └─ 未命中 ⇒ 照今天：_start（:231）+ initialize（:243）
+```
+
+- **键** = `(cwd, hasFilesCapability)`：`initialize` 的 `clientCapabilities` 由 `_context.files` 决定（`thincoder_kernel.dart:249-251`），能力位不同则握手的宣告不同，不能混领；键不同 ⇒ 旧住户关掉、按需新起。
+- **能力位的唯一取法**：键的位 = `files != null`，与内核同一表达式（`_context.files == null ? {} : ThincoderFiles.capabilities`）。
+  workspace 侧在打开项目时用**它将交给内核的同一个 `files` 取值**推出这一位（`workspace.dart:549-556` / `:2567-2572` 的 `KernelContext(files: IdeKernelFiles(...))`；缺省恒非 null ⇒ 位 = true）。
+  取不到（构造失败 / 尚未定）⇒ **不预热**（错过预热优于错领）；T108 钉住「warm 键 == 内核领池键」。
+- **领池交的是连接，不是裸 transport**：`take()` 返回池里那条 `ThincoderConnection`（`thincoder_protocol.dart:58-64`：它持 `_write` / 请求表 / 回调，`transport.messages` 只有池侧订阅过一次）——
+  `_launch` 领到后直接接管该连接（重接 `onRequest` / `onNotification`），**不再 `_start`、不再 `initialize`、不再订阅同一条流**；`_transport` 仍归内核，`release()` / `_teardown()` 关的仍是它。
+- **池不认领槽位**：`initialize` 之后不调 `session/new`，故按 §3.5「未发过消息的会话不落槽文件」，池里的进程在终端 `session/list` 里不可见、也不占槽。
+- **只有一个**：每 cwd 至多一位住户（第二个请求 `warm` 直接返回）；换项目 ⇒ 先关旧住户再起新的（不并行占两个 Node 进程）。
+- **释放归池、不归内核**：内核 `release()` / `dispose()` / `_teardown()`（`:544-609`）语义零改——它关的是**自己领到的那条** transport；池里的住户不在任何内核名下，`_canClose` 的四个条件（回合 / 启动中 / 子代理 / 挂起窗）对它无意义。
+- **重新预热**：`release()` 走完（`_releaseWhenIdle` 的 macrotask 收束，`:576-583`）后**不**立即补位（否则等于取消释放的收益）；补位只发生在**打开项目**与**项目切换**两个时刻（应用前后台生命周期驱动不进本批，见 §25.12-8）。
+- **失败面**：预热的进程起不来（未装 / 未登录 / 版本过低）⇒ 池记一个**短时冷却**（60 s 内不再试），会话照今天的方式启动并给出既有引导（F7：`thincoder_kernel.dart:279-296` 的错误面）。预热失败**不产生用户可见通知**——用户还没做任何事，报错只会制造噪声。
+- **为什么这样能达标**：用户的等待 = 打开会话 → 首帧。预热把 364 ms 移到打开项目那一侧（用户在那里本来就要等目录扫描）；`session/new` 的 1501 ms 仍在（属主探测 1358 + 装配 138），但它在 `attach → prepare` 时就开始了（今天也如此），用户打字的时间与它重叠 ⇒ 首帧只剩 `344 ms` 的量级（判据与上界见 §25.10）。
+
+### 25.3 乐观就绪（B）：输入不等内核，等待必须可见
+
+事实（实读）：`canSend => !isStreaming || canQueue`（`chat_session.dart:693`）——不含健康位；`isStreaming` = `_transcript.activeTurn != null`（`:687`）、
+`canQueue` = `_kernel is QueuesMessages`（`:651`）⇒ starting 期间 `canSend` 为真（U6 已实读关闭）；`ThincoderKernel.send`（`:614`）入队即返回；
+`_drain`（`:630`）先 `_beginTurn` 再 `_deliver`，而 `_deliver` 在 `await _ensureStarted()`（`:680`）之前就把用户气泡发出（`:653-663`）。
+**所以「起进程期间不能输入」在当前代码里不成立**；需要补的是三件事：
+
+1. **可输入时刻可测**：t0 = `timing: open`（`chat_session.dart:402` 的 attach）；落点 = 首个「发送可用」帧——`canSend == true` 且 composer 的发送键 `_canSend`（`composer.dart:655`）只看内容。
+   两者都成立的**第一帧**发一次 `timing: input-ready`（配对口径同 §25.6 的 `first-frame`：起飞点只建一个 `Stopwatch`，落点读一次即弃）。
+   若实施首轮发现 composer 另有健康门（未核实，§25.15 U1），该门按「内核声明什么、UI 显示什么」的既有原则放宽为**只看能否发送**，不看 ready。
+2. **等待可见**：起进程 / 装配期间，首条消息的回合已经开着（`_beginTurn`）却没有内容帧 ⇒ 界面必须能说清「它在准备」。
+   **唯一路径**（实读关闭 U2）：宿主侧没有任何消费 `KernelHealthStatus.starting` 的呈现（`lib/chat/panels/health_banner.dart:27-28` 的 `shows` 只在 `failed` 为真；全仓仅 `ready` / `failed` 比较）。
+   ⇒ 发一条 `NoticeItem(NoticeKind.warning, 'thincoder is starting…')`，并在 `_setHealth(ready)` 处 `ItemRemoved` 撤掉（形同 `_teardown` 的清理先例 `:495-499`）。
+   文案按 §14-28 的惯例取**内核口英文**，登记 §14-29（本地化归既有的内核文案本地化项，不在本批）。
+3. **失败可见**：起不来时既有 `_fail`（`:461-470`）+ `_deliver` 的错误 `NoticeItem`（`:681-693`）已经把回合收尾成 interrupted ⇒ 不新增路径；补一条断言即可（T107 ②）。
+
+**禁止**（本批明确不做）：不把「未就绪」做成「发不出去」——即不允许任何路径在 `_turn == null` 且内核未 ready 时静默丢消息；不改队列排水顺序（§18.1）；不给 composer 加「等就绪」的禁用态。
+
+### 25.4 会话装配复用（C 的宿主侧上界）：结论 = 宿主侧不可达
+
+- **事实**：`session/new` 实测 1501 ms（2026-10-21 00:55，同进程两次相近）⇒ 成本按**会话**计，不按**进程**计；其构成 = `newSession`（认领槽）1358 ms（属主探测：`tasklist` 658 + CIM 633）+ `createSession`（含 `assembleAgent` 95 ms）138 ms + 余 ≈5 ms。
+- **推论一**：进程复用（预热池）只能拿掉 364 ms 的进程与握手成本，**拿不掉** 1501 ms 的会话建立成本。
+- **推论二**：即使把同一 cwd 的多个聊天会话塞进一个 ACP 进程（`session/new` 不关闭既有会话，`sessions.set` 并存；`agentCapabilities.sessionCapabilities` 已声明 list/resume/delete/close），每个新会话仍要付一次 `session/new` ⇒ 仍不满足「第二会话不付全量装配」。
+- **修正（旧稿的「装配 = 1545 ms」不成立）**：装配只占 **138 ms**；1.29 s 是**属主探测**。所以可省的不是模型目录懒取（它早已后台，`acp.mjs:97-111`），而是**判活**（C′1 658 + C′2 633）⇒ 归已批准的外仓批。
+- **结论**：A11 第 4 项（同项目第二个会话不付全量装配）**宿主侧不可达**，C′1 + C′2 落地后可达（判据 = `timing: session-new` ≤400 ms）。宿主侧本批交付的上界 = 第二会话省掉 364 ms（预热池命中）。
+- **为什么不做单进程多会话**：收益 364 ms（与预热池相同、不叠加），代价是把连接的归属从「一个内核实例」改成「一个按 cwd 的共享连接」，`_teardown`（`:472-510`）会误杀别的会话、`release()`（`:544`）的释放判据要重写、`session/close` 的归属要重划——风险面与 §19 的挂起窗、§18 的队列、§24 的模型后置同时相交。**被否**（D102）。
+
+### 25.5 切内核路径：只读数、只回归
+
+- 既有实现：`_warm` 表（`chat_session.dart:440`）把离开的内核实例留着，切回时 `_connect` 复用同一实例，`prepare()`（`:450-453`）走 `_ensureStarted`（`thincoder_kernel.dart:220-224`）——进程与 `initialize` 都还在，**不再付 364 ms**；`session/new` 也不付（`_slot` 在内存，走 `session/resume`，`_pickUpKept :401-408`）。
+- 本批**不改**这条路径。只加一处打点：`setKernel`（`:435`）记 `t0`，新内核 `_setHealth(ready)` 落 `t1` ⇒ `timing: kernel-switch`（门槛 ≤200 ms，A11 第 3 项）。
+- 回归判据：T111（切走再切回，第二次 `prepare` 不产生新的 `initialize` 请求）。
+
+### 25.6 打点表（供实施与走查共用）
+
+打点一律 `appEvent('thincoder', …)`（`lib/platform/event_log.dart:84`），一条一行、只在状态迁移处发一次；热路径上不写日志、不 `stopwatch` 常驻（`Stopwatch` 只在起飞点创建、落点读一次即弃）。
+
+| 事件名（`appEvent` 第二参前缀） | 触发点（`file:line`） | 门槛 / 期望读数 |
+|---|---|---|
+| `timing: open` | `chat_session.dart:402`（`attach` 里 `prepare()` 之前） | t0，无门槛 |
+| `timing: input-ready <N>ms` | t0 = `timing: open`（`chat_session.dart:402`）；落点 = 首个「发送可用」帧（`canSend == true` 且 composer 发送键只看内容） | **≤300 ms**（A11 第 1 项） |
+| `timing: warm hit <N>ms` / `warm miss` | `thincoder_kernel.dart:231`（领池处） | 命中 ⇒ 省 ≥300 ms；miss ⇒ 走原路 |
+| `timing: session-new <N>ms` | `thincoder_kernel.dart:415`（`session/new` 前后） | 现状 1501 ms（属主探测 1358 + 装配 138；只读数，不改） |
+| `timing: first-frame <N>ms` | 首个内容帧落点：`thincoder_kernel.dart` 的 `_notification` 分流入口（`:1140` 附近）与 `_deliver` 的 prompt 发出处（`:697` 之后）配对 | **≤600 ms**（A11 第 2 项） |
+| `timing: kernel-switch <N>ms` | `chat_session.dart:435` / `thincoder_kernel.dart:270` | **≤200 ms**（A11 第 3 项） |
+| `warm: held` | 新档池内（`initialize` 回包落地、住户入池） | 只留痕（走查 §25.14-1） |
+| `warm: dropped <reason>` | 新档池内（TTL / 进程退出 / 切项目） | 只留痕 |
+
+- 配对口径：`first-frame` 的计时窗 = 「`session/prompt` 写出」→「第一条携带内容（文本 / 思考 / 工具卡）的 `session/update`」；纯状态帧（`usage_update` / `config_option_update`）不计入。
+- 打点行数上限：每会话每次迁移一行；不得出现按帧打印。
+
+### 25.7 语义不变表（逐条写「不变」的根据）
+
+| 面 | 结论 | 根据 |
+|---|---|---|
+| 审批 | 不变 | 预热池的进程没有会话 ⇒ 不可能有 `session/request_permission`；领池后走同一 `_serverRequest`（`thincoder_kernel.dart:239` 接线不变） |
+| 取消 | 不变 | `cancel` 路径与队列 / 回合绑定，本批零改（`_queue` / `_turn` / `_endTurn` 不动） |
+| 队列（F15 / §18） | 不变 | `send` / `_drain` / `_deliver` 的排水顺序与 `queued: true` 标记零改；乐观就绪只是**复用**它（§25.3 事实行） |
+| 回合归属 | 不变 | `_beginTurn` 仍由 `_drain` 唯一触发；自动轮（§19.2）与用户回合的判据零改 |
+| 未读 | 不变 | 未读由宿主 `ChatSession` 侧按回合结束计算，本批不触 |
+| 挂起窗（§19） | 不变 | `_canClose` 四条件零改；池里的住户不在 `_canClose` 的判定对象内（没有 `_transport` 字段持有） |
+| 切内核 | 不变（只加读数） | §25.5；`_warm` 表与 `prepare()` 调用点零改 |
+| 释放 | 不变 | `release()` / `dispose()` 关的仍是「自己领到的 transport」；领池后该 transport 已归内核，池不再持有（`take` = 移出） |
+| 模型后置（§24） | 不变 | 触发点全在 `_endTurn` 之后，与启动路径无交 |
+
+### 25.8 受影响文件清单（E2 增量；行数 = 2026-10-21 实测）
+
+| # | 坐标 | 改动 | 增量 |
+|---|---|---|---|
+| ① | `lib/kernel/thincoder/thincoder_warm.dart`（新增） | 保温池：`warm(cwd, files)` / `take(key)` / `drop(reason)` / TTL / 冷却；进程退出监听；`handshake` 回包原样保存 | ~ +170（新档，<300） |
+| ② | `lib/kernel/thincoder/thincoder_kernel.dart`（1353） | `_launch`（`:226-297`）拆出「领池 ∥ 起进程」两条入口；`_ensureStarted`（`:220`）不变签名；打点 4 处（`:229` / `:231` / `:270` / `:415`）；首个内容帧打点 1 处 | ≤ +55（⇒ ≤1408；>800 名单，本批只行级） |
+| ③ | `lib/chat/chat_session.dart`（1324） | `attach`（`:402`）打 `timing: open`；`setKernel`（`:435`）打 `timing: kernel-switch` 起点；`timing: input-ready` 落点一处 | ≤ +8（⇒ ≤1332） |
+| ④ | `lib/kernel/agent_kernel.dart`（530） | 无改（`prepare` 语义不变；等待面走 `NoticeItem`，不新增 `preparing` 投影——无消费者、无用例，U2 已实读关闭） | 0 |
+| ⑤ | `lib/workspace/workspace.dart`（2940） | 打开项目处调 `ThincoderWarm.warm(...)`（默认内核为 thincoder 时）；项目切换 / 关闭调 `drop` | ≤ +12（⇒ ≤2952） |
+| ⑥ | `lib/chat/composer/composer.dart`（2416） | 若 composer 存在健康门（未核实 U1）⇒ 只在「未 ready」时不禁用发送 | 0 ~ +6 |
+| ⑦ | `test/kernel/thincoder_kernel_test.dart`（3644） | T107–T111（§25.11） | ≤ +150（⇒ ≤3794） |
+| ⑧ | `test/kernel/thincoder_warm_test.dart`（新增） | T108 / T109 的池单测（不启真进程：注入假 transport 工厂） | ~ +110（新档，<300） |
+
+- **零改动**：`thincoder_protocol.dart` · `thincoder_events.dart` · `thincoder_mock.dart` · `thincoder/`（B1 默认，见 §25.13）· `lib/kernel/claude_code/**` · 审批 / 取消 / 队列代码面 · 固件（无新帧）。
+- **体量**：新档 <300；`thincoder_kernel.dart` / `workspace.dart` / `chat_session.dart` / `composer.dart`（2416）已在 >800 名单（§5.2），本批只行级（+≤55 / +≤12 / +≤8 / 0~+6），不续拆。
+- **拆分立场（一句话）**：`_launch` 拆分**不动任何缝候选**、拆分触发仍归独立拆分批（与本批体量无咬合）。
+- **接缝待核**：`workspace.dart` 的「打开项目 / 解析默认内核」处的确切行号（`:239-240` 是默认内核的现值点）由实施首轮 `grep` 核定并回填本节。
+
+### 25.9 关键决策记录（含被否）
+
+| # | 决策 | 理由 / 被否 |
+|---|---|---|
+| D100 | 预热池住在 `lib/kernel/thincoder/` 的独立档，键 = `(cwd, hasFilesCapability)`，只持一条进程 | `initialize` 的 `clientCapabilities` 由 `_context.files` 决定（`:249-251`），能力位不同的进程不能互领；E1 单点要求 thincoder 相关代码集中一档。被否：把池做成全局单例跨 cwd 共享（`session/new` 的 cwd 必须等于进程 cwd，跨项目领来也用不了） |
+| D101 | 池的触发 = 打开项目（默认内核为 thincoder 时），不跟会话视图 | 视图打开那一刻与 `prepare()` 同时发生，预热没有提前量；打开项目才是唯一稳定比「点会话」更早的时刻。被否：跟 composer 聚焦（聚焦即打开会话，同时发生）；被否：应用启动即预热（用户可能一整天不用 thincoder，白占一个 Node 进程） |
+| D102 | 不做单进程多会话（宿主侧） | 只省 364 ms（与池不叠加），却要改连接归属 / `_teardown` / 释放判据，且**仍不满足** A11 第 4 项（装配按会话计）。被否 |
+| D103 | 乐观就绪不新造队列，复用 §18 / `_drain` | 既有 `send` → `_queue` → `_beginTurn` → 气泡先落（`:653`）→ `await _ensureStarted()`（`:680`）已经是「先接住、后送达」；新造队列会与 `canQueue` / 队列面板 / 撤回编辑三条面同时冲突。被否：宿主侧待发队列 |
+| D104 | 预热失败静默（用户不可见）+ 60 s 冷却 | 用户还没做任何事，报错是噪声；冷却避免每次打开会话都重试一次注定失败的启动。被否：预热失败即弹既有引导（会在用户没打算用 thincoder 时打断） |
+| D105 | 打点只在状态迁移处，一条一次 | 热路径（每帧 / 每个 `session/update`）写日志会把测量成本加进被测量对象（§25.6 末行）。被否：帧级计时（自伤） |
+| D106 | A11 第 4 项判为「宿主侧不可达」，归**已批准的外仓批**（§25.13），不在宿主侧伪造读数 | 实测 `session/new` 1501 ms = 属主探测 1358 + 装配 138；宿主侧无接口能改它。被否：以「进程复用」冒充「装配复用」报绿；被否：按旧稿归因「装配 1545 ms」（2026-10-21 实测推翻，装配只占 138 ms） |
+
+### 25.10 验收对照（回指需求档 F22 / A11）
+
+| 需求判据（A11） | 本档落点 | 机制 | 判据（机检 / 走查） | 宿主侧可达成上界 |
+|---|---|---|---|---|
+| 新建会话 **≤300 ms 可输入** | §25.2 / §25.3 | 输入不看健康位（`chat_session.dart:693` 实读）+ 预热池把 364 ms 前移 | T107：`health == starting` 时 `send` 仍入队、用户气泡在首个内容帧之前出现；`appEvent timing: input-ready` ≤300 | ✅ 可达成（输入面与内核状态解耦） |
+| **首帧 ≤600 ms** | §25.2 + §25.6 | 预热省 364 ms；`session/new` 1501 ms（属主探测 1358 + 装配 138）在 `attach → prepare` 即起跑，与用户打字重叠；首帧本体 344 ms | T110：注入假 transport 时 `first-frame` 事件读数 ≤600；真机走查 S1 连续 5 次取中位数 | ⚠️ 本批交付时**条件达成**（打字时间 ≥ 会话建立剩余时间；300 ms 内就发首条 ⇒ 下界 ≈ 1501 − 300 + 344 ≈ 1.5 s）；**外仓批 C′1+C′2 后无条件**：首帧 = 预热命中 0 + 装配 138 + 首帧 344 ≈ 482 ms |
+| **切内核 ≤200 ms** | §25.5 | 既有 `_warm` 表 + `prepare()` 复用（`fe403e32`），不重启进程、不再 `session/new` | T111：切走再切回，第二次启动零 `initialize`、零 `session/new`；`timing: kernel-switch` ≤200 | ✅（既有机制，只加读数；若读数超线 ⇒ 按 §25.12-3 登记，不在本批改实现） |
+| **同项目第二会话不付全量装配** | §25.4 / §25.13 | 宿主侧只能省 364 ms（池命中）；1.5 s 里 1358 ms 是属主探测（C′1 658 + C′2 633）、138 ms 是装配（C′3 71 在装配内）⇒ 只能由外仓批拿掉 | 走查 S2：同项目开第二个会话，读 `timing: warm hit` 与 `timing: session-new` —— 前者命中、后者**仍 ≈1500 ms** ⇒ 本批判「未达标，待外仓批」 | ❌ 本批不可达；**待外仓批（已批准）C′1+C′2 落地**，后判据 = `timing: session-new` ≤400 ms |
+
+- **读数归属**：A11 的「真机 `appEvent` 计时」= §25.6 的事件行；走查取证 = `events.log` 里对应时间戳差分，不是手掐秒表。
+- **诚实口径（2026-10-21 修正）**：①③ 可判过 = **宿主批交付**；② 本批条件过，**无条件面**归外仓批；④ 本批不可达，**归外仓批交付（已获批准，C′1+C′2 后可达）**——批档 §2 与交付报告都按这个口径写，不合并成一句「全部达标」。
+
+### 25.11 用例表（T107–T111）
+
+| # | 场景 | 输入 | 期望 |
+|---|---|---|---|
+| T107 | 乐观就绪不阻塞、不丢消息 | 假 transport 工厂延迟 800 ms 才返回握手；`agent.prepare()` 后立刻 `send('hi')`；另一条：工厂直接抛 `ThincoderUnavailable` | ① `health.status == starting` 期间 `agent.send` 不抛、`requests('session/prompt')` 为空；800 ms 后恰 1 条 `session/prompt`；用户 `UserMessageItem` 在首个内容帧之前出现；`timing: input-ready` 事件存在。② 启动失败 ⇒ 恰 1 条 error `NoticeItem` + `TurnEnded(interrupted: true)`，无悬挂回合 |
+| T108 | 预热池命中不重复 spawn / 不重复握手 / 键一致 | `ThincoderWarm` 注入假工厂（注入点在**连接层**：池与内核共用同一工厂，返回真 `ThincoderConnection`），`warm('/p', files)` 完成后再 `ThincoderKernel.prepare()` | 假工厂的 spawn 调用次数 == 1；`initialize` 请求在**假 transport 层**只出现 1 次（池里那次）；**领用的连接上不再出现 `initialize`**；`session/new` 恰 1 条；`warm` 键 == 内核领池键（同一 `(cwd, files != null)`） |
+| T109 | 池的失效与释放 | ① TTL 到期（**注入时钟**推进 10 min，不靠墙钟）；② 池进程 `exited`；③ 能力位不同（`files == null` vs 有）；④ `drop('project-switch')` | 四种情形 `take(key)` 均返回 null 且不抛；`warm: dropped <reason>` 各一行；旧 transport 均已 `close()` |
+| T110 | 首帧打点口径 | 假 transport：`session/prompt` 应答前先推 `usage_update`（状态帧）再推 `agent_message_chunk`（内容帧） | `first-frame` 的时间起点 = prompt 写出时刻，落点 = 内容帧（`usage_update` 不计）；读数 ≤600（假时钟 344 ms） |
+| T111 | 切内核温启动不回归 | 两个内核描述符；`setKernel(a→b→a)`（视图在） | `a` 的第二次 `prepare` 不产生新的 `initialize` / `session/new`；`timing: kernel-switch` 每个方向各一行 |
+
+- 断言面：`_Session` / 假 transport（`ThincoderMock` 已有 `start` 注入口，形同 T100–T105）；池单测在 `test/kernel/thincoder_warm_test.dart`，不启真进程。
+- **确定性**：时钟 / 定时器与 transport 工厂都可注入（构造参数或模块级 setter + `??` 生产缺省，用例 `finally` 复位）——T109 ① 的 TTL 用注入时钟推进，不依赖墙钟；T107 的 800 ms 延迟与 T110 的假时钟 344 ms 同源。
+- 不新增固件：线形零改（仍是 `initialize` / `session/new` / `session/prompt`），既有固件保持绿 = 回归哨兵。
+
+### 25.12 边界（本批不做）与登记（判定条件）
+
+1. **本批不改 CLI**：`thincoder/` 零改；CLI 侧改动归**已获批准的外仓批**（§25.13 C′1–C′3，该仓自己的批次档与测试）。
+2. **不做单进程多会话**：D102。
+3. **切内核超线不改实现**：若 `timing: kernel-switch` 真机 >200 ms，登记判定条件 = 「同项目连续切两次、第二次仍 >200 ms ⇒ 取 `events.log` 与 `graph` 时序另立批」；本批只读数。
+4. **本批不做首帧的无条件达标**：见 §25.10 的上界；外仓批（C′1+C′2）落地前 A11 第 2 项按「条件达成」记。
+5. **不做预热池的跨进程复用**：池随应用进程存活；应用重启后首次打开项目重新预热。
+6. **不做远端项目的预热**（F8 面）：远端 ACP 进程在 SSH 主机上，预热 = 在远端起进程，本批不做（判定条件：远端项目走查首帧明显偏慢 ⇒ 另立）。
+7. **不把 `session/new` 挪到首条消息**：它在 `prepare()`（打开视图）时就起，这是今天的行为、也是首帧能达标的前提；挪到发送时才起会把 1.5 s 全压在首帧上。
+8. **应用前后台生命周期驱动预热池 = 条件项（本批不做）**：进后台关池 / 回前台补位无承载档与用例，也不在 A11 验收路径上（已从 §25.2 删掉）。判定条件：现场见到「长时间在后台后回前台，首帧明显慢」⇒ 先核池是否已被 TTL 关掉；确认平台有可靠生命周期回调 ⇒ 另立批补 `WidgetsBindingObserver` 钩子 + 用例。
+
+### 25.13 外仓（`thincoder/`）改动清单 = B1 已获用户批准（2026-10-21 00:53）· 独立外仓批（本批不实施）
+
+> 依据：需求档 F22「依赖」行 + 用户 2026-10-21 00:53 逐字「允许修改thincoder仓库」⇒ B1 例外**已批准**，落点 = 独立外仓批（该仓自己的批次档 + 测试 + 提交）。
+> 前提事实（2026-10-21 00:55–00:58 实测，可复跑）：`session/new` 1501 ms = `newSession`（认领槽）**1358 ms**
+> （`probeOwnersAsync` → `batchAliveAsync` 的 `tasklist /FO CSV /NH` 658 + `probeCmdlinesAsync` 的 PowerShell `Get-CimInstance … ConvertTo-Json` 633）
+> + `createSession`（含 `assembleAgent` 95 ms）**138 ms** + 余 ≈5 ms；`assembleAgent` 内：`git config user.name` 71 / `createMemory` 7 / `assembleBuiltinTools` 9 / `loadConfig` 5 / `syncDir` 1 / `discoverRules` 0；
+> `loadManifest` 1 ms、`activeSlot` 1 ms；模型目录**已是后台**（`thincoder-cli/src/acp.mjs:97-111` 的 `defaultCreateSession` 不 await `refreshModelChoices`）⇒ 旧稿的 C1（模型目录懒取）**无收益，已撤**。
+> 处理链起点：`thincoder-cli/src/acp/handlers-session.mjs:285` 起（`requireConfigured()` → `newSession(getCwd())` → `createSession({...})` → `sessions.set`）；`process.kill(pid, 0)` 实测 0.19 ms/pid（死 pid 返 `ESRCH`，Windows 可用）。
+
+| # | 档 | 改动 | 预期收益 | 判定条件（做完怎么算成） |
+|---|---|---|---|---|
+| C′1 | `session/new` 的属主判活（Windows） | 批量判活改 `process.kill(pid, 0)` 查表（死 pid = `ESRCH`）；**保留「unknown ⇒ 不认领不判死」语义**与 `probeOwnersAsync` 的注入缝 | **≈658 ms** | 打点复测：`session/new` 降幅 ≥600 ms；unknown 分支有用例（非 `ESRCH` 错误不判死） |
+| C′2 | `session/new` 的属主命令行 | `probeCmdlinesAsync` 只在「pid 复用需复核身份」时发；死属主清理移出 `session/new` 热路径（改懒清理 / 后台） | **≈633 ms** | 同会话首建与再建均不再跑全量 CIM；清理在后台完成且有留痕 |
+| C′3 | `assembleAgent` 的 git 身份 | `git config user.name` 缓存或改读 `.git/config` | **≈71 ms** | 装配打点降幅 ≥50 ms；子仓库 / worktree 取到同名值 |
+
+- 开工形式：另立 out-of-repo 批（该仓自己的批次档 + 测试），本仓只登记；**本批一行不写**。
+- 收益排序已由实测给定（C′1 658 > C′2 633 ≫ C′3 71）：外仓批按此顺序做，每项落地后复测 `session/new`。
+- 语义保留（C′1 硬约束）：「unknown ⇒ 不认领不判死」不变（`process.kill` 的 `EPERM` / 非 `ESRCH` 错误按 unknown）；`probeOwnersAsync` 的注入缝保留。
+
+### 25.14 真机走查步骤
+
+1. 打开项目（默认内核 = thincoder），等 3 s（让池预热完）⇒ `events.log` 有 `warm: held` 一行、无 `session/new`。
+2. 点新建会话 ⇒ 输入框立刻可打字；`timing: input-ready` ≤300 ms；`timing: warm hit` 命中。
+3. 立刻发一条消息（开视图后 1 s 内）⇒ `timing: first-frame` 读数；连做 5 次取中位数（A11 第 2 项）。
+4. 同一项目再开第二个会话 ⇒ `timing: session-new` 仍 ≈1500 ms（记录为「待外仓批」，不当作缺陷瞒下）；`warm hit` 是否命中（取决于池是否已被第一个会话领走 ⇒ 第二个会话 miss 属预期）。
+5. 切到 claude-code 再切回 ⇒ 输入可用；`timing: kernel-switch` ≤200 ms，第二次切回零 `initialize` / 零 `session/new`。
+6. 关掉会话视图（`release`）⇒ 进程退出、池空（不补位）⇒ 下一次开会话付全量启动（spawn + `initialize` + `session/new`），属预期；与本步无关的 TTL 条件不计。
+
+### 25.15 未核实 / 实现期确认项
+
+| # | 项 | 现状 | 处置 |
+|---|---|---|---|
+| U1 | composer 是否存在「内核未 ready ⇒ 禁用发送」的健康门 | 未核实（`composer.dart:2126` 的 `enabled: _canSend` 只看内容；其它门未逐行核） | 实施首轮核；有 ⇒ 按 §25.3-1 放宽，无 ⇒ 本条作废 |
+| U3 | `session/new` 1501 ms 的构成 | 已实测（2026-10-21 00:55）：属主探测 1358（`tasklist` 658 + CIM 633）+ 装配 138（`assembleAgent` 95）+ manifest / activeSlot 各 1 | 不再需要外仓批分解；MCP / embedding 合计 ≤43 ms（`createSession` 138 − `assembleAgent` 95），按 §25.13 顺序实施 |
+| U6 | starting 期间 `isStreaming` 是否为真 | **已实读关闭**：`chat_session.dart:687` = `_transcript.activeTurn != null`；`canQueue` 在 `:651` | 不再需要实施首轮核；§25.3 事实行成立（starting 期间 `canSend` 为真） |
+| U4 | 预热池的常驻内存开销 | 未测（一个 Node 进程的 V8 基线） | 实施首轮量一次 `process` 内存；超过 ~120 MB ⇒ 池改为按需预热（只保留开关） |
+| U5 | `workspace.dart` 打开项目处的确切行号 | 未定位到行（`:239-240` = 默认内核现值点） | 实施首轮核定并回填 §25.8 |
+
 
