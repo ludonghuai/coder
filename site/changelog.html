@@ -30,6 +30,33 @@
   <h1>Changelog</h1>
   <p class="subtitle">What changed in each version of BaoCode.</p>
 
+  <section class="release" id="v1.6.0">
+    <h2 class="plain"><a href="#v1.6.0">1.6.0</a></h2>
+    <p>New</p>
+    <ul>
+    <li>The thincoder kernel is in: messages queue while it works, a sent message is edited by rewinding to its turn, sessions rename, files revert per turn, and the mode and model menus follow what the kernel reports</li>
+    <li>A thincoder session opens on a kernel that is already up: a warm process and its handshake are paid for ahead of time, and the CLI now builds a session in about 0.19 s instead of 1.5 s</li>
+    <li><code>@</code> lists the project's files (subfolders and paths outside the project too), and <code>/</code> opens the command menu anywhere in the message</li>
+    <li>Subagents may run on another upstream's model through the proxy; an agent stopped at its usage limit goes on once it resets</li>
+    <li>Queued messages send while the agent works, leaving background tasks at work</li>
+    </ul>
+    <p>Improved</p>
+    <ul>
+    <li>A streaming delta rebuilds one row, not the history</li>
+    <li>A kernel switched back to is the one still running, with no handshake to wait for</li>
+    <li>The <code>@</code> menu no longer re-walks the project per keystroke, and a two-key chord starts inside the message box</li>
+    </ul>
+    <p>Fixed</p>
+    <ul>
+    <li>A chord's second key is this window's even when nothing inside has focus</li>
+    <li>The automatic fetch runs with the chat alone</li>
+    <li>A kernel switched to starts at once, without waiting a frame</li>
+    <li>A drag in a zoomed preview selects under the pointer</li>
+    <li>The side panel's action row counts all three buttons</li>
+    <li>A definition in a remote project opens on its host, its path read as the host spells it</li>
+    </ul>
+  </section>
+
   <section class="release" id="v1.5.0">
     <h2 class="plain"><a href="#v1.5.0">1.5.0</a></h2>
     <p>Easy SSH</p>
