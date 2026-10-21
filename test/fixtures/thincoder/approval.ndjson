@@ -1,14 +1,14 @@
-{"fixture": "approval", "cwd": "/project"}
-{"client": {"jsonrpc": "2.0", "id": "c1", "method": "initialize", "params": {"protocolVersion": 1, "clientCapabilities": {}}}}
-{"server": {"jsonrpc": "2.0", "id": "c1", "result": {"protocolVersion": 1, "agentCapabilities": {"loadSession": true, "sessionCapabilities": {"list": {}, "resume": {}, "delete": {}, "close": {}}}, "authMethods": [], "agentInfo": {"name": "thincoder", "version": "0.12.74"}}}}
-{"client": {"jsonrpc": "2.0", "id": "c2", "method": "session/new", "params": {"cwd": "/project"}}}
-{"server": {"jsonrpc": "2.0", "id": "c2", "result": {"sessionId": "1", "configOptions": [{"id": "mode", "name": "Mode", "type": "select", "currentValue": "normal", "options": [{"value": "normal", "name": "Normal"}, {"value": "plan", "name": "Plan"}]}]}}}
-{"turn": "run it"}
-{"client": {"jsonrpc": "2.0", "id": "c3", "method": "session/prompt", "params": {"sessionId": "1", "prompt": [{"type": "text", "text": "run it"}]}}}
-{"server": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "1", "update": {"sessionUpdate": "tool_call", "toolCallId": "t1", "title": "bash", "kind": "execute", "status": "in_progress", "rawInput": {"command": "flutter test"}, "content": [{"type": "content", "content": {"type": "text", "text": "{\"command\":\"flutter test\"}"}}]}}}}
-{"server": {"jsonrpc": "2.0", "id": "rpc-1", "method": "session/request_permission", "params": {"sessionId": "1", "options": [{"optionId": "approve_once", "name": "Approve once", "kind": "allow_once"}, {"optionId": "approve_always", "name": "Approve for this session", "kind": "allow_always"}, {"optionId": "reject", "name": "Reject", "kind": "reject_once"}], "toolCall": {"toolCallId": "t1", "title": "bash", "content": [{"type": "content", "content": {"type": "text", "text": "flutter test — a command that changes things"}}]}}}}
-{"answer": "approve_once"}
-{"client": {"jsonrpc": "2.0", "id": "rpc-1", "result": {"outcome": {"outcome": "selected", "optionId": "approve_once"}}}}
-{"server": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "1", "update": {"sessionUpdate": "tool_call_update", "toolCallId": "t1", "status": "completed", "content": [{"type": "content", "content": {"type": "text", "text": "All 3 tests passed"}}]}}}}
-{"server": {"jsonrpc": "2.0", "id": "c3", "result": {"stopReason": "end_turn"}}}
-{"expect": {"items": ["user: run it", "terminal succeeded: flutter test"], "interrupted": false}}
+{"fixture":"approval","cwd":"/project"}
+{"client":{"jsonrpc":"2.0","id":"c1","method":"initialize","params":{"protocolVersion":1,"clientCapabilities":{}}}}
+{"server":{"jsonrpc":"2.0","id":"c1","result":{"protocolVersion":1,"agentCapabilities":{"loadSession":true,"sessionCapabilities":{"list":{},"resume":{},"delete":{},"close":{}}},"authMethods":[],"agentInfo":{"name":"thincoder","version":"0.12.74"}}}}
+{"client":{"jsonrpc":"2.0","id":"c2","method":"session/new","params":{"cwd":"/project"}}}
+{"server":{"jsonrpc":"2.0","id":"c2","result":{"sessionId":"1","configOptions":[{"id":"mode","name":"Mode","type":"select","currentValue":"normal","options":[{"value":"normal","name":"Normal"},{"value":"plan","name":"Plan"}]}]}}}
+{"turn":"run it"}
+{"client":{"jsonrpc":"2.0","id":"c3","method":"session/prompt","params":{"sessionId":"1","turnId":"turn-1","prompt":[{"type":"text","text":"run it"}]}}}
+{"server":{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"1","update":{"sessionUpdate":"tool_call","toolCallId":"t1","title":"bash","kind":"execute","status":"in_progress","rawInput":{"command":"flutter test"},"content":[{"type":"content","content":{"type":"text","text":"{\"command\":\"flutter test\"}"}}]}}}}
+{"server":{"jsonrpc":"2.0","id":"rpc-1","method":"session/request_permission","params":{"sessionId":"1","options":[{"optionId":"approve_once","name":"Approve once","kind":"allow_once"},{"optionId":"approve_always","name":"Approve for this session","kind":"allow_always"},{"optionId":"reject","name":"Reject","kind":"reject_once"}],"toolCall":{"toolCallId":"t1","title":"bash","content":[{"type":"content","content":{"type":"text","text":"flutter test — a command that changes things"}}]}}}}
+{"answer":"approve_once"}
+{"client":{"jsonrpc":"2.0","id":"rpc-1","result":{"outcome":{"outcome":"selected","optionId":"approve_once"}}}}
+{"server":{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"1","update":{"sessionUpdate":"tool_call_update","toolCallId":"t1","status":"completed","content":[{"type":"content","content":{"type":"text","text":"All 3 tests passed"}}]}}}}
+{"server":{"jsonrpc":"2.0","id":"c3","result":{"stopReason":"end_turn"}}}
+{"expect":{"items":["user: run it","terminal succeeded: flutter test"],"interrupted":false}}

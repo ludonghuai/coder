@@ -1,12 +1,12 @@
-{"fixture": "turn-stream", "cwd": "/project"}
-{"client": {"jsonrpc": "2.0", "id": "c1", "method": "initialize", "params": {"protocolVersion": 1, "clientCapabilities": {}}}}
-{"server": {"jsonrpc": "2.0", "id": "c1", "result": {"protocolVersion": 1, "agentCapabilities": {"loadSession": true, "promptCapabilities": {"image": false}, "sessionCapabilities": {"list": {}, "resume": {}, "delete": {}, "close": {}}}, "authMethods": [], "agentInfo": {"name": "thincoder", "version": "0.12.74"}}}}
-{"client": {"jsonrpc": "2.0", "id": "c2", "method": "session/new", "params": {"cwd": "/project"}}}
-{"server": {"jsonrpc": "2.0", "id": "c2", "result": {"sessionId": "1", "configOptions": [{"id": "model", "name": "Model", "type": "select", "currentValue": "anthropic:claude-sonnet-5", "options": [{"value": "anthropic:claude-sonnet-5", "name": "anthropic:claude-sonnet-5"}]}, {"id": "thinking", "name": "Thinking", "type": "boolean", "currentValue": true}, {"id": "mode", "name": "Mode", "type": "select", "currentValue": "normal", "options": [{"value": "normal", "name": "Normal"}, {"value": "plan", "name": "Plan"}]}]}}}
-{"turn": "what does main do?"}
-{"client": {"jsonrpc": "2.0", "id": "c3", "method": "session/prompt", "params": {"sessionId": "1", "prompt": [{"type": "text", "text": "what does main do?"}]}}}
-{"server": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "1", "update": {"sessionUpdate": "agent_thought_chunk", "content": {"type": "text", "text": "Reading lib/main.dart…"}}}}}
-{"server": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "1", "update": {"sessionUpdate": "agent_message_chunk", "content": {"type": "text", "text": "It runs the app."}}}}}
-{"server": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "1", "update": {"sessionUpdate": "usage_update", "used": 1841, "size": 200000}}}}
-{"server": {"jsonrpc": "2.0", "id": "c3", "result": {"stopReason": "end_turn"}}}
-{"expect": {"items": ["user: what does main do?", "text: It runs the app."], "usage": {"used": 1841, "size": 200000}, "interrupted": false}}
+{"fixture":"turn-stream","cwd":"/project"}
+{"client":{"jsonrpc":"2.0","id":"c1","method":"initialize","params":{"protocolVersion":1,"clientCapabilities":{}}}}
+{"server":{"jsonrpc":"2.0","id":"c1","result":{"protocolVersion":1,"agentCapabilities":{"loadSession":true,"promptCapabilities":{"image":false},"sessionCapabilities":{"list":{},"resume":{},"delete":{},"close":{}}},"authMethods":[],"agentInfo":{"name":"thincoder","version":"0.12.74"}}}}
+{"client":{"jsonrpc":"2.0","id":"c2","method":"session/new","params":{"cwd":"/project"}}}
+{"server":{"jsonrpc":"2.0","id":"c2","result":{"sessionId":"1","configOptions":[{"id":"model","name":"Model","type":"select","currentValue":"anthropic:claude-sonnet-5","options":[{"value":"anthropic:claude-sonnet-5","name":"anthropic:claude-sonnet-5"}]},{"id":"thinking","name":"Thinking","type":"boolean","currentValue":true},{"id":"mode","name":"Mode","type":"select","currentValue":"normal","options":[{"value":"normal","name":"Normal"},{"value":"plan","name":"Plan"}]}]}}}
+{"turn":"what does main do?"}
+{"client":{"jsonrpc":"2.0","id":"c3","method":"session/prompt","params":{"sessionId":"1","turnId":"turn-1","prompt":[{"type":"text","text":"what does main do?"}]}}}
+{"server":{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"1","update":{"sessionUpdate":"agent_thought_chunk","content":{"type":"text","text":"Reading lib/main.dart…"}}}}}
+{"server":{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"It runs the app."}}}}}
+{"server":{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"1","update":{"sessionUpdate":"usage_update","used":1841,"size":200000}}}}
+{"server":{"jsonrpc":"2.0","id":"c3","result":{"stopReason":"end_turn"}}}
+{"expect":{"items":["user: what does main do?","text: It runs the app."],"usage":{"used":1841,"size":200000},"interrupted":false}}

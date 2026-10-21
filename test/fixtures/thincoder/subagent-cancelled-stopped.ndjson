@@ -1,19 +1,19 @@
-{"fixture": "subagent-cancelled-stopped", "cwd": "/project"}
-{"client": {"jsonrpc": "2.0", "id": "c1", "method": "initialize", "params": {"protocolVersion": 1, "clientCapabilities": {}}}}
-{"server": {"jsonrpc": "2.0", "id": "c1", "result": {"protocolVersion": 1, "agentCapabilities": {"loadSession": true, "sessionCapabilities": {"list": {}, "resume": {}, "delete": {}, "close": {}}}, "authMethods": [], "agentInfo": {"name": "thincoder", "version": "0.12.74"}}}}
-{"client": {"jsonrpc": "2.0", "id": "c2", "method": "session/new", "params": {"cwd": "/project"}}}
-{"server": {"jsonrpc": "2.0", "id": "c2", "result": {"sessionId": "1"}}}
-{"turn": "spawn three"}
-{"client": {"jsonrpc": "2.0", "id": "c3", "method": "session/prompt", "params": {"sessionId": "1", "prompt": [{"type": "text", "text": "spawn three"}]}}}
-{"server": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "1", "update": {"sessionUpdate": "session_info_update", "_meta": {"thincoder.dev/subagent": {"role": "eng-coder", "id": 1, "state": "async"}}}}}}
-{"server": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "1", "update": {"sessionUpdate": "session_info_update", "_meta": {"thincoder.dev/subagent": {"role": "eng-coder", "id": 1, "state": "turn", "progress": {"turn": 1, "maxTurns": 100}}}}}}}
-{"server": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "1", "update": {"sessionUpdate": "session_info_update", "_meta": {"thincoder.dev/subagent": {"role": "eng-coder", "id": 1, "state": "stopped"}}}}}}
-{"server": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "1", "update": {"sessionUpdate": "session_info_update", "_meta": {"thincoder.dev/subagent": {"role": "explore", "id": 2, "state": "queued", "progress": {"position": 1}, "detail": "no slot free"}}}}}}
-{"server": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "1", "update": {"sessionUpdate": "session_info_update", "_meta": {"thincoder.dev/subagent": {"role": "explore", "id": 2, "state": "cancelled"}}}}}}
-{"expect": {"items": ["user: spawn three", "agent failed: eng-coder#1"], "tasks": []}}
-{"server": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "1", "update": {"sessionUpdate": "session_info_update", "_meta": {"thincoder.dev/subagent": {"role": "advisor", "id": 3, "state": "async"}}}}}}
-{"server": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "1", "update": {"sessionUpdate": "session_info_update", "_meta": {"thincoder.dev/subagent": {"role": "advisor", "id": 3, "state": "turn", "progress": {"turn": 1, "maxTurns": 100}}}}}}}
-{"expect": {"tasks": ["subagent:advisor#3"], "items": ["user: spawn three", "agent failed: eng-coder#1", "agent running: advisor#3 · turn 1/100"]}}
-{"server": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "1", "update": {"sessionUpdate": "session_info_update", "_meta": {"thincoder.dev/subagent": {"role": "advisor", "id": 3, "state": "cancelled"}}}}}}
-{"server": {"jsonrpc": "2.0", "id": "c3", "result": {"stopReason": "end_turn"}}}
-{"expect": {"items": ["user: spawn three", "agent failed: eng-coder#1"], "tasks": [], "health": "ready"}}
+{"fixture":"subagent-cancelled-stopped","cwd":"/project"}
+{"client":{"jsonrpc":"2.0","id":"c1","method":"initialize","params":{"protocolVersion":1,"clientCapabilities":{}}}}
+{"server":{"jsonrpc":"2.0","id":"c1","result":{"protocolVersion":1,"agentCapabilities":{"loadSession":true,"sessionCapabilities":{"list":{},"resume":{},"delete":{},"close":{}}},"authMethods":[],"agentInfo":{"name":"thincoder","version":"0.12.74"}}}}
+{"client":{"jsonrpc":"2.0","id":"c2","method":"session/new","params":{"cwd":"/project"}}}
+{"server":{"jsonrpc":"2.0","id":"c2","result":{"sessionId":"1"}}}
+{"turn":"spawn three"}
+{"client":{"jsonrpc":"2.0","id":"c3","method":"session/prompt","params":{"sessionId":"1","turnId":"turn-1","prompt":[{"type":"text","text":"spawn three"}]}}}
+{"server":{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"1","update":{"sessionUpdate":"session_info_update","_meta":{"thincoder.dev/subagent":{"role":"eng-coder","id":1,"state":"async"}}}}}}
+{"server":{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"1","update":{"sessionUpdate":"session_info_update","_meta":{"thincoder.dev/subagent":{"role":"eng-coder","id":1,"state":"turn","progress":{"turn":1,"maxTurns":100}}}}}}}
+{"server":{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"1","update":{"sessionUpdate":"session_info_update","_meta":{"thincoder.dev/subagent":{"role":"eng-coder","id":1,"state":"stopped"}}}}}}
+{"server":{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"1","update":{"sessionUpdate":"session_info_update","_meta":{"thincoder.dev/subagent":{"role":"explore","id":2,"state":"queued","progress":{"position":1},"detail":"no slot free"}}}}}}
+{"server":{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"1","update":{"sessionUpdate":"session_info_update","_meta":{"thincoder.dev/subagent":{"role":"explore","id":2,"state":"cancelled"}}}}}}
+{"expect":{"items":["user: spawn three","agent failed: eng-coder#1"],"tasks":[]}}
+{"server":{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"1","update":{"sessionUpdate":"session_info_update","_meta":{"thincoder.dev/subagent":{"role":"advisor","id":3,"state":"async"}}}}}}
+{"server":{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"1","update":{"sessionUpdate":"session_info_update","_meta":{"thincoder.dev/subagent":{"role":"advisor","id":3,"state":"turn","progress":{"turn":1,"maxTurns":100}}}}}}}
+{"expect":{"tasks":["subagent:advisor#3"],"items":["user: spawn three","agent failed: eng-coder#1","agent running: advisor#3 · turn 1/100"]}}
+{"server":{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"1","update":{"sessionUpdate":"session_info_update","_meta":{"thincoder.dev/subagent":{"role":"advisor","id":3,"state":"cancelled"}}}}}}
+{"server":{"jsonrpc":"2.0","id":"c3","result":{"stopReason":"end_turn"}}}
+{"expect":{"items":["user: spawn three","agent failed: eng-coder#1"],"tasks":[],"health":"ready"}}

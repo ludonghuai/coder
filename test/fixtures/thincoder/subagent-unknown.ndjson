@@ -1,18 +1,18 @@
-{"fixture": "subagent-unknown", "cwd": "/project"}
-{"client": {"jsonrpc": "2.0", "id": "c1", "method": "initialize", "params": {"protocolVersion": 1, "clientCapabilities": {}}}}
-{"server": {"jsonrpc": "2.0", "id": "c1", "result": {"protocolVersion": 1, "agentCapabilities": {"loadSession": true, "sessionCapabilities": {"list": {}, "resume": {}, "delete": {}, "close": {}}}, "authMethods": [], "agentInfo": {"name": "thincoder", "version": "0.12.74"}}}}
-{"client": {"jsonrpc": "2.0", "id": "c2", "method": "session/new", "params": {"cwd": "/project"}}}
-{"server": {"jsonrpc": "2.0", "id": "c2", "result": {"sessionId": "1"}}}
-{"turn": "still there?"}
-{"client": {"jsonrpc": "2.0", "id": "c3", "method": "session/prompt", "params": {"sessionId": "1", "prompt": [{"type": "text", "text": "still there?"}]}}}
-{"server": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "1", "update": {"sessionUpdate": "session_info_update", "_meta": {"thincoder.dev/subagent": {"role": "eng-coder", "id": 1, "state": "async"}}}}}}
-{"server": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "1", "update": {"sessionUpdate": "session_info_update", "_meta": {"thincoder.dev/subagent": {"role": "eng-coder", "id": 1, "state": "turn", "progress": {"turn": 2, "maxTurns": 100}}}}}}}
-{"server": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "1", "update": {"sessionUpdate": "session_info_update", "_meta": {"thincoder.dev/subagent": {"role": "eng-coder", "id": 1, "state": "settling"}}}}}}
-{"server": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "1", "update": {"sessionUpdate": "session_info_update", "_meta": {"title": "From the terminal"}}}}}
-{"server": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "1", "update": {"sessionUpdate": "session_info_update", "_meta": "not a map"}}}}
-{"server": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "1", "update": {"sessionUpdate": "session_info_update", "_meta": {"thincoder.dev/subagent": {"role": 7, "id": 9, "state": "turn"}}}}}}
-{"server": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "1", "update": {"sessionUpdate": "session_info_update", "_meta": {"thincoder.dev/subagent": {"role": "eng-coder", "id": "9", "state": "turn"}}}}}}
-{"expect": {"tasks": ["subagent:eng-coder#1"], "items": ["user: still there?", "agent running: eng-coder#1 · turn 2/100"]}}
-{"server": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "1", "update": {"sessionUpdate": "agent_message_chunk", "content": {"type": "text", "text": "Yes."}}}}}
-{"server": {"jsonrpc": "2.0", "id": "c3", "result": {"stopReason": "end_turn"}}}
-{"expect": {"tasks": ["subagent:eng-coder#1"], "items": ["user: still there?", "agent running: eng-coder#1 · turn 2/100", "text: Yes."], "health": "ready"}}
+{"fixture":"subagent-unknown","cwd":"/project"}
+{"client":{"jsonrpc":"2.0","id":"c1","method":"initialize","params":{"protocolVersion":1,"clientCapabilities":{}}}}
+{"server":{"jsonrpc":"2.0","id":"c1","result":{"protocolVersion":1,"agentCapabilities":{"loadSession":true,"sessionCapabilities":{"list":{},"resume":{},"delete":{},"close":{}}},"authMethods":[],"agentInfo":{"name":"thincoder","version":"0.12.74"}}}}
+{"client":{"jsonrpc":"2.0","id":"c2","method":"session/new","params":{"cwd":"/project"}}}
+{"server":{"jsonrpc":"2.0","id":"c2","result":{"sessionId":"1"}}}
+{"turn":"still there?"}
+{"client":{"jsonrpc":"2.0","id":"c3","method":"session/prompt","params":{"sessionId":"1","turnId":"turn-1","prompt":[{"type":"text","text":"still there?"}]}}}
+{"server":{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"1","update":{"sessionUpdate":"session_info_update","_meta":{"thincoder.dev/subagent":{"role":"eng-coder","id":1,"state":"async"}}}}}}
+{"server":{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"1","update":{"sessionUpdate":"session_info_update","_meta":{"thincoder.dev/subagent":{"role":"eng-coder","id":1,"state":"turn","progress":{"turn":2,"maxTurns":100}}}}}}}
+{"server":{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"1","update":{"sessionUpdate":"session_info_update","_meta":{"thincoder.dev/subagent":{"role":"eng-coder","id":1,"state":"settling"}}}}}}
+{"server":{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"1","update":{"sessionUpdate":"session_info_update","_meta":{"title":"From the terminal"}}}}}
+{"server":{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"1","update":{"sessionUpdate":"session_info_update","_meta":"not a map"}}}}
+{"server":{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"1","update":{"sessionUpdate":"session_info_update","_meta":{"thincoder.dev/subagent":{"role":7,"id":9,"state":"turn"}}}}}}
+{"server":{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"1","update":{"sessionUpdate":"session_info_update","_meta":{"thincoder.dev/subagent":{"role":"eng-coder","id":"9","state":"turn"}}}}}}
+{"expect":{"tasks":["subagent:eng-coder#1"],"items":["user: still there?","agent running: eng-coder#1 · turn 2/100"]}}
+{"server":{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"Yes."}}}}}
+{"server":{"jsonrpc":"2.0","id":"c3","result":{"stopReason":"end_turn"}}}
+{"expect":{"tasks":["subagent:eng-coder#1"],"items":["user: still there?","agent running: eng-coder#1 · turn 2/100","text: Yes."],"health":"ready"}}

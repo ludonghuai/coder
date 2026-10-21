@@ -1,13 +1,13 @@
-{"fixture": "tools", "cwd": "/project"}
-{"client": {"jsonrpc": "2.0", "id": "c1", "method": "initialize", "params": {"protocolVersion": 1, "clientCapabilities": {}}}}
-{"server": {"jsonrpc": "2.0", "id": "c1", "result": {"protocolVersion": 1, "agentCapabilities": {"loadSession": true, "sessionCapabilities": {"list": {}, "resume": {}, "delete": {}, "close": {}}}, "authMethods": [], "agentInfo": {"name": "thincoder", "version": "0.12.74"}}}}
-{"client": {"jsonrpc": "2.0", "id": "c2", "method": "session/new", "params": {"cwd": "/project"}}}
-{"server": {"jsonrpc": "2.0", "id": "c2", "result": {"sessionId": "1", "configOptions": [{"id": "mode", "name": "Mode", "type": "select", "currentValue": "normal", "options": [{"value": "normal", "name": "Normal"}, {"value": "plan", "name": "Plan"}]}]}}}
-{"turn": "run the tests"}
-{"client": {"jsonrpc": "2.0", "id": "c3", "method": "session/prompt", "params": {"sessionId": "1", "prompt": [{"type": "text", "text": "run the tests"}]}}}
-{"server": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "1", "update": {"sessionUpdate": "tool_call", "toolCallId": "t1", "title": "read", "kind": "read", "status": "in_progress", "rawInput": {"path": "test/a_test.dart"}, "content": [{"type": "content", "content": {"type": "text", "text": "{\"path\":\"test/a_test.dart\"}"}}]}}}}
-{"server": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "1", "update": {"sessionUpdate": "tool_call_update", "toolCallId": "t1", "status": "completed", "content": [{"type": "content", "content": {"type": "text", "text": "void main() {}"}}]}}}}
-{"server": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "1", "update": {"sessionUpdate": "tool_call", "toolCallId": "t2", "title": "bash", "kind": "execute", "status": "in_progress", "rawInput": {"command": "flutter test"}, "content": [{"type": "content", "content": {"type": "text", "text": "{\"command\":\"flutter test\"}"}}]}}}}
-{"server": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "1", "update": {"sessionUpdate": "tool_call_update", "toolCallId": "t2", "status": "failed", "content": [{"type": "content", "content": {"type": "text", "text": "3 tests failed"}}]}}}}
-{"server": {"jsonrpc": "2.0", "id": "c3", "result": {"stopReason": "end_turn"}}}
-{"expect": {"items": ["user: run the tests", "tool succeeded: read a_test.dart", "terminal failed: flutter test"]}}
+{"fixture":"tools","cwd":"/project"}
+{"client":{"jsonrpc":"2.0","id":"c1","method":"initialize","params":{"protocolVersion":1,"clientCapabilities":{}}}}
+{"server":{"jsonrpc":"2.0","id":"c1","result":{"protocolVersion":1,"agentCapabilities":{"loadSession":true,"sessionCapabilities":{"list":{},"resume":{},"delete":{},"close":{}}},"authMethods":[],"agentInfo":{"name":"thincoder","version":"0.12.74"}}}}
+{"client":{"jsonrpc":"2.0","id":"c2","method":"session/new","params":{"cwd":"/project"}}}
+{"server":{"jsonrpc":"2.0","id":"c2","result":{"sessionId":"1","configOptions":[{"id":"mode","name":"Mode","type":"select","currentValue":"normal","options":[{"value":"normal","name":"Normal"},{"value":"plan","name":"Plan"}]}]}}}
+{"turn":"run the tests"}
+{"client":{"jsonrpc":"2.0","id":"c3","method":"session/prompt","params":{"sessionId":"1","turnId":"turn-1","prompt":[{"type":"text","text":"run the tests"}]}}}
+{"server":{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"1","update":{"sessionUpdate":"tool_call","toolCallId":"t1","title":"read","kind":"read","status":"in_progress","rawInput":{"path":"test/a_test.dart"},"content":[{"type":"content","content":{"type":"text","text":"{\"path\":\"test/a_test.dart\"}"}}]}}}}
+{"server":{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"1","update":{"sessionUpdate":"tool_call_update","toolCallId":"t1","status":"completed","content":[{"type":"content","content":{"type":"text","text":"void main() {}"}}]}}}}
+{"server":{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"1","update":{"sessionUpdate":"tool_call","toolCallId":"t2","title":"bash","kind":"execute","status":"in_progress","rawInput":{"command":"flutter test"},"content":[{"type":"content","content":{"type":"text","text":"{\"command\":\"flutter test\"}"}}]}}}}
+{"server":{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"1","update":{"sessionUpdate":"tool_call_update","toolCallId":"t2","status":"failed","content":[{"type":"content","content":{"type":"text","text":"3 tests failed"}}]}}}}
+{"server":{"jsonrpc":"2.0","id":"c3","result":{"stopReason":"end_turn"}}}
+{"expect":{"items":["user: run the tests","tool succeeded: read a_test.dart","terminal failed: flutter test"]}}
