@@ -23,9 +23,13 @@ const _skipped = {
   '.next',
 };
 
-/// What [root] holds, as suggestions: refreshed at most every [cacheFor].
+/// What [root] holds, as suggestions: listed at most every [cacheFor], one
+/// listing at a time, and not at all for a query too short to narrow it.
 class ProjectSuggestions {
-  ProjectSuggestions({this.limit = 20, this.cacheFor = const Duration(seconds: 2)});
+  ProjectSuggestions({
+    this.limit = 20,
+    this.cacheFor = const Duration(seconds: 30),
+  });
 
   final int limit;
   final Duration cacheFor;
@@ -33,13 +37,19 @@ class ProjectSuggestions {
   String? _root;
   DateTime? _listedAt;
   List<String> _paths = const [];
+  Future<void>? _listing;
 
   /// The suggestions for [query] among [root]'s files (none when [root] is
   /// not a directory, or holds nothing to suggest).
+  ///
+  /// A project can be a folder of repositories: listing one is not done per
+  /// keystroke. Under two characters the host's own listing answers (the
+  /// composer asks both), and a listing past [cacheFor] is refreshed behind
+  /// the answer rather than in front of it.
   Future<List<FileSuggestion>> of(String? root, String query) async {
-    if (root == null) return const [];
-    await _refresh(root);
     final needle = query.trim().toLowerCase();
+    if (root == null || needle.length < 2) return const [];
+    await _refresh(root);
     final ranked = [
       for (final path in _paths) if (_matches(path, needle)) path,
     ]..sort((a, b) => _score(a, needle).compareTo(_score(b, needle)));
@@ -50,14 +60,17 @@ class ProjectSuggestions {
 
   Future<void> _refresh(String root) async {
     final now = DateTime.now();
-    if (_root == root &&
-        _listedAt != null &&
-        now.difference(_listedAt!) < cacheFor) {
-      return;
-    }
+    final age = _listedAt == null ? null : now.difference(_listedAt!);
+    final stale = _root != root || age == null || age >= cacheFor;
+    if (!stale) return;
+    final first = _root != root || _paths.isEmpty;
     _root = root;
     _listedAt = now;
-    _paths = await _list(root);
+    // One listing at a time; a later query joins it instead of starting one.
+    final listing = _listing ??= _list(root).then((paths) {
+      _paths = paths;
+    }).whenComplete(() => _listing = null);
+    if (first) await listing;
   }
 
   /// Every file under [root], relative and `/`-separated (folders of
@@ -66,7 +79,7 @@ class ProjectSuggestions {
   static Future<List<String>> _list(String root) async {
     final out = <String>[];
     Future<void> walk(Directory directory, String relative) async {
-      if (out.length >= 20000) return;
+      if (out.length >= 8000) return;
       final List<FileSystemEntity> entries;
       try {
         entries = await directory.list(followLinks: false).toList();
@@ -83,7 +96,7 @@ class ProjectSuggestions {
         } else {
           out.add(path);
         }
-        if (out.length >= 20000) return;
+        if (out.length >= 8000) return;
       }
     }
 

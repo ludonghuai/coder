@@ -2932,10 +2932,24 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
   /// The key after a first chord, before the focus sees it: upstream's
   /// keybinding service takes it wherever the focus is.
   KeyEventResult _onChordKey(KeyEvent event) {
+    if (event is KeyUpEvent || _modifierKeys.contains(event.logicalKey)) {
+      return KeyEventResult.ignored;
+    }
     final chord = _chord;
-    if (chord == null ||
-        event is KeyUpEvent ||
-        _modifierKeys.contains(event.logicalKey)) {
+    if (chord == null) {
+      // A chord's first key starts it here, before the focus sees it: a text
+      // field (the chat's input) stops every Ctrl key with
+      // `skipRemainingHandlers`, and a chord typed while writing would
+      // never begin. Only a prefix starts one — a whole binding is the
+      // field's to keep.
+      if (!_holdsKeys() || ChatKeys.isComposing) {
+        return KeyEventResult.ignored;
+      }
+      if (_resolveKey(event) case MoreChordsNeeded(:final chords)) {
+        _offeredKey = event;
+        _expectAnotherChord(chords);
+        return KeyEventResult.handled;
+      }
       return KeyEventResult.ignored;
     }
     // A key pressed in another window goes there: this one's chord would
