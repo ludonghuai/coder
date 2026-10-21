@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:path/path.dart' as p;
 import 'package:baocode/chat/chat_models.dart';
 import 'package:baocode/chat/chat_screen.dart';
 import 'package:baocode/chat/chat_session.dart';
@@ -289,7 +288,7 @@ void main() {
     await _paste(tester);
     expect(
       _content(tester),
-      'look at {@${p.join('lib', 'main.dart')}} {@${p.join('lib', 'chat')}${p.separator}} {@"/tmp/My Notes.txt"}',
+      'look at {@lib/main.dart} {@lib/chat/} {@"/tmp/My Notes.txt"}',
     );
     final controller = _controller(tester);
     expect(controller.selection.baseOffset, controller.document.length - 1);
@@ -354,7 +353,7 @@ void main() {
     );
     expect(await _drag(tester, 'drop', toolbar, files), isTrue);
     await tester.pump();
-    expect(_content(tester), 'hello world {@${p.join('lib', 'main.dart')}}');
+    expect(_content(tester), 'hello world {@lib/main.dart}');
 
     // The placeholder left nothing to undo; the drop is one step.
     final controller = _controller(tester);
@@ -402,7 +401,7 @@ void main() {
     expect(_hasGhost(tester), isTrue);
     await drag.up();
     await tester.pump();
-    expect(_content(tester), '{@${p.join('lib', 'chat')}${p.separator}}');
+    expect(_content(tester), '{@lib/chat/}');
   }, variant: _macOS);
 
   testWidgets('code copied from the IDE pastes as a tag of its lines, and '
@@ -420,7 +419,7 @@ void main() {
     _type(tester, 'why');
     await tester.pump();
     await _paste(tester);
-    expect(_content(tester), 'why {[${p.join('lib', 'main.dart')}:3-4]}');
+    expect(_content(tester), 'why {[lib/main.dart:3-4]}');
 
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pump();
@@ -430,9 +429,9 @@ void main() {
         .text;
     expect(
       sent,
-      'why [${p.join('lib', 'main.dart')}:3-4]\n'
+      'why [lib/main.dart:3-4]\n'
       '\n'
-      '[${p.join('lib', 'main.dart')}:3-4]\n'
+      '[lib/main.dart:3-4]\n'
       '```\n'
       'void main() {\n'
       '  runApp(App());\n'

@@ -58,9 +58,19 @@ import '../../workspace/chat_window_keys_test.dart' show press;
 import '../../workspace_test.dart' show pumpLoaded;
 import '../../kernel_ui_test.dart' show pumpScripted;
 
-/// A project's files, in memory.
+/// The host's spelling of the paths these tests write (`/p/...`): the panel
+/// joins paths with the host's separator, so what it returns is that.
+String _q(String path) => p.normalize(path);
+
+
+/// A project's files, in memory. Keys are held in the host's spelling, as
+/// the panel hands paths to it.
 class _Files implements IdeFileService {
-  _Files(this.texts);
+  _Files(Map<String, String> texts)
+    : texts = {
+        for (final MapEntry(:key, :value) in texts.entries)
+          _q(key): value,
+      };
 
   final Map<String, String> texts;
   final List<String> listed = [];
@@ -69,21 +79,22 @@ class _Files implements IdeFileService {
   @override
   Future<String> read(String path, {bool force = false}) async =>
       reader?.call(path) ??
-      texts[path] ??
+      texts[_q(path)] ??
       (throw IdeFileNotFoundException(path));
 
   @override
   Future<void> write(String path, String text, {String? expectedText}) async {
-    if (texts[path] != expectedText) throw IdeFileConflictException(path);
-    texts[path] = text;
+    if (texts[_q(path)] != expectedText) throw IdeFileConflictException(path);
+    texts[_q(path)] = text;
   }
 
   @override
   Future<List<IdeFile>> list(String directory) async {
     listed.add(directory);
+    final folder = _q(directory);
     return [
       for (final path in texts.keys)
-        if (p.dirname(path) == directory)
+        if (p.dirname(path) == folder)
           IdeFile(path, p.basename(path), isDirectory: false),
     ];
   }
@@ -339,7 +350,7 @@ void main() {
     expect(find.text('test  ·  Failed'), findsOneWidget);
     expect(find.textContaining('Output unavailable:'), findsOneWidget);
     expect(await _previewScreen(tester), 'command failed');
-    files.texts['/tmp/missing.output'] = 'recovered output';
+    files.texts[_q('/tmp/missing.output')] = 'recovered output';
     await tester.tap(find.byIcon(Codicons.refresh));
     await tester.pumpAndSettle();
     // Not what it showed with more: printed again, on a reset screen.
@@ -397,10 +408,10 @@ void main() {
     final listening = _previewTerminal(tester).output
         .listen((data) => printed.add(utf8.decode(data)));
     addTearDown(listening.cancel);
-    files.texts['/tmp/run.output'] = 'one\n';
+    files.texts[_q('/tmp/run.output')] = 'one\n';
     await tester.pump(const Duration(seconds: 1));
     expect(await _previewScreen(tester), 'one');
-    files.texts['/tmp/run.output'] = 'one\n\x1b[31mtwo\x1b[0m\n';
+    files.texts[_q('/tmp/run.output')] = 'one\n\x1b[31mtwo\x1b[0m\n';
     await tester.pump(const Duration(seconds: 1));
     expect(await _previewScreen(tester), 'one\ntwo');
     expect(printed.last, '\x1b[31mtwo\x1b[0m\n');
@@ -843,6 +854,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey(SidePanelSection.files)));
     await tester.pumpAndSettle();
     expect(find.byType(FilePreview), findsOneWidget);
+    // Opened by this test, given as written: kept as it is.
     expect(_active(panel, session)!.path, '/p/lib/main.dart');
     panel.width = AgentSidePanel.minWidth;
     await tester.pumpAndSettle();
@@ -865,7 +877,7 @@ void main() {
     expect(find.text('Select a file to preview it'), findsOneWidget);
     await tester.tap(find.descendant(of: list, matching: find.text('b.dart')));
     await tester.pumpAndSettle();
-    expect(_active(panel, session)!.path, '/p/b.dart');
+    expect(_active(panel, session)!.path, _q('/p/b.dart'));
     expect(_edited(tester).text, 'beta');
 
     // The list hides, and comes back as wide as dragged.
@@ -1069,7 +1081,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       [for (final tab in panel.tabsOf(session).diffs) tab.path],
-      ['/p/lib/staged.dart'],
+      [_q('/p/lib/staged.dart')],
     );
 
     // A row's menu stages it.
@@ -1195,13 +1207,16 @@ void main() {
     final second = find.textContaining('Second', findRichText: true);
     expect(second, findsOneWidget);
     expect(find.textContaining('First', findRichText: true), findsOneWidget);
-    const file = ValueKey('file:c2:/p/lib/main.dart');
+    final file = ValueKey('file:c2:${_q('/p/lib/main.dart')}');
     expect(find.byKey(file), findsNothing);
 
     await tester.tap(second);
     await tester.pumpAndSettle();
     // Under its folder, lib.
-    expect(find.byKey(const ValueKey('folder:c2:/p/lib')), findsOneWidget);
+    expect(
+      find.byKey(ValueKey('folder:c2:${_q('/p/lib')}')),
+      findsOneWidget,
+    );
     final changes = find.byKey(file).first;
     expect(tester.getSize(changes).height, IdeListColors.rowHeight);
     await tester.tap(
@@ -1218,7 +1233,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       [for (final tab in panel.tabsOf(session).files) tab.path],
-      ['/p/lib/main.dart'],
+      [_q('/p/lib/main.dart')],
     );
   });
 
@@ -1528,7 +1543,7 @@ void main() {
         await _previewScreen(tester),
         '\$ sleep 120 && echo one\nfirst output',
       );
-      files.texts['/tmp/one.output'] = 'first output\nnew output';
+      files.texts[_q('/tmp/one.output')] = 'first output\nnew output';
       await tester.pump(const Duration(seconds: 1));
       await tester.pump();
       expect(
@@ -1690,7 +1705,7 @@ void main() {
 
     expect(panel.shown, isTrue);
     final tab = _active(panel, session)!;
-    expect(tab.path, '/p/lib/main.dart');
+    expect(tab.path, _q('/p/lib/main.dart'));
     expect(tab.diff, isFalse);
     expect(tab.request.range, const FileLineRange(1, 562));
     expect(find.byType(FilePreview), findsOneWidget);
@@ -1714,7 +1729,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final tab = _active(panel, session)!;
-    expect(tab.path, '/p/lib/main.dart');
+    expect(tab.path, _q('/p/lib/main.dart'));
     expect(tab.diff, isTrue);
     // At its first change.
     expect(tab.request.range?.start, 143);
@@ -1734,7 +1749,7 @@ void main() {
     await tester.tap(find.text('lib/main.dart:142'));
     await tester.pumpAndSettle();
     final tab = _active(panel, session)!;
-    expect(tab.path, '/p/lib/main.dart');
+    expect(tab.path, _q('/p/lib/main.dart'));
     expect(tab.request.range, const FileLineRange(142));
   });
 
@@ -1821,7 +1836,7 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.keyS);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     await tester.pumpAndSettle();
-    expect(files.texts['/p/a.dart'], 'alpha!');
+    expect(files.texts[_q('/p/a.dart')], 'alpha!');
     expect(tab.dirty, isFalse);
     expect(dot, findsNothing);
   });
@@ -1839,7 +1854,7 @@ void main() {
       ..selectAll()
       ..replaceSelection('mine');
     await tester.pump();
-    files.texts['/p/a.dart'] = 'theirs';
+    files.texts[_q('/p/a.dart')] = 'theirs';
 
     final close = find.descendant(
       of: find.byType(TabStripScroll),
@@ -1867,7 +1882,7 @@ void main() {
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
     // Not saved over theirs: open still, saying why.
-    expect(files.texts['/p/a.dart'], 'theirs');
+    expect(files.texts[_q('/p/a.dart')], 'theirs');
     expect(_active(panel, session), same(tab));
     expect(find.textContaining('changed on disk'), findsOneWidget);
 
@@ -1876,7 +1891,7 @@ void main() {
     await tester.tap(find.text("Don't Save"));
     await tester.pumpAndSettle();
     expect(_active(panel, session), isNull);
-    expect(files.texts['/p/a.dart'], 'theirs');
+    expect(files.texts[_q('/p/a.dart')], 'theirs');
   });
 
   testWidgets('the same file opens in its tab again; tabs close', (
@@ -1910,7 +1925,7 @@ void main() {
     _tapSpan(tester, 'the screen');
     await tester.pumpAndSettle();
     final tab = _active(panel, session)!;
-    expect(tab.path, '/p/lib/chat_screen.dart');
+    expect(tab.path, _q('/p/lib/chat_screen.dart'));
     expect(tab.request.range, const FileLineRange(4, 6));
     // The caret at the lines' start.
     final edited = _edited(tester);
@@ -1918,7 +1933,7 @@ void main() {
 
     _tapSpan(tester, 'notes');
     await tester.pumpAndSettle();
-    expect(_active(panel, session)!.path, '/p/docs/release notes.md');
+    expect(_active(panel, session)!.path, _q('/p/docs/release notes.md'));
   });
 
   testWidgets('inline code naming a file is a link once the file is known '
@@ -1934,7 +1949,7 @@ void main() {
     _tapSpan(tester, 'lib/main.dart:12');
     await tester.pumpAndSettle();
     final tab = _active(panel, session)!;
-    expect(tab.path, '/p/lib/main.dart');
+    expect(tab.path, _q('/p/lib/main.dart'));
     expect(tab.request.range, const FileLineRange(12));
   });
 
@@ -1992,7 +2007,7 @@ void main() {
     await tester.tap(find.byType(ToolCallRow).first);
     expect(opened, isEmpty);
     await tester.tap(find.byType(ToolCallRow).last);
-    expect([for (final request in opened) request.path], ['/p/a.dart']);
+    expect([for (final request in opened) request.path], [_q('/p/a.dart')]);
   });
 
   testWidgets('the side panel is toggled from the title bar, and kept shown '

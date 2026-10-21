@@ -1,7 +1,7 @@
 # 2026-10-20 · 测试策略批：平台专属红与夹具依赖红的统一处置
 > 六段 append-only，一段一作者：§1 讨论（主 agent）· §2 批次任务与设计（eng-designer）· §3 设计评审（评审子代理）· §4 用户批准（主 agent）· §5 实施记录（eng-coder）· §6 验证与收口（父代理）。
 > 编制：主 agent · 2026-10-20 · 来源 = 用户 2026-10-20 21:11「按原计划继续走测试」；台账 #109（上游 Windows 平台红 22 条）+ #101（workbench 13 + lsp/install 15）。
-> 台账 = #116（ide · 归批）。前情 = 无（独立批；输入 = #109 / #101）。
+> 台账 = #109 · #101（ide · 归批）。前情 = 无（独立批）。
 ## §1 讨论（主 agent）
 **状态行**：🔄 进行中（…）
 <§1 模板占位：本批条目 / 关键判据 / 授权口径>
@@ -33,6 +33,21 @@
 - **撤回**（`git checkout` 还原，stash 已 drop，复跑 `composer_files_test` 17/17 绿）——显示口径是用户可见的产品决定，不由测试批顺手改。**待用户裁定**：聊天/输入框里的项目内路径显示 `/`（跨平台一致，与消息正文里的链接一致）还是 `\`（宿主拼写）。
 
 **现状**：`test/chat` 17 红 = 8 条既有平台红（`code_citation` 3 · `composer_files` 4 · `content_image` 1，与本轮无关，两态对照已验）+ `side_panel_test` 9 条（差在内部路径断言与 diff CRLF）。
+
+**第三轮（22:05–23:15）**：用户裁定 **A（路径显示 `/`）** 后落地，`test/chat` 全部转绿。
+
+| 改动 | 读数 |
+|---|---|
+| `displayPath` 项目内相对路径统一 `/`（`lib/chat/composer/composer_files.dart:55`） | 输入框 chip / `@` 引用 / 回退对话框显示名；复制路径仍走 `paths.relative`（宿主拼写，粘终端正确） |
+| `composer_files_test` 四条断言改新契约（`:292/:357/:405/:423/:433`） | **17/17 绿** |
+| `side_panel_test`：`_q`（宿主拼写）+ 夹具 `_Files` 按宿主归一 + 输出路径 `_q` | **45/45 绿**（原 10 红） |
+| `code_citation_test`：root/期望按宿主；一条着色用例在 Windows 上测不到目标 ⇒ 平台跳过 | **28/28 绿**（原 3 红；跳过 1 条已入账 #117） |
+| `content_image_test`：项目内图片路径期望归一 | **绿**（原 1 红） |
+| `ide_standalone_test`：临时文件 `p.join` | **15/15 绿**（原 1 红，且需 `import package:path`) |
+
+**总读数**：`test/chat` **540/540 全绿**（本轮开始 17 红）；`test/ide/ide_standalone_test` 15/15；`test/ide/lsp/install` 12 绿 + 整档按平台跳过；`analyze`（test/chat + ide_standalone + composer_files）No issues。
+
+**仍红（本批未处置）**：`test/ide/workbench` 14 条（`color_theme_picker` 10 · `explorer_exclude` 2 · `problems`/`tabs` 各 1）——首条断在「第二段 chord 没打开 `IdeQuickInput`」，根因未定；`macOS ⌘` 一条的键表读宿主、`debugDefaultTargetPlatformOverride` 覆盖不到。
 
 ## §2 批次任务与设计（eng-designer）
 **状态行**：（eng-designer 写入时更新）

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_quill/flutter_quill.dart';
+import 'package:path/path.dart' as p;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:baocode/chat/widgets/pixel_loader.dart';
 import 'package:baocode/chat/chat_screen.dart';
@@ -75,7 +76,7 @@ void main() {
       'the agent told of it', (tester) async {
     final folder = Directory.systemTemp.createTempSync('baocode-loose-file');
     addTearDown(() => folder.deleteSync(recursive: true));
-    final file = File('${folder.path}/CN2-GIA.conf')
+    final file = File(p.join(folder.path, 'CN2-GIA.conf'))
       ..writeAsStringSync('[general]\nudp_drop_list = 443\n');
     final workspace = await _pumpApp(tester);
     await _showIde(tester, workspace);

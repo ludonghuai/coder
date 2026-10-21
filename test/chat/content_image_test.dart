@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:ui' as ui;
+import 'package:path/path.dart' as p;
 
 import 'package:baocode/chat/chat_models.dart';
 import 'package:baocode/chat/composer/composer_embeds.dart' show FileImageChip;
@@ -537,7 +538,7 @@ void main() {
 
     testWidgets('of the project shows', (tester) async {
       await pump(tester, '看这张：\n\n![首页](shots/home.png)');
-      expect(read, ['/p/shots/home.png']);
+      expect(read, [p.normalize('/p/shots/home.png')]);
       expect(find.byType(ContentImage), findsOneWidget);
     });
 

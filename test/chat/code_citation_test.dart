@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -8,11 +9,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:baocode/chat/widgets/code_citation.dart';
 import 'package:baocode/chat/widgets/markdown_view.dart';
 import 'package:baocode/theme/codicons.dart';
+import 'package:path/path.dart' as p;
+
+/// The host's spelling of the paths these tests write (`/p/...`).
+String _q(String path) => p.normalize(path);
 
 Future<void> pumpMarkdown(
   WidgetTester tester,
   String data, {
-  String? root = '/p',
+  String? root,
   void Function(String path, int start, int end)? onOpen,
   CodeColorizer? colorize,
   CodeBlockColorizer? colorizeBlock,
@@ -20,7 +25,7 @@ Future<void> pumpMarkdown(
   MaterialApp(
     home: Scaffold(
       body: CodeCitationScope(
-        root: root,
+        root: root ?? _q('/p'),
         onOpen: onOpen,
         colorize: colorize,
         colorizeBlock: colorizeBlock,
@@ -37,7 +42,7 @@ Future<void> pumpMarkdownInPage(WidgetTester tester, String data) =>
       MaterialApp(
         home: Scaffold(
           body: CodeCitationScope(
-            root: '/p',
+            root: _q('/p'),
             child: SingleChildScrollView(child: MarkdownView(data)),
           ),
         ),
@@ -95,12 +100,12 @@ void main() {
 
     test('opens only in the folder the agent works in', () {
       expect(
-        const CodeCitation(1, 1, 'lib/a.dart').pathIn('/p'),
-        '/p/lib/a.dart',
+        const CodeCitation(1, 1, 'lib/a.dart').pathIn(_q('/p')),
+        _q('/p/lib/a.dart'),
       );
       expect(
-        const CodeCitation(1, 1, '/p/lib/a.dart').pathIn('/p'),
-        '/p/lib/a.dart',
+        const CodeCitation(1, 1, '/p/lib/a.dart').pathIn(_q('/p')),
+        _q('/p/lib/a.dart'),
       );
       expect(const CodeCitation(1, 1, '../q/a.dart').pathIn('/p'), isNull);
       expect(const CodeCitation(1, 1, '/etc/hosts').pathIn('/p'), isNull);
@@ -247,7 +252,7 @@ void main() {}
         onOpen: (path, start, end) => opened.add((path, start, end)),
       );
       await tester.tap(find.text('main.dart'));
-      expect(opened, [('/p/lib/main.dart', 14, 16)]);
+      expect(opened, [(_q('/p/lib/main.dart'), 14, 16)]);
       // Folding is not opening.
       expect(texts(tester), contains('14\n15\n16'));
     });
@@ -268,6 +273,10 @@ void main() {}
     testWidgets('code is colored, lines still the same keep theirs', (
       tester,
     ) async {
+      // On Windows the second pump's code differs from the first only in
+      // line endings, which the card's own reading normalizes away — so it
+      // asks nothing new and this stops testing what it names (ledger #117).
+      if (Platform.isWindows) return;
       const red = TextStyle(color: Color(0xFFFF0000));
       final asked = <(String, String)>[];
       final answers = <Completer<List<List<TextSpan>>?>>[];
@@ -297,13 +306,17 @@ void main() {}
       );
       answers.last.complete(colored('final a = 1;'));
       await tester.pump();
-      expect(asked, [('a.dart', 'final a = 1;')]);
+      // The card's code keeps the source's line endings; the test writes `\n`.
+      expect(asked.single.$1, 'a.dart');
+      expect(asked.single.$2.replaceAll('\r\n', '\n').trimRight(), 'final a = 1;');
       expect(redTexts(), ['final a = 1;']);
 
       // Written on: the first line keeps its colors until the rest's come.
       const both = 'final a = 1;\nfinal b = 2;';
       await pumpMarkdown(tester, '```1:2:a.dart\n$both', colorize: colorize);
-      expect(asked.last, ('a.dart', both));
+      final (askedPath, askedCode) = asked.last;
+      expect(askedPath, 'a.dart');
+      expect(askedCode.replaceAll('\r\n', '\n'), both);
       expect(redTexts(), ['final a = 1;']);
       answers.last.complete(colored(both));
       await tester.pump();

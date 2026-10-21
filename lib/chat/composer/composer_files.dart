@@ -51,10 +51,12 @@ class FileDragData {
 bool Function(String path) pastedAsPicture = (_) => false;
 
 /// [path] as the composer shows and sends it: from the project's [root]
-/// when it is in the project, else as it is.
+/// when it is in the project, else as it is. Separators are `/`, as the
+/// message text writes them — on Windows a chip reads `lib/main.dart`
+/// beside a link that says the same.
 String displayPath(String path, String? root) {
   if (root == null || !p.isWithin(root, path)) return path;
-  return p.relative(path, from: root);
+  return p.posix.joinAll(p.split(p.relative(path, from: root)));
 }
 
 /// A file or folder as a message's text refers to it: `@lib/main.dart`, a
