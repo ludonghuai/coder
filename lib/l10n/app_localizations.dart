@@ -5342,6 +5342,24 @@ abstract class AppLocalizations {
   /// **'Remove from the queue'**
   String get queuedRemove;
 
+  /// No description provided for @stopConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop the agent?'**
+  String get stopConfirmMessage;
+
+  /// No description provided for @stopConfirmDetail.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{The task running in the background will stop too.} other{The {count} tasks running in the background will stop too.}}'**
+  String stopConfirmDetail(int count);
+
+  /// No description provided for @stopConfirmStop.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop'**
+  String get stopConfirmStop;
+
   /// No description provided for @tabClose.
   ///
   /// In en, this message translates to:
@@ -10956,8 +10974,14 @@ abstract class AppLocalizations {
   /// No description provided for @modelsRoleSubagentDescription.
   ///
   /// In en, this message translates to:
-  /// **'CLAUDE_CODE_SUBAGENT_MODEL: the model every subagent runs on, over the one its definition or the agent\'s call names (but inherit).'**
+  /// **'CLAUDE_CODE_SUBAGENT_MODEL: the model every subagent runs on, over the one its definition or the agent\'s call names (but inherit). It may be another upstream\'s: BaoCode\'s local proxy sends its requests there.'**
   String get modelsRoleSubagentDescription;
+
+  /// Under a role that picks another upstream's model, once that upstream or model is gone.
+  ///
+  /// In en, this message translates to:
+  /// **'This model is no longer one of its upstream\'s: subagents\' requests to it will fail.'**
+  String get modelsRoleMissing;
 
   /// No description provided for @modelsAdvanced.
   ///
@@ -14235,6 +14259,30 @@ abstract class AppLocalizations {
   /// **'While the agent works, a line under the reply with how long the turn has taken, how fast the model writes and the tokens so far, changing as it goes. The figures under a finished turn always show.'**
   String get generalSettingsLiveTurnStatsDescription;
 
+  /// No description provided for @usageLimitScheduled.
+  ///
+  /// In en, this message translates to:
+  /// **'Usage limit reached · continues automatically after it resets at {time}'**
+  String usageLimitScheduled(String time);
+
+  /// No description provided for @usageLimitTomorrow.
+  ///
+  /// In en, this message translates to:
+  /// **'tomorrow {time}'**
+  String usageLimitTomorrow(String time);
+
+  /// No description provided for @resumeAfterResetPrompt.
+  ///
+  /// In en, this message translates to:
+  /// **'The usage limit has reset. Continue where you left off.'**
+  String get resumeAfterResetPrompt;
+
+  /// No description provided for @resumeAfterLimitToggle.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue After Limit Reset'**
+  String get resumeAfterLimitToggle;
+
   /// No description provided for @stashPolishFailed.
   ///
   /// In en, this message translates to:
@@ -16448,6 +16496,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Once the page says it\'s done, BaoCode continues on its own. Closed the page by mistake? Open it again.'**
   String get channelSetupWaiting;
+
+  /// No description provided for @channelSetupOpenFailedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your browser didn\'t open'**
+  String get channelSetupOpenFailedTitle;
+
+  /// No description provided for @channelSetupOpenFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy this address and open it in your browser. Once the page says it\'s done, BaoCode continues on its own.'**
+  String get channelSetupOpenFailed;
+
+  /// No description provided for @channelSetupAddressCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Copied'**
+  String get channelSetupAddressCopied;
 
   /// No description provided for @channelSetupOffline.
   ///

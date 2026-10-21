@@ -3124,6 +3124,23 @@ class AppLocalizationsEn extends AppLocalizations {
   String get queuedRemove => 'Remove from the queue';
 
   @override
+  String get stopConfirmMessage => 'Stop the agent?';
+
+  @override
+  String stopConfirmDetail(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'The $count tasks running in the background will stop too.',
+      one: 'The task running in the background will stop too.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get stopConfirmStop => 'Stop';
+
+  @override
   String get tabClose => 'Close';
 
   @override
@@ -6755,7 +6772,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get modelsRoleSubagentDescription =>
-      'CLAUDE_CODE_SUBAGENT_MODEL: the model every subagent runs on, over the one its definition or the agent\'s call names (but inherit).';
+      'CLAUDE_CODE_SUBAGENT_MODEL: the model every subagent runs on, over the one its definition or the agent\'s call names (but inherit). It may be another upstream\'s: BaoCode\'s local proxy sends its requests there.';
+
+  @override
+  String get modelsRoleMissing =>
+      'This model is no longer one of its upstream\'s: subagents\' requests to it will fail.';
 
   @override
   String get modelsAdvanced => 'Advanced';
@@ -8750,6 +8771,23 @@ class AppLocalizationsEn extends AppLocalizations {
       'While the agent works, a line under the reply with how long the turn has taken, how fast the model writes and the tokens so far, changing as it goes. The figures under a finished turn always show.';
 
   @override
+  String usageLimitScheduled(String time) {
+    return 'Usage limit reached · continues automatically after it resets at $time';
+  }
+
+  @override
+  String usageLimitTomorrow(String time) {
+    return 'tomorrow $time';
+  }
+
+  @override
+  String get resumeAfterResetPrompt =>
+      'The usage limit has reset. Continue where you left off.';
+
+  @override
+  String get resumeAfterLimitToggle => 'Continue After Limit Reset';
+
+  @override
   String stashPolishFailed(String error) {
     return 'Could not polish: $error';
   }
@@ -10060,6 +10098,16 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get channelSetupWaiting =>
       'Once the page says it\'s done, BaoCode continues on its own. Closed the page by mistake? Open it again.';
+
+  @override
+  String get channelSetupOpenFailedTitle => 'Your browser didn\'t open';
+
+  @override
+  String get channelSetupOpenFailed =>
+      'Copy this address and open it in your browser. Once the page says it\'s done, BaoCode continues on its own.';
+
+  @override
+  String get channelSetupAddressCopied => 'Copied';
 
   @override
   String get channelSetupOffline =>

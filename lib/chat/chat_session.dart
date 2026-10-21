@@ -66,7 +66,9 @@ class ModelSettingChoice {
     this.toggle = false,
   });
 
-  final KernelChoiceKind kind;
+  /// The kernel's setting it is; null for the app's own, shown beside them
+  /// (`chat.resumeAfterLimitReset`, in the model picker).
+  final KernelChoiceKind? kind;
   final List<KernelOption> options;
 
   /// What is in effect, or would stay so with the model picked; null
@@ -546,6 +548,28 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
       unawaited(kernel.refreshUsage());
     }
   }
+
+  /// When the usage limit the agent stopped at resets (see
+  /// [ReportsUsageLimit]); null with none hit, and while a turn runs.
+  DateTime? get usageLimitResetsAt => switch (_kernel) {
+    ReportsUsageLimit(:final usageLimitResetsAt) when !isStreaming =>
+      usageLimitResetsAt,
+    _ => null,
+  };
+
+  /// Whether the next message is held to the account's usage limit: not
+  /// once on another provider's model.
+  bool get usageLimitApplies => switch (_kernel) {
+    ReportsUsageLimit(:final usageLimitApplies) => usageLimitApplies,
+    _ => true,
+  };
+
+  /// Whether an agent on [model] can go on by itself once the usage limit
+  /// it stopped at resets: on the account's own plan, which says when.
+  bool continuesAfterLimit(String model) => switch (_kernel) {
+    final ReportsUsageLimit kernel => kernel.usageLimitAppliesTo(model),
+    _ => false,
+  };
 
   /// Whether pictures sent with a message are taken: by the protocol
   /// ([AcceptsImages]), or as files it is told of ([AcceptsImageFiles]).

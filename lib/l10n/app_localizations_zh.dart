@@ -3009,6 +3009,22 @@ class AppLocalizationsZh extends AppLocalizations {
   String get queuedRemove => '移出队列';
 
   @override
+  String get stopConfirmMessage => '要停止 Agent 吗？';
+
+  @override
+  String stopConfirmDetail(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '后台运行中的 $count 个任务也会一并停止。',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get stopConfirmStop => '停止';
+
+  @override
   String get tabClose => '关闭';
 
   @override
@@ -6337,7 +6353,10 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get modelsRoleSubagentDescription =>
-      'CLAUDE_CODE_SUBAGENT_MODEL：所有子 Agent 使用的模型，优先于子 Agent 定义或调用时指定的模型（定义为 inherit 的除外）。';
+      'CLAUDE_CODE_SUBAGENT_MODEL：所有子 Agent 使用的模型，优先于子 Agent 定义或调用时指定的模型（定义为 inherit 的除外）。也可以选其他上游的模型，请求会经 BaoCode 的本地代理发过去。';
+
+  @override
+  String get modelsRoleMissing => '这个模型已不在它的上游里，子 Agent 的请求会失败。';
 
   @override
   String get modelsAdvanced => '高级';
@@ -8261,6 +8280,22 @@ class AppLocalizationsZh extends AppLocalizations {
       '运行中在回复下方实时显示本轮耗时、输出速度和已输出的 token。一轮结束后的统计始终显示';
 
   @override
+  String usageLimitScheduled(String time) {
+    return '已达到用量上限，将在 $time 重置后自动继续';
+  }
+
+  @override
+  String usageLimitTomorrow(String time) {
+    return '明天 $time';
+  }
+
+  @override
+  String get resumeAfterResetPrompt => '用量已重置，请从中断的地方继续。';
+
+  @override
+  String get resumeAfterLimitToggle => '限额重置后自动继续';
+
+  @override
   String stashPolishFailed(String error) {
     return '没能润色：$error';
   }
@@ -9512,6 +9547,15 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get channelSetupWaiting => '网页显示完成后，这里会自动继续。不小心关掉了网页，可以重新打开。';
+
+  @override
+  String get channelSetupOpenFailedTitle => '浏览器没有打开';
+
+  @override
+  String get channelSetupOpenFailed => '复制下面的网址，粘贴到浏览器里打开。网页显示完成后，这里会自动继续。';
+
+  @override
+  String get channelSetupAddressCopied => '已复制';
 
   @override
   String get channelSetupOffline => '连不上 baocode.dev，需要联网才能完成设置。';
