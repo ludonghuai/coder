@@ -2,6 +2,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 import 'package:baocode/ide/ide_breadcrumbs.dart';
 import 'package:baocode/ide/ide_explorer.dart';
 import 'package:baocode/ide/ide_hover.dart';
@@ -117,7 +118,8 @@ void main() {
     await pumpWorkbench(tester, files, open: ['lib/util.dart', 'a.dart']);
     await _menu(tester, 'util.dart', 'Copy Relative Path');
     await _menu(tester, 'util.dart', 'Copy Path');
-    expect(copied, ['lib/util.dart', inRoot('lib/util.dart')]);
+    // Copied for a terminal: the host's spelling (what a paste there needs).
+    expect(copied, [p.join('lib', 'util.dart'), inRoot('lib/util.dart')]);
 
     // The explorer follows the active editor: a.dart is selected now.
     await tester.pumpAndSettle();

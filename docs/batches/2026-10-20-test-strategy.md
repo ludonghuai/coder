@@ -49,6 +49,19 @@
 
 **仍红（本批未处置）**：`test/ide/workbench` 14 条（`color_theme_picker` 10 · `explorer_exclude` 2 · `problems`/`tabs` 各 1）——首条断在「第二段 chord 没打开 `IdeQuickInput`」，根因未定；`macOS ⌘` 一条的键表读宿主、`debugDefaultTargetPlatformOverride` 覆盖不到。
 
+**第四轮（23:01–次日 00:10）：workbench 14 红清零，其中一条是产品缺陷。**
+
+**根因（探针实测，`_onChordKey` 打印 `holds=false` 每次按键）**：`IdeWorkbenchState._holdsKeys()`（`lib/ide/ide_workbench.dart:2917`）判断焦点归属只认「焦点在本节点的后代或祖先里」，**不认本节点自己持有焦点**。工作台自己的节点拿到焦点时（聊天/编辑器都没占焦点），`Ctrl+K` 起手生效，第二个键被当成「别的窗口的键」丢弃 ⇒ `Ctrl+K Ctrl+T` 打不开主题选择器。修法 = 加 `identical(focus, _workbenchFocus)`（4 行，可回滚）。
+
+**其余三处是测试侧**：
+- `tabs_explorer_test`：Copy Relative Path 断言宿主拼写（与「复制路径按宿主、显示按 `/`」的口径一致）。
+- `panel_keys_test`：剪贴板是 JSON，路径里的 `\` 被转义 ⇒ 期望值用 `jsonEncode(inRoot(...))`。
+- `explorer_exclude_test`：`IdeExplorerController(paths: p.posix)` 与夹具的宿主拼写根冲突（树 math 用 posix 算 `dirname`）⇒ 改 `p.context`（排除规则本身两侧都归一 `\`→`/`，逻辑未动）。
+
+**读数**：`test/ide/workbench` **334/334 绿**（原 14 红）；`test/chat` 540/540；`test/ide/lsp/install` 12 绿 + 1 档按平台跳过；`analyze`（workbench + ide_workbench）无新问题。
+
+**范围外（未处置）**：`test/ide` 其余 ~50 条既有红（`ide_workspace_model` 10 · `native_editor_integration` 9 · `textmate_editor` 9 · `ide_editor_keys` 8 …），本轮未触碰；`ide_standalone` 单独跑绿、并跑红（并行共享状态），已入账 #118。
+
 ## §2 批次任务与设计（eng-designer）
 **状态行**：（eng-designer 写入时更新）
 <§2 模板占位：本批条目（覆盖） / 设计档落点 / 机制设计 / 受影响文件与测试覆盖 / 验收对照 / 关键决策 / 上抛项>

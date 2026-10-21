@@ -1,4 +1,6 @@
 import 'package:flutter/services.dart';
+import 'dart:convert' show jsonEncode;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:baocode/ide/lsp/lsp_protocol.dart';
 import 'package:baocode/keybindings/keybinding_service.dart';
@@ -106,7 +108,11 @@ void main() {
     expect(state.keyContext('problemFocus'), isTrue);
     await press(tester, LogicalKeyboardKey.keyC, primary: true);
     expect(copied, hasLength(1));
-    expect(copied.single, startsWith('[{\n\t"resource": "${inRoot(_b)}"'));
+    // The clipboard holds JSON: separators escaped as JSON escapes them.
+    expect(
+      copied.single,
+      startsWith('[{\n\t"resource": ${jsonEncode(inRoot(_b))}'),
+    );
     expect(copied.single, contains('"message": "Info in b"'));
     expect(copied.single, contains('"severity": 2'));
     expect(copied.single, contains('"startColumn": 5'));

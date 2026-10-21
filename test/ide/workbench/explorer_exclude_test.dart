@@ -26,7 +26,7 @@ void main() {
       files: TreeFiles({
         for (final MapEntry(:key, :value) in files.entries) inRoot(key): value,
       }),
-      paths: p.posix,
+      paths: p.context,
       excludes: excludes,
       watch: (_) => const Stream.empty(),
     );

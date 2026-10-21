@@ -2918,8 +2918,12 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
     if (!mounted || !widget.visible) return false;
     final focus = FocusManager.instance.primaryFocus;
     if (focus == null) return false;
-    if (!(focus.ancestors.contains(_workbenchFocus) ||
-        _workbenchFocus.ancestors.contains(focus))) {
+    // The workbench's own node holding the focus is this window's too: with
+    // nothing inside it focused (the chat beside it, an editor), the node
+    // itself takes it, and a chord would otherwise start and be dropped.
+    if (!identical(focus, _workbenchFocus) &&
+        !focus.ancestors.contains(_workbenchFocus) &&
+        !_workbenchFocus.ancestors.contains(focus)) {
       return false;
     }
     return ModalRoute.isCurrentOf(context) ?? true;
