@@ -9904,4 +9904,10 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get revertTurnInFlight => '回合进行中，暂时不能回退';
+
+  @override
+  String get rewindNotInThisRun => '这条消息不能编辑——只能编辑本次运行中发送的消息';
+
+  @override
+  String get rewindTurnInFlight => '回合进行中，暂时不能编辑';
 }

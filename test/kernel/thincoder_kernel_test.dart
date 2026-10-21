@@ -32,6 +32,7 @@ import 'package:baocode/kernel/thincoder/thincoder_protocol.dart';
 import 'package:baocode/kernel/thincoder/thincoder_session_ref.dart';
 import 'package:baocode/kernel/thincoder/thincoder_transport.dart';
 import 'package:baocode/kernel/transcript.dart';
+import 'package:baocode/l10n/l10n.dart';
 import 'package:baocode/platform/event_log.dart';
 
 /// The kernel's descriptor, as the registry gives it (not made here).
@@ -318,7 +319,7 @@ void main() {
       expect(s.kernel, isNot(isA<StartsPlans>()));
       expect(s.kernel, isNot(isA<RunsBackgroundTasks>()));
       expect(s.kernel, isA<QueuesMessages>());
-      expect(s.kernel, isNot(isA<RewindsConversation>()));
+      expect(s.kernel, isA<RewindsConversation>());
       expect(s.kernel, isA<RenamesSession>());
       expect(s.kernel, isA<PlansReverts>());
       expect(s.kernel, isA<GeneratesTitles>());
@@ -4129,6 +4130,114 @@ void main() {
       await settle();
     });
   });
+
+  group('rewinding (A2)', () {
+    Future<_Session> ready({ThincoderMock Function()? make}) async {
+      final s = _Session(make: make);
+      addTearDown(s.dispose);
+      s.kernel.prepare();
+      await settle();
+      return s;
+    }
+
+    List<NoticeItem> errors(_Session s) => [
+      for (final item in s.items<NoticeItem>())
+        if (item.kind == NoticeKind.error) item,
+    ];
+
+    test('T1: a rewind names the turn alone, and the host is cut there '
+        '(§3.3)', () async {
+      final s = await ready();
+      final rewound = await s.kernel.rewind(
+          itemId: 't-2', index: 3, turns: 2, lastSeen: 't-3');
+      expect(rewound, isTrue);
+      final writes = s.agent.requests('session/rewind');
+      expect(writes, hasLength(1));
+      expect(writes.single['params'], {'sessionId': '1', 'turnId': 't-2'});
+      expect(s.agent.requests('session/prompt'), isEmpty);
+      expect(s.events.whereType<Rewound>(), hasLength(1));
+      expect(errors(s), isEmpty);
+    });
+
+    test('T5: a rewind drops what waited behind the cut, unsent (§3.3)',
+        () async {
+      final s = await ready(
+          make: () => ThincoderMock(serialInbound: true)
+            ..hold = Completer<void>());
+      s.send('go');
+      await settle();
+      expect(s.transcript.activeTurn, 'turn-1');
+
+      s.send('later', id: 'turn-2'); // A turn runs: it waits its own.
+      await settle();
+      expect(s.transcript.queued.map((q) => q.$1), ['turn-2']);
+
+      expect(await s.kernel.rewind(itemId: 'turn-1', index: 0, turns: 1),
+          isTrue);
+      await settle();
+      expect(s.transcript.queued, isEmpty); // Dropped, not sent.
+
+      s.agent.release();
+      await s.agent.finished.future;
+      await settle();
+
+      expect(s.agent.requests('session/prompt'), hasLength(1));
+      expect(s.shown, isNot(contains('user: later')));
+    });
+
+    test('T2: a turn of another run is turned down, with one notice '
+        '(D-SG24)', () async {
+      final s = await ready(
+          make: () => ThincoderMock(serialInbound: true)..rewindUnknown = true);
+      final rewound = await s.kernel.rewind(itemId: 'old', index: 0, turns: 1);
+      expect(rewound, isFalse);
+      expect(s.agent.requests('session/rewind'), hasLength(1));
+      expect(errors(s).single.text, englishLocalizations.rewindNotInThisRun);
+      expect(s.agent.requests('session/prompt'), isEmpty);
+      expect(s.transcript.length, 1); // The notice alone: nothing moved.
+    });
+
+    test('T4: a turn under way is turned down with its own notice (§3.3)',
+        () async {
+      final s = await ready(
+          make: () => ThincoderMock(serialInbound: true)..rewindBusy = true);
+      final rewound = await s.kernel.rewind(itemId: 't-1', index: 0, turns: 1);
+      expect(rewound, isFalse);
+      expect(errors(s).single.text, englishLocalizations.rewindTurnInFlight);
+      expect(s.transcript.length, 1);
+    });
+
+    test('T3: an edit stops, rewinds, and sends only once it went back',
+        () async {
+      Future<(ChatSession, _EditKernel)> open() async {
+        final kernel = _EditKernel();
+        final descriptor = KernelDescriptor(
+            id: 'edit', label: 'edit', icon: Icons.smart_toy_outlined,
+            description: 'Edits for the test', create: (_) => kernel);
+        final session = ChatSession(
+            kernel: descriptor, kernels: [descriptor], historyCount: 0);
+        addTearDown(session.dispose);
+        session.send(const ComposerMessage(text: 'first'));
+        await settle();
+        return (session, kernel);
+      }
+
+      final (rewound, kernel) = await open();
+      expect(rewound.canEditMessages, isTrue);
+      rewound.editMessage(0, const ComposerMessage(text: 'second'));
+      expect(kernel.calls, ['send', 'stop', 'rewind']);
+      kernel.rewinding!.complete(true);
+      await settle();
+      expect(kernel.calls, ['send', 'stop', 'rewind', 'send']);
+
+      final (turnedDown, refused) = await open();
+      turnedDown.editMessage(0, const ComposerMessage(text: 'second'));
+      expect(refused.calls, ['send', 'stop', 'rewind']);
+      refused.rewinding!.complete(false);
+      await settle();
+      expect(refused.calls, ['send', 'stop', 'rewind']);
+    });
+  });
 }
 
 /// The host's files as one that cannot be read at all: a binary file's.
@@ -4140,4 +4249,51 @@ class _BinaryFiles implements KernelFiles {
   @override
   Future<String?> writeText(String path, String text) async =>
       throw IdeBinaryFileException(path);
+}
+
+/// A kernel that only goes back, and in what order (§3.3).
+class _EditKernel implements AgentKernel, RewindsConversation {
+  /// What it was asked: send, stop, rewind.
+  final List<String> calls = [];
+  /// What [rewind] waits on, for the test to answer.
+  Completer<bool>? rewinding;
+  final _events = StreamController<KernelEvent>.broadcast();
+
+  @override
+  KernelDescriptor get descriptor => _descriptor;
+  @override
+  Stream<KernelEvent> get events => _events.stream;
+  @override
+  KernelHealth get health => const KernelHealth(KernelHealthStatus.ready);
+  @override
+  String? get sessionId => 's-1';
+
+  @override
+  void send(KernelTurn turn) {
+    calls.add('send');
+    _events.add(ItemUpserted(1, turn.id, UserMessageItem(text: turn.text)));
+  }
+
+  @override
+  void cancel() => calls.add('stop');
+
+  @override
+  Future<bool> rewind({required String itemId, required int index,
+      required int turns, String? lastSeen}) {
+    calls.add('rewind');
+    return (rewinding = Completer<bool>()).future;
+  }
+
+  @override
+  void answer(String requestId, InteractionAnswer answer) {}
+  @override
+  void restart() {}
+  @override
+  void prepare() {}
+  @override
+  void release() {}
+  @override
+  void dispose() => unawaited(_events.close());
+  @override
+  Future<void> get stopped => Future.value();
 }

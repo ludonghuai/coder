@@ -7278,5 +7278,9 @@
   "revertNothingToRevert": "Nothing to revert.",
   "@revertNothingToRevert": {"description": "Said when the turn has no changes to revert."},
   "revertTurnInFlight": "Unavailable while a turn is running",
-  "@revertTurnInFlight": {"description": "The tooltip of a revert entry while a turn runs: the revert has to wait."}
+  "@revertTurnInFlight": {"description": "The tooltip of a revert entry while a turn runs: the revert has to wait."},
+  "rewindNotInThisRun": "This message cannot be edited — only messages sent in this run can be.",
+  "@rewindNotInThisRun": {"description": "Said when a message cannot be edited: only messages sent in this run can be."},
+  "rewindTurnInFlight": "Cannot edit while a turn is running",
+  "@rewindTurnInFlight": {"description": "Said when a message cannot be edited while a turn runs."}
 }

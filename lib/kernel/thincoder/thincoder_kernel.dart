@@ -10,6 +10,7 @@ import 'package:path/path.dart' as p;
 import '../../chat/chat_models.dart';
 import '../../host_tools/host_mcp_server.dart';
 import '../../host_tools/host_tools.dart';
+import '../../l10n/l10n.dart';
 import '../../models/model_provider.dart';
 import '../../platform/event_log.dart';
 import '../agent_kernel.dart';
@@ -33,8 +34,8 @@ part 'thincoder_choices.dart';
 /// its modes and settings are what it reports them to be, and pictures go
 /// to files the agent is told of, or as native image blocks (F6 / F19).
 ///
-/// What it does not have — plans as cards, forks, rewind, background
-/// tasks — it does not declare, and the UI leaves those parts out.
+/// What it does not have — plans as cards, forks, background tasks — it
+/// does not declare, and the UI leaves those parts out.
 class ThincoderKernel
     with KernelEventSource
     implements
@@ -52,6 +53,7 @@ class ThincoderKernel
         QueuesMessages,
         RenamesSession,
         PlansReverts,
+        RewindsConversation,
         GeneratesTitles,
         DefersRename {
   ThincoderKernel(
@@ -949,6 +951,53 @@ class ThincoderKernel
     ItemUpserted(nextSeq, 'revert:$sinceTurn',
         NoticeItem(NoticeKind.error, 'Could not revert: $reason')),
   );
+
+  // --- Rewinding --------------------------------------------------------------
+
+  @override
+  Future<bool> rewind({
+    required String itemId,
+    required int index,
+    required int turns,
+    String? lastSeen,
+  }) async {
+    // index / turns / lastSeen are the host transcript's own: the agent cuts
+    // at the turn id, and the host is cut here with Rewound (§3.3).
+    final connection = _connection, slot = _slot;
+    if (connection == null || slot == null) {
+      _rewindFailed(itemId, 'Could not rewind: no session to rewind in');
+      return false;
+    }
+    try {
+      await connection.request('session/rewind', {
+        'sessionId': slot,
+        'turnId': itemId,
+      });
+      emit(Rewound(nextSeq, itemId: itemId, index: index));
+      // What waited behind the cut is dropped: it would run after the new turn.
+      for (final turn in [..._queue, ?_next]) {
+        emit(ItemRemoved(nextSeq, turn.id));
+      }
+      _queue.clear(); _next = null;
+      return true;
+    } on ThincoderRpcError catch (error) {
+      // A turn of another run and one that never was are one code (D-SG24);
+      // a turn under way is its own.
+      _rewindFailed(itemId, switch (error.code) {
+        -32602 => englishLocalizations.rewindNotInThisRun,
+        -32002 => englishLocalizations.rewindTurnInFlight,
+        _ => 'Could not rewind: $error',
+      });
+      return false;
+    } on Object catch (error) {
+      _rewindFailed(itemId, 'Could not rewind: $error');
+      return false;
+    }
+  }
+
+  /// Says why an edit did not go back (§9): the host's path is silent on false.
+  void _rewindFailed(String itemId, String text) =>
+      emit(ItemUpserted(nextSeq, 'rewind:$itemId', NoticeItem(NoticeKind.error, text)));
 
   // --- Approvals --------------------------------------------------------------
 

@@ -17084,6 +17084,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Unavailable while a turn is running'**
   String get revertTurnInFlight;
+
+  /// Said when a message cannot be edited: only messages sent in this run can be.
+  ///
+  /// In en, this message translates to:
+  /// **'This message cannot be edited — only messages sent in this run can be.'**
+  String get rewindNotInThisRun;
+
+  /// Said when a message cannot be edited while a turn runs.
+  ///
+  /// In en, this message translates to:
+  /// **'Cannot edit while a turn is running'**
+  String get rewindTurnInFlight;
 }
 
 class _AppLocalizationsDelegate

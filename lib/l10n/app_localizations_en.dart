@@ -10470,4 +10470,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get revertTurnInFlight => 'Unavailable while a turn is running';
+
+  @override
+  String get rewindNotInThisRun => 'This message cannot be edited — only messages sent in this run can be.';
+
+  @override
+  String get rewindTurnInFlight => 'Cannot edit while a turn is running';
 }

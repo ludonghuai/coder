@@ -82,6 +82,12 @@ class ThincoderMock implements ThincoderTransport {
   /// Answers `session/revert` with `-32602` (an unknown turn).
   bool revertUnknown = false;
 
+  /// Answers `session/rewind` with `-32602` (a turn of another run).
+  bool rewindUnknown = false;
+
+  /// Answers `session/rewind` with `-32002` (a turn under way).
+  bool rewindBusy = false;
+
   /// Says its handshake takes HTTP MCP servers (`mcpCapabilities`), as the
   /// CLI with the forwarding face does.
   final bool httpMcp;
@@ -353,6 +359,10 @@ class ThincoderMock implements ThincoderTransport {
           false => revertApply ?? revertPlan,
         };
         _respond(id, answer ?? _noRevert);
+      case 'session/rewind':
+        if (rewindBusy) return _error(id, -32002, 'a turn is in flight');
+        if (rewindUnknown) return _error(id, -32602, 'unknown turn');
+        _respond(id, const {});
       case 'session/prompt':
         unawaited(_prompt(id, '${params['sessionId']}'));
       case 'session/cancel':

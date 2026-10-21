@@ -2837,5 +2837,7 @@
   "revertSummarySkipped": "{count, plural, =0{没有跳过文件} =1{跳过了 1 个文件} other{跳过了 {count} 个文件}}",
   "revertSummaryUnrevertable": "{count, plural, =0{没有无法回退的文件} =1{1 个文件无法回退} other{{count} 个文件无法回退}}",
   "revertNothingToRevert": "无可回退。",
-  "revertTurnInFlight": "回合进行中，暂时不能回退"
+  "revertTurnInFlight": "回合进行中，暂时不能回退",
+  "rewindNotInThisRun": "这条消息不能编辑——只能编辑本次运行中发送的消息",
+  "rewindTurnInFlight": "回合进行中，暂时不能编辑"
 }
