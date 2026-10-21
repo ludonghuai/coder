@@ -1,7 +1,7 @@
 # 会话治理（session-governance）需求
 
 > 板块：会话治理（`lib/chat` 的会话面 + `lib/kernel` 的能力门 + ACP 会话方法）· 范围仓：baocode（含声明的 thincoder 检出）。
-> 状态：需求（用户 2026-10-20 00:02「拆两拨做吧，允许 rename」）· A1（rename + revert）已收口；A2（rewind，F3）= 本批，设计已过评审、待实施。
+> 状态：需求（用户 2026-10-20 00:02「拆两拨做吧，允许 rename」）· A1（rename + revert）已收口 · A2（rewind，F3）已收口（会话治理 A2 批，2026-10-20）。
 > 来源：用户 2026-10-19 23:56 起「我们如何安排任务」→ 差距表会话治理行（Claude 有 fork/回退/重命名，thincoder 只有存档级 list/load/resume）→ 用户裁定拆两拨并允许动外仓。
 
 ## 1. 模块目标

@@ -23,3 +23,18 @@
 ## §4 用户批准（主 agent）
 ## §5 实施记录（eng-coder）
 ## §6 验证与收口（父代理）
+
+**验收读数**
+
+| 项 | 命令 | 结果 |
+|---|---|---|
+| `@` 建议（新档） | `flutter test test/kernel/thincoder_suggestions_test.dart` | **6/6 绿** |
+| thincoder 内核非回归 | `flutter test test/kernel/thincoder_kernel_test.dart` | **141/141 绿** |
+| 聊天面非回归 | `flutter test test/chat` | **540/540 绿** |
+| 静态 | `flutter analyze`（thincoder 内核面 + 新测试） | No issues |
+
+**待用户走查**：重启 dev 实例后在 thincoder 会话输入 `@` 看建议是否出现；在工程模式点 plan 看是否出一条可见提示（原为静默）。
+
+**提交**：`5f9df260`。
+
+**范围外（已入账）**：#119 `thincoder_fixtures_test` 13 红（夹具缺 A1 起携带的 `turnId`）+ `dart_core_e2e_test` 1 红，两态对照确认与本笔无关。

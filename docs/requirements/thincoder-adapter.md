@@ -176,11 +176,15 @@ thincoder 将来补能力 → 改能力映射表（§5）+ 适配层小改即可
 | 历史载入 `LoadsHistory` | `loadSession` + `session/load` | ✅ |
 | 图片 `AcceptsImages` | `promptCapabilities.image: true`（批 11 起；B1 例外） | ✅ 原生 image 块（§22）；旧 CLI / 缺位 ⇒ F6 替代 |
 | 图片文件面（接口 `AcceptsImageFiles`） | 图片落盘 `<cwd>/.thincoder/tmp/` + 消息附路径行（F6） | ✅ |
-| 会话改名 `RenamesSession` | 无 | ❌ |
-| fork / 对话回退 / 文件回退 | 无 | ❌ |
-| 后台任务 / 排队消息控制 | 无 | ❌ |
+| 会话改名 `RenamesSession` | `session/set_title` | ✅ |
+| fork（对话分叉） | 无 | ❌ |
+| 对话回退（rewind：编辑已发消息） | `session/rewind`（会话治理 A2） | ✅ |
+| 文件 / 回合级回退（`PlansReverts`：先出计划再执行） | `session/revert`（dryRun = 计划） | ✅（会话治理 A1） |
+| 排队消息控制 `QueuesMessages` | 无（内核本地队列，回合尾排水） | ✅ |
+| 后台任务控制 `RunsBackgroundTasks` | 无 | ❌ |
 | 账号用量与限额 `ReportsUsage` | 无 | ❌ |
-| 命令列表 / 文件建议 / 建议提示 | 无 | ❌ |
+| 文件建议 `SuggestsFiles` | 无（桌面本地列目录，不向 agent 请求） | ✅ |
+| 命令列表 / 提示建议 | 无 | ❌ |
 | MCP 连接管理 `ManagesMcpServers` | 无（面板面走 F9 文件管理） | ❌ |
 | `context` / `fast` 档 | 无 | ❌ |
 
@@ -192,8 +196,7 @@ thincoder 将来补能力 → 改能力映射表（§5）+ 适配层小改即可
 
 **B1 默认不改 thincoder 仓**——本适配默认落本仓；ACP 给不了的能力默认不通过改 thincoder 补。**例外**：接口面必要且最小的改动，经用户裁定、保持上游可合并（F12 / 批 5 先例：用户 2026-10-16「允许动仓，保留拉代码的能力」）。
 **B1 例外状态**：`host-tool-channel` 批（2026-10-18）要动 `thincoder/`（MCP forwarding + `permissionExempt` 信任位；外仓约 +170 行）——用户 2026-10-18 20:08「对，一定要实现宿主工具通道」+ 20:40 批准开工；保持上游可合并。
-**B2** 上表 ❌ 各项首版不做：多文件夹工作区、对话 fork、对话/文件回退、后台任务控制、排队消息控制、
-MCP 连接管理、账号用量、@文件建议、prompt 建议、命令列表、会话改名、`context`/`fast` 档、effort 多档。
+**B2** 上表 ❌ 各项首版不做：多文件夹工作区、对话 fork、后台任务控制、MCP 连接管理、账号用量、命令列表、提示建议、`context`/`fast` 档、effort 多档。
 **B3** 不代管 provider / key：thincoder 配置由用户终端自理，桌面端只读取使用。
 **B4** 不做会话在两内核间迁移（内核会话格式不通；既有「对话开始即锁定内核」语义不变）。
 
