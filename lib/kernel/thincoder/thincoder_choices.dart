@@ -178,6 +178,18 @@ Future<void> _setModeOf(ThincoderKernel kernel, String mode) async {
     });
   } on Object catch (error) {
     appEvent('thincoder', 'set_mode($mode) failed: $error');
+    // The picker offered it; the agent refused it (e.g. plan in engineering
+    // mode). Said where the picker was, not only in the log.
+    kernel.emit(
+      ItemUpserted(
+        kernel.nextSeq,
+        'error:mode',
+        NoticeItem(
+          NoticeKind.error,
+          'The mode was not switched to $mode: $error',
+        ),
+      ),
+    );
   }
 }
 

@@ -22,6 +22,7 @@ import 'thincoder_locator.dart';
 import 'thincoder_process.dart';
 import 'thincoder_protocol.dart';
 import 'thincoder_session_ref.dart';
+import 'thincoder_suggestions.dart';
 import 'thincoder_transport.dart';
 
 part 'thincoder_choices.dart';
@@ -55,6 +56,7 @@ class ThincoderKernel
         PlansReverts,
         RewindsConversation,
         GeneratesTitles,
+        SuggestsFiles,
         DefersRename {
   ThincoderKernel(
     this.descriptor,
@@ -1176,6 +1178,13 @@ class ThincoderKernel
   Future<void> _config(String configId, Object? value) =>
       _configOf(this, configId, value);
 
+  // --- Mention suggestions ----------------------------------------------------
+  /// The project's files for the composer's `@` menu: the kernel runs where
+  /// the project lives, so it lists them itself (no request to the agent).
+  final _suggestions = ProjectSuggestions();
+  @override
+  Future<List<FileSuggestion>> suggestFiles(String query) =>
+      _suggestions.of(_context.cwd, query);
   // --- Pictures ---------------------------------------------------------------
 
   /// The most one picture may be, as the terminal takes them
