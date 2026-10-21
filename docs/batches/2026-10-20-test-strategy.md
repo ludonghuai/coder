@@ -27,6 +27,13 @@
 
 **读数（逐档跑）**：上述三档 + lsp 目录全绿；`test/chat/side_panel` 合计由 22 红降至 11 红。
 
+**第二轮（21:32–21:50）**：探到一条**产品面决定**，按轻重缓急退回未改：
+
+- 试改 `displayPath`（`lib/chat/composer/composer_files.dart:55`）让输入框 chip / `@` 引用在 Windows 也显示 `lib/main.dart`（现为 `lib\main.dart`）。改后 `side_panel_test` 10 红 → 9 红，但 `composer_files_test` **17/17 → 4 红**（该档四条断言旧契约：宿主拼写）。
+- **撤回**（`git checkout` 还原，stash 已 drop，复跑 `composer_files_test` 17/17 绿）——显示口径是用户可见的产品决定，不由测试批顺手改。**待用户裁定**：聊天/输入框里的项目内路径显示 `/`（跨平台一致，与消息正文里的链接一致）还是 `\`（宿主拼写）。
+
+**现状**：`test/chat` 17 红 = 8 条既有平台红（`code_citation` 3 · `composer_files` 4 · `content_image` 1，与本轮无关，两态对照已验）+ `side_panel_test` 9 条（差在内部路径断言与 diff CRLF）。
+
 ## §2 批次任务与设计（eng-designer）
 **状态行**：（eng-designer 写入时更新）
 <§2 模板占位：本批条目（覆盖） / 设计档落点 / 机制设计 / 受影响文件与测试覆盖 / 验收对照 / 关键决策 / 上抛项>
