@@ -35,7 +35,9 @@ import 'package:baocode/kernel/thincoder/thincoder_transport.dart';
 import 'package:baocode/kernel/thincoder/thincoder_warm.dart';
 import 'package:baocode/kernel/transcript.dart';
 import 'package:baocode/l10n/l10n.dart';
+import 'package:baocode/platform/data_dir.dart';
 import 'package:baocode/platform/event_log.dart';
+import 'package:bao_remote/local.dart' show ClaudeEnvironment;
 
 /// The kernel's descriptor, as the registry gives it (not made here).
 final _descriptor = KernelDescriptor(
@@ -4613,6 +4615,130 @@ void main() {
     expect(s.kernel.model.options.map((option) => option.id), [
       'openai:gpt-5',
     ]);
+  });
+
+  group('the runtime the distribution carries (F23, §26)', () {
+    late Directory root;
+    late DataDirectory previousData;
+    late Map<String, String> environment;
+
+    setUp(() {
+      root = Directory.systemTemp.createTempSync('thincoder-runtime');
+      EventLog.current = EventLog(p.join(root.path, 'logs'));
+      previousData = DataDirectory.current;
+      DataDirectory.current = DataDirectory(p.join(root.path, 'data'));
+      environment = {'PATH': '', 'HOME': root.path};
+      ClaudeEnvironment.use(environment);
+    });
+
+    tearDown(() {
+      DataDirectory.current = previousData;
+      EventLog.current = null;
+      ThincoderPathSetting.current = () => null;
+      ThincoderLocator.candidatesOverride = null;
+      ThincoderLocator.executableDirectoryOverride = null;
+      ThincoderLocator.isMacOverride = null;
+      ClaudeEnvironment.use(null);
+      if (root.existsSync()) root.deleteSync(recursive: true);
+    });
+
+    /// The runtime a distribution carries, beside [app]; answers the CLI's
+    /// entry file.
+    String putRuntime(String app) {
+      final runtime = p.join(app, 'runtime');
+      final entry = File(p.join(runtime, 'thincoder', 'bin', 'thincoder.cjs'))
+        ..parent.createSync(recursive: true)
+        ..writeAsStringSync('');
+      File(p.join(runtime, 'node', 'node.exe'))
+        ..parent.createSync(recursive: true)
+        ..writeAsStringSync('');
+      return entry.path;
+    }
+
+    /// What the terminal's log says, the lines with [text].
+    List<String> logged(String text) {
+      final file = File(p.join(root.path, 'logs', 'events.log'));
+      if (!file.existsSync()) return const [];
+      return [
+        for (final line in file.readAsLinesSync())
+          if (line.contains(text)) line,
+      ];
+    }
+
+    /// A kernel whose start records what the locator handed it, a scripted
+    /// agent standing in for the process it would have started.
+    Future<List<ThincoderLaunch>> started() async {
+      final launches = <ThincoderLaunch>[];
+      final kernel = ThincoderKernel(
+        _descriptor,
+        const KernelContext(cwd: '/project'),
+        start: (launch) async {
+          launches.add(launch);
+          return ThincoderMock(serialInbound: true);
+        },
+      );
+      addTearDown(kernel.dispose);
+      kernel.prepare();
+      await settle();
+      return launches;
+    }
+
+    test('T113 / T115a: the kernel starts the runtime the app carries, and '
+        'the log says so', () async {
+      final app = p.join(root.path, 'app');
+      Directory(app).createSync(recursive: true);
+      final entry = putRuntime(app);
+      ThincoderLocator.executableDirectoryOverride = app;
+      ThincoderLocator.isMacOverride = false;
+      var asked = 0;
+      ThincoderLocator.candidatesOverride = (_) {
+        asked++;
+        return const [];
+      };
+
+      final launches = await started();
+
+      expect(launches, hasLength(1));
+      expect(p.basename(launches.single.executable), 'node.exe');
+      expect(launches.single.arguments, [entry, 'acp']);
+      expect(
+        launches.single.environment[ThincoderLocator.configDirVariable],
+        DataDirectory.current.thincoderDataDir,
+      );
+      // What Settings → Models (thincoder) resolves its file from, the
+      // same environment: the page writes the file the CLI reads.
+      expect(
+        await ThincoderLocator.environment(),
+        equals(launches.single.environment),
+      );
+      expect(asked, 0, reason: 'the PATH is not looked at');
+      expect(logged('launch: builtin'), [contains(entry)]);
+    });
+
+    test('T112 / T115b: with no runtime the kernel hands over the environment '
+        'it always did', () async {
+      final app = p.join(root.path, 'app');
+      Directory(app).createSync(recursive: true);
+      ThincoderLocator.executableDirectoryOverride = app;
+      ThincoderLocator.isMacOverride = false;
+      final installed = File(p.join(root.path, 'bin', 'thincoder'))
+        ..parent.createSync(recursive: true)
+        ..writeAsStringSync('');
+      ThincoderLocator.candidatesOverride = (_) => [installed.path];
+
+      final launches = await started();
+
+      expect(launches, hasLength(1));
+      expect(launches.single.executable, installed.path);
+      expect(launches.single.environment, equals(environment));
+      expect(
+        launches.single.environment.containsKey(
+          ThincoderLocator.configDirVariable,
+        ),
+        isFalse,
+      );
+      expect(logged('launch: path'), [contains(installed.path)]);
+    });
   });
 }
 

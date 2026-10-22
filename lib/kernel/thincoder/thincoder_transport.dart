@@ -34,13 +34,14 @@ abstract final class ThincoderExit {
   };
 }
 
-/// How to start thincoder for one session: where it runs, which build, and
-/// the environment it runs in (the login shell's, as the user's terminal
-/// has it).
+/// How to start thincoder for one session: where it runs, which build, what
+/// it is started with, and the environment it runs in (the login shell's,
+/// as the user's terminal has it).
 class ThincoderLaunch {
   const ThincoderLaunch({
     required this.cwd,
     required this.executable,
+    this.arguments = const [command],
     this.environment = const {},
   });
 
@@ -51,6 +52,11 @@ class ThincoderLaunch {
 
   /// The thincoder to run.
   final String executable;
+
+  /// What [executable] is started with: [command] alone, or — for the build
+  /// a distribution carries — the CLI's entry file and [command] (node runs
+  /// the file).
+  final List<String> arguments;
 
   /// What it runs with.
   final Map<String, String> environment;
@@ -63,6 +69,7 @@ class ThincoderLaunch {
       ThincoderLaunch(
         cwd: cwd,
         executable: executable,
+        arguments: arguments,
         environment: {...environment, ...added},
       );
 }

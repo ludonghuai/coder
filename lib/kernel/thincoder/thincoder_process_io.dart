@@ -85,7 +85,7 @@ class ThincoderProcess implements ThincoderTransport {
     try {
       final process = await Process.start(
         launch.executable,
-        const [ThincoderLaunch.command],
+        launch.arguments,
         workingDirectory: launch.cwd,
         // The login shell's environment is the whole of it; on Windows it
         // is the app's own, and the child needs the parent's beside it for

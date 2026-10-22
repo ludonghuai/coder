@@ -49,6 +49,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
+
 /// Where the .app flutter leaves behind goes, and where the disk image is
 /// written. Under build/, which the repository already ignores and flutter
 /// clean already removes.
@@ -73,6 +75,45 @@ const _remoteReleaseRelative = 'build/remote-release';
 
 /// The browser's native messaging host, beside the app's executable.
 const _browserHost = 'baocode-browser-host';
+
+/// The Node.js release the runtime carries, the SHA-256 of its macOS
+/// tarballs, and the version of the thincoder source tree it is built from:
+/// checked against these constants, not against each other (as
+/// tool/build_windows.dart does). Both architectures' node go in, lipo'd
+/// into one binary that `ditto --arch` thins with each app.
+const _nodeVersion = 'v24.11.1';
+const _nodeSha256 = {
+  'arm64': 'b05aa3a66efe680023f930bd5af3fdbbd542794da5644ca2ad711d68cbd4dc35',
+  'x64': '096081b6d6fcdd3f5ba0f5f1d44a47e83037ad2e78eada26671c252fe64dd111',
+};
+const _thincoderVersion = '0.12.76';
+const _thincoderFiles = ['bin', 'src', 'package.json', 'LICENSE'];
+const _runtimeRequired = [
+  'Contents/Resources/runtime/node/node',
+  'Contents/Resources/runtime/thincoder/bin/thincoder.cjs',
+  'Contents/Resources/runtime/thincoder/LICENSE',
+  'Contents/Resources/runtime/THIRD-PARTY-NOTICES.txt',
+];
+
+/// The licenses the runtime carries beside the CLI's own (`LICENSE`), which
+/// the app ships as they are: what a distribution has to say about what it
+/// includes.
+const _notices =
+    '''
+BaoCode's thincoder runtime
+
+runtime/thincoder is the thincoder CLI, MIT licensed; its license is in
+runtime/thincoder/LICENSE.
+
+runtime/thincoder/node_modules/@thincoder/core is @thincoder/core, MIT
+licensed; its license is in that folder's LICENSE.
+
+runtime/node/node is Node.js $_nodeVersion, MIT licensed, with the licenses
+of what it is built from inside it. Node.js's own license and its
+third-party notices are published at
+https://github.com/nodejs/node/blob/main/LICENSE and in the release it came
+from, https://nodejs.org/dist/$_nodeVersion/.
+''';
 
 /// What has to be in the .app for it to start. As on Windows, a build that
 /// failed late still leaves an .app behind that looks complete — these are
@@ -166,8 +207,14 @@ Future<void> main(List<String> arguments) async {
     Directory('${bundle.path}/Contents/Resources/remote'),
   );
 
+  _step(
+    'Putting in the thincoder runtime $_thincoderVersion '
+    '(Node.js $_nodeVersion)',
+  );
+  await _putRuntime(root, bundle);
+
   _step('Checking the app');
-  _checkBundle(bundle, _required);
+  _checkBundle(bundle, [..._required, ..._runtimeRequired]);
   await _checkUniversal(bundle);
   // An app built before pubspec.yaml's version changed (--skip-build) would
   // be shipped as the new version, and offered as an update to itself.
@@ -389,6 +436,7 @@ class _Signing {
       }
     }
     await sign('${app.path}/Contents/MacOS/$_browserHost');
+    await sign('${app.path}/Contents/Resources/runtime/node/node');
     await sign(
       '${app.path}/Contents/PlugIns/FinderExtension.appex',
       entitlements: 'macos/FinderExtension/FinderExtension.entitlements',
@@ -494,6 +542,144 @@ String _bundleRemote(Directory remote, Directory target) {
   return File('${remote.path}/VERSION').readAsStringSync().trim();
 }
 
+/// Puts the runtime the app carries in Contents/Resources/runtime/: node
+/// from the release [_nodeVersion] pins — both architectures' own, lipo'd
+/// into one universal binary that `ditto --arch` thins with the app — the
+/// thincoder source tree from the repository, and the licenses it carries.
+/// Both versions are checked against this script's constants; not verified
+/// on a Mac yet (§26.14 U7).
+Future<void> _putRuntime(Directory root, Directory bundle) async {
+  final source = Directory('${root.path}/thincoder/thincoder-cli');
+  final package = File('${source.path}/package.json');
+  if (!package.existsSync()) {
+    _fail('No ${package.path} to build the runtime from.');
+  }
+  final declared = (jsonDecode(
+    package.readAsStringSync(),
+  ) as Map<String, Object?>)['version'];
+  if (declared != _thincoderVersion) {
+    _fail(
+      'The thincoder source tree is $declared; this script expects\n'
+      '$_thincoderVersion. Update _thincoderVersion when the tree moves.',
+    );
+  }
+
+  final runtime = Directory('${bundle.path}/Contents/Resources/runtime');
+  if (runtime.existsSync()) runtime.deleteSync(recursive: true);
+  final target = Directory('${runtime.path}/thincoder');
+  target.createSync(recursive: true);
+  for (final name in _thincoderFiles) {
+    final from = '${source.path}/$name';
+    final to = '${target.path}/$name';
+    switch (FileSystemEntity.typeSync(from)) {
+      case FileSystemEntityType.directory:
+        _copyTree(Directory(from), Directory(to));
+      case FileSystemEntityType.file:
+        File(from).copySync(to);
+      default:
+        _fail('No $from in the thincoder source tree.');
+    }
+  }
+  // `@thincoder/core`, where the CLI's bare imports find it: npm's own
+  // layout, node_modules/@thincoder/core.
+  _copyTree(
+    Directory('${root.path}/thincoder/thincoder-core'),
+    Directory('${target.path}/node_modules/@thincoder/core'),
+  );
+
+  final node = File('${runtime.path}/node/node');
+  node.parent.createSync(recursive: true);
+  final binaries = [
+    for (final arch in _nodeSha256.keys) await _nodeBinary(root, arch),
+  ];
+  await _run('lipo', [
+    '-create',
+    for (final binary in binaries) binary.path,
+    '-output',
+    node.path,
+  ], root.path);
+  await _run('chmod', ['755', node.path], root.path);
+  File('${runtime.path}/THIRD-PARTY-NOTICES.txt').writeAsStringSync(_notices);
+
+  // What was copied runs, and says the version this script expects.
+  final result = await Process.run(node.path, [
+    '${target.path}/bin/thincoder.cjs',
+    '--version',
+  ], workingDirectory: root.path);
+  final reported = RegExp(r'\d+\.\d+\.\d+')
+      .firstMatch('${result.stdout}\n${result.stderr}')
+      ?.group(0);
+  if (result.exitCode != 0 || reported != _thincoderVersion) {
+    _fail(
+      'The runtime runs thincoder $reported (exit ${result.exitCode}); this\n'
+      'script expects $_thincoderVersion.\n'
+      '${result.stdout}\n${result.stderr}',
+    );
+  }
+  stdout.writeln('  runtime/node/node ran thincoder $reported.');
+}
+
+/// Node's own `node` for [arch], from the release [_nodeVersion] pins:
+/// downloaded into build/node-macos once, checked against [_nodeSha256].
+Future<File> _nodeBinary(Directory root, String arch) async {
+  final cache = Directory('${root.path}/build/node-macos');
+  final tarball = File('${cache.path}/node-$_nodeVersion-darwin-$arch.tar.gz');
+  String sha256Of(File file) =>
+      sha256.convert(file.readAsBytesSync()).toString();
+  if (!tarball.existsSync() || sha256Of(tarball) != _nodeSha256[arch]) {
+    final url = Uri.parse(
+      'https://nodejs.org/dist/$_nodeVersion/'
+      'node-$_nodeVersion-darwin-$arch.tar.gz',
+    );
+    stdout.writeln('  Downloading $url');
+    cache.createSync(recursive: true);
+    final client = HttpClient();
+    try {
+      final response = await (await client.getUrl(url)).close();
+      if (response.statusCode != 200) {
+        _fail('$url answered ${response.statusCode}.');
+      }
+      await response.pipe(tarball.openWrite());
+    } finally {
+      client.close();
+    }
+    if (sha256Of(tarball) != _nodeSha256[arch]) {
+      tarball.deleteSync();
+      _fail(
+        'The Node.js download is not the one this script expects.\n'
+        'After choosing another release, update _nodeVersion and\n'
+        '_nodeSha256 in this script.',
+      );
+    }
+  }
+  final unpacked = Directory('${cache.path}/$arch');
+  if (unpacked.existsSync()) unpacked.deleteSync(recursive: true);
+  unpacked.createSync(recursive: true);
+  await _run('tar', ['-xzf', tarball.path, '-C', unpacked.path], root.path);
+  final node = File(
+    '${unpacked.path}/node-$_nodeVersion-darwin-$arch/bin/node',
+  );
+  if (!node.existsSync()) _fail('No node in the Node.js release for $arch.');
+  return node;
+}
+
+/// Copies every file of [from] into [to], making the folders they are in.
+void _copyTree(Directory from, Directory to) {
+  if (!from.existsSync()) _fail('No ${from.path} to put in the runtime.');
+  final base = from.path;
+  to.createSync(recursive: true);
+  for (final entity in from.listSync(recursive: true)) {
+    final path = '${to.path}/${entity.path.substring(base.length + 1)}';
+    if (entity is Directory) {
+      Directory(path).createSync(recursive: true);
+    } else if (entity is File) {
+      final file = File(path);
+      file.parent.createSync(recursive: true);
+      entity.copySync(path);
+    }
+  }
+}
+
 /// The version pubspec.yaml carries, as `1.0.0+1`: the whole of it, the part
 /// the app shows (CFBundleShortVersionString), and the build number after it
 /// (CFBundleVersion).
@@ -513,12 +699,15 @@ String _bundleRemote(Directory remote, Directory target) {
 }
 
 /// The executables in [app]: its own, the browser's host, the Finder
-/// extension's, and each framework's.
+/// extension's, each framework's, and the Node.js the runtime carries.
 List<String> _executables(Directory app) => [
   '${app.path}/Contents/MacOS/BaoCode',
   '${app.path}/Contents/MacOS/$_browserHost',
   '${app.path}/Contents/PlugIns/FinderExtension.appex/Contents/MacOS/'
       'FinderExtension',
+  // The runtime's node: one universal binary, thinned with the app
+  // (`_putRuntime`), or it is not there at all.
+  '${app.path}/Contents/Resources/runtime/node/node',
   // A framework's executable is named as the framework: X.framework/X.
   for (final framework in Directory(
     '${app.path}/Contents/Frameworks',

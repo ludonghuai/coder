@@ -120,6 +120,11 @@ class DataDirectory {
   /// error_log.dart).
   String get logsDir => p.join(path, 'logs');
 
+  /// What the built-in thincoder runtime keeps — its config, sessions and
+  /// logs — apart from the user's `~/.thincoder` (see
+  /// lib/kernel/thincoder/thincoder_locator.dart).
+  String get thincoderDataDir => p.join(path, 'runtime-data', 'thincoder');
+
   /// Installed theme extensions, as VS Code lays them out
   /// (`publisher.name-version/`, `extensions.json`).
   String get extensionsDir => p.join(path, 'extensions');
@@ -140,6 +145,7 @@ class DataDirectory {
     'argv.json',
     'keymaps',
     'state',
+    'runtime-data',
     'servers',
     'language-packs',
     'checkpoints',

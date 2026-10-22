@@ -28,10 +28,17 @@
 // remote projects where the system's ssh is too old to ask for a password
 // (Windows 10's 8.1): downloaded once into build\openssh\ and checked.
 //
+// It carries the thincoder runtime too (runtime\): node.exe from the Node.js
+// release this script pins, and the thincoder source tree in the repository
+// (thincoder\), so that the app runs on a machine with no Node installed.
+// Both versions are checked against this script's constants: a source tree,
+// or a copy, that is not the expected one stops the build.
+//
 // The installer lands in build/installers/; beside it, remote\<VERSION>\,
 // the remote server's gzipped builds, which the app downloads instead of
 // carrying them (tool/build_remote_server.dart), to upload with the
 // release.
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
@@ -78,6 +85,47 @@ const _openSshFiles = [
   'LICENSE.txt',
   'NOTICE.txt',
 ];
+
+/// The Node.js release the runtime carries (node.exe), the SHA-256 of its
+/// Windows zip, and the version of the thincoder source tree the runtime is
+/// built from. Downloaded once into build\node\ and checked each time, as
+/// [_openSshRelease] is; both versions are checked against these constants,
+/// not against each other, so a tree or copy that is not the expected one
+/// stops the build.
+const _nodeVersion = 'v24.11.1';
+const _nodeSha256 =
+    '5355ae6d7c49eddcfde7d34ac3486820600a831bf81dc3bdca5c8db6a9bb0e76';
+const _thincoderVersion = '0.12.76';
+
+/// What of the thincoder source tree the runtime carries, and what has to be
+/// in the bundle once it is put there.
+const _thincoderFiles = ['bin', 'src', 'package.json', 'LICENSE'];
+const _runtimeRequired = [
+  r'runtime\node\node.exe',
+  r'runtime\thincoder\bin\thincoder.cjs',
+  r'runtime\thincoder\LICENSE',
+  r'runtime\THIRD-PARTY-NOTICES.txt',
+];
+
+/// The licenses the runtime carries beside the CLI's own (`LICENSE`), which
+/// the installer ships as they are: what a distribution has to say about
+/// what it includes.
+const _notices =
+    '''
+BaoCode's thincoder runtime
+
+runtime\\thincoder is the thincoder CLI, MIT licensed; its license is in
+runtime\\thincoder\\LICENSE.
+
+runtime\\thincoder\\node_modules\\@thincoder\\core is @thincoder/core, MIT
+licensed; its license is in that folder's LICENSE.
+
+runtime\\node\\node.exe is Node.js $_nodeVersion, MIT licensed, with the
+licenses of what it is built from inside it. Node.js's own license and its
+third-party notices are published at
+https://github.com/nodejs/node/blob/main/LICENSE and in the release it came
+from, https://nodejs.org/dist/$_nodeVersion/.
+''';
 
 /// SHA-256 of Flutter's own release flutter_windows.dll that
 /// tool/engine/flutter_windows.dll was built to replace (3.47.5), and of that
@@ -182,6 +230,13 @@ Future<void> main(List<String> arguments) async {
   _step('Putting in OpenSSH for Windows $_openSshRelease');
   await _putOpenSsh(root, bundle);
   _checkBundle(bundle, [for (final name in _openSshFiles) 'openssh\\$name']);
+
+  _step(
+    'Putting in the thincoder runtime $_thincoderVersion '
+    '(Node.js $_nodeVersion)',
+  );
+  await _putRuntime(root, bundle);
+  _checkBundle(bundle, _runtimeRequired);
 
   _step('Compiling the installer');
   final iscc = _findIscc();
@@ -369,6 +424,134 @@ Future<void> _putOpenSsh(Directory root, Directory bundle) async {
     final file = File('${unpacked.path}\\OpenSSH-Win64\\$name');
     if (!file.existsSync()) _fail('No $name in the OpenSSH release.');
     file.copySync('${target.path}\\$name');
+  }
+}
+
+/// Puts the runtime the app carries in [bundle]\runtime\: node.exe from the
+/// release [_nodeVersion] pins, the thincoder source tree from the
+/// repository, and the licenses it carries. Both versions are checked
+/// against this script's constants: the source tree before anything is
+/// copied, and what was copied by running it — so neither a tree that moved
+/// nor a copy that is broken goes into an installer.
+Future<void> _putRuntime(Directory root, Directory bundle) async {
+  final source = Directory('${root.path}\\thincoder\\thincoder-cli');
+  final package = File('${source.path}\\package.json');
+  if (!package.existsSync()) {
+    _fail('No ${package.path} to build the runtime from.');
+  }
+  final declared = (jsonDecode(
+    package.readAsStringSync(),
+  ) as Map<String, Object?>)['version'];
+  if (declared != _thincoderVersion) {
+    _fail(
+      'The thincoder source tree is $declared; this script expects\n'
+      '$_thincoderVersion. Update _thincoderVersion when the tree moves.',
+    );
+  }
+
+  final runtime = Directory('${bundle.path}\\runtime');
+  if (runtime.existsSync()) runtime.deleteSync(recursive: true);
+  final target = Directory('${runtime.path}\\thincoder');
+  target.createSync(recursive: true);
+  for (final name in _thincoderFiles) {
+    final from = '${source.path}\\$name';
+    final to = '${target.path}\\$name';
+    switch (FileSystemEntity.typeSync(from)) {
+      case FileSystemEntityType.directory:
+        _copyTree(Directory(from), Directory(to));
+      case FileSystemEntityType.file:
+        File(from).copySync(to);
+      default:
+        _fail('No $from in the thincoder source tree.');
+    }
+  }
+  // `@thincoder/core`, where the CLI's bare imports find it: npm's own
+  // layout, node_modules\@thincoder\core.
+  _copyTree(
+    Directory('${root.path}\\thincoder\\thincoder-core'),
+    Directory('${target.path}\\node_modules\\@thincoder\\core'),
+  );
+
+  final node = File('${runtime.path}\\node\\node.exe');
+  node.parent.createSync(recursive: true);
+  (await _nodeExe(root)).copySync(node.path);
+  File('${runtime.path}\\THIRD-PARTY-NOTICES.txt').writeAsStringSync(_notices);
+
+  // What was copied runs, and says the version this script expects.
+  final result = await Process.run(node.path, [
+    '${target.path}\\bin\\thincoder.cjs',
+    '--version',
+  ], workingDirectory: root.path);
+  final reported = RegExp(r'\d+\.\d+\.\d+')
+      .firstMatch('${result.stdout}\n${result.stderr}')
+      ?.group(0);
+  if (result.exitCode != 0 || reported != _thincoderVersion) {
+    _fail(
+      'The runtime runs thincoder $reported (exit ${result.exitCode}); this\n'
+      'script expects $_thincoderVersion.\n'
+      '${result.stdout}\n${result.stderr}',
+    );
+  }
+  stdout.writeln('  runtime\\node\\node.exe ran thincoder $reported.');
+}
+
+/// Node's own node.exe, from the release [_nodeVersion] pins: downloaded
+/// into build\node\ once, and checked against [_nodeSha256] each time.
+Future<File> _nodeExe(Directory root) async {
+  final cache = Directory('${root.path}\\build\\node');
+  final zip = File('${cache.path}\\node-$_nodeVersion-win-x64.zip');
+  String sha256Of(File file) =>
+      sha256.convert(file.readAsBytesSync()).toString();
+  if (!zip.existsSync() || sha256Of(zip) != _nodeSha256) {
+    final url = Uri.parse(
+      'https://nodejs.org/dist/$_nodeVersion/'
+      'node-$_nodeVersion-win-x64.zip',
+    );
+    stdout.writeln('  Downloading $url');
+    cache.createSync(recursive: true);
+    final client = HttpClient();
+    try {
+      final response = await (await client.getUrl(url)).close();
+      if (response.statusCode != 200) {
+        _fail('$url answered ${response.statusCode}.');
+      }
+      await response.pipe(zip.openWrite());
+    } finally {
+      client.close();
+    }
+    if (sha256Of(zip) != _nodeSha256) {
+      zip.deleteSync();
+      _fail(
+        'The Node.js download is not the one this script expects.\n'
+        'After choosing another release, update _nodeVersion and\n'
+        '_nodeSha256 in this script.',
+      );
+    }
+  }
+  final unpacked = Directory('${cache.path}\\$_nodeVersion');
+  if (unpacked.existsSync()) unpacked.deleteSync(recursive: true);
+  unpacked.createSync(recursive: true);
+  // Windows' own tar (bsdtar) reads zips.
+  await _run('tar', ['-xf', zip.path, '-C', unpacked.path], root.path);
+  final node = File('${unpacked.path}\\node-$_nodeVersion-win-x64\\node.exe');
+  if (!node.existsSync()) _fail('No node.exe in the Node.js release.');
+  return node;
+}
+
+/// Copies every file of [from] into [to], making the folders they are in.
+void _copyTree(Directory from, Directory to) {
+  if (!from.existsSync()) _fail('No ${from.path} to put in the runtime.');
+  final base = from.path;
+  to.createSync(recursive: true);
+  for (final entity in from.listSync(recursive: true)) {
+    final path = '${to.path}\\${entity.path.substring(base.length + 1)}';
+    if (entity is Directory) {
+      Directory(path).createSync(recursive: true);
+    } else if (entity is File) {
+      final file = File(path);
+      file.parent.createSync(recursive: true);
+      entity.copySync(path);
+    }
   }
 }
 

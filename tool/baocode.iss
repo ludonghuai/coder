@@ -92,8 +92,11 @@ Name: "contextmenu"; \
 ; AOT app.so and flutter_assets) which sit beside the executable, and
 ; remote\ (VERSION and servers.json: which baocode-server remote projects
 ; run on their host, and where the app downloads it; tool/build_windows.dart
-; puts them there), and openssh\ (OpenSSH for Windows, for remote projects
-; where the system's ssh is too old to ask for a password).
+; puts them there), openssh\ (OpenSSH for Windows, for remote projects
+; where the system's ssh is too old to ask for a password), and runtime\
+; (Node.js and the thincoder source tree the app runs its own thincoder
+; with, so that no Node has to be installed; tool/build_windows.dart puts
+; both there, and the recursive entry below packs them with the rest).
 Source: "{#BundleDir}\*"; DestDir: "{app}"; \
   Flags: ignoreversion recursesubdirs createallsubdirs
 
