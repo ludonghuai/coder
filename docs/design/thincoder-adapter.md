@@ -3550,4 +3550,238 @@ T99 已被 §23.1 预留给用量归属的补项（自动轮 ∥ 撤暂存轮）
 | U4 | 预热池的常驻内存开销 | 未测（一个 Node 进程的 V8 基线） | 实施首轮量一次 `process` 内存；超过 ~120 MB ⇒ 池改为按需预热（只保留开关） |
 | U5 | `workspace.dart` 打开项目处的确切行号 | 未定位到行（`:239-240` = 默认内核现值点） | 实施首轮核定并回填 §25.8 |
 
+## 26. 内置运行时（批 17；F23）
+
+> 回指：需求档 F23 功能点 ①–⑤ / 验收 ①–⑤ + 边界「开发环境零变化」（`docs/requirements/thincoder-adapter.md:168`）。
+> 一句结论：发行版自带 `runtime\node\node.exe` + `runtime\thincoder\`（源码树，零构建）+ 私有数据目录；
+> locator 顺序 = 显式 → 内置 → PATH，**内置存在即不构造 PATH 候选**；开发环境靠「内置目录在不在」自然分叉，不引入任何 release 分支。
+
+**最近先例（对齐 ∥ 偏离及理由）**
+
+- 对齐 ①：**OpenSSH 随包**（`tool/build_windows.dart:71-80` 版本 + SHA-256 钉死、`:182-184` 入包、`:329-373` 下载一次缓存到 `build\openssh\`）——本批的 Node 运行时完全照此形：版本 + 哈希钉死、`build\node\` 缓存、入包前校验。
+- 对齐 ②：**替换引擎的哈希校验**（`tool/build_windows.dart:294-324`）——「包里的东西不是脚本预期的就停」这条先例直接用于 `node.exe` 与 thincoder 源码树的版本一致性（§26.8）。
+- 对齐 ③：**设置路径优先**（`thincoder_locator.dart:96-108`）——显式路径不存在即抛，今天已是「不回落」形，本批不动这一段，只在其后插入内置层。
+- 偏离 ①：**不做单文件 SEA**——判据见 §26.2（入口动态 import、8+8 处 `import.meta.url` 资产读、注入需 postject、体积不省）。取等价形态「源码树 + 内嵌 node 目录」。
+
+**survey 证据**：本轮**未调**公开检索（`websearch` / `fetch` 未发起）——Node SEA 在本机的可用性用 `node --help` 实测判定（§26.2 第 1 行），不依赖外部文档版本；
+其余判据全部来自本仓与外仓实读（坐标见各节）。外仓构建源 = 本仓工作树 `thincoder/` 当前 HEAD，不拉上游最新（用户 2026-10-21 03:58 落定）。
+
+### 26.1 决议与形态
+
+| 面 | 决议 |
+|---|---|
+| 内置位置 | `<安装目录>\runtime\`（Inno 的 `{app}\runtime\`）。理由：只读、与发版版本同生共死、升级整体替换、卸载带走；应用数据目录只放可变状态（配置 / 会话 / 日志），不混装二进制 |
+| 内置组成 | `runtime\node\node.exe`（85.7 MB，实测）+ `runtime\thincoder\{bin,src,package.json,LICENSE,node_modules\@thincoder\core\}`（≈6.8 MB，实测）+ `runtime\THIRD-PARTY-NOTICES.txt` |
+| 启动命令 | `runtime\node\node.exe runtime\thincoder\bin\thincoder.cjs acp`；`bin/thincoder.cjs:6` 的 `import("./thincoder.mjs")` 是运行期动态 import，源码树在位即可解析（实测可跑，§26.2） |
+| 构建源 | 本仓工作树 `thincoder/` 当前 HEAD；版本一致性判据 = 产物 `--version` == `thincoder-cli\package.json` 的 `version`（今天 `0.12.76`，实测） |
+| 数据目录 | `THINCODER_CONFIG_DIR` → `<应用数据目录>\runtime-data\thincoder`（§26.5） |
+
+### 26.2 打包可行性 spike（实测，2026-10-21 04:05–04:08，本机 Node v24.11.1）
+
+| # | 命令 / 读点 | 读数 | 结论 |
+|---|---|---|---|
+| 1 | `node -v` / `node --help \| findstr sea` | `v24.11.1`；含 `--experimental-sea-config` | SEA 的 blob 步骤本机可用（不等于整链可用） |
+| 2 | `node thincoder-cli\bin\thincoder.cjs --version` | `0.12.76` | 源码树**零构建直接可跑**（`package.json:4` 的 "no build step" 成立） |
+| 3 | `node …\bin\thincoder.cjs acp` | stderr `[acp] thincoder 0.12.76 — ACP v1 over stdio, waiting for initialize`，exit 0 | ACP 入口可跑 |
+| 4 | `C:\Program Files\nodejs\node.exe` 大小 | `89,894,400` B = 85.7 MB | 内置 Node 的体积基线 |
+| 5 | `dir /s /-c`：`thincoder-core` 与 `thincoder-cli\src` 逐目录 `File(s)` 合计 | 两树合计 ≈ 6.8 MB（其中一树 346 文件） | 压缩前总量 ≈ 92.5 MB |
+
+**SEA 不选的判据（逐条带坐标）**
+
+1. **入口是 CJS shim + 运行期动态 `import()`**（`thincoder-cli\bin\thincoder.cjs:6`）：SEA 的主脚本是单一 blob，动态 import 一个不在 blob 里的路径解析不了；要 SEA 必先 bundler 合成单文件，而上游明示零构建、无 bundler 依赖（`package.json:4`）。
+2. **运行期读 `package.json`**：`thincoder-cli\src` 内 `import.meta.url` 命中 **8 处**：
+   `src/acp.mjs:43` · `src/command-table.mjs:115` · `src/tui/cmd-upgrade.mjs:11` · `src/tui/input-face.mjs:44` ·
+   `src/tui/render-frame.mjs:33` · `src/tui/update-notice.mjs:59` · `src/tui/wrapped-spawn.mjs:15` · `:26`；
+   `thincoder-core` 同命令命中 **8 处**。SEA 里 `import.meta.url` 不指向文件系统，须改 `sea.getAsset` ⇒ 动上游 16 处，与「最小改动、上游可合并」冲突。
+3. **注入步骤要 postject**（`npx postject … NODE_SEA_BLOB …`）：本机未安装，构建链需额外依赖与网络；源码树 + node 目录零外部工具。
+4. **体积不省**：SEA = node.exe + blob，与直接带 node.exe 同量级（85.7 MB 已量到）。
+
+⇒ **替代方案即主方案**：bundle = 源码树 + `node.exe` 目录，不做单文件。
+将来若仍要 SEA，验证步骤（本批不执行）：`sea-config.json`（`main` = 打包后的单文件）→ `node --experimental-sea-config sea-config.json` → 按 Node 文档用 `postject` 把 blob 注入 node.exe（sentinel fuse 参数以该 Node 版本文档为准）→ `thincoder.exe --version` 与 `acp` 冒烟；任一步失败即回到本方案。
+
+### 26.3 候选顺序与四格表
+
+解析顺序：**① 显式 `thincoder.path` → ② 内置副本 → ③ PATH（仅当 ② 不存在）**。
+「内置存在」时**不调用 `candidates()`**（连候选表都不构造），这是 PATH 屏蔽的实现形状。
+
+| 情形 | 内置存在 | 显式设置 | 解析结果 | 是否探测 PATH |
+|---|---|---|---|---|
+| 发行版开箱 | 是 | 无 | 内置（`node.exe` + `bin\thincoder.cjs`） | 否 |
+| 发行版 + 用户设了有效路径 | 是 | 有 | 显式路径（优先于内置） | 否 |
+| 发行版 + 显式路径不存在 | 是 | 有（坏） | 抛 `ThincoderUnavailable` ⇒ 状态 `ThincoderFailed`（与今天同形，不回落到内置） | 否 |
+| 开发 `flutter run` / `flutter test` | 否 | 无 | PATH 候选，顺序与今天**逐字相同** | 是 |
+| 开发 + 显式设置 | 否 | 有 | 显式路径 | 否 |
+| 发行版 runtime 被删（安装损坏） | 否 | 无 | 与开发同路走 PATH | 是 |
+
+末行的取舍：**「内置在不在」是唯一判据**，不引入发行版常量（用户 2026-10-21 03:57「不要影响到我们的开发环境，只有发行版才这样做」）；安装损坏的用户得到今天的引导面，而不是一个无法自救的报错。
+
+**「屏蔽 PATH」的机检判据（两条）**
+
+1. 解析函数级：`candidatesOverride` 注入一个计数桩，内置存在时调用 `locate()` ⇒ 桩调用次数 **0**（T113）；解析结果逐字 == 内置 cjs 的绝对路径。
+2. 行为级：`events.log` 的启动行点名绝对路径 `…\runtime\thincoder\bin\thincoder.cjs`（§26.7），且该会话的启动行不出现任何 PATH 候选串（`npm` 目录 / `thincoder.cmd`）。
+
+### 26.4 locator 机制（本档改动面）
+
+- 新增 `ThincoderBuild { display, executable, arguments }`：`display` = 状态行显示的构建（内置 = cjs 路径，PATH/显式 = 原可执行文件），`executable` + `arguments` = 真正 spawn 的东西（内置 = `node.exe` + `[cjs, 'acp']`）。
+- `locate()`（`thincoder_locator.dart:94-120`）插入一层：
+  ```
+  显式 → 现状（不存在即抛，不回落）
+  内置存在 → 返回 ThincoderBuild(display: cjs, executable: node.exe, arguments: [cjs, 'acp'])
+  否则 → 现状 candidates()（一行不改）
+  ```
+- 内置判定：`p.join(p.dirname(Platform.resolvedExecutable), 'runtime', 'thincoder', 'bin', 'thincoder.cjs')` 存在且 `runtime\node\node.exe` 存在。测试注入 `@visibleForTesting static String? executableDirectoryOverride`（生产 = `p.dirname(Platform.resolvedExecutable)`）。
+- `versionOf`（`:164-180`）加可选 `arguments`，内置情形跑 `node.exe cjsPath --version`；`status()`（`:206-220`）用 `display` 进 `ThincoderFound.path`，于是设置页显示「In use: …\runtime\thincoder\bin\thincoder.cjs (0.12.76)」。
+- `launch()`（`:82-89`）返回值携带 `arguments` 与注入后的 environment（§26.5）；`throughShell`（`:224-226`）对 `.exe` 为 false，内置路径不再过 shell。
+- `ThincoderLaunch`（`thincoder_transport.dart:40-68`）增 `arguments`（默认 `const [ThincoderLaunch.command]`），`withEnvironment` 同步携带。
+
+### 26.5 独立数据目录（外仓改动已获批准 2026-10-21 03:58「外仓可以」；本批不实施）
+
+**外仓最小改动（+ 实测的必要扩展）**
+
+- 新增 `thincoder-core/home.mjs`（≈18 行）：`thincoderHome(env = process.env)` = `env.THINCODER_CONFIG_DIR?.trim() || join(homedir(), ".thincoder")`。
+- `config-io.mjs:32` → `export const configDir = thincoderHome()`；`:33` 的 `configPath` 自动随动。
+- **实测发现（本批读数，不是预估）**：`~/.thincoder` 另有 **4 档 7 处**直接拼 `homedir()`，不随 `configDir`：
+  `log.mjs:58`（日志目录，**写**）· `agent/dispatch-gates.mjs:21`（`tool-errors/`，**写**）· `skills.mjs:94` / `:136` / `:217` / `:226`（用户 skills，读；`:136` 是否写待实施首轮核）· `agent/helpers.mjs:403`（用户级 AGENTS 文件，读）。
+  ⇒ 只改 `config-io.mjs:32` 时内置副本仍会写 `~/.thincoder/logs` 与 `~/.thincoder/tool-errors`，F23 验收 ③ 不达标。外仓改动 = 新增 1 档 + 5 档改调 `thincoderHome()`（共 8 处调用点），估 **≈ +30 / −7 行**。
+- 其余路径全部派生自 `configDir`（实测坐标）：
+  会话 `session-slots.mjs:89` · `session-gc.mjs:51` · `session-index.mjs:42` · `session-migrate.mjs:24`；
+  ledger `ledger-db.mjs:29` · 检查点 `checkpoint.mjs:42` · traces `trace-store.mjs:53` · peers `peer-claims.mjs:40` · teams `assemble.mjs:33`；
+  tool-results `helpers.mjs:156` / `bash-async.mjs:62` / `digest-budget.mjs:66` · memory `config-defaults.mjs:59` / `acp/ext.mjs:81`；
+  crash reports `crash-reports.mjs:35` · ssh `ssh-transport.mjs:51` · 浏览器 profile `browser/launch.mjs:66`。
+
+**注入点（本仓）**：`ThincoderLocator.launch`（`thincoder_locator.dart:82-89`）里写 `environment['THINCODER_CONFIG_DIR'] = <私有目录>`（`DataDirectory.current` 已有，`lib/platform/data_dir.dart`；具体子目录访问器名实施首轮核，U12）；`Process.start`（`thincoder_process_io.dart:86-97`）原样透传 ⇒ **一处注入，全进程生效**（env 在进程启动前就位，模块加载期读到的即私有目录）。
+
+**连带影响面**
+
+| 面 | 今天 | 发行版（内置副本） |
+|---|---|---|
+| 配置 | `~/.thincoder/config.json` | `<数据目录>\runtime-data\thincoder\config.json` |
+| 会话槽 | `~/.thincoder/sessions/` | 同上私有目录下 `sessions/` |
+| token / 凭据 | `configDir` 域内（具体文件名未逐档核实，U11） | 同域，随 env 迁移 |
+| 日志 | `~/.thincoder/logs/` | 私有目录下 `logs/` |
+| 崩溃报告 / memory.db / ledger / checkpoints / traces / teams / tool-results / browser profile | `~/.thincoder/…` | 私有目录下同名子目录 |
+
+**「用户 `~/.thincoder` 不被写」的机检读法**（会话前后各跑一次，两值逐字相同）：
+
+```powershell
+$p = Join-Path $HOME '.thincoder'
+$a = @(Get-ChildItem -Recurse -Force $p -ErrorAction SilentlyContinue)
+'{0} {1:o}' -f $a.Count, (($a | Sort-Object LastWriteTime -Descending | Select-Object -First 1).LastWriteTime)
+```
+
+另一侧（私有目录）同命令 ⇒ 文件数 > 0 且 mtime 前进，证明写的是新目录而不是没写。
+
+### 26.6 开发环境不受影响（如何保证）
+
+- **唯一判据**：`runtime\thincoder\bin\thincoder.cjs` 在不在，由 `Platform.resolvedExecutable` 的目录推出。`flutter run` 的 Debug 产物、`flutter test` 的 tester、`dart run tool\*` 都没有 `runtime\` ⇒ 走 PATH 分支，候选列表代码一行不改。
+- **不引入 release 分支**：无 `kReleaseMode` 判断、无编译期开关、无默认值变化（用户 2026-10-21 03:57 逐字约束；需求档 `:168`）。
+- **`lib/**` 零硬编码安装目录**：安装目录只出现在「由可执行文件目录派生」这一处（`executableDirectoryOverride ?? p.dirname(Platform.resolvedExecutable)`），没有字面量 `Program Files` / `runtime\`。
+- **测试覆盖**：T112（无内置 ⇒ `candidates()` 与今天逐项相等、顺序不变）· T113（有内置 ⇒ 解析到内置且 `candidates()` 零调用）。两条都用 `executableDirectoryOverride` 指向临时目录制造有/无 `runtime\` 两种世界。
+
+### 26.7 启动与日志（可机检）
+
+- `ThincoderProcess.start`（`thincoder_process_io.dart:86-97`）保持一条 spawn 路径；内置情形 `runInShell == false`（`.exe`），不再经 `cmd.exe`。
+- 新增启动行：`appEvent('thincoder', 'launch <display> → <exe> <args>')`，每进程一次，落 `events.log`。这就是验收 ② 的读点。
+- 设置页状态行沿用 `thincoderStatusLine`（`thincoder_locator.dart:55-60`）：`In use: <display> (<version>)`，用户能看出当前用的是内置还是自己设的路径，文案零改。
+
+### 26.8 打包改动
+
+**Windows（本机可验证）**
+
+- `tool/build_windows.dart`（425 行）新增：
+  1. `_nodeRelease = 'v24.11.1'` + `_nodeSha256`（照 OpenSSH 先例 `:71-73`）：从 Node 官方下载 `node-v24.11.1-win-x64.zip` 到 `build\node\`，校验后取 `node.exe`。
+  2. `_putRuntime(root, bundle)`：从工作树复制 `thincoder\thincoder-cli\{bin,src,package.json,LICENSE}` 与 `thincoder\thincoder-core\` 到 `bundle\runtime\thincoder\`，并把 core 放到 `runtime\thincoder\node_modules\@thincoder\core\`（`@thincoder/core` 的裸导入按 node 解析规则命中）；`node.exe` → `runtime\node\node.exe`；写 `runtime\THIRD-PARTY-NOTICES.txt`（thincoder / @thincoder/core 的 MIT 声明 + Node 的许可指向）。
+  3. **版本一致性校验**：`node.exe runtime\thincoder\bin\thincoder.cjs --version` 必须等于 `thincoder-cli\package.json.version`，否则 `_fail`（今天的读数 `0.12.76`）。
+  4. `_checkBundle` 必检项追加 `runtime\node\node.exe` · `runtime\thincoder\bin\thincoder.cjs` · `runtime\thincoder\LICENSE`。
+- `tool/baocode.iss`（342 行）：`[Files]` 的 `Source: "{#BundleDir}\*"; recursesubdirs`（`:97-98`）**已覆盖** `runtime\`，不需要新增文件行。改动 = ① `:90-96` 注释补 `runtime\`；② **不**把 thincoder 的 MIT 设为 `LicenseFile`（安装向导的许可页是 BaoCode 自己的），许可随附 = `runtime\thincoder\LICENSE` + `runtime\THIRD-PARTY-NOTICES.txt`，由「关于」面引用。
+- 体积：未压缩 ≈ 85.7 + 6.8 ≈ 92.5 MB；lzma2 后的增量实施轮实测回填（现值安装包 21.0 MB）。
+
+**macOS（设计已给、未验证——本机不能验证）**
+
+- `tool/build_macos.dart`（631 行）同改点：`_putRuntime` → `BaoCode.app/Contents/Resources/runtime/`；node 取 `node-v24.11.1-darwin-{arm64,x64}.tar.gz`（按构建架构取，或双架构都带、启动时按 arch 选）；node 二进制随包 `codesign --force --sign -`（hardened runtime 下未签名子进程会被拦）；`--version` 一致性校验同上。
+
+### 26.9 受影响文件清单（行数 = 2026-10-21 实测）
+
+**本仓**
+
+| # | 坐标 | 现值 | 改动 | delta |
+|---|---|---|---|---|
+| ① | `lib/kernel/thincoder/thincoder_locator.dart` | 227 | `ThincoderBuild`、内置探测、`versionOf(arguments)`、env 注入 | ≈ +70 |
+| ② | `lib/kernel/thincoder/thincoder_transport.dart` | 87 | `ThincoderLaunch.arguments`（默认 `['acp']`），`withEnvironment` 同步 | ≈ +8 |
+| ③ | `lib/kernel/thincoder/thincoder_process_io.dart` | 207 | 启动行 `appEvent`；`arguments` 透传 | ≈ +10 |
+| ④ | `tool/build_windows.dart` | 425 | Node 下载校验 + `_putRuntime` + 版本一致性 + 必检项 | ≈ +90 |
+| ⑤ | `tool/baocode.iss` | 342 | `:90-96` 注释补 `runtime\` | ≈ +3 |
+| ⑥ | `tool/build_macos.dart` | 631 | 同改点（未验证） | ≈ +45 |
+| ⑦ | `test/kernel/thincoder_locator_test.dart` | 新增 | T112–T115 的解析单测 | ≈ +160 |
+| ⑧ | `test/kernel/thincoder_kernel_test.dart` | 4299 | 启动行断言 + 数据目录注入回归 | ≈ +40 |
+
+- **零改动**：`thincoder_kernel.dart` · `thincoder_protocol.dart` · 聊天 UI · Claude 内核面 · `candidates()` 函数体。
+
+**外仓 `thincoder/`（已批准；本批不实施，实施归独立外仓批）**
+
+| # | 坐标 | 现值 | 改动 | delta |
+|---|---|---|---|---|
+| ① | `thincoder-core/home.mjs` | 新增 | `thincoderHome()` | ≈ +18 |
+| ② | `thincoder-core/config-io.mjs` | 288 | `:32` 改调 `thincoderHome()` | +2 / −1 |
+| ③ | `thincoder-core/log.mjs` | 215 | `:58` 改调 | +2 / −1 |
+| ④ | `thincoder-core/agent/dispatch-gates.mjs` | 151 | `:21` 改调 | +2 / −1 |
+| ⑤ | `thincoder-core/skills.mjs` | 234 | `:94` / `:136` / `:217` / `:226` 改调 | +4 / −2 |
+| ⑥ | `thincoder-core/agent/helpers.mjs` | 491 | `:403` 改调 | +2 / −2 |
+
+合计 ≈ **+30 / −7**（含新档 18 行；8 处调用点）。
+
+### 26.10 关键决策记录
+
+| # | 决策 | 理由 / 被否 |
+|---|---|---|
+| D107 | 内置形态 = `node.exe` + thincoder 源码树目录，不做单文件 SEA | 判据四条（§26.2）：动态 import、16 处 `import.meta.url` 资产读、postject、体积不省。被否：SEA + bundler（要把上游改成单文件工程） |
+| D108 | 内置位置 = 安装目录 `{app}\runtime\` | 只读、随版本替换、卸载带走；被否：应用数据目录（可写区放二进制，升级残留、多用户重复占盘） |
+| D109 | 分叉判据 = 「内置在不在」，不引入 release 常量 | 用户 2026-10-21 03:57 逐字；被否：`kReleaseMode` 特判（开发/发行两套解析路径，测试只能覆盖一半） |
+| D110 | 显式路径不存在 ⇒ 报错不回落内置 | 今天的形（`thincoder_locator.dart:97-107`）已如此；F23 验收 ④ 就是它 |
+| D111 | 数据目录用 env 注入，不改上游默认 | 用户终端副本继续用 `~/.thincoder`，两侧零共享；被否：改 `configDir` 默认值（会改掉所有端的行为） |
+| D112 | 外仓改动面 = 6 档 8 处调用点，不是 1 档 | 实测 4 档 7 处绕过 `configDir` 直写 `~/.thincoder`（§26.5）；被否：只改 `config-io.mjs:32`（logs / tool-errors 仍写用户目录，验收 ③ 不达标） |
+
+### 26.11 用例表（T112–T117）
+
+| # | 场景 | 输入 | 期望 |
+|---|---|---|---|
+| T112 | 开发环境解析与今天逐字相同 | `executableDirectoryOverride` 指向无 `runtime\` 的临时目录；`PATH=/a;/b` | `candidates(env)` 逐项 == 今天（Windows：`/a\thincoder.cmd`、`/a\thincoder.exe`、`/b\…`、`%APPDATA%\npm\thincoder.cmd`、`.exe`，顺序不变）；`locate()` 返回首个存在的项 |
+| T113 | 内置存在 ⇒ 屏蔽 PATH | 临时目录造出 `runtime\thincoder\bin\thincoder.cjs` + `runtime\node\node.exe`；`candidatesOverride` 计数桩 | `locate()` == 该 cjs 绝对路径；桩调用次数 **0**；`launch().executable` 以 `node.exe` 结尾、`arguments == [cjs,'acp']`；`throughShell == false` |
+| T114 | 显式坏路径不回落 | 设置 `thincoder.path = <不存在>`，且内置存在 | 抛 `ThincoderUnavailable`（`status()` ⇒ `ThincoderFailed`，消息含该路径）；不返回内置、不调 `candidates()` |
+| T115 | 数据目录注入 | 任意 `launch()`（含内置与 PATH 两种） | `launch.environment['THINCODER_CONFIG_DIR']` == `<数据目录>\runtime-data\thincoder`，且为绝对路径；其它 env 键不被删 |
+| T116 | 用户 `~/.thincoder` 不被写（真机） | 发行版安装包；会话前后各跑 §26.5 的 PowerShell 读法 | 两次输出（文件数 + 最大 mtime）逐字相同；私有目录同读法文件数 > 0 且 mtime 前进 |
+| T117 | 打包版本一致 | `dart run tool/build_windows.dart --skip-build`（runtime 已就位） | 产物 `--version` == `thincoder-cli\package.json.version`；不等 ⇒ 脚本 `_fail` 并打印两侧版本 |
+
+### 26.12 验收对照（回指 F23 验收 ①–⑤）
+
+| 需求判据 | 本档落点 | 机制 | 机检 |
+|---|---|---|---|
+| ① 未装 node/npm/thincoder 的机器可用 | §26.1 / §26.8 | 安装包内含 node.exe + 源码树；`@` / Auto / rewind / 回退 / 队列本就在 CLI 侧（F1–F15） | 干净机走查 + T116 私有目录有写；`events.log` 启动行点名内置路径 |
+| ② 启动行点名内置绝对路径、不出现 PATH 候选 | §26.3 / §26.7 | 内置存在 ⇒ 不调用 `candidates()`；启动行打绝对路径 | T113（桩零调用）+ `events.log` 读行 |
+| ③ 用户 `~/.thincoder` 文件数与 mtime 不变 | §26.5 | `THINCODER_CONFIG_DIR` 注入 + 外仓 10 处改调 | T116（PowerShell 两读数逐字相同） |
+| ④ 显式坏路径明确报错、不静默回落 | §26.3 / §26.4 | 今天的 `:97-107` 分支原样保留，内置层插在其后 | T114 |
+| ⑤ `flutter run` 走 PATH、行为与今天一致 | §26.6 | 无 `runtime\` ⇒ PATH 分支；候选列表零改；无 release 常量 | T112（候选逐项相等）+ 本仓 `flutter test` 全绿 |
+
+### 26.13 边界（本批不做）与回滚单位
+
+**不做**：接管用户终端 / 改 PATH / 写 `~/.thincoder` · 内置副本独立升级（随应用版本走） · 单文件 SEA（D107） · 活会话跨端（#36） · 上游发布流程 · macOS 的本机验证（见 §26.14）。
+
+**回滚单位（三处各自独立、互不依赖）**
+
+1. **打包改动**（`build_windows.dart` / `baocode.iss` / `build_macos.dart`）：回退后安装包不含 `runtime\` ⇒ locator 自动走 PATH，其余行为不变。
+2. **locator 改动**（`thincoder_locator.dart` / `thincoder_transport.dart` / `thincoder_process_io.dart`）：回退后解析回到「显式 → PATH」，即使包里仍带 `runtime\` 也不会被使用。
+3. **外仓改动**（独立仓、独立提交）：回退后 `THINCODER_CONFIG_DIR` 被忽略，数据回到 `~/.thincoder`——**必须与内置副本同时回退**才安全（只回退外仓会在用户目录生成新会话，不破坏数据但会写用户目录）。
+
+### 26.14 未验证项（单列，不静默省略）
+
+| # | 项 | 现状 | 处置 |
+|---|---|---|---|
+| U7 | macOS 打包（`codesign` 子进程、双架构 node、`Contents/Resources` 执行位） | **设计已给、未验证**（本机 Windows） | 实施轮在 Mac 上验证；失败面 = 签名被拦 ⇒ 按 §26.8 的 `codesign --force --sign -` 与 hardened runtime 排查 |
+| U8 | 安装包体积增量 | 未打包实测（仅未压缩 ≈ 92.5 MB + 现值 21.0 MB） | 实施轮 `dart run tool/build_windows.dart` 后回填实际 MB |
+| U9 | `skills.mjs:136` 是否写用户 skills 目录 | 未逐行核 | 外仓实施轮首轮核；写 ⇒ 同批改调 `thincoderHome()` |
+| U10 | token / 凭据的具体文件名 | 未逐档核实（落在 `configDir` 域内） | 不影响设计（随 `configDir` 迁移）；实施轮核一次并补 §26.5 表 |
+| U11 | SEA 整链（blob 注入 + 运行） | 未尝试（判据已足，D107） | 仅当将来要单文件时按 §26.2 步骤验 |
+| U12 | 应用数据目录下私有子目录的访问器名 | 未逐行核（`DataDirectory.current` 已实读，`data_dir.dart`） | 实施首轮核定并回填 §26.5；路径语义不变（`<数据目录>\runtime-data\thincoder`） |
+
+
 
