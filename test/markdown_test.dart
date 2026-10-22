@@ -1,7 +1,5 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:markdown/markdown.dart' as md;
@@ -397,108 +395,118 @@ void main() {
     });
   });
 
-  testWidgets('a frame timestamp advances with the time pumped', (
-    tester,
-  ) async {
-    final tick = ValueNotifier(0);
-    addTearDown(tick.dispose);
-    final stamps = <Duration>[];
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: ListenableBuilder(
-            listenable: tick,
-            builder: (context, _) {
-              stamps.add(SchedulerBinding.instance.currentFrameTimeStamp);
-              return Text('${tick.value}');
-            },
-          ),
-        ),
-      ),
-    );
-    for (var i = 0; i < 7; i++) {
-      tick.value++;
-      await tester.pump(const Duration(milliseconds: 8));
+  group('segments', () {
+    // Every kind of block, some across blank lines, as a long reply has
+    // them, and the same again until it is long.
+    String reply(int length) {
+      const pieces = [
+        '## Heading\n\nA paragraph with `code` and a [link](a.md).\n',
+        '1. first\n2. second\n\n3. loose third\n\n   still the third\n',
+        '- tight\n- list\n  - nested\n\nAfter the list.\n',
+        '```dart\nvoid main() {\n\n  print(1);\n}\n\nnot code yet\n```\n',
+        '\$\$\na^2\n\nb^2\n\$\$\n',
+        '<analysis>\nWhy\n\nnot cut\n</analysis>\n',
+        '<!-- a comment\n\nacross lines -->\n',
+        '<pre>\nraw\n\nraw\n</pre>\n',
+        '| a | b |\n|---|---|\n| 1 | 2 |\n',
+        '> quoted\n> still\n\n> another quote\n',
+        'Setext\n===\n',
+        '***\n',
+        '<br>\n',
+        '~~~\ntilde\n\n````\n~~~\n',
+        '    indented\n\n    code\n',
+      ];
+      final out = StringBuffer();
+      for (var i = 0; out.length < length; i++) {
+        out
+          ..write(pieces[i % pieces.length])
+          ..write('\n')
+          ..write('Words of paragraph $i, ' * (1 + i % 7))
+          ..write('\n\n');
+      }
+      return out.toString();
     }
-    debugPrint('C1 clock advance=${stamps.last - stamps.first}');
-    expect(
-      stamps.last - stamps.first,
-      greaterThanOrEqualTo(const Duration(milliseconds: 50)),
-    );
-  });
 
-  testWidgets('another message in its place parses at once, not throttled', (
-    tester,
-  ) async {
-    final text = ValueNotifier('Alpha, the first words.');
-    addTearDown(text.dispose);
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: SingleChildScrollView(
-            child: ListenableBuilder(
-              listenable: text,
-              builder: (context, _) => MarkdownView(text.value),
+    final document = MarkdownView.document(tags: true);
+    // Between blocks, the renderer's line breaks or none.
+    String html(String text) =>
+        md.renderToHtml(document.parse(text)).replaceAll('\n', '');
+
+    test('parse as the whole does, and keep as it grows', () {
+      final text = reply(30000);
+      var before = <String>[];
+      for (var length = 0; length <= text.length; length += 397) {
+        final prefix = text.substring(0, length);
+        final segments = markdownSegments(prefix);
+        // Cut again from the last of those before, the same.
+        expect(
+          markdownSegmentsGrown(prefix, before),
+          segments,
+          reason: 'at $length',
+        );
+        expect(segments.join(), prefix);
+        expect(segments.map(html).join(), html(prefix), reason: 'at $length');
+        // All but the last as they were: only that is parsed again.
+        if (before.length > 1) {
+          expect(
+            segments.take(before.length - 1),
+            before.take(before.length - 1),
+            reason: 'at $length',
+          );
+        }
+        before = segments;
+      }
+      expect(before.length, greaterThan(8));
+    });
+
+    test('a text changed before its end is cut anew', () {
+      final text = reply(12000);
+      final before = markdownSegments(text);
+      expect(before, hasLength(greaterThan(2)));
+      final changed = 'A new start.\n\n${text.substring(40)}';
+      expect(
+        markdownSegmentsGrown(changed, before),
+        markdownSegments(changed),
+      );
+    });
+
+    test('footnotes and link definitions leave it whole', () {
+      final text = reply(10000);
+      expect(markdownSegments(text), hasLength(greaterThan(1)));
+      expect(markdownSegments('$text\n[^1]: a note\n'), hasLength(1));
+      expect(markdownSegments('$text\n[a]: https://a.dev\n'), hasLength(1));
+    });
+
+    testWidgets('a long reply shows as it does whole', (tester) async {
+      final text = reply(12000);
+      expect(markdownSegments(text), hasLength(greaterThan(2)));
+      const key = Key('shown');
+      Future<(String, double)> shown(Widget markdown) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: SingleChildScrollView(
+                child: KeyedSubtree(key: key, child: markdown),
+              ),
             ),
           ),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    // Not grown on what was parsed: shown in the same frame.
-    text.value = 'Beta, wholly other words.';
-    await tester.pump(const Duration(milliseconds: 8));
-    final shown = tester
-        .widget<MarkdownBlocks>(find.byType(MarkdownBlocks))
-        .nodes
-        .map((node) => node.textContent)
-        .join(' ');
-    expect(shown, contains('Beta'));
-    expect(shown, isNot(contains('Alpha')));
-  });
+        );
+        return (
+          leaves(tester).map((span) => span.text).join('|'),
+          tester.getSize(find.byKey(key)).height,
+        );
+      }
 
-  testWidgets('a reply streamed in parses at most every 50ms, and at the end '
-      'as it would once', (tester) async {
-    final text = ValueNotifier('Start. ');
-    addTearDown(text.dispose);
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: SingleChildScrollView(
-            child: ListenableBuilder(
-              listenable: text,
-              builder: (context, _) => MarkdownView(text.value),
-            ),
+      // The same text, as high as its blocks in one column.
+      expect(
+        await shown(MarkdownView(text)),
+        await shown(
+          MarkdownBlocks(
+            nodes: MarkdownView.document(tags: true).parse(text),
+            style: MarkdownView.baseStyle,
           ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    var parses = 0;
-    debugOnRebuildDirtyWidget = (element, _) {
-      if (element.widget is MarkdownBlocks) parses++;
-    };
-    addTearDown(() => debugOnRebuildDirtyWidget = null);
-    final buffer = StringBuffer('Start. ');
-    for (var i = 0; i < 200; i++) {
-      buffer.write('word$i $i${'x' * 32} ');
-      text.value = buffer.toString();
-      await tester.pump(const Duration(milliseconds: 8));
-    }
-    await tester.pump(const Duration(milliseconds: 50));
-    await tester.pumpAndSettle();
-    final blocks = tester.widget<MarkdownBlocks>(find.byType(MarkdownBlocks));
-    final once = MarkdownView.document(tags: true)
-        .parse(text.value)
-        .map((node) => node.textContent)
-        .toList();
-    final terminal = listEquals(
-      blocks.nodes.map((node) => node.textContent).toList(),
-      once,
-    );
-    debugPrint('C1 parses=$parses C2 terminal=$terminal');
-    expect(parses, lessThanOrEqualTo(34));
-    expect(parses, greaterThanOrEqualTo(5));
-    expect(terminal, isTrue);
+      );
+    });
   });
 }

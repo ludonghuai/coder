@@ -12,6 +12,7 @@ import 'package:bao_editor/textmate/textmate_syntax.dart';
 import 'package:bao_editor/monaco/flutter/language_assets.dart';
 import 'package:bao_remote/local.dart' show setGitProcessEnvironment;
 
+import 'base/smooth_scroll.dart' show BaoScrollBehavior;
 import 'browser/browser_bridge.dart';
 import 'browser/browser_tools.dart' show BrowserHistory;
 import 'chat/composer/composer_files.dart' show ComposerFile, pastedAsPicture;
@@ -68,6 +69,7 @@ import 'network/network_proxy.dart';
 import 'network/network_proxy_io.dart' show NetworkProxy;
 import 'notifications/attention_host.dart';
 import 'notifications/attention_settings.dart';
+import 'platform/memory_budget.dart';
 import 'platform/app_platform.dart';
 import 'platform/data_dir.dart';
 import 'platform/error_log.dart';
@@ -149,6 +151,7 @@ Future<void> main(List<String> arguments) async {
   unawaited(reapPtyProcesses());
   unawaited(reapThincoderProcesses());
   WidgetsFlutterBinding.ensureInitialized();
+  MemoryBudget.apply();
   if (!kIsWeb) AppEventWatch.start();
   // The Windows app's own logs go beside it.
   if (errors != null) unawaited(errors.shareWithHost());
@@ -844,6 +847,7 @@ class _BaoCodeAppState extends State<BaoCodeApp> {
     title: 'BaoCode',
     debugShowCheckedModeBanner: false,
     theme: buildAppTheme(),
+    scrollBehavior: const BaoScrollBehavior(),
     builder: (context, child) => ValueListenableBuilder<int>(
       valueListenable: CodeFont.uiScale,
       builder: (context, percent, scaled) {
