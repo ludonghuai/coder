@@ -11,7 +11,7 @@
 https://github.com/ludonghuai/coder/releases/latest
 ```
 
-页面里找 **Assets**，点 `BaoCode-1.7.0-setup.exe`（约 43 MB —— 从 1.7.0 起安装包**内置了 thincoder**，所以比旧版大；换来的是装完就能用，不必先装 Node）。
+页面里找 **Assets**，点 `BaoCode-1.7.1-setup.exe`（约 43 MB —— 从 1.7.0 起安装包**内置了 thincoder**，所以比旧版大；换来的是装完就能用，不必先装 Node）。
 
 ## 2. 安装
 
