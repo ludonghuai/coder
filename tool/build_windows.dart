@@ -95,7 +95,7 @@ const _openSshFiles = [
 const _nodeVersion = 'v24.11.1';
 const _nodeSha256 =
     '5355ae6d7c49eddcfde7d34ac3486820600a831bf81dc3bdca5c8db6a9bb0e76';
-const _thincoderVersion = '0.12.76';
+const _thincoderVersion = '0.12.77';
 
 /// What of the thincoder source tree the runtime carries, and what has to be
 /// in the bundle once it is put there.
