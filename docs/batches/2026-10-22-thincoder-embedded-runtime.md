@@ -3,7 +3,7 @@
 > 编制：主 agent · 2026-10-22 · 来源 = 用户 2026-10-22 01:06「用户内置thincoder开吧」；前情 = 批 17 于 2026-10-21 19:14 被取消（设计档 §26 已完成但未评审），同日 03:53–03:57 的诉求与 03:58 的 B1 例外批准仍有效。
 > 台账 = #140（thincoder-adapter · 归批）。前情 = docs/batches/2026-10-21-thincoder-embedded-runtime.md §1（已收口 2026-10-21，用户取消）。
 ## §1 讨论（主 agent）
-**状态行**：🔄 进行中（…）
+**状态行**：已收口 2026-10-22
 <§1 模板占位：本批条目 / 关键判据 / 授权口径>
 
 ## 讨论（主 agent）
@@ -250,3 +250,31 @@ VERDICT: pass
 - 本机不可验项单列：macOS `_putRuntime` / lipo / 签名 / `runtimeRootOf` 真机包结构（U7）、真机 `~/.thincoder` 不变（T116，前置 = 外仓批）。
 
 ## §6 验证与收口（父代理）
+
+## 验证与收口（主 agent）
+
+**两支交付**
+| 支 | 提交 | 读数 |
+|---|---|---|
+| 外仓 `thincoder/` | `ae3a9b96`（本机，未推上游） | `home.mjs` 16 行 + 8 处跟随；批次测试 **3/3**、既有批次档 **26/26**；不设变量 8 条路径逐字同今天、设了全落变量目录（T-HOME-1/2 + 红-绿对） |
+| 本仓 | `c572c6a9`（已推 `mine/main`） | 11 档；`flutter test` locator+kernel **160 通过**、并入模型页共 **171**；`dart analyze` 改动面 **No issues found** |
+
+**打包实测（2026-10-22 01:53）**
+| 项 | 读数 |
+|---|---|
+| 安装包 | **42.9 MiB（44,931,377 B）** —— 设计估 50–60 MB，**实测更低**（发布版 22,022,549 B，增 22.9 MB） |
+| `Release\runtime\node\node.exe` | 85.73 MB ✅ |
+| `runtime\thincoder\` | `bin\thincoder.cjs` / `LICENSE` / `src` / `package.json` ✅ · `node_modules\@thincoder\core` **347 文件** ✅ |
+| `runtime\THIRD-PARTY-NOTICES.txt` | 在位 ✅ |
+| 冒烟 | `runtime\node\node.exe runtime\thincoder\bin\thincoder.cjs --version` ⇒ **`0.12.76`**，与常量一致 ✅ |
+| 版本双检负向 | `_thincoderVersion` 改 `0.12.99` ⇒ 脚本 `_fail` 并打印两侧值（eng-coder 实跑，已改回） |
+
+**未验项（如实记）**
+- **macOS 全链**：lipo / codesign / `Contents/Resources/runtime` 包结构本机无 Mac（U7）。
+- **T116 真机**：「发行版不写用户 `~/.thincoder`」需外仓批 + 真机安装走查；本批只交付注入面（§26.12 ③ 前置已写明）。
+- **安装后整机走查**：未在本机静默安装（会覆盖既有安装的卸载项）；以 runtime 落位 + `--version` + `acp` 冒烟 + ISCC 日志替代。
+
+**上抛待裁（eng-coder 发现的设计空隙，主 agent 记录）**
+发行版 + 用户在设置里填了**有效** `thincoder.path` 时，当前实现仍注入私有 `THINCODER_CONFIG_DIR`、启动行仍写 `builtin`（判据 = 「内置副本存在」，与需求 `:169` 的字面口径一致；§26.3 四格表缺这一格）。若裁定「显式路径应完全按用户那份走（读 `~/.thincoder`）」，需改 `thincoder_locator.dart:139` 与 `:133` 两处判据并补用例 ⇒ 台账 **#141**。
+
+**doc-check gate**：本批文档改动（设计档 §26 / 需求档 F23 / 本档）在评审与收口轮机检均 PASS；收口轮无新增文档改动。

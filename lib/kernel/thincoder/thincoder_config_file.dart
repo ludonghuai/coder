@@ -1,7 +1,9 @@
 import 'dart:io';
 
-import 'package:bao_remote/local.dart' show AppPaths, ClaudeEnvironment;
+import 'package:bao_remote/local.dart' show AppPaths;
 import 'package:path/path.dart' as p;
+
+import 'thincoder_locator.dart';
 
 // Where the thincoder CLI keeps its config.json, as it reads it
 // (thincoder-core/config-io.mjs:32): `THINCODER_CONFIG_DIR` when it names a
@@ -22,9 +24,10 @@ String resolveThincoderConfigDir(Map<String, String> environment) {
 File thincoderConfigFile(Map<String, String> environment) =>
     File(p.join(resolveThincoderConfigDir(environment), 'config.json'));
 
-/// The environment the CLI runs in, which is where its config is: the
-/// user's shell's, as the kernel launches it with (`ClaudeEnvironment.of`,
-/// as `thincoder_locator.dart:83` asks it). A directory named by F23 goes in
-/// here; the resolution above stays as it is.
+/// The environment the CLI runs in, which is where its config is: the one
+/// `ThincoderLocator.launch` starts it with — the user's shell's, and, for
+/// the build a distribution carries, that build's own folder. Written by
+/// Settings → Models (thincoder), so that the page writes the file the CLI
+/// reads.
 Future<Map<String, String>> Function() thincoderEnvironment =
-    ClaudeEnvironment.of;
+    ThincoderLocator.environment;
