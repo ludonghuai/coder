@@ -3,7 +3,7 @@
 > 编制：主 agent · 2026-10-21 · 来源 = 用户 2026-10-21 23:38「还得想一下模型添加的问题…要留一个模型添加的地方，或者直接获取 thincoder 的模型，我可以保证我用户的电脑里面都有 thincoder」· 23:40「走 B 吧」。
 > 台账 = #136（thincoder-adapter · 归批）。前情 = 无（独立批）。
 ## §1 讨论（主 agent）
-**状态行**：🔄 进行中（…）
+**状态行**：已收口 2026-10-22
 <§1 模板占位：本批条目 / 关键判据 / 授权口径>
 
 **三条上抛的裁定（主 agent，2026-10-21 23:45）**
@@ -225,3 +225,23 @@ VERDICT: pass
 **边界守线**：未写 `docs/**`；未碰外仓 `thincoder/**`；`thincoder_choices.dart` / `thincoder_kernel.dart` / `chat_session.dart` 零改动。
 
 ## §6 验证与收口（父代理）
+
+## 验证与收口（主 agent）
+
+**交付与复核**
+| 面 | 读数 |
+|---|---|
+| 文件 | `thincoder_config_file.dart` 30 行 · `thincoder_config_store.dart` 495 · `thincoder_models_page.dart` 579 · store 测试 540 · page 测试 386（与报告逐档一致） |
+| 测试（主 agent 复跑） | `test/kernel/thincoder_config_store_test.dart` + `thincoder_kernel_test.dart` + `test/settings/thincoder_models_page_test.dart` ⇒ **+173 全绿 · exit 0** |
+| 静态检查 | 改动面 `flutter analyze` ⇒ No issues found |
+| 提交 | `fc061374`（13 文件，+2642/−12） |
+| 真机 | 用户 2026-10-22 00:29 在 dev 实例看到设置页与「添加 provider」（原话「我看到了添加provider」）；00:40 追问配置归属，答：写的是本机 `~/.thincoder/config.json`，新用户无该文件时按空配置渲染、页面给添加入口 |
+
+**未走完的面（如实记）**
+- **真机保存一次并核对文件**：未由用户执行（测试已覆盖 T119/T120/T121 的写盘与「其它键逐字不变」；真机走查留给下一次）。
+- **U14「CLI 读得进」**：T125 离线固件已真跑外仓 `resolveProviders`；真机 CLI 会话未验。
+- **设计档漂移 4 处**（`model` 校验行、§27.9 两档清单外文件、T126 用 `test` 非 `testWidgets`、delta 双向漂移）⇒ 转入台账 #139，下一次触碰该档时回填。
+
+**评审余项 9 条**（表单无取消、无 HOME 回退、T124 机器家目录断言、chmod 0500 root 必红、读侧 `providersNotList` 保存前不显示、`rename` 替换软链等）：批档 §5 已单列，主 agent 裁定按「认账不排期」——不进本批，随 #139 的档面触碰一并处置。
+
+**doc-check gate**：本批文档改动（设计档 §27 / 需求档 F24）两轮评审期间均 PASS；收口轮无新增文档改动。

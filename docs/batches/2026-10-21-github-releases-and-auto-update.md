@@ -3,7 +3,7 @@
 > 编制：主 agent · 2026-10-21 · 来源 = 用户 2026-10-21 23:24「用户如何更新？」· 23:29「我这里做唯一更新源吗？我拉他们的改过之后继续发版」· 23:32「我们不能发布在 github 上面吗」· 23:33「好，你上传上去，我自己根据情况修改仓库的私有和公有情况」· 23:35「自动更新也要做」· 23:36「不改我们的开发这边，只在发行版这么做」。
 > 台账 = #135（distribution · 归批）。前情 = 无（独立批）。
 ## §1 讨论（主 agent）
-**状态行**：🔄 进行中（…）
+**状态行**：已收口 2026-10-22
 <§1 模板占位：本批条目 / 关键判据 / 授权口径>
 
 ## 讨论（主 agent）
@@ -325,3 +325,34 @@ VERDICT: pass
 行数校正（修正轮 1 之后，`git diff --numstat` 实测）：`test/update/update_manifest_test.dart` +41/−4、`test/update/installer_test.dart` +30/−0；上方改动表 ⑦⑧ 是修正前的读数。其余六档不变（`update_manifest` +25/−12、`installer_io` +9/−4、`update_signature` +1/−1、`release_manifest` +14/−14、`release.yml` +4/−2、`publish_release` 362 行）。
 
 ## §6 验证与收口（父代理）
+
+## 验证与收口（主 agent）
+
+**代码与文档**
+| 面 | 读数 |
+|---|---|
+| `flutter test test/update` | **+81 通过 · 2 跳过 · exit 0**（需 `C:\Program Files\Git\usr\bin` 在 PATH，`chmod` 由它提供） |
+| 改动面 `dart analyze` | No issues found |
+| 公钥 | `update_signature.dart` = `TTLrdC73SdSwOxlF/njyvEgLTc2EUEyg3cRnkEq3HB0=`（自有） |
+| 下载域 | `githubHosts = {'github.com', 'objects.githubusercontent.com'}`（精确主机） |
+| CI | `release.yml` 只剩 `workflow_dispatch` |
+| 提交 | `f800e82c`（14 文件，+1371/−81） |
+
+**发布与线上（真实动作，2026-10-22 00:53–00:57）**
+| 步骤 | 读数 |
+|---|---|
+| 构建 | `dart run tool/build_windows.dart --stock-engine` → `BaoCode-1.6.0-setup.exe` 21.0 MB（`app.so` 00:52、安装包 00:53） |
+| 清单 | `tool/release_manifest.dart` → `latest.json` 777 B，`version=1.6.0+16`，`url` 指向 v1.6.0 资产，签名 88 字符 |
+| 发布 | `tool/publish_release.dart`：复用 v1.6.0 release → 删旧 setup → 传 setup（22,022,549 B）→ 传 latest.json → PATCH 非 draft → 回读断言 |
+| **匿名下载** | 清单 **200 · 777 B**；安装包 **200 · 22,022,549 B**（落点 `release-assets.githubusercontent.com`） |
+| **真机** | 用户 2026-10-22 01:02 装 `Release\baocode.exe` 后点「检查更新」⇒ **「已经是最新版本」**（原话）——读清单、验签、版本比对全链路成立 |
+
+**验收对照**：① 匿名可下 ✅ · ② 新钥过旧钥拒 ✅（T8）· ③ 清单自洽 ✅（size 与实读逐字节一致）· ④ 策略四断言 + 四条拒绝 ✅ · ⑤ 真机升级 —— **部分**：版本比对与提示成立，**下载→安装→生效**未走（线上无更高版本），转入 U 表 · ⑥ 上游清单被拒 ✅（T8 旧钥拒）· ⑦ debug 不发请求 ✅（T5/T6）。
+
+**已知窗口（如实记）**：同 tag 覆盖时 `latest.json` 在「删旧→传新」之间短暂 404（设计 §7.2「已知窗口」）；本次覆盖实测未观察到用户侧影响（无已装用户持旧公钥）。
+
+**未达成 / 转入台账**
+- 设置页文案仍写「在 baocode.dev 上检查新版本」⇒ **#138**（归批）。
+- 真机「下载→安装→生效」一段未走 ⇒ 下次发更高版本时验（属 U3/U4 的延伸）。
+
+**doc-check gate**：本批文档改动已过门（`docs/auto-update.md` / `docs/release.md` 一次 REFUSED 后复跑 PASS，见 §2）；收口轮无新增文档改动。
