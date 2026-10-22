@@ -1,6 +1,7 @@
 // Signs a release's installers and writes the manifest the app reads to
-// update itself (https://dl.baocode.dev/releases/latest.json; see
-// docs/auto-update.md). Run from anywhere in the repository:
+// update itself (defaultManifestUrl: the newest GitHub release's
+// latest.json; see docs/auto-update.md). Run from anywhere in the
+// repository:
 //
 //   dart run tool/release_manifest.dart \
 //     --windows build/installers/BaoCode-1.2.0-setup.exe \
@@ -32,10 +33,10 @@
 // the same version keeps the other platforms' entries, so the Windows and the
 // macOS installers can be signed on their own machines one after the other.
 //
-// Each link ends in `?sha256=<the file's first 16 hex digits>`: a file
-// published again under the same name (a release redone) is another address
-// to the CDN, which keeps downloads for a year, so no one is served the old
-// one. The app names a download by the path alone.
+// Each link is the file's asset in the release tagged v<version>
+// (…/releases/download/v<version>/<file>): publishing a version again
+// uploads the same names in place, so an address never changes. The app
+// names a download by the path alone.
 //
 // Besides what the app reads, `downloads` gives the download page
 // (site/site.js) what it offers: the disk images (--dmg-arm64, --dmg-x64),
@@ -49,13 +50,12 @@ import 'package:baocode/update/update_signature.dart';
 import 'package:baocode/update/version.dart';
 import 'package:crypto/crypto.dart' as crypto;
 
-/// Where the downloads go: `<base>/<1.2.0>/<file>`.
-const _releasesBase = 'https://dl.baocode.dev/releases';
+/// Where a release's files go: `$_releasesBase/v<version>/<file>`.
+const _releasesBase = 'https://github.com/$updateRepository/releases/download';
 
-/// [name]'s link, for the file whose SHA-256 is [sha256].
-Uri _link(AppVersion version, String name, String sha256) => Uri.parse(
-  '$_releasesBase/${version.marketing}/$name?sha256=${sha256.substring(0, 16)}',
-);
+/// [name]'s link in the release tagged for [version].
+Uri _link(AppVersion version, String name) =>
+    Uri.parse('$_releasesBase/v${version.marketing}/$name');
 
 /// The Macs built for, each its own download (tool/build_macos.dart), and
 /// the app takes its processor's (lib/update/installer_io.dart).
@@ -182,7 +182,7 @@ Future<void> main(List<String> arguments) async {
     }
     final name = file.uri.pathSegments.last;
     assets[platform] = UpdateAsset(
-      url: _link(version, name, sha256),
+      url: _link(version, name),
       size: size,
       sha256: sha256,
       signature: signature,
@@ -231,7 +231,7 @@ Future<void> main(List<String> arguments) async {
     if (!dmg.existsSync()) _fail('No such file: ${dmg.path}');
     final sha256 = '${await crypto.sha256.bind(dmg.openRead()).first}';
     offer(os, edition, {
-      'url': '${_link(version, dmg.uri.pathSegments.last, sha256)}',
+      'url': '${_link(version, dmg.uri.pathSegments.last)}',
       'size': dmg.lengthSync(),
       'sha256': sha256,
     });

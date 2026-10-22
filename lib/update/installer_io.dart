@@ -14,9 +14,14 @@ import 'version.dart';
 /// installs it. Null where there are none: not macOS, Windows or Linux, or a
 /// debug build (which would replace the build folder's app), unless
 /// [manifestUrlVariable] points at a manifest to try.
-PlatformUpdates? platformUpdates({required String updatesDirectory}) {
-  final environment = Platform.environment;
-  final override = environment[manifestUrlVariable]?.trim() ?? '';
+///
+/// [environment] is the process's; a test gives its own.
+PlatformUpdates? platformUpdates({
+  required String updatesDirectory,
+  Map<String, String>? environment,
+}) {
+  final env = environment ?? Platform.environment;
+  final override = env[manifestUrlVariable]?.trim() ?? '';
   if (!kReleaseMode && override.isEmpty) return null;
   final manifestUrl = Uri.tryParse(
     override.isEmpty ? defaultManifestUrl : override,
@@ -40,7 +45,7 @@ PlatformUpdates? platformUpdates({required String updatesDirectory}) {
     installer = WindowsUpdateInstaller(
       executable: executable,
       pid: pid,
-      environment: environment,
+      environment: env,
       updatesDirectory: updatesDirectory,
     );
   } else if (Platform.isLinux) {

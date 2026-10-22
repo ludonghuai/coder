@@ -65,9 +65,9 @@ void main() {
     });
 
     test('names a download by its path, whatever its query', () {
-      // tool/release_manifest.dart ends links in the file's hash, so a
-      // release redone is not served from the CDN's cache of the old one;
-      // and adds `downloads`, for the site, which the app has no use for.
+      // Links went out with a cache key on them (`?sha256=`), and one may
+      // again; and the manifest adds `downloads`, for the site, which the
+      // app has no use for.
       final text = jsonEncode({
         ...jsonDecode(
           _manifest(
@@ -160,7 +160,7 @@ void main() {
       }
     });
 
-    test('downloads have to be https links on baocode.dev', () {
+    test('downloads have to be https links on the hosts the app trusts', () {
       UpdateManifest at(String url) => UpdateManifest.parse(
         _manifest(platforms: {'windows-x64': _asset(url: url)}),
       );
@@ -187,6 +187,43 @@ void main() {
         'https://cdn.baocode.dev/x.exe',
       ]) {
         expect(at(url).assetFor('windows-x64'), isNotNull, reason: url);
+      }
+    });
+
+    test('a download comes from the release on GitHub', () {
+      // The asset's address in the tag, and where GitHub sends it from;
+      // each its own manifest.
+      for (final url in [
+        'https://github.com/ludonghuai/coder/releases/download/v1.6.1/'
+            'BaoCode-1.6.1-setup.exe',
+        'https://objects.githubusercontent.com/github-production-release-'
+            'asset/BaoCode-1.6.1-setup.exe?X-Amz-Signature=abc',
+      ]) {
+        final manifest = UpdateManifest.parse(
+          _manifest(platforms: {'windows-x64': _asset(url: url)}),
+        );
+        expect(manifest.assetFor('windows-x64'), isNotNull, reason: url);
+      }
+    });
+
+    test('nor from any other host, nor in a weaker form', () {
+      UpdateManifest at(String url) => UpdateManifest.parse(
+        _manifest(platforms: {'windows-x64': _asset(url: url)}),
+      );
+      for (final url in [
+        'https://evil.example/x.exe',
+        'http://github.com/x.exe',
+        // GitHub's hosts are exactly those two, no subdomain of them.
+        'https://api.github.com/x.exe',
+        'https://github.com:8443/x.exe',
+        'https://user@github.com/x.exe',
+        'https://github.com.evil.example/x.exe',
+      ]) {
+        expect(
+          () => at(url).assetFor('windows-x64'),
+          _invalid('https'),
+          reason: url,
+        );
       }
     });
 

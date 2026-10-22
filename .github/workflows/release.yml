@@ -20,6 +20,10 @@
 #   Actions → Release → Run workflow           build only, to try the build
 #                                              (the editions asked for)
 #
+# The tag pushes above trigger nothing in this fork (it has no R2 or signing
+# secrets): its releases are made by tool/publish_release.dart
+# (docs/design/distribution.md 7).
+#
 # The remote server alone: a server-* tag (remote.yml, which this calls).
 #
 # A version may be published again (the tag moved to a fixed commit): the
@@ -28,8 +32,6 @@
 name: Release
 
 on:
-  push:
-    tags: ['v*', 'test-*']
   workflow_dispatch:
     inputs:
       editions:

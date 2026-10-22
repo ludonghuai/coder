@@ -1,10 +1,10 @@
 # 自动更新
 
-BaoCode 的自动检查与升级：怎么工作、服务端约定、签名、出问题怎么查，以及以后改代码时要注意什么。版本号怎么定、怎么发版、CI 和 Cloudflare 怎么配，见 [release.md](release.md)。
+BaoCode 的自动检查与升级：怎么工作、服务端约定、签名、出问题怎么查，以及以后改代码时要注意什么。发版见 `docs/design/distribution.md`；[release.md](release.md) 描述的 CI / R2 流程属于上游，本 fork 已停用，该档顶部有横幅。
 
-- 更新服务器：`https://dl.baocode.dev`（Cloudflare R2；`baocode.dev/releases/*` 302 到这里）
+- 更新渠道：GitHub Releases（本 fork `ludonghuai/coder`）；清单地址 `https://github.com/ludonghuai/coder/releases/latest/download/latest.json`
 - 平台：macOS（Apple silicon 和 Intel 各一个包）、Windows（x64）
-- 代码：`lib/update/`，测试：`test/update/`，发布工具：`tool/release_manifest.dart`
+- 代码：`lib/update/`，测试：`test/update/`；发布工具：`tool/release_manifest.dart`（签名 + 清单）、`tool/publish_release.dart`（建 release + 上传）
 
 ## 目录
 
@@ -33,10 +33,10 @@ BaoCode 的自动检查与升级：怎么工作、服务端约定、签名、出
 | macOS 替换 .app 并自动重启 | 已完成 |
 | 发布工具（签名 + 生成清单） | 已完成：`tool/release_manifest.dart` |
 | 版本号工具 | 已完成：`tool/bump_version.dart` |
-| CI 构建与发布 | 已完成：`.github/workflows/release.yml`，见 [release.md](release.md) |
+| 发版（构建 → 签名 → 发布） | 已落地：`tool/release_manifest.dart` + `tool/publish_release.dart`，见 `docs/design/distribution.md` §7；上游 CI 的 tag 触发已停用 |
 | macOS 打包（dmg + 更新用 zip） | 已完成：`tool/build_macos.dart` |
 | macOS 代码签名与公证 | 脚本已支持；**等 Apple 开发者账号**，见 [release.md 7.3](release.md#73-applemacos-签名与公证) |
-| dl.baocode.dev（R2） | **需要准备**：见 [release.md 7.1](release.md#71-cloudflare) |
+| 发布渠道 | GitHub Releases（本 fork `ludonghuai/coder`）：清单与安装包是同一版 release 的资产，见 `docs/design/distribution.md` §3 |
 | 真机端到端验证 | **未做**：见第 11 节 |
 
 签名密钥已经生成：私钥在 `~/.baocode-release/update-signing.key`（不在仓库里），公钥写在 `lib/update/update_signature.dart`。
@@ -98,6 +98,7 @@ BaoCode 的自动检查与升级：怎么工作、服务端约定、签名、出
 | `lib/update/update_store.dart` | `GlobalUpdateStore`：跳过的版本、上次检查时间 | GlobalStorage |
 | `lib/settings/pages/updates_page.dart` | 设置 → 更新 | UI |
 | `tool/release_manifest.dart` | 签名并生成清单、生成密钥 | 只依赖上面的纯 Dart 文件 |
+| `tool/publish_release.dart` | 建 GitHub release、上传安装包与清单 | GitHub API（`GITHUB_TOKEN`） |
 
 `version.dart`、`update_manifest.dart`、`update_signature.dart` **不能引入 Flutter**：`dart run tool/release_manifest.dart` 也会用到它们，引入 Flutter 后这个工具就跑不起来了。
 
@@ -234,25 +235,28 @@ main.dart onExitRequested
 
 ### 5.1 目录布局
 
+一版 = 本 fork 的一个 GitHub Release，tag 是 `v<marketing 版本>`：
+
 ```
-https://dl.baocode.dev/
+https://github.com/ludonghuai/coder/
   releases/
-    latest.json                         ← 应用读取的清单
-    1.2.0/
+    latest/download/latest.json         ← 应用读取的清单（最新一个非 draft、非 prerelease 的 release）
+    download/v1.2.0/
+      latest.json                       ← 这一版自己的清单，内容指向本 tag 的资产
       BaoCode-1.2.0-setup.exe           ← Windows 更新 / 首次安装
       BaoCode-1.2.0-mac-arm64.zip       ← macOS 更新（Apple silicon）
       BaoCode-1.2.0-mac-x64.zip         ← macOS 更新（Intel）
       BaoCode-1.2.0-arm64.dmg           ← macOS 首次安装（应用不读取）
       BaoCode-1.2.0-x64.dmg
-    remote/
-      <VERSION>/                        ← 远程服务端，应用连远程主机时按需下载
-        baocode-server-linux-x64.gz        （见 docs/ssh-remote.md 第 9.3 节；
-        baocode-server-linux-arm64.gz       旧版本的目录要一直保留）
 ```
+
+- 清单里写**具体 tag** 的资产地址（`download/v<版本>/…`），不用 `latest/download`：清单与安装包必须指向同一版。
+- 同一版本重新发布 = 同 tag 内同名覆盖，不新建 tag；覆盖顺序与短窗口见 `docs/design/distribution.md` §7.2。
+- 远程服务端不在 GitHub，仍从 `https://dl.baocode.dev/releases/remote/<VERSION>/` 下载（见 `docs/ssh-remote.md` 第 9.3 节）；旧版本的目录要一直保留。
 
 下载页 `https://baocode.dev/download` 在官网上（`site/`），应用无法自己更新时会打开它。
 
-`tool/release_manifest.dart` 按 `https://dl.baocode.dev/releases/<marketing 版本>/<文件名>` 生成链接。要改目录结构，就改工具里的 `_releasesBase`。
+`tool/release_manifest.dart` 按 `https://github.com/ludonghuai/coder/releases/download/v<marketing 版本>/<文件名>` 生成链接（`_releasesBase` 由 `updateRepository` 常量拼出）。要改仓库，就改 `lib/update/update_manifest.dart` 的 `updateRepository`。
 
 ### 5.2 `latest.json` 格式
 
@@ -264,19 +268,19 @@ https://dl.baocode.dev/
   "minimumVersion": "1.0.0",
   "platforms": {
     "windows-x64": {
-      "url": "https://dl.baocode.dev/releases/1.2.0/BaoCode-1.2.0-setup.exe",
+      "url": "https://github.com/ludonghuai/coder/releases/download/v1.2.0/BaoCode-1.2.0-setup.exe",
       "size": 123456789,
       "sha256": "64 位十六进制",
       "signature": "base64，解码后 64 字节"
     },
     "macos-arm64": {
-      "url": "https://dl.baocode.dev/releases/1.2.0/BaoCode-1.2.0-mac-arm64.zip?sha256=0123456789abcdef",
+      "url": "https://github.com/ludonghuai/coder/releases/download/v1.2.0/BaoCode-1.2.0-mac-arm64.zip",
       "size": 123456789,
       "sha256": "...",
       "signature": "..."
     },
     "macos-x64": {
-      "url": "https://dl.baocode.dev/releases/1.2.0/BaoCode-1.2.0-mac-x64.zip?sha256=fedcba9876543210",
+      "url": "https://github.com/ludonghuai/coder/releases/download/v1.2.0/BaoCode-1.2.0-mac-x64.zip",
       "size": 123456789,
       "sha256": "...",
       "signature": "..."
@@ -284,6 +288,8 @@ https://dl.baocode.dev/
   }
 }
 ```
+
+链接里不带 `?sha256=`：GitHub 资产地址不靠查询串区分文件，内容由清单里的 `sha256` 和签名钉死。
 
 | 字段 | 必填 | 说明 |
 | --- | --- | --- |
@@ -306,31 +312,31 @@ https://dl.baocode.dev/
 允许：
 
 - `https://baocode.dev/...`、`https://<任意子域>.baocode.dev/...`（主机名不区分大小写）
+- `https://github.com/...`、`https://objects.githubusercontent.com/...`（**精确主机**，这两个域的子域一个不放）
 
 拒绝：
 
 - `http://`、其他协议、相对路径
-- 带端口：`https://baocode.dev:8443/`
-- 带用户信息：`https://user@baocode.dev/`
-- 相似域名：`baocode.dev.evil.example`、`notbaocode.dev`
+- 带端口：`https://github.com:8443/`
+- 带用户信息：`https://user@github.com/`
+- 相似域名：`github.com.evil.example`、`notgithub.com`、`api.github.com`（`github.com` 的子域）
 
 例外：设置了 `BAOCODE_UPDATE_URL` 时，清单同源（协议 + 主机 + 端口）的链接也会被接受，方便本地测试。
 
-服务器可以把下载重定向到其他域名的 CDN（`HttpClient` 会自动跟随），因为下载内容由 SHA-256 和签名保证，不依赖域名。
+GitHub 的资产下载会 302 到 `objects.githubusercontent.com`；`HttpClient` 自动跟随重定向，重定向目标不再做域名校验——下载内容由 SHA-256 和签名保证，不依赖最终落在哪个域名。白名单里的 `objects.githubusercontent.com` 是记录这个落点，不是今天的必需。
 
-### 5.4 对服务器的要求
+### 5.4 发布顺序与覆盖
 
-CI 上传时已经按下面这些设置好（见 [release.md 第 5 节](release.md#5-dlbaocodedev-上有什么)）：
+发布由 `tool/publish_release.dart` 做，命令见 `docs/design/distribution.md` §7.1：
 
-- **`latest.json` 不要缓存太久**：`Cache-Control: max-age=300`。CDN 缓存旧清单会导致新版本推送延迟；撤回某个版本时也要清 CDN 缓存。
-- **安装包可以长期缓存**（`immutable`，一年）：清单里的链接末尾带文件哈希（`?sha256=…`），文件换了链接就换了，所以同一个版本重新发布也不会拿到旧文件，见 [release.md 第 2 节](release.md#2-版本号)。
-- **建议支持 `Range` 请求**（回 206）：用于断点续传。不支持也没关系，应用会从头重新下载。
-- **返回 `Content-Length`**：不强制，但没有的话进度显示不准。
-- **上传顺序**：先上传安装包，**最后**上传 `latest.json`。
+- 建 release 时是 **draft**；安装包和 `latest.json` 都传完，最后才置为非 draft。所以 `releases/latest` 在资产齐备前一直指向旧 release。
+- **上传顺序**：先安装包，**最后** `latest.json`。
+- **同名覆盖**：同一个 tag 里删掉同名资产再上传，地址不变；从删旧件到新件传完之间有一个短窗口，见 `docs/design/distribution.md` §7.2。
+- 应用侧不看服务端的缓存设置：清单按普通 GET 拉取，安装包下完按大小 → SHA-256 → 签名校验（4.2）。
 
 ### 5.5 撤回一个版本
 
-把 `latest.json` 改回上一个版本的内容并重新上传（清掉 CDN 缓存）。已经更新到问题版本的用户不会被“降级”，因为应用只接受比当前版本高的版本。要让这些用户回到正常状态，需要发一个版本号更高的修复版。
+把 `latest.json` 换回上一个版本的内容，按同名覆盖重新上传（5.4）。已经更新到问题版本的用户不会被“降级”，因为应用只接受比当前版本高的版本。要让这些用户回到正常状态，需要发一个版本号更高的修复版。
 
 ---
 
@@ -359,8 +365,8 @@ windows-x64
 
 | 项目 | 位置与说明 |
 | --- | --- |
-| 私钥 | `~/.baocode-release/update-signing.key`，权限 600。内容是一行 base64，解码后是 32 字节的随机种子 |
-| 公钥 | `lib/update/update_signature.dart` 的 `updatePublicKey`，当前是 `iBSgPUxNeT4jvgaua22aN/jCDwG+ry8rGc17kMcU4II=` |
+| 私钥 | `~/.baocode-release/update-signing.key`（Windows 上即 `%USERPROFILE%\.baocode-release\\update-signing.key`；非 Windows 生成时设成 600）。内容是一行 base64，解码后是 32 字节的随机种子 |
+| 公钥 | `lib/update/update_signature.dart` 的 `updatePublicKey`，当前是 `TTLrdC73SdSwOxlF/njyvEgLTc2EUEyg3cRnkEq3HB0=`（本 fork 自己的发布密钥；与私钥不配套时 `tool/release_manifest.dart` 拒绝签名） |
 | 发布时 | 用环境变量 `BAOCODE_UPDATE_SIGNING_KEY` 指向私钥文件 |
 
 常用命令：
@@ -378,7 +384,7 @@ dart run tool/release_manifest.dart --generate-key <路径>
 
 - **不要**提交到仓库，不要放进网盘的同步目录明文保存，不要发到聊天工具里。
 - 离线备份至少两份，例如密码管理器一份、加密 U 盘一份。
-- **泄露的后果**：拿到私钥的人可以让所有已安装的 BaoCode 运行他们的程序（当然还需要能控制 dl.baocode.dev 或用户的网络）。
+- **泄露的后果**：拿到私钥的人可以让所有已安装的 BaoCode 运行他们的程序（当然还需要能控制 GitHub release 资产或用户的网络）。
 - **丢失的后果**：已经安装的版本再也收不到自动更新，只能让用户手动去下载页重装。
 
 ### 6.4 轮换密钥
@@ -396,13 +402,15 @@ dart run tool/release_manifest.dart --generate-key <路径>
 
 ## 7. 发版步骤
 
-见 [release.md](release.md)：用 `tool/bump_version.dart` 改版本号，推送 `v<版本>` 标签，CI 构建、签名、上传到 `dl.baocode.dev`，`latest.json` 最后上传。CI 不可用时的手动步骤见 [release.md 第 9 节](release.md#9-不用-ci手动发布)。
+本 fork 的发版见 `docs/design/distribution.md` §7：`tool/bump_version.dart` 改版本号 → 构建 → `tool/release_manifest.dart` 签名并生成清单 → `tool/publish_release.dart` 建 release 并上传（`GITHUB_TOKEN` 走环境变量）。
+
+推送 `v<版本>` 标签在本 fork **不再触发 CI**：`.github/workflows/release.yml` 只剩 `workflow_dispatch`。[release.md](release.md) 描述的是上游的 CI / R2 流程，本 fork 不使用，该档顶部有横幅说明。
 
 ---
 
 ## 8. 本地测试
 
-不用发布到 dl.baocode.dev，就能在本机完整走一遍更新流程：
+不用发布到 GitHub Releases，就能在本机完整走一遍更新流程：
 
 ```sh
 # 1. 准备一个“更新版本”：版本号比要测试的那个构建高，签名后写到一个目录
@@ -412,7 +420,7 @@ BAOCODE_UPDATE_SIGNING_KEY=~/.baocode-release/update-signing.key \
   --macos-arm64 /tmp/rel/BaoCode-1.2.0-mac-arm64.zip --manifest /tmp/rel/latest.json
 
 # 2. 把 latest.json 里的 url 换成本地地址（同源的链接会被接受）
-sed -i '' 's#https://dl.baocode.dev/releases/9.0.0/#http://127.0.0.1:8080/#' /tmp/rel/latest.json
+sed -i '' 's#https://github.com/ludonghuai/coder/releases/download/v9.0.0/#http://127.0.0.1:8080/#' /tmp/rel/latest.json
 
 # 3. 起一个静态服务器
 cd /tmp/rel && python3 -m http.server 8080
@@ -478,7 +486,7 @@ flutter test test/update
 | --- | --- | --- |
 | 设置页显示“此版本的 BaoCode 不支持自动更新” | 这是 debug 构建，或者不是 macOS / Windows | 用 release 构建；或者设置 `BAOCODE_UPDATE_URL` 测试 |
 | 一直显示“已是最新版本” | 清单版本不比当前高（build 号没递增）；清单里没有本平台的条目；CDN 还在返回旧清单 | 检查 `version` 和平台键；清 CDN 缓存 |
-| “检查更新失败：Invalid update manifest: …” | 清单格式有错；链接不在 baocode.dev 上 | 错误信息里会说明是哪个字段；用发布工具重新生成 |
+| “检查更新失败：Invalid update manifest: …” | 清单格式有错；链接不在允许的主机上（`baocode.dev` / `github.com` / `objects.githubusercontent.com`） | 错误信息会点名主机和字段；用发布工具重新生成 |
 | “检查更新失败：HTTP 404 / 超时” | 清单没上传，或者网络不通 | `curl` 一下清单地址 |
 | “更新失败：The download is N bytes, not M” | 上传的文件不完整，或者清单里写的不是这个文件的 size | 重新上传；或者对实际上传的文件重新签名 |
 | “更新失败：The download does not match its SHA-256” | 上传后文件被替换了，或者签名时用的不是同一个文件 | 对实际上传的文件重新运行发布工具 |
@@ -528,7 +536,9 @@ flutter test test/update
 
 **改检查的时间**：改 `UpdateService` 的 `firstCheckDelay`（30 秒）和 `checkInterval`（6 小时）这两个默认值，然后同步改 `update_service_test.dart` 里对应的时间。
 
-**改域名或下载页**：域名在 `UpdateUrlPolicy.domain`；清单地址在 `defaultManifestUrl`；下载页在 `ManualUpdateRequired.downloadPage`；发布工具里的链接前缀在 `tool/release_manifest.dart` 的 `_releasesBase`，远程服务端的在 `tool/build_remote_server.dart` 的 `_downloadsBase`；CI 的上传地址在 `.github/workflows/release.yml`；`updates_page` 和文案里也提到了 baocode.dev。改完后跑 `flutter test test/update`。
+**改仓库或下载页**：仓库 slug 在 `lib/update/update_manifest.dart` 的 `updateRepository`；清单地址 `defaultManifestUrl` 和发布工具的链接前缀 `_releasesBase` 都由它拼出。
+允许的主机在 `UpdateUrlPolicy`（`domain` 加 `githubHosts`）；下载页在 `ManualUpdateRequired.downloadPage`；远程服务端的下载前缀另在 `tool/build_remote_server.dart` 的 `_downloadsBase`（仍是 `dl.baocode.dev`）。
+`updates_page` 和文案里也提到了 baocode.dev。改完后跑 `flutter test test/update`。
 
 **加一个平台**（比如 `windows-arm64`、Linux）：
 
@@ -568,4 +578,4 @@ flutter test test/update
 - **没有增量更新**：每次都下载完整的安装包。
 - **拒绝 UAC 之后**：应用已经退出，需要用户手动重新打开（下次启动会再提示更新）。
 - **macOS 的 /Applications 归 root 所有时**：当前用户能改名 .app 但删不掉旧版本的内容时，`.baocode-old` 可能会残留。
-- **服务端还没准备**：R2 存储桶、`dl.baocode.dev`、GitHub 的 `release` 环境，见 [release.md 第 7 节](release.md#7-第一次发布前的准备)。
+- **真实发版还没跑过**：`tool/publish_release.dart` 对 GitHub 的实际调用（上传端点与上限、`GITHUB_TOKEN` 的最小权限、draft → 发布的效果）和仓库公开后的匿名下载都待首跑核对，见 `docs/design/distribution.md` §15（U1 / U4 / U5 / U7）。

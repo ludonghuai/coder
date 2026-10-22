@@ -195,6 +195,36 @@ void main() {
     );
   });
 
+  test('a debug build asks nothing, unless pointed at a manifest', () {
+    // Not release mode (flutter test): no update service, so no backend and
+    // no request — unless BAOCODE_UPDATE_URL says which manifest to try
+    // (lib/update/installer_io.dart).
+    final directory = p.join(temp.path, 'updates');
+    expect(
+      platformUpdates(updatesDirectory: directory, environment: const {}),
+      isNull,
+    );
+    final pointed = platformUpdates(
+      updatesDirectory: directory,
+      environment: const {
+        manifestUrlVariable: 'https://example.test/latest.json',
+      },
+    );
+    expect(pointed, isNotNull);
+    final updates = pointed!;
+    expect(updates.manifestUrl, Uri.parse('https://example.test/latest.json'));
+    // This platform's key: windows-x64 here, one of a Mac's or Linux's own
+    // there (translated or not: both are the update's).
+    expect(
+      updates.platform,
+      Platform.isWindows
+          ? 'windows-x64'
+          : Platform.isMacOS
+          ? anyOf('macos-arm64', 'macos-x64')
+          : anyOf('linux-x64', 'linux-arm64'),
+    );
+  });
+
   group('macOS', () {
     late Directory applications;
     late String app;

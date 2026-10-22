@@ -4,16 +4,20 @@ import 'dart:convert';
 
 import 'version.dart';
 
-/// Where the app looks for its next version: the release manifest
-/// dl.baocode.dev serves (docs/auto-update.md has its format).
-const defaultManifestUrl = 'https://dl.baocode.dev/releases/latest.json';
+/// This fork's repository: the app updates from its releases.
+const updateRepository = 'ludonghuai/coder';
+
+/// Where the app looks for its next version: the newest release's manifest
+/// (docs/auto-update.md has its format).
+const defaultManifestUrl =
+    'https://github.com/$updateRepository/releases/latest/download/latest.json';
 
 /// The environment variable that points the app at another manifest, to
 /// try a release before it is published (a local server's, say).
 const manifestUrlVariable = 'BAOCODE_UPDATE_URL';
 
 /// A manifest that cannot be used: not JSON, a field missing or wrong, a
-/// download not on baocode.dev.
+/// download on a host the app does not trust.
 class UpdateManifestException implements Exception {
   const UpdateManifestException(this.message);
 
@@ -24,9 +28,9 @@ class UpdateManifestException implements Exception {
 }
 
 /// Which download links a manifest may give: https on baocode.dev (or a
-/// subdomain of it), and [extraOrigins] besides — the origin of a manifest
-/// [manifestUrlVariable] points at, so a release can be tried from where it
-/// is served before it is published.
+/// subdomain of it), on one of [githubHosts], and [extraOrigins] besides —
+/// the origin of a manifest [manifestUrlVariable] points at, so a release
+/// can be tried from where it is served before it is published.
 class UpdateUrlPolicy {
   const UpdateUrlPolicy({this.extraOrigins = const {}});
 
@@ -40,6 +44,13 @@ class UpdateUrlPolicy {
 
   static const domain = 'baocode.dev';
 
+  /// Where the releases are, and where GitHub sends a download from: two
+  /// hosts exactly, no subdomain of them (docs/design/distribution.md 4.2).
+  static const githubHosts = {'github.com', 'objects.githubusercontent.com'};
+
+  /// For errors: the hosts a link may be on, from the same constants.
+  static String get allowedHosts => '$domain, ${githubHosts.join(', ')}';
+
   final Set<String> extraOrigins;
 
   bool allows(Uri url) {
@@ -49,11 +60,13 @@ class UpdateUrlPolicy {
         extraOrigins.contains(url.origin)) {
       return true;
     }
+    if (url.scheme != 'https' || url.hasPort || url.userInfo.isNotEmpty) {
+      return false;
+    }
     final host = url.host.toLowerCase();
-    return url.scheme == 'https' &&
-        !url.hasPort &&
-        url.userInfo.isEmpty &&
-        (host == domain || host.endsWith('.$domain'));
+    return host == domain ||
+        host.endsWith('.$domain') ||
+        githubHosts.contains(host);
   }
 }
 
@@ -220,7 +233,7 @@ class UpdateManifest {
     if (url == null) throw const UpdateManifestException('"url" is missing');
     if (!policy.allows(url)) {
       throw UpdateManifestException(
-        '"$url" is not an https link on ${UpdateUrlPolicy.domain}',
+        '"$url" is not an https link on ${UpdateUrlPolicy.allowedHosts}',
       );
     }
     final size = json['size'];
