@@ -11,7 +11,7 @@
 https://github.com/ludonghuai/coder/releases/latest
 ```
 
-页面里找 **Assets**，点 `BaoCode-1.6.0-setup.exe`（约 21 MB）。
+页面里找 **Assets**，点 `BaoCode-1.7.0-setup.exe`（约 43 MB —— 从 1.7.0 起安装包**内置了 thincoder**，所以比旧版大；换来的是装完就能用，不必先装 Node）。
 
 ## 2. 安装
 
@@ -36,22 +36,9 @@ BaoCode 有两个内核，选一个用：
 
 ### 方式 A：thincoder 内核（推荐，终端同款）
 
-1. 先装 Node.js 24 或更新版本：<https://nodejs.org>
-2. 打开命令提示符（`Win+R` → `cmd`），执行：
-
-   ```
-   npm install -g thincoder
-   ```
-
-3. 验证：
-
-   ```
-   thincoder --version
-   ```
-
-   能打印出版本号（如 `0.12.76`）即可。
-4. 回到 BaoCode，新建会话时会自动找到它。
-   - 如果找不到：**设置 → 通用 → thincoder**，把路径填成 `thincoder` 命令的完整路径，或点「检查」。
+1. **不用装任何东西**——安装包里已自带 thincoder（Node 运行时 + CLI 源码树）
+2. 配一个供应商就能用：**设置 → 模型（thincoder）→ 添加 provider**，填 名字 / Base URL / API Key / 模型名，保存
+3. 回到会话，顶部就能选到那个模型了
 
 ### 方式 B：Claude Code 内核
 
@@ -60,10 +47,11 @@ BaoCode 有两个内核，选一个用：
 
 ## 5. 没有模型可选怎么办
 
-如果对话页顶部看不到模型、或者发消息提示没有模型，说明 thincoder 还没配过供应商：
+如果对话页顶部看不到模型、或者发消息提示没有模型，说明还没有可用的供应商：
 
-1. 在终端执行一次 `thincoder`，按它的引导填一个供应商（Base URL + API Key + 模型名）；
-2. 或者直接编辑 `C:\Users\<你的用户名>\.thincoder\config.json`，在 `providers` 里加一条：
+1. **设置 → 模型（thincoder）→ 添加 provider**，填四项保存（页面顶部会显示配置文件的实际路径，想手改就按那个路径找）；
+2. 保存后如果当前会话已经开着，页面上会出现「重新打开 thincoder 会话」的按钮，点一下生效；
+3. 手改也行：按上面那个路径编辑 `config.json`，在 `providers` 里加一条：
 
    ```json
    {
@@ -93,6 +81,6 @@ BaoCode 有两个内核，选一个用：
 | 双击没反应 / 被 SmartScreen 拦住 | 安装包未签名 | 更多信息 → 仍要运行 |
 | 启动报缺 DLL | 没装 VC++ 运行库 | 装 `vc_redist.x64.exe` |
 | 会话里没有模型 | thincoder 没配供应商 | 见第 5 节 |
-| 提示 `thincoder is not installed` | 没装 CLI 或不在 PATH | 见第 4 节方式 A；或设置里指定路径 |
-| 提示 thincoder 版本过旧 | CLI 低于 0.12.74 | `npm i -g thincoder@latest` |
+| 提示 `thincoder is not installed` | 内置运行时缺失（安装不完整）或手动指定了不存在的路径 | 重装一次（覆盖安装即可）；或在 **设置 → 通用 → thincoder** 清空路径 |
+| 提示 thincoder 版本过旧 | 手动指定了自己那份且低于 0.12.74 | 清空那个路径回到内置那份，或 `npm i -g thincoder@latest` |
 | 检查更新失败 | 网络到 GitHub 不通 | 稍后再试；或手动下载覆盖安装 |
