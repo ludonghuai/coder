@@ -23,6 +23,7 @@ import 'package:baocode/kernel/kernel_registry.dart';
 import 'package:baocode/kernel/kernel_types.dart';
 import 'package:baocode/kernel/mock/mock_kernels.dart';
 import 'package:baocode/kernel/thincoder/thincoder_catalog.dart';
+import 'package:baocode/kernel/thincoder/thincoder_config_store.dart';
 import 'package:baocode/kernel/thincoder/thincoder_files.dart';
 import 'package:baocode/kernel/thincoder/thincoder_options.dart';
 import 'package:baocode/kernel/thincoder/thincoder_kernel.dart';
@@ -4543,6 +4544,75 @@ void main() {
       // One line each way (§25.5).
       expect(logged('timing: kernel-switch'), hasLength(2));
     });
+  });
+
+  test('T126: a saved config shows in a new session after the restart the '
+      'page offers (§27.6)', () async {
+    final directory = await Directory.systemTemp.createTemp('thincoder-model');
+    addTearDown(() async {
+      if (directory.existsSync()) await directory.delete(recursive: true);
+    });
+    final file = File(p.join(directory.path, 'config.json'));
+    final store = ThincoderConfigStore(file: file);
+
+    // The scripted agent reads the file where the CLI would — the offline
+    // stand-in for a real one (U14): a session started after a save reports
+    // what the save wrote.
+    ThincoderMock started() {
+      final raw = file.existsSync()
+          ? jsonDecode(file.readAsStringSync()) as Map<String, Object?>
+          : const <String, Object?>{};
+      final model = raw['defaultModel'] as String?;
+      return ThincoderMock(
+        serialInbound: true,
+        currentModel: model,
+        models: model == null ? null : [model],
+      );
+    }
+
+    final s = _Session(make: started);
+    addTearDown(s.dispose);
+    s.kernel.prepare();
+    await settle();
+
+    // Nothing configured for us yet: the agent reports a model of its own,
+    // and it is the only candidate.
+    expect(s.agents, hasLength(1));
+    expect(s.kernel.model.selected, 'anthropic:claude-sonnet-5');
+    expect(s.kernel.model.options.map((option) => option.id), [
+      'anthropic:claude-sonnet-5',
+    ]);
+
+    // The page's save (§27.3): the provider, and the model it starts with.
+    final saved = await store.saveProvider(
+      name: 'openai',
+      baseURL: 'https://api.example.com/v1',
+      apiKey: 'sk-test-1',
+      model: 'gpt-5',
+    );
+    expect(saved, isA<ThincoderSaved>());
+
+    // The page's button (§27.6): the kernel's own restart, which
+    // `ChatSession.restart` calls (`chat_session.dart:398`) — a new
+    // process, a new session, the file read again.
+    s.kernel.restart();
+    await settle();
+
+    expect(s.agents, hasLength(2));
+    expect(s.agents.last.requests('session/new'), hasLength(1));
+    final model = s.agents.last.configOptions.firstWhere(
+      (option) => option['id'] == 'model',
+    );
+    expect(model['currentValue'], 'openai:gpt-5');
+    expect(model['options'], [
+      {'value': 'openai:gpt-5', 'name': 'openai:gpt-5'},
+    ]);
+    // And what the model pill reads (`thincoder_choices.dart:46-53`): the
+    // value and the candidate are the new session's.
+    expect(s.kernel.model.selected, 'openai:gpt-5');
+    expect(s.kernel.model.options.map((option) => option.id), [
+      'openai:gpt-5',
+    ]);
   });
 }
 

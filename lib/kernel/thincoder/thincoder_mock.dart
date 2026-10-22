@@ -20,6 +20,7 @@ class ThincoderMock implements ThincoderTransport {
     this.askPermission = false,
     this.autoApprove,
     this.models,
+    this.currentModel,
     this.thinkingLevels,
     this.configError = false,
     this.httpMcp = false,
@@ -66,6 +67,11 @@ class ThincoderMock implements ThincoderTransport {
 
   /// What `model.options` / `thinkingLevel.options` list; null: today's.
   final List<String>? models;
+
+  /// What `model` reports in effect (`configOptions.model.currentValue`),
+  /// e.g. the `defaultModel` a config file was written with; null: an agent
+  /// with a provider of its own.
+  final String? currentModel;
   final List<String>? thinkingLevels;
 
   /// Answers config writes with `-32602` (T59 / T60).
@@ -133,7 +139,9 @@ class ThincoderMock implements ThincoderTransport {
   bool _cancelled = false;
   bool _closed = false;
   String _slot = '1';
-  String _model = 'anthropic:claude-sonnet-5';
+  // The model it reports; a config file's `defaultModel` where one is given
+  // (a session started after Settings → Models (thincoder) wrote it).
+  late String _model = currentModel ?? 'anthropic:claude-sonnet-5';
   bool _thinking = true;
   String _mode = 'normal';
 

@@ -257,7 +257,7 @@ class ThincoderLaunch { final String cwd; final String executable; final Map<Str
 ### F10 用量展示
 
 - `usage_update{used,size}` → `UsageReported`；`ReportsContext.contextWindow` 在首个回报之前用 128 000（thincoder 未知模型兜底值，`bridge.mjs:252`；非虚构），此后以回报为准（`chat_session.dart:419-423` 取 transcript 的最近回报）。
-- 模型/供应商配置只读：桌面不写 `~/.thincoder/config.json`、不改 provider/key（B3）。
+- 模型与供应商配置在**会话内只读**（不改会话内投影）；编辑入口 = 设置 → 模型（thincoder）（F24 / §27）——只写 `providers[]` 与顶层 `defaultModel`，其它键逐字不动，密钥明文与 CLI 一致（0600 尽力而为）（B3 收窄后口径）。
 
 **宿主工具通道（`host-tool-channel` 批；非 `AgentKernel` 能力面）**：`initialize` 回包的 `agentCapabilities.mcpCapabilities.http` 为真、且暴露组内有已注册工具时，内核在 `session/new` / `session/load` / `session/resume` 的 `mcpServers` 里带本机环回 MCP server（过门才带该键，不带空数组；线形见 §3.4）。
 server 由 `HostMcpServer` 签发（127.0.0.1 系统选端口 + 每会话 Bearer 令牌，不落盘、不进 URL），`_teardown` 撤销；工具免审以 `_meta["baocode.dev/trusted"]` 信任位表达，由 CLI 侧消费（转发与信任位属对端仓轮，不在本档机制面）。需求面 = `docs/requirements/host-tool-channel.md`。
@@ -354,7 +354,7 @@ server 由 `HostMcpServer` 签发（127.0.0.1 系统选端口 + 每会话 Bearer
 | D6 | `catalog.projects()` 返回空；靠宿主逐项目列（接线点 ⑤） | ACP 无跨 cwd 枚举；被否：读 `~/.thincoder/sessions/` 反查 cwd——读 thincoder 内部布局（需求档 F2 明写"走 session/list"）；被否：`projects()` 里对"记得的项目"逐个起进程——刷新（窗口聚焦）时进程风暴 |
 | D7 | 图片：不声明 `AcceptsImages`；新增 `AcceptsImageFiles` + 落盘 + 路径行（= 回退路；原生路见 §22 / D82–D85） | 需求档 F6 原文；原生路随握手能力位（§22.1）；不复制终端 `read_image` 指令（桌面不知模型多模态性） |
 | D8 | 不声明 `StartsPlans`，计划以对话文本呈现 | 协议面无计划对象/文件；终端同形；声明了就得造假计划卡 |
-| D9 | 模型候选 = `configOptions.options`（当前一项）；不读 config.json、不直连 provider `/models` | 需求档 §5 口径就是 `set_config_option` + `config_option_update`；读 config.json 拿不到清单（渠道不携模型），直连 `/models` 要用户的 key（B3 张力）且要复刻三种渠道格式（`model-picker.mjs:294-319`）。E3 钩子：thincoder 填多候选即亮 |
+| D9 | 模型候选 = `configOptions.options`（当前一项）；不读 config.json、不直连 provider `/models` | 需求档 §5 口径就是 `set_config_option` + `config_option_update`；读 config.json 拿不到清单（渠道不携模型），直连 `/models` 要用户的 key、且要复刻三种渠道格式（`model-picker.mjs:294-319`）。E3 钩子：thincoder 填多候选即亮 |
 | D10 | 思考 = `ModelSetting(toggle: true)` | 协议面 thinking 是 boolean；先例 = claude 的 `fast` |
 | D11 | 会话起点只吃 `settings['mode']` | 宿主 settings 面是 Claude 形（`workspace.dart:2473-2477` 是 ModelProviders 的模型名），喂给 thincoder 会指错模型 |
 | D12 | 认证引导 = 服务端 message 原文 + 我方一行前缀；不声明 `auth.terminal` | 声明了要有动作，本批不做终端登录动作；声明即虚报 |
@@ -395,8 +395,10 @@ server 由 `HostMcpServer` 签发（127.0.0.1 系统选端口 + 每会话 Bearer
 | F20 用量（批 11） | §23（验收对照 = §23.5 · 用例 = §23.6） | 回合 token = 本回合 `usage_update.used` 之和（turn footer）；会话累计 = 全会话之和（上下文面板）；成本无来源（§14-25）；走查 §23.8 |
 | F21 模型切换后置应用（批 14） | §24（验收对照 = §24.5 · 用例 = §24.6） | 回合在飞时点模型 ⇒ 回合收尾自动重发；pill 标「回合结束后切换到 <目标>」；失败 = 旧模型 + 一条 error；走查 §24.8 |
 | F22 交互响应（批 16） | §25（验收对照 = §25.10 · 用例 = §25.11） | 宿主侧：打开项目预热进程（领池即用）+ 乐观就绪可见（`NoticeItem` 等待面）+ 打点 8 类；CLI 侧瘦身归已批准的外仓批（§25.13 C′1–C′3）；走查 §25.14 |
+| F23 内置运行时（批 17） | §26（验收对照 = §26.12 · 用例 = §26.11） | 发行版内置 `runtime\node\node.exe` + thincoder 源码树 + 私有数据目录（`THINCODER_CONFIG_DIR`）；开发环境按「内置目录在不在」自然分叉、零 release 常量；外仓 6 档 8 处改动归独立外仓批；走查 §26.14 |
+| F24 模型配置面（批 18） | §27（验收对照 = §27.8 · 用例 = §27.7） | 模型清单仍由 CLI 投射（零新协议）；新增「设置 → 模型（thincoder）」页，写内核实际读的那份 `config.json`（只动 `providers[]` 与顶层 `defaultModel`，并发门零写 + 原子写 + 回读）；可见性 = 用户点「重开会话」 |
 
-需求档条目覆盖（三方一致链）：F1–F7、F10–F22、E1–E5 全部有落点；F8/F9 只留接口（§13）；B1–B4 遵守——
+需求档条目覆盖（三方一致链）：F1–F7、F10–F24、E1–E5 全部有落点；F8/F9 只留接口（§13）；B1–B4 遵守，B3 由 F24 收窄（provider / key 的编辑面由 F24 承接，写入面只有 `providers[]` 与顶层 `defaultModel`）——
 B1 默认不改 thincoder 仓，例外 = 经用户裁定的最小接口改动（F12 归属标 §16.1；F13 / F14 的 configOptions 投影 §17.1-① / §17.3-①②；
 F16 的 ACP 挂起窗 + 回合边界帧 §19.3；F19 的 `promptCapabilities.image` + 图像块内容 §22.2——**B1 已裁 A**；
 会话治理 A1 的 `session/set_title` / `session/revert` + 撤销栈回合化 / `prompt.turnId`——用户 2026-10-20 00:02 已准，落点见 `session-governance`）。
@@ -1508,7 +1510,7 @@ console.log(applyConfigOption(tiers, "thinkingLevel", "bogus"))
 2. **AUTO 徽标 / 状态行面**：不做（D42）。判定条件 = 走查时右下角开关不足以「一眼看出」⇒ 评估加宿主面。
 3. **「Approve for this session」的服务端语义**：服务端仍无记忆、按工具会话级放行表不做；桌面侧已按 §17.1-④ 接成会话级 auto（先答本次 + 同一回合写 `autoApprove`）。判定条件 = §17.1-④ 两条（先到先做）。
 4. **P0（桌面内核自答）**：不做（§17.2）；判据 = §17.2 那一句，且与 P1 互斥。
-5. **模型清单的失败面**：拉不到的渠道只报当前项，失败不缓存（下次会话再试）；不做「桌面代拉 `/models`」（B3：不代管 provider / key，与 D9 同口径）。
+5. **模型清单的失败面**：拉不到的渠道只报当前项，失败不缓存（下次会话再试）；不做「桌面代拉 `/models`」（provider / key 的编辑面 = F24 §27，只写 `providers[]` 与 `defaultModel`；清单仍由 CLI 投射，与 D9 同口径）。
 6. **档位面只覆盖有思考面的模型**（D44）：无 `spec` 行 / `thinking:false` 的模型没有 `thinkingLevel`，思考仍只有既有布尔开面。
 7. **auto 不越过核的其它闸**：工程模式设计门与 D5 冻结窗在 `dispatch.mjs:142-165`，位于 autoApprove 短路（`:177`）**之前** ⇒ 自动档不越过它们（与终端同）；桌面不额外加闸（加一条终端没有的闸 = 两端分叉）。
 8. **开关不落盘的情形**：切了没发消息就关窗口 ⇒ 槽里没写（§17.1-② 精度条）；不为此加写盘路径。
@@ -2723,7 +2725,7 @@ initialize 回包 agentCapabilities.promptCapabilities.image == true ?
 |---|---|---|
 | D82 | 能力位随握手（`promptCapabilities.image`），**不**按编译期接口翻牌；内核仍只声明 `AcceptsImageFiles` | 同一内核连新旧 CLI 都可能；编译期 `AcceptsImages` 会在旧 CLI 上虚报（E3）。宿主只需「收图」一个判据（composer / `ChatSession.acceptsImages`），行为差异留在内核。被否：新增 `AcceptsImages`（宿主判据两处、且旧 CLI 下假报） |
 | D83 | 原生路**不落盘**、不发路径行 | 需求「不再只依赖落盘路径告知」；落盘只会多一份无主副本（终端按 3 天窗扫除 `.thincoder/tmp`，`attachments.mjs:14-17`）。被否：两路都发（重复内容、模型两处引用同一图） |
-| D84 | 非多模态模型退化交 CLI（`stripImagesForTextModel`），桌面不做视觉判据 | 桌面不读 provider 规格（B3 / E3）；CLI 每次请求前统一剥图并留 `[image omitted — …]` 可见文本（`provider/core.mjs:133` / `normalize.mjs:100-121`）。被否：桌面按模型名判视觉（模型清单不可靠、且要维护规格副本） |
+| D84 | 非多模态模型退化交 CLI（`stripImagesForTextModel`），桌面不做视觉判据 | 桌面不读 provider 规格；CLI 每次请求前统一剥图并留 `[image omitted — …]` 可见文本（`provider/core.mjs:133` / `normalize.mjs:100-121`）。被否：桌面按模型名判视觉（模型清单不可靠、且要维护规格副本） |
 | D85 | 回退判据 = 能力位在场且为 true；其余一律今天路径 | 需求「CLI 不支持时回退既有路径且行为同今天」；能力位 = 协议唯一权威（ACP：omitted ⇒ UNSUPPORTED）。被否：按版本号判（E3 不加版本门） |
 | D86 | B1 例外面 = 5 档 ≈ +70 行（§22.2 表）；替代通道已查实不可行 | 不改 CLI ⇒ 图块到不了模型（`buildPromptText` 丢块、`run` 只收文本）。被否：桌面自建第二条旁路（协议无通道） |
 
@@ -2996,7 +2998,7 @@ for (const item of residual) {
 - 对齐 ①：回合用量 = 既有 `TurnEnded.usage`（`kernel_event.dart:34-52`）+ turn footer（`turn_footer.dart:121-148`，Claude 已有 tokens / speed / cost）——本批只把 thincoder 的 `usage` 填上，不新造展示面。
 - 对齐 ②：上下文占用 = 既有 `UsageReported` / `ContextUsage` / `ContextUsagePanel`（`thincoder_events.dart:421-434`；`kernel_types.dart:126-140`；`context_usage_panel.dart:50-167`）——F10 已接，本批不改语义。
 - 对齐 ③：会话累计 = 面板里新增一行（形同既有 `_Legend` 行，`context_usage_panel.dart:141-153`）。
-- 偏离 ①：**不**在桌面重算成本（无价目表、B3 不代管 provider）——成本缺席并在登记里给判定条件。
+- 偏离 ①：**不**在桌面重算成本（无价目表、B3 不代管账号 / 账单用量）——成本缺席并在登记里给判定条件。
 - 偏离 ②：**不**把终端 context%（`estimateTokens(history)` 估算，`render-loop.mjs:89-90`）当对照口径——不同仪器；对照只对 token 合计（同 `onUsage` 源）。
 
 **survey 证据**：外仓 `bridge.mjs:254-261`（每条 `onUsage` 发一条 `usage_update`：`used = prompt_tokens + completion_tokens`、`size = providerSpec(agent.provider).context`）；
@@ -3081,7 +3083,7 @@ class ContextUsage {                   // lib/kernel/kernel_types.dart:126-140
 |---|---|---|
 | D87 | 回合用量 = 本回合各条 `usage_update.used` 之和；会话累计 = 全会话之和 | 需求验收「会话级累计 = 各回合之和」；`used` = 该请求 prompt+completion（CLI 定义，`bridge.mjs:254-259`），求和即消耗合计 = 终端状态行 ↑+↓ 同源。被否：取回合最后一条 `used`（那是上下文快照、不是消耗，且与「累计 = 之和」矛盾） |
 | D88 | 会话累计挂 `ContextUsage.sessionSpent`，不新增事件 / 接口 | 面板已有 `ContextUsage` 与 `stats` 两条数据路；加字段零新机制、Claude 面零影响（缺省 null）。被否：实现 `ReportsUsage`（`accountLimits` / `refreshUsage` 对 thincoder 是假面，E3）；被否：新事件 `SessionUsageReported`（宿主与翻译面双改，E2 违规） |
-| D89 | 成本本批不做（无来源）；登记判定条件 | CLI 不上报 `cost`（`bridge.mjs:258-261` 只发 used/size），core 无价目表 ⇒ 桌面要显示只能自建价目表 = 重算（违「口径 = CLI 上报值，不重算」+ B3）。被否：桌面按 provider 价目表估算（第二判据源） |
+| D89 | 成本本批不做（无来源）；登记判定条件 | CLI 不上报 `cost`（`bridge.mjs:258-261` 只发 used/size），core 无价目表 ⇒ 桌面要显示只能自建价目表 = 重算（违「口径 = CLI 上报值，不重算」+ B3 不代管账号 / 账单用量）。被否：桌面按 provider 价目表估算（第二判据源） |
 | D90 | 「与终端同口径」= 同一 `onUsage` 来源的 token 合计；context% 不作对照 | 终端 context% = `estimateTokens(history)` 估算（`render-loop.mjs:89-90`）、非 CLI 上报值；终端也无 `/usage` 命令 ⇒ 对照面 = 状态行累计 ↑+↓（同源）。被否：把 context% 差异当缺陷（不同仪器） |
 
 ### 23.5 验收对照（回指需求档 F20）
@@ -3782,6 +3784,243 @@ $a = @(Get-ChildItem -Recurse -Force $p -ErrorAction SilentlyContinue)
 | U10 | token / 凭据的具体文件名 | 未逐档核实（落在 `configDir` 域内） | 不影响设计（随 `configDir` 迁移）；实施轮核一次并补 §26.5 表 |
 | U11 | SEA 整链（blob 注入 + 运行） | 未尝试（判据已足，D107） | 仅当将来要单文件时按 §26.2 步骤验 |
 | U12 | 应用数据目录下私有子目录的访问器名 | 未逐行核（`DataDirectory.current` 已实读，`data_dir.dart`） | 实施首轮核定并回填 §26.5；路径语义不变（`<数据目录>\runtime-data\thincoder`） |
+
+## 27. 模型配置面（批 18；F24）
+
+> 回指：需求档 F24 功能点 ①–⑥ / 验收 ①–⑥ / 边界（`docs/requirements/thincoder-adapter.md:171-177`）。
+> 一句结论：模型清单仍只由 CLI 投射（零新协议）；baocode 新增「设置 → 模型（thincoder）」页，
+> 写入**内核实际读的那份** `config.json`（只动 `providers[]` 与顶层 `defaultModel`，原子写 + 回读），
+> 保存后由用户点一次「重开会话」拿到新模型。
+
+**最近先例（对齐 ∥ 偏离及理由）**
+
+- 对齐 ①：**设置里的 thincoder 行**（`general_page.dart:443-458` 的 `SettingsGroup(title: 'thincoder')` + `:803-857` `_ThincoderPathSetting`）——同一板块的入口形、字面文案、状态行沿用这一形。
+- 对齐 ②：**供应商表单控件**（`models_page.dart:2084-2173` 的 `_Field`，含 `obscure` 遮显参数）——本页四个输入框用同一控件形，密钥框 `obscure: true`。
+- 对齐 ③：**原子写语义**（外仓 `thincoder-core/config-io.mjs:59-89` `writeConfigAtomic`：stat→read 序、mtime 冲突放弃、`.bak` 留现场、0600）——Dart 侧逐条照搬判据，不新造。
+- 偏离 ①：**不加新协议**。现有 ACP 方法面（`handlers-session.mjs:2-5`）没有「重读配置」入口，`config_option_update` 只是现值通知；可见性靠重开会话（§27.6）。
+- 偏离 ②：**原因串不由 CLI 传输**。实读：`defaultModelReason` 只出现在 core（`model-ref.mjs:69-77`，被 `config.mjs:303` 消费），宿主侧零命中（`grep defaultModelReason lib/**` 无结果）。故页面按**同一判据复述**两条串（§27.5 ④），并把「CLI 是否另有投影面」列入未验证项 U13。
+- 对齐 ④：**外仓 desktop / VSC 的 provider 编辑面**（坐标均在 `thincoder/` 仓内）——写面纪律 = 配置读写只经核 `config-io.mjs`、端侧零自写盘零形状构造、`provider:*` 四通道
+  （`thincoder/thincoder-desktop/src/main/providers.mjs:1-31`；`thincoder/docs/desktop/design/SETTINGS.md:15` KD-10；`thincoder/docs/desktop/design/IPC.md:297-300` 的 `provider:list` / `save` / `remove` / `verify` 家族）。
+  字段构造与遮罩口径对齐它：遮罩单点 `maskKey`、行面只回遮罩后值、明文 key 零下发；本页同形（末四位）。
+- 偏离 ③：**Dart 侧自造 provider 形状与遮罩**。外仓的写面是「核唯一执行体（`writeConfigAtomic`）+ 端侧只给 mutate」（KD-10）；baocode 宿主没有 node 通道、且要在 CLI 子进程之外写用户配置，`config-io.mjs` 不可调（本批不改外仓）⇒ 条目形状与 `defaultModel` 复合串必须由宿主自己构造。遮罩判据仍照外仓口径（末四位），不新造第二套判据。
+
+**survey 证据**：本轮未调公开检索（`websearch` / `fetch` 未发起）——判据全部来自本仓与外仓实读。
+外仓 provider 口径以 `thincoder-core/config.mjs:1-12` 头注为单一来源；编辑面的写面纪律与遮罩判据以 `thincoder/thincoder-desktop/src/main/providers.mjs:1-31`、`thincoder/docs/desktop/design/SETTINGS.md:15`、`thincoder/docs/desktop/design/IPC.md:297-300` 为坐标（对齐 ④ / 偏离 ③）。
+
+### 27.1 决议总表
+
+| 面 | 决议 |
+|---|---|
+| 清单来源 | 沿用 ACP `configOptions.model` / `config_option_update`；`thincoder_choices.dart:46-53` 只投影，零改 |
+| 设置页 | 新增 `SettingsSection.thincoderModels`（导航项「模型（thincoder）」，排在 `models` 之后）+ 新页 `lib/settings/pages/thincoder_models_page.dart` |
+| 写入目标 | `THINCODER_CONFIG_DIR`（非空）→ 否则 `~/.thincoder/config.json`；解析函数在 `lib/kernel/thincoder/thincoder_config_file.dart` |
+| 写入形状 | stat `t0` → 读 → 解析 → 校验并合并 → 重取 `t1`（冲突则零写 + `config.json.bak-<ts>`）→ 临时文件 + 替换（失败回退直写）→ chmod → 回读断言 |
+| 只动键 | `providers[]`（追加，或按 `name` 合并条目上的三个字段）与顶层 `defaultModel` |
+| 可见性 | 保存后由用户点「重开会话」⇒ `ThincoderKernel.restart()`（`thincoder_kernel.dart:563-568`）；不自动重启 |
+| 密钥 | 表单遮显；保存后只显示末四位；日志与 `events.log` 不出现 key |
+
+### 27.2 写入目标解析（与 F23 同一判据）
+
+新增 `lib/kernel/thincoder/thincoder_config_file.dart`（≈ 90 行）：
+
+```dart
+/// The directory the CLI reads its config from: THINCODER_CONFIG_DIR when
+/// set, else ~/.thincoder (thincoder-core/config-io.mjs:32).
+String resolveThincoderConfigDir(Map<String, String> environment) {
+  final named = environment['THINCODER_CONFIG_DIR']?.trim() ?? '';
+  return named.isNotEmpty
+      ? named
+      : p.join(AppPaths.home(environment), '.thincoder');
+}
+
+File thincoderConfigFile(Map<String, String> environment) =>
+    File(p.join(resolveThincoderConfigDir(environment), 'config.json'));
+```
+
+- **环境来源**：`Future<Map<String, String>> Function() thincoderEnvironment`（默认 `ClaudeEnvironment.of`，与 `thincoder_locator.dart:83` 同一次调用）。F23 实施时把 `THINCODER_CONFIG_DIR` 注入 `launch()` 的那份 environment（§26.5），只需把本默认换成内核记录的那份，解析函数零改。
+- **判据一句话**：写的那份 == 子进程环境里解析出来的那份；不引入发行 / 开发开关。
+- **与 CLI 逐字同判据（不展开 `~`）**：CLI 的 `thincoderHome` = `env.THINCODER_CONFIG_DIR?.trim() || join(homedir(), ".thincoder")`（`thincoder-core/home.mjs` 的形；今天是 `config-io.mjs:32`）——env 值原样使用、不做路径展开；本函数同形：给同一 environment，两侧算出同一个字符串。被否：多加一层 `~/` → 主目录展开（CLI 不展开 ⇒ 本档自己的判据在 shell 导出 `~/…` 时失效）。
+- **两种初值**：目录不存在 ⇒ 读作空配置（`{}`），写时 `createSync(recursive: true)`；文件不存在 ⇒ 读作 `{}`，写时新建（与 `config-io.mjs:64-72` 的 `text === null ⇒ raw = {}` 同形）。
+- **非法 JSON** ⇒ 拒绝写、原文件零改动（同 `config-io.mjs:68-71` 的 throw 语义，转成页面错误态）。
+- F23 未实施的事实：`THINCODER_CONFIG_DIR` 在 `lib/**` 零命中（本轮 grep），故本批默认路径就是 `~/.thincoder`。
+
+### 27.3 写入形状（写前读 → 合并 → 并发门 → 原子写 → 回读）
+
+新增 `lib/kernel/thincoder/thincoder_config_store.dart`（≈ 200 行）：
+
+```dart
+class ThincoderConfigStore {
+  ThincoderConfigStore({required this.file});
+  final File file;
+
+  Future<ThincoderConfigDocument> read();   // 缺文件 ⇒ 空文档（exists == false）
+  Future<ThincoderSaveResult> saveProvider({
+    required String name,
+    required String baseURL,
+    required String apiKey,   // 空串 = 保留原值（编辑态）
+    required String model,
+  });
+}
+```
+
+| # | 步骤 | 判据 |
+|---|---|---|
+| 1 | `t0 = file.statSync().modified`（文件缺失 ⇒ `null`） | stat 先于 read（安全方向，`config-io.mjs:60-64` 同序）；`t0` 是并发门的基线 |
+| 2 | `readAsStringSync`；文件缺失 ⇒ 读作空配置（`{}`） | 与 `config-io.mjs:64-72` 的 `text === null ⇒ raw = {}` 同形 |
+| 3 | 解析；非 Map / 非法 JSON ⇒ `invalidJson`，零写 | 页面错误态「配置文件不是合法 JSON：<path>」；本步不触碰磁盘 |
+| 4 | 校验四个输入（§27.4；不满足 ⇒ `invalidField`，零写）→ 合并：`providers = raw['providers']`（非数组 ⇒ `[]`）；按 `name` 找条目。找到 ⇒ 只写 `baseURL`（去尾部 `/`，同 `config-io.mjs:152` 归一）与 `apiKey`（**空串 ⇒ 保留原值**），条目上其它键（`format` / `proxy` / `context` / `maxTokens`）原样保留，`model` 键若在则删（退役字段，`config-io.mjs:154` 运行期即删）；未找到 ⇒ 追加 `{name, baseURL, apiKey}`。最后 `raw['defaultModel'] = '$name:$model'` | 除 `providers` 与 `defaultModel` 外零键变动；所有校验都在写盘前完成 |
+| 5 | 重取 `t1 = file.statSync().modified`（缺失 ⇒ `null`） | 与第 1 步同一读法；这是并发门的唯一判定点，位于任何写盘动作之前 |
+| 6 | `t0 != t1` ⇒ **零写**：不建临时文件、不动目标文件，把**当前磁盘内容**复制为 `config.json.bak-<ts>` 后返回 `conflict`（同 `config-io.mjs:77-78`）；相等 ⇒ 继续第 7 步 | 并发改配置 ⇒ 提示重试、不吞对端新值；`.bak-<ts>` = 冲突现场，只在这一路产生副本 |
+| 7 | 写同目录临时文件 `config.json.tmp-<pid>-<ts>`（内容 = `JSON.stringify(raw, null, 2) + '\n'`，UTF-8 无 BOM；`flush: true`）→ `rename` 覆盖目标；`rename` 抛（Windows 锁 / 跨卷）⇒ 删临时文件后直写目标 | 不留半截文件；序列化形状与 `config-io.mjs:83` 同形（2 空格缩进 + 末尾换行 + UTF-8） |
+| 8 | POSIX：`Process.run('chmod', ['600', path])` 尽力而为，失败不阻断；Windows 跳过 | 与 `config-io.mjs:83-84` 同义 |
+| 9 | 回读：重新 `read`，断言 `defaultModel == '$name:$model'` 且该条目存在、`apiKey` 与预期一致（编辑态留空 ⇒ 与原值相同）；不等 ⇒ `verifyFailed` | 回读断言失败按错误展示，不刷成成功态 |
+| 10 | 成功 ⇒ 返回新文档，页面就地刷新列表 | 页面无需再读盘 |
+
+**「其它键逐字不变」的可机检读法**
+
+单测（T120）用规范化比较：删掉 `providers` 与 `defaultModel` 后，其余部分递归按键名排序、无空白地编码，前后逐字相等。
+
+```dart
+String rest(Map<String, dynamic> raw) {
+  final copy = jsonDecode(jsonEncode(raw)) as Map<String, dynamic>
+    ..remove('providers')
+    ..remove('defaultModel');
+  return canonicalJson(copy); // 递归排序键名 + 无空白
+}
+// 断言：rest(before) == rest(after)
+```
+
+不依赖 Dart 的人工读法（保存前后各跑一次，两行输出逐字相同；`<config.json>` 替换为实际路径）：
+
+```
+node -e "const r=JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));delete r.providers;delete r.defaultModel;console.log(JSON.stringify(r,null,1))" <config.json>
+```
+
+### 27.4 字段口径（以 `thincoder-core/config.mjs:1-12` 头注为准）
+
+| 口径 | 证据 | 本设计的落法 |
+|---|---|---|
+| `providers[].apiKey` 是唯一密钥源，环境变量不是 | `config.mjs:11` | 表单只写 `providers[].apiKey` |
+| `providers[].model` 已退役（渠道不携模型） | `config.mjs:3-6`；运行期删除 `config-io.mjs:153-154` | 「模型名」写进顶层 `defaultModel`，不写进 provider 条目 |
+| `defaultModel` = 顶层 `"provider:model"` 复合串 | `config.mjs:6-8`；解析见 `model-ref.mjs` 的 `parseModelRef` | `defaultModel = '<name>:<model>'` |
+| provider 条目的可选字段与格式判据 | `config-io.mjs:244-253`（`format` 缺省 `openai`，非 openai 才落键；`baseURL` 必填） | 表单不收 `format`；更新已有条目时保留其原值（§27.3 第 4 步） |
+| 渠道名重复的处理 | `config-io.mjs:247`（`Name "…" is already in use`） | 同名 ⇒ 走「更新」分支，页面明示「将更新已有供应商」，不静默覆盖 |
+| `name` 校验（新增 / 改名） | `config-io.mjs:149`（无名 / 空名条目在读取时被过滤）、`:169` / `:172`（`defaultModel` 在首个 `:` 处切开，切出的 provider 名不匹配 ⇒ 静默回退首渠道） | 保存前校验：trim 后非空、不含 `:`；不满足 ⇒ `invalidField`，零写（不落一个会被 CLI 过滤掉的条目） |
+| `baseURL` 校验 | `config-io.mjs:248-249`（`baseURL` 必填）、`:152`（去尾部 `/`） | 保存前判 trim 后非空（不满足 ⇒ `invalidField`）；写盘前按 `:152` 去尾部 `/` |
+| `providers` 非数组 | `config-io.mjs:149`（读侧按数组逐项处理） | 读到的 `providers` 非数组 ⇒ 合并时按 `[]` 处理，页面提示「providers 不是数组，已按空列表处理」 |
+
+**「我们写的文件 CLI 读得进」怎么验证**（离线 + 真机两条）
+
+1. **离线固件**：用本写入器产出 `config.json`，跑 `node -e "import('thincoder/thincoder-core/config-io.mjs').then(m=>console.log(JSON.stringify(m.resolveProviders())))"`，读回 `providers` 各字段与 `activeProvider` 与写入一致（T125）。
+2. **真机**：写后开一个 thincoder 会话，ACP 首包的 `configOptions` 出现 `id: "model"` 项且 `currentValue == '<name>:<model>'`（判据 = `handlers-session.mjs:49-53` 的 push 条件成立）。无 CLI 环境时按 U14 处置。
+
+### 27.5 UI 面：设置 → 模型（thincoder）
+
+**导航接线**
+
+- `SettingsSection` 增 `thincoderModels`（`settings_dialog.dart:26-43`），排在 `models` 之后（`SettingsCategory.preferences`，`:48-63`）。
+- 图标（`:238-256`）用 `Codicons.serverProcess`；label / keywords（`:266-300`）与文案面归 #7 一次覆盖，本批取字面串「模型（thincoder）」，与 `general_page.dart:445` 的 `'thincoder'` 同形。
+- `app_settings.dart:153-236` 增一个 case，返回 `ThincoderModelsSettingsPage`。
+
+**页面结构**（`thincoder_models_page.dart`，≈ 420 行）
+
+| 区 | 内容 | 显隐判据 |
+|---|---|---|
+| ① 配置位置 | 解析出的 `config.json` 绝对路径 + 「存在 / 新建」；只读一行 | 常显（这是「写到哪」的唯一说明） |
+| ② 当前模型 | 活的 thincoder 会话投射的 `currentValue`（`thincoder_choices.dart:46-53` 同一投影）；无活会话 ⇒ 「打开一个 thincoder 会话后这里显示 CLI 给的模型」 | `probe() != null` |
+| ③ 候选列表 | `configOptions.model` 的 `options`（CLI 后台拉到的清单）；拉到 ≤ 1 项 ⇒ 只出当前值一行 + 「刷新」按钮（重开会话） | 有活会话即显示（与 ② 同判据 `probe() != null`） |
+| ④ 空态 | 两句引导：「添加一个供应商」/「在你自己的终端里配好后回来点刷新」，并显示原因串：无 provider ⇒ 「未配置任何 provider」；有 provider 无 `defaultModel` ⇒ 「defaultModel 未设置」 | `providers` 空，或 `defaultModel` 空 |
+| ⑤ 供应商列表 | 每行：名字、baseURL、密钥末四位（`••••1234`）、模型（`defaultModel` 指向它时）；行操作「编辑」 | `providers` 非空 |
+| ⑥ 添加 / 编辑表单 | 四个输入：名字、Base URL、API Key（`obscure: true`）、模型名；「保存」按钮 + 行内错误。编辑态密钥框留空 = 保留原值 | 点「添加供应商」或行「编辑」 |
+| ⑦ 错误态 | 五种：`invalidJson` / `invalidField` / `conflict` / `ioError` / `verifyFailed`，各一句可读文案 + 路径；不吞异常 | 保存返回非 ok |
+
+- **「设为默认」不做**：默认模型只在 ⑥ 保存时置位（`defaultModel = '<name>:<model>'`）——条目上无模型名可合成该串（`providers[].model` 已退役，§27.4），行级动作会变成一次隐式写盘。
+
+- **密钥规则（敏感面）**：输入框 `obscure: true`（`models_page.dart:2164` 同形）；保存成功后输入框清空，行上只显示末四位；写入器与页面都不调 `appEvent` 带 key，`events.log` 不出现 key（边界见 §27.11）。
+- **与会话内 pill 的关系**：设置页写磁盘，pill 显示会话内投影（§2 的 `SelectsModel`）——两者不同步是设计的正常态。因此保存成功后页脚固定一行：「已保存。重开会话后，模型选项才会更新。」+ 按钮「重开会话 thincoder」。
+
+### 27.6 保存后的可见性闭环（三选一：重开会话）
+
+| 候选 | 可行性（实读判据） | 结论 |
+|---|---|---|
+| 触发 `config_option_update` | 该通知只是**现值投影**（`sessionConfigOptions` 单源，`handlers-session.mjs:39-46`）；运行中的 agent 在 `session/new` 时已装配 `providers`（`handlers-session.mjs:98-105` 注释：清单来源 = `agent.providers`），不重读磁盘；ACP 方法面没有「重读配置」（`:2-5`），新造 = 改外仓（本批禁止） | ❌ |
+| 下次会话生效 | 事实成立（每次 `session/new` 重新装配），但保存后当前会话零反馈，用户会以为没生效 | ❌ 不可感知 |
+| **重开会话** | 现有入口 `ThincoderKernel.restart()`（`thincoder_kernel.dart:563-568`：`_teardown()` → `prepare()` = 新进程 + 新 `session/new`）；聊天面已有 `ChatSession.restart()`（`chat_session.dart:398`） | ✅ **选它** |
+
+**交互定案**：保存成功后**不自动重启**——自动重启会掐断正在跑的回合，与 F21（回合在飞时切换不丢请求）的语义冲突；页面给一行提示 + 一个按钮。用户不点 ⇒ 新会话（切走再回来 / 新建）自然生效。
+
+### 27.7 用例表（T118–T130）
+
+| # | 场景 | 输入 | 期望 |
+|---|---|---|---|
+| T118 | 空配置读 | 文件不存在；目录不存在 | `read()` ⇒ `providers` 空、`defaultModel == null`、`exists == false`；不创建任何文件 |
+| T119 | 新建供应商 | `{}` 起步 + 四字段 | 文件出现 `providers:[{name,baseURL,apiKey}]`、`defaultModel == "name:model"`；回读断言通过；无旧文件 ⇒ 无 `.bak` |
+| T120 | 其它键逐字不变 | 预置 `{agent:{…}, subagentModels:{…}, providers:[{name:"x",apiKey:"k",format:"anthropic",proxy:true}], defaultModel:"x:m", $schema:"…"}` + 新增一条 | `rest(before) == rest(after)`；`x` 条目的 `format` / `proxy` 原样保留 |
+| T121 | 更新已有供应商 | 同名条目 + 新 baseURL / apiKey / model | 条目数不变；三字段更新；条目上的 `model` 键若在则消失；`defaultModel` 更新 |
+| T122 | 写失败（只读目录） | 目录只读（POSIX `chmod 0500`）/ 父路径不可建 | `ioError`；原文件字节不变、仍可读；无 `.tmp` 残留；不生成任何 `.bak` / `.bak-<ts>`（零写） |
+| T123 | 非法 JSON | 文件内容 `{not json` | `invalidJson`；文件字节不变；零写；不生成任何 `.bak` / `.bak-<ts>` |
+| T124 | 写入目标解析 | env `THINCODER_CONFIG_DIR=<tmp>`；另一组无该键 | 前者目标 == `<tmp>/config.json` 且 `~/.thincoder` 的 `modified` 前后相同；后者 == `~/.thincoder/config.json` |
+| T125 | CLI 读得进（离线固件） | 写入器产物 + `node -e` 调 `resolveProviders()` | `providers` 各字段与写入一致、`activeProvider == name`（无 node 环境 ⇒ 记 U14） |
+| T126 | 保存后的可见性（宿主链路） | 写入后 `restart()`（mock 对端） | 证明的是「翻译 / 投影 + `restart()` 后新会话拿到清单」：新会话 `configOptions` 出现 `id:"model"`、`currentValue == "name:model"`；候选含该值。**不**证明「文件 → CLI → ACP」 |
+| T127 | 密钥不回显 / 不落日志 | 保存后读页面状态与 `events.log` | 行上只有末四位；`events.log` 全文不含完整 key |
+| T128 | 并发冲突（零写 + 留现场） | 首次 stat 之后、写盘之前从外部改写目标文件（stat 缝：第二次返回不同 mtime） | `conflict`；目标文件字节 == 对端写入内容（本次零写）；存在 `config.json.bak-<ts>` 且内容 == 冲突时的磁盘内容；无 `.tmp` 残留；无滚动 `config.json.bak` |
+| T129 | 回读失败 | 写入成功后向读回缝注入被改写的内容（如丢掉 `defaultModel`） | `verifyFailed`；页面显示错误、不刷成成功态；文件内容 = 本次写入的内容（回读只核对、不回滚） |
+| T130 | 字段校验（零写） | `name` 空 / `name` 含 `:` / `baseURL` 空 / `providers` 非数组 | 前三项 ⇒ `invalidField`，文件字节不变，无 `.bak` / `.bak-<ts>` / `.tmp`；末项 ⇒ 按 `[]` 合并后正常写盘，页面提示「providers 不是数组」 |
+
+**可见性判据的分工**：`文件 → CLI → ACP` 这条链由 T125（离线固件，核 `resolveProviders` 读回）+ 真机（U14）证明；T126 的 mock 对端只覆盖宿主链路（翻译 / 投影 / `restart()`），两者不混成一条。
+
+### 27.8 验收对照（回指 F24 验收 ①–⑥）
+
+| 需求判据 | 本档落点 | 机制 | 机检 |
+|---|---|---|---|
+| ① 全新配置 ⇒ pill 不出现、设置页空态 + 原因串 | §27.2 / §27.5 ④ | 空文件读作 `{}` ⇒ 内核 `agent.provider.model` 空 ⇒ `handlers-session.mjs:51` 不 push model 项 | T118 + 真机开新配置会话看 pill 缺席（`thincoder_choices.dart:49-50` 空列表） |
+| ② 填一个供应商 ⇒ 文件出现条目与 `defaultModel`，其它键逐字不变 | §27.3 | 读 → 合并 → 原子写 → 回读 | T119 / T120 / T121 |
+| ③ 会话内 pill 出现该模型并可选中 | §27.6 | 重开会话 ⇒ 新 `session/new` 重新装配 providers | T126 + 真机点选一次 |
+| ④ 写失败明确报错、不留半截文件：只读目录 / 非法 JSON / 字段不合法三路为零写（原文件字节不变、可读），并发冲突路零写且留 `config.json.bak-<ts>` 现场 | §27.3 第 3 / 4 / 6 / 7 / 9 步 | 非法 JSON 零写；字段不合法零写；并发冲突零写 + `config.json.bak-<ts>`；临时文件 + 替换；回读断言 | T122 / T123 / T130 / T128 / T129——三路零写由 T122 / T123 / T130 断言（无副本、无 `.tmp` 残留）；`.bak-<ts>` 现场只由冲突用例 T128 断言 |
+| ⑤ `THINCODER_CONFIG_DIR` 指向临时目录 ⇒ 写临时目录，`~/.thincoder` mtime 不变 | §27.2 | 解析函数按 env 决定 | T124（`~/.thincoder` 的 `modified` 前后相同）+ 真机读法同 §26.5 的 PowerShell |
+| ⑥ debug 与发行一致（无开关） | §27.2 | 解析函数零 `kReleaseMode`、零开关、零默认值分叉 | T124 在 `flutter test` 与真机走同一函数；`grep kReleaseMode` 该文件零命中 |
+
+### 27.9 受影响文件清单（行数 = 本轮实测）
+
+| # | 坐标 | 现值 | 改动 | delta |
+|---|---|---|---|---|
+| ① | `lib/kernel/thincoder/thincoder_config_file.dart` | 新增 | 解析函数 + 环境来源缝 | ≈ +90 |
+| ② | `lib/kernel/thincoder/thincoder_config_store.dart` | 新增 | 读 / 合并 / 原子写 / 回读 | ≈ +200 |
+| ③ | `lib/settings/pages/thincoder_models_page.dart` | 新增 | 七区页面（§27.5） | ≈ +420 |
+| ④ | `lib/settings/settings_dialog.dart` | 841 | enum + 图标 + label + keywords 四点 | ≈ +15 |
+| ⑤ | `lib/settings/app_settings.dart` | 290 | `buildPage` 一个 case + 依赖接线 | ≈ +12 |
+| ⑥ | `test/kernel/thincoder_config_store_test.dart` | 新增 | T118–T125 · T128–T130 | ≈ +290 |
+| ⑦ | `test/settings/thincoder_models_page_test.dart` | 新增 | 空态 / 错误态 / 遮显（T127） | ≈ +140 |
+| ⑧ | `test/kernel/thincoder_kernel_test.dart` | 4299 | T126（宿主链路：写入后 `restart()`，末尾追加一个 `testWidgets`） | ≈ +60 |
+
+- **零改动**：`thincoder_choices.dart`（286）· `thincoder_kernel.dart`（1409）· `chat_session.dart`（1340）· 外仓 `thincoder/**` 全部 · 需求档 · l10n 资源档（本批字面串，归 #7）。
+- **体量立场（`settings_dialog.dart` 841 行，已过 >800 硬顶）**：本批只加四点（enum / 图标 / label / keywords），不动结构；缝候选 = `SettingsSection` 与页构造映射族（`settings_dialog.dart:26-43` / `:48-63` / `:238-256` / `:266-300`）；触发 = 独立拆分批立项（本批不拆）。
+- **体量立场（`test/kernel/thincoder_kernel_test.dart` 4299 行，在 >800 名单）**：本批只在末尾追加一个 `testWidgets`（T126），不动结构；缝候选沿用 §5.2 已记的测试档四组拆法；触发 = 下一次结构级触碰或独立拆分批立项（本批不拆）。
+
+### 27.10 回滚单位（三处各自独立）
+
+1. **UI**（`thincoder_models_page.dart` + `settings_dialog.dart` + `app_settings.dart` 接线）：回退后导航项与页面消失，配置文件零影响。
+2. **写入器**（`thincoder_config_store.dart`）：回退后没有写盘路径，页面不能保存；磁盘内容不变。
+3. **解析**（`thincoder_config_file.dart`）：回退后回到 `~/.thincoder` 硬路径；F23 实施前无行为差异。
+
+### 27.11 边界（本批不做）
+
+不建本地模型目录；不做多供应商并行探测；不自动重开会话；不改外仓。
+
+- **密钥不进系统凭据库**：与 CLI 一致，明文在 `config.json`，0600 尽力而为。
+- **不做滚动 `.bak`**：每次保存不产生额外明文副本，只在并发冲突时按先例留一份 `config.json.bak-<ts>`（同 `config-io.mjs:78`）。
+- **不接管用户终端其它配置键**：写入面只有 `providers[]` 与 `defaultModel`。
+- **不做供应商删除**：删除会牵出 `cascadeRemoveProvider` 的 `consultModels` / `subagentModels` / `advisor.provider` 连带面（`config-io.mjs:178-196`，属代理配置），本批不碰——用户仍可在终端删。
+
+### 27.12 未验证项（单列，不静默省略）
+
+| # | 项 | 现状 | 处置 |
+|---|---|---|---|
+| U13 | CLI 是否在别处把 `defaultModelReason` 投影给客户端（`session/new` 回包 / 通知） | 实读无：该符号只在 core（`model-ref.mjs:69`、`config.mjs:303`），CLI 的 acp 面未见；宿主侧零命中 | 本批按同判据复述两条串；实施轮在 `session/new` 首包与 `events.log` 里核一次，有投影就改读它 |
+| U14 | 「CLI 读得进我们写的配置」真机 | 未验证（本机无 CLI 会话在本批内跑） | T125 离线固件先挡；发行版走查再验一次（开新会话看 `configOptions.model`） |
+| U15 | `app_settings` 取「活的 thincoder 会话」的现有访问器名 | 未逐行核（`workspace` 侧） | 实施首轮核定；本档只定缝形（`probe()` 返回 `KernelChoiceSource?`），不改语义 |
+| U16 | Windows 上 Dart `File.rename` 覆盖已存在文件的语义 | 文档未核 | 实施首轮一条单测钉住；失败即走 §27.3 第 7 步的直写回退 |
+
 
 
 

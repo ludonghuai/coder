@@ -77,7 +77,7 @@
 
 **F9 Customize 对接**：按 thincoder 实际定制面（skills / rules / AGENTS.md / MCP / hooks——逐类以源码核实为准）在 Customize 面板对位；无对应面的类别不显示。
 
-**F10 用量展示**：上下文用量（usage_update）接入现有展示；模型与供应商配置只读（不代管）。
+**F10 用量展示**：上下文用量（usage_update）接入现有展示；模型与供应商配置在**会话内只读**，编辑入口见 F24（设置 → 模型（thincoder））。
 
 **F11 子代理活动可见**（批 4；用户 2026-10-16 拍板开批）：thincoder 主代理异步调子代理时，桌面可见其活动——
 子代理卡片（出现 / 进度 / 完成）· 活动条运行代号与计时 · 会话状态行「后台 N 个子代理运行中」· 长回合静默期的活动指示。
@@ -104,7 +104,7 @@ CLI 侧把 `autoApprove` 做成 config option（boolean，照 thinking 同款）
 CLI 侧把运行期拉取的清单（`listModels`）投影进 `configOptions.model.options[]`（现只报当前一项，`handlers-session.mjs:46`）；
 thinking 扩展为独立档位 id（`thinkingLevel`，布尔形状不动）；桌面：**模型面零改动**（E3），**档位面 = 适配层给 effort 面加一条上报分支**。
 验收：桌面模型选择器与终端 `/model` 清单一致；切换生效；thinking 档位与终端一致。
-边界：桌面不代管 provider / key（B3 不变）。
+边界：不做 provider / key 编辑——该面归 F24（设置 → 模型（thincoder））；本条目只保模型清单与 thinking 档位。
 
 **F15 工作中发送的消息（队列）**（批 7；用户 2026-10-16 22:24 报告）：thincoder 会话在代理工作中**不能**先写消息、等它说完自动发——
 宿主面齐备（`QueuesMessages` / 队列面板 / 设置项 `chat.queuedMessages` / `canQueue`），**Claude 内核已实现，thincoder 内核未声明** ⇒ 流式中输入框被禁用（`chat_session.dart:511` / `:544`；`composer.dart:1321`）。
@@ -166,6 +166,16 @@ ACP schema v1 的 image 块形 = `{type:"image", mimeType, data}`（已查实）
 验收（可机检）：① 发行版在**未安装 node / npm / thincoder** 的机器上，thincoder 会话可用（`@` 有建议、Auto 开关出现、rewind 与回退可用）；② `events.log` 的启动行点名内置副本的绝对路径，且**不出现 PATH 候选**；③ 用户 `~/.thincoder` 在会话前后**文件数与 mtime 不变**；④ 设置里填一个不存在的路径 ⇒ 明确报错，不静默回落到内置（与今天的 `ThincoderFailed` 同形）；⑤ `flutter run`（无内置副本）走 PATH，行为与今天一致。
 依赖：单文件运行时（Node SEA 或等价物）的构建；`tool/build_windows.dart` / `tool/baocode.iss` / macOS 打包同改；外仓 `THINCODER_CONFIG_DIR`（**B1 例外已获用户批准 2026-10-21 03:58**，约 3–5 行）；`thincoder_locator.dart` 的候选顺序。内置副本的构建源 = **本仓 `thincoder/` 工作树当前 HEAD**（与发版时代的代码严格一致；不每次拉上游最新）。
 边界（用户强调，2026-10-21 03:57：「不要影响到我们的开发环境，只有发行版才这样做，打包的时候！」）：**开发环境零变化** —— `flutter run` / 本仓测试 / 本机调试一律按今天的行为（设置路径 → PATH），**不得**因为本批引入任何“开发专用开关”、编译期分支或默认值变更；内置副本只存在于**打包产物**（安装包）内，仓内 `lib/**` 不得硬编码内置路径。
+边界（用户强调，2026-10-21 23:47：「能不能不影响我们这边开发的情况，开发这边保留终端和 baocode 互通」）：**开发环境与终端互通** —— 没有内置副本时不注入 `THINCODER_CONFIG_DIR`，内核读写用户自己的 `~/.thincoder`，于是终端开的会话在 baocode 里能列、能打开、能续接（存档级 `session/list` · `load` · `resume`）；**同一判据的反面**：内置副本存在时才注入私有目录（发行版隔离）。不做活会话级互通（`#36`），两边同时打开同一槽位仍走“占用即另开”的既有行为。
+
+**F24 模型配置面（在 baocode 里加/改 thincoder 的模型，不再依赖去终端配置）**（用户 2026-10-21 23:38 逐字：「还得想一下模型添加的问题，我们这个不关联终端的话，要留一个模型添加的地方，或者直接获取 thincoder 的模型，我可以保证我用户的电脑里面都有 thincoder，就是我的上游版本」；23:40 裁定「走 B 吧」；23:47 补：「能不能不影响我们这边开发的情况，开发这边保留终端和 baocode 互通」）：
+模块目标：thincoder 会话的模型选项**总是可用**——有配置就显示并可选；没配置时用户能在 baocode 里**当场配好**，不必切到终端跑一次 CLI。
+功能点：① **模型列表来自 CLI**（沿用今天：ACP `configOptions.model` 与 `config_option_update`，`thincoder_choices.dart:46-53` 只做投影；不另建一份模型目录）；② **新增设置页「设置 → 模型（thincoder）」**：列出当前模型与候选（候选 = CLI 后台拉到的清单，拉不到就显示当前值 + 刷新动作）；③ **供应商编辑**：名字 / Base URL / API Key / 模型名，写成 CLI 认识的 `providers[]` 条目并置顶层 `defaultModel`（字段口径以 `thincoder-core/config.mjs` 头注为准：`providers[].apiKey` 是唯一密钥源、`providers[].model` 已退役、`defaultModel` 是顶层复合串）；④ **写入目标 = 内核实际使用的那个配置**：`THINCODER_CONFIG_DIR` 有值就写它（内置运行时场景），否则写 `~/.thincoder/config.json`（今天用户的终端配置）——**同一份代码，按解析结果决定，不加发行/开发开关**；⑤ **写入安全**：原子写（沿用外仓 `config-io.mjs` 的 `writeConfigAtomic` 语义：临时文件 + 替换 + `.bak` 现场 + 0600），写前读、写后回读校验；⑥ **空态引导**：没有 provider 时说清两件事——"填一个供应商"或"在你自己的终端里配好后回来刷新"，并显示 CLI 给的原因串（`defaultModelReason` 的 `未配置任何 provider` / `defaultModel 未设置`）。
+边界：不做模型目录的本地副本；不做多供应商并行探测；不做密钥进系统凭据库（先与 CLI 一致，明文在配置里）；不接管用户终端（写共享配置时**只写 provider/defaultModel 两个面**，不动其它键）；不在 debug/发行之间分叉行为。
+边界（用户 2026-10-21 23:47）：**开发环境与终端互通** —— 无 `THINCODER_CONFIG_DIR` 时写入 `~/.thincoder/config.json`，因此终端与 baocode 看到同一份配置与模型（互通是“同一份数据”的自然结果，不是新机制）；有该变量（发行版的私有副本）时两边互不影响。
+验收（可机检）：① 全新配置下打开 thincoder 会话 ⇒ 模型 pill 不出现，设置页显示空态与原因串；② 在设置页填入一个供应商（baseURL + apiKey + model）⇒ 配置文件出现该 provider 条目与顶层 `defaultModel`，**其它既有键逐字不变**；③ 会话内模型 pill 出现该模型并可选中；④ 配置写失败 ⇒ 明确报错且**不留半截文件**：只读目录 / 非法 JSON / 字段不合法三路为零写（原文件字节不变、可读），并发冲突路零写且留 `config.json.bak-<ts>` 现场；⑤ 用 `THINCODER_CONFIG_DIR` 指向临时目录时，写的是临时目录那份，`~/.thincoder` 的 mtime 不变；⑥ debug 与发行构建行为一致（无开关）。
+依赖：CLI 配置格式（外仓只读，不改）；`thincoder_choices.dart` 的投影面；设置页基础设施（`lib/settings/pages/`）；若与 F23 同批实施，写入目标由 F23 的 `THINCODER_CONFIG_DIR` 决定。
+
 
 
 
@@ -219,7 +229,7 @@ thincoder 将来补能力 → 改能力映射表（§5）+ 适配层小改即可
 **B1 默认不改 thincoder 仓**——本适配默认落本仓；ACP 给不了的能力默认不通过改 thincoder 补。**例外**：接口面必要且最小的改动，经用户裁定、保持上游可合并（F12 / 批 5 先例：用户 2026-10-16「允许动仓，保留拉代码的能力」）。
 **B1 例外状态**：`host-tool-channel` 批（2026-10-18）要动 `thincoder/`（MCP forwarding + `permissionExempt` 信任位；外仓约 +170 行）——用户 2026-10-18 20:08「对，一定要实现宿主工具通道」+ 20:40 批准开工；保持上游可合并。
 **B2** 上表 ❌ 各项首版不做：多文件夹工作区、对话 fork、后台任务控制、MCP 连接管理、账号用量、命令列表、提示建议、`context`/`fast` 档、effort 多档。
-**B3** 不代管 provider / key：thincoder 配置由用户终端自理，桌面端只读取使用。
+**B3** 不代管**账号 / 账单用量**：用量与限额只读、不代管；**provider / key 的编辑面由 F24 承接**——只写 `providers[]` 与顶层 `defaultModel`（其它键逐字不动），密钥明文与 CLI 一致（0600 尽力而为）。
 **B4** 不做会话在两内核间迁移（内核会话格式不通；既有「对话开始即锁定内核」语义不变）。
 
 ## 7. 验收

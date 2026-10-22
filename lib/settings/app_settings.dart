@@ -8,6 +8,7 @@ import '../diagnostics/diagnostics_upload.dart';
 import '../forge/forge_accounts.dart';
 import '../customize/customization_store.dart';
 import '../kernel/claude_code/claude_path_setting.dart';
+import '../kernel/kernel_registry.dart' show KernelRegistry;
 import '../kernel/thincoder/thincoder_locator.dart';
 import '../keybindings/import_dialog.dart';
 import '../keybindings/keybinding_service.dart';
@@ -44,6 +45,7 @@ import 'pages/settings_widgets.dart' show SettingsPage;
 import 'pages/ssh_page.dart';
 import 'pages/stash_hotkey_field.dart';
 import 'pages/stash_page.dart';
+import 'pages/thincoder_models_page.dart';
 import 'pages/updates_page.dart';
 import 'settings_dialog.dart';
 import 'user_settings.dart';
@@ -173,6 +175,8 @@ class AppSettings {
           providers: ModelProviders.current,
           workspace: workspace,
         );
+      case SettingsSection.thincoderModels:
+        return ThincoderModelsSettingsPage(probe: thincoderModelSession);
       case SettingsSection.network:
         return NetworkSettingsPage(settings: files?.settings);
       case SettingsSection.ssh:
@@ -233,6 +237,34 @@ class AppSettings {
       case SettingsSection.dataDirectory:
         return const DataDirectoryPage();
     }
+  }
+
+  /// The live thincoder agent Settings → Models (thincoder) reads (U15):
+  /// the one showing, else the first one open; null when none is, and the
+  /// page says a session is needed.
+  ThincoderModelSession? thincoderModelSession() {
+    final workspace = this.workspace;
+    if (workspace == null) return null;
+    final open = [
+      for (final thread in workspace.threads)
+        if (thread.isOpen && thread.kernel.id == KernelRegistry.thincoder.id)
+          thread,
+    ];
+    final current = workspace.current;
+    AgentThread? shown;
+    for (final thread in open) {
+      if (identical(thread, current)) shown = thread;
+    }
+    final thread = shown ?? (open.isEmpty ? null : open.first);
+    if (thread == null) return null;
+    final session = thread.session;
+    return ThincoderModelSession(
+      models: session.models,
+      listenable: session,
+      // The existing restart (§27.6): a new process, a new session, the
+      // config file read again.
+      restart: session.restart,
+    );
   }
 
   /// Imports another editor's keybindings (and keymap), as the user picks

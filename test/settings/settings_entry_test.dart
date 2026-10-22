@@ -229,7 +229,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.getSize(find.byType(SettingsDialog)), const Size(800, 600));
     expect(find.text('page general'), findsOneWidget);
-    // The pages listed in their groups' order.
+    // The pages listed in their groups' order: the list scrolls, so the last
+    // of them is scrolled to first.
+    await tester.drag(find.text('Keyboard Shortcuts'), const Offset(0, -120));
+    await tester.pumpAndSettle();
     expect(
       tester.getTopLeft(find.text('Data Directory')).dy,
       greaterThan(tester.getTopLeft(find.text('Keyboard Shortcuts')).dy),

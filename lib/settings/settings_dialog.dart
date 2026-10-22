@@ -27,6 +27,7 @@ enum SettingsSection {
   general,
   appearance,
   models,
+  thincoderModels,
   network,
   ssh,
   mobile,
@@ -48,6 +49,7 @@ enum SettingsCategory {
     SettingsSection.general,
     SettingsSection.appearance,
     SettingsSection.models,
+    SettingsSection.thincoderModels,
     SettingsSection.network,
     SettingsSection.ssh,
     SettingsSection.mobile,
@@ -240,6 +242,7 @@ class SettingsDialogState extends State<SettingsDialog> {
     SettingsSection.appearance => Codicons.symbolColor,
     SettingsSection.models =>
       ChannelSetup.channelBuild ? Codicons.person : Codicons.sparkle,
+    SettingsSection.thincoderModels => Codicons.serverProcess,
     SettingsSection.network => Codicons.radioTower,
     SettingsSection.ssh => Codicons.remote,
     SettingsSection.mobile => Codicons.deviceMobile,
@@ -272,6 +275,9 @@ class SettingsDialogState extends State<SettingsDialog> {
         ChannelSetup.channelBuild
             ? l10n.channelAccountTitle
             : l10n.settingsSectionModels,
+      // A literal for this batch: the words of every page are #7's to
+      // translate (§27.5).
+      SettingsSection.thincoderModels => 'Models (thincoder)',
       SettingsSection.network => l10n.settingsSectionNetwork,
       SettingsSection.ssh => l10n.settingsSectionSsh,
       SettingsSection.mobile => l10n.settingsSectionMobile,
@@ -298,6 +304,10 @@ class SettingsDialogState extends State<SettingsDialog> {
         SettingsSection.browser => context.l10n.settingsBrowserKeywords,
         SettingsSection.customize => context.l10n.settingsCustomizeKeywords,
         SettingsSection.accounts => context.l10n.settingsAccountsKeywords,
+        // A literal for this batch (#7 owns the words): the pages a user
+        // looking for the CLI's providers would name it by.
+        SettingsSection.thincoderModels =>
+          'thincoder provider providers base url api key default model config',
         _ => '',
       };
 
