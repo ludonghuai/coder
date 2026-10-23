@@ -162,4 +162,81 @@ VERDICT: pass
 - 🟡 空 `/` 面板（命令口径）与 §28.8 行数差 —— 归父代理/设计席裁定，见上。
 - 同一时序家族的另一子情形：`rename → 写入在飞 → 释放 → teardown`，完成回调的 `identical(connection, kernel._connection)` 检查会静默返回（无提示）；本次裁定只覆盖 `_pumpTitle` 的释放旁路，未动该分支，如实登记。
 
+### 补轮：F26① 行首 `/` 不弹空命令面板（用户 2026-10-23 07:21 裁定；台账 #161）
+
+**范围**：按需求 F26① 的**字面**收口——thincoder 会话行首 `/` 不弹命令面板；Claude 侧命令面板行为不变。
+本轮只改 2 档，均在批准面内；不造命令源、不加占位项；`docs/**` 零改动。
+
+**改动**
+- `lib/chat/composer/composer.dart:863-875`（`_handleEditorChanged` 的命令触发分支）：判据由「`trigger.start > 0` 才判空」改为「命令源为空 ⇒ 面板不开，行首同样生效」；行首且命令源非空时仍开面板（含无匹配时的 no-results 说明，Claude 原行为保留）。
+- `test/chat/thincoder_commands_test.dart`：T133③ 由「菜单存在 ∧ 无 command 建议」改为「菜单不存在」（`findsNothing`）；补 `/` 与 `/pl` 两种查询下文本原样；本地 `typeText` 副本删除，改用 `test/composer_test.dart` 的 `typeInto`（先例 `test/chat/session_mentions_test.dart:8`）。
+- 零改动：`lib/chat/chat_session.dart`、`lib/browser/btest/**`、`lib/kernel/**`、`docs/**`。
+
+**复现读数**：改动前跑新 T133③ ⇒ 失败 `Found 1 widget with type "SuggestionMenu"`（即空面板）；改动后 ⇒ 通过。
+
+**验证读数**
+- 门禁（验收 ⑥）：`flutter test --no-pub test/composer_test.dart test/chat/thincoder_commands_test.dart` ⇒ `+55 -2`；两个 `[E]` 恰为基线 2 红（`mode picker opens on press…` / `Shift+Tab in the input goes through the modes`），无新增。
+- Claude 侧（验收 ④）：同门禁里 `test/composer_test.dart:1170`「the command menu opens only at the end of a query」、`:1331`「the suggestion menu shows on the next frame and fades out」、`:169`「escape dismisses the menu…」全绿；另跑 `test/chat/chat_keys_test.dart`（含 `/` 菜单按键 `:192-221`）与 `test/chat/command_details_test.dart` ⇒ 全绿（四档合计 `+74 -2`，红项仍是那 2 条基线）。
+- `dart analyze`（整包）⇒ `No issues found!`（exit 0）。
+- 编码：两档 UTF-8 无 BOM、全文 CRLF（node 字节读；`dart format` 对测试档 0 changed；composer 的剩余 format 差异全在未触碰的既有行）。
+
+**审计与评审轮次**
+- explore 差异审计 1 轮：四类偏差（PARTIAL / SILENT-SIMPLIFICATION / DOC-DRIFT / OUT-OF-LIST）均未发现；两条非缺陷 notes（设计档口径待同步；④ 的 Claude 证据应指 composer 侧用例）。
+- advisor 代码评审 1 轮：verdict = pass，🔴 0 / 🟡 3 / 🔵 3。
+  - 🟡（均文档面，归父代理/设计席）：§28.5 的「现状即如此…不加任何入口」与 §28.8 改动清单未收 `composer.dart`；§28.7 T133③ 口径仍是「无 command 建议」；F26② 字面差——Claude 命令表尚未到达的窗口里，行首 `/` 由「弹 no-results 空壳」变为「不弹」。
+  - 🔵 3 条已全部落地：复用 `typeInto`、注释改指 composer 侧用例、补 `/pl` 用例。
+
+**终端状态**：clean。
+
+**设计档漂移（交父代理路由；本轮未改 docs）**
+- `docs/design/thincoder-adapter.md:4234`「现状即如此，本批把它钉成判据，不加任何入口」与实现（宿主判据）不符。
+- `docs/design/thincoder-adapter.md:4255` F26① 机制仍写「候选表为空」。
+- `docs/design/thincoder-adapter.md:4264` T133③ 仍写「无 `SuggestionKind.command` 项」。
+- `docs/design/thincoder-adapter.md:4283` §28.8 ⑦ 只列测试档，未列 `lib/chat/composer/composer.dart`。
+
+### 补轮 2：`/` 面板判据改为「内核是否提供命令源」（F26② 字面收口；父代理 2026-10-23 裁定）
+
+**范围**：把判据从「候选命令表为空」换成「该会话的内核是否实现 `ProvidesCommands`」。父代理裁定：上一轮留在 Claude 会话「命令表尚未到达」窗口里的行为差（行首 `/` 由「弹 no-results 空壳」变成「不弹」）**不予认可** —— 需求 F26② 字面是「Claude 内核会话里该面板行为不变」，「表还没到」也是 Claude 会话的一种现场。
+本轮只改 4 档；`docs/**` 零改动（设计措辞归设计侧）；`lib/browser/btest/**` 与 thincoder 命令面零改动。
+
+**改动**
+
+- `lib/chat/composer/composer.dart:863-877`（`_handleEditorChanged` 的命令分支）：判据改写为
+  `visible = commands.isNotEmpty || (trigger.start == 0 && widget.session.hasCommandSource);`
+  —— 命令源 = 内核能力；行首 `/` 对有源内核恒开（表空、表未到、查询无匹配都开，空壳照旧），对无源内核（thincoder）行首/行中都不开。
+- `lib/chat/chat_session.dart:440`：新增能力面 `bool get hasCommandSource => _hasCommandsOf(this);`（+1 行）。
+- `lib/chat/session/kernel_proxy.dart:47`：`bool _hasCommandsOf(ChatSession owner) => owner._kernel is ProvidesCommands;`（+2 行含分隔空行）。
+- 能力查询面合计 **+3 行**；`chat_session.dart` 实测 **794 行**（改前 793，界 800）。
+
+**用例**
+
+- T133（thincoder，保留并加钉）：`kernel` 非 `ProvidesCommands`、`session.commands` 空、新增 `session.hasCommandSource == false`；行首 `/` 与 `/pl` 均 `SuggestionMenu findsNothing`，文本原样保留。
+- **T139（新增，Claude 侧，本次裁定的理由书）**：`FakeCli(answers: {'initialize': {}})` ⇒ Claude 内核握手回包无 `commands`；断言 `isA<ProvidesCommands>()`、启动前后 `session.commands` 均为空、`hasCommandSource == true`；行首 `/` ⇒ 面板出现且 `matches` 为空（no-results 空壳），再输 `pl` ⇒ 面板仍在且 `matches` 仍为空。
+
+**复现 → 修复读数**：改动前跑 T139 ⇒ 失败于 `expect(menu, findsOneWidget)`（`Found 0 widgets with type "SuggestionMenu"`），即上一轮的窗口差；修复后 ⇒ 通过。
+
+**验证读数**
+
+- 修复前：`flutter test --no-pub test/chat/thincoder_commands_test.dart --plain-name "T139"` ⇒ 1 failed（上述行）。
+- 修复后：同档 ⇒ `+2: All tests passed!`。
+- 门禁（验收 ④）：`flutter test --no-pub test/composer_test.dart test/chat/thincoder_commands_test.dart test/chat/chat_keys_test.dart` ⇒ `+73 -2`；两红逐条 = 基线 `mode picker opens on press, animates, and follows the mouse` / `Shift+Tab in the input goes through the modes`，无新增。
+- `dart analyze`（整包）⇒ `No issues found!`（exit 0）。
+- 编码：4 档 UTF-8 无 BOM、无替换字符；`chat_session.dart` / `composer.dart` / 测试档 CRLF，`kernel_proxy.dart` 保持原有 LF。`dart format --set-exit-if-changed` 对 `chat_session.dart` / `kernel_proxy.dart` 报 changed，已在 HEAD 版本上复测同样 changed ⇒ 是本轮之前就有的格式差（长行），新加的三行均为 80 列内单行，未触发重排；未对这两档跑格式化以免制造无关 diff。
+
+**审计与评审轮次（终态 clean）**
+
+- 内部 explore 差异审计 1 轮：VERDICT clean；四类偏差（PARTIAL / SILENT-SIMPLIFICATION / DOC-DRIFT / OUT-OF-LIST）均无；判据三处（composer / `ChatSession` / `kernel_proxy`）互证一致；`chat_session.dart` 794 行、能力面 +3 在界内；T139 的空表不被 `FakeCli` 默认 `initialize` 录像填回（显式 `{}` 命中 `answers[subtype] ??` 左侧）。
+- 内部 advisor 代码评审 1 轮：VERDICT pass（🔴 0 / 🟡 1 / 🔵 3）。
+  - 🟡（协调项，非 must-fix）：台账 #161 补轮记录与本轮 diff 已不一致 —— 该段「零改动」仍写 `lib/chat/chat_session.dart`，且 §28.8 受影响文件清单未收本轮两处能力面；归设计侧改字（本轮明令不动 docs），已在交付报告登记。
+  - 🔵 2 条（判据双来源耦合说明、能力 getter 缺语义注释）：**落在使用点**——`composer.dart:866-867` 补一句「source 是内核能力、不是表；候选来自同一会话的 vocabulary」，以守住能力面 ≤ +3 行的裁定。
+  - 🔵 1 条（T139 后半段未断言 `matches` 为空）：已补 `expect(tester.widget<SuggestionMenu>(again).matches, isEmpty)` 后重跑，门禁读数不变（`+73 -2`）。
+
+**设计档漂移（交父代理路由；本轮未改 docs）**
+
+- `docs/design/thincoder-adapter.md:4234` / `:4238` / `:4255`：§28.5 与 §28.6 的 F26① 机制仍写「候选表为空 / 空列表」；实现已是「内核提供命令源」。
+- `docs/design/thincoder-adapter.md:4264`（T133③ 仍写「无 command 建议」，实现已改为「面板不出现」）与 `:4283`（§28.8 ⑦ 只列测试档，未列 `composer.dart`）；§28.8 亦未列本轮新增的 `chat_session.dart:440` / `kernel_proxy.dart:47`。
+- `docs/batches/2026-10-23-upstream-features-on-thincoder.md` 本档上一段「零改动」清单含 `lib/chat/chat_session.dart`，与本轮 diff 相左（由本轮记录取代，不回写旧段）。
+
+**终端状态**：clean。
+
 ## §6 验证与收口（父代理）

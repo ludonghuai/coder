@@ -861,14 +861,18 @@ class ChatComposerState extends State<ChatComposer>
           _stashes.isNotEmpty;
     }
     // A / within the message that starts no command's name (e.g. a path's)
-    // stays text.
+    // stays text; and for a kernel with no command source (thincoder's) no
+    // panel opens, at the message's start as much as within it. One with a
+    // source opens it at a start for any query — none in its list yet, or
+    // none matching — so that it can say there are none. The source is the
+    // kernel's capability, not its table; the matches come from the same
+    // session's vocabulary, which that table fills.
     List<SuggestionMatch>? commands;
-    if (visible &&
-        trigger != null &&
-        trigger.kind == SuggestionKind.command &&
-        trigger.start > 0) {
+    if (visible && trigger != null && trigger.kind == SuggestionKind.command) {
       commands = rankSuggestions(vocabulary.commands, trigger.query);
-      visible = commands.isNotEmpty;
+      visible =
+          commands.isNotEmpty ||
+          (trigger.start == 0 && widget.session.hasCommandSource);
     }
 
     if (visible) {

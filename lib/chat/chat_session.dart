@@ -437,6 +437,7 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
   String? selected(KernelChoiceKind kind) => _selectedOf(this, kind);
   KernelChoice? _choice(KernelChoiceSource source) => _choiceOf(this, source);
   List<KernelCommand> get commands => _commandsOf(this);
+  bool get hasCommandSource => _hasCommandsOf(this);
   Future<List<FileSuggestion>> Function(String query)? get suggestFiles => _suggestFilesOf(this);
   ContextUsage? get context => _contextOf(this);
   UsageStats? get stats => _statsOf(this);

@@ -44,6 +44,8 @@ List<KernelCommand> _commandsOf(ChatSession owner) => switch (owner._kernel) {
   _ => const [],
 };
 
+bool _hasCommandsOf(ChatSession owner) => owner._kernel is ProvidesCommands;
+
 /// Files matching an `@` query; null when the kernel does not look.
 Future<List<FileSuggestion>> Function(String query)? _suggestFilesOf(
   ChatSession owner,
