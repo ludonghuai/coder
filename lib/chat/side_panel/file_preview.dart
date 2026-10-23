@@ -488,6 +488,10 @@ class _FilePreviewState extends State<FilePreview> {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final tight = constraints.maxWidth < 420;
+          // The pills carry words: with the path, the language and the markdown
+          // switch beside them the row needs room the pane does not have long
+          // before it is "tight".
+          final compactActions = constraints.maxWidth < 720;
           return Row(
             children: [
               FileIcon(path, size: 14),
@@ -516,23 +520,39 @@ class _FilePreviewState extends State<FilePreview> {
                   ),
                 ),
               ),
-              if (!tight && !_image && widget.language)
-                _TextButton(
-                  label: IdeLanguageNames.forPath(path),
-                  tooltip: l10n.languageModeChange,
-                  onPressed: () => unawaited(changeLanguageMode(context, path)),
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (!tight && !_image && widget.language)
+                        _TextButton(
+                          label: IdeLanguageNames.forPath(path),
+                          tooltip: l10n.languageModeChange,
+                          onPressed: () =>
+                              unawaited(changeLanguageMode(context, path)),
+                        ),
+                      if (!tight && _isMarkdown && _markdown != null)
+                        _TextButton(
+                          label: _source
+                              ? l10n.sidePanelPreview
+                              : l10n.sidePanelSource,
+                          onPressed: () => setState(() => _source = !_source),
+                        ),
+                      if ((widget.agentEdit, _agent) case (final edit?, _?)
+                          when !_isMarkdown || _source)
+                        IdeAgentEditActions(
+                          edit: edit,
+                          hunks: _hunks,
+                          compact: compactActions,
+                        ),
+                      ...widget.actions,
+                    ],
+                  ),
                 ),
-              if (!tight && _isMarkdown && _markdown != null)
-                _TextButton(
-                  label: _source ? l10n.sidePanelPreview : l10n.sidePanelSource,
-                  onPressed: () => setState(() => _source = !_source),
-                ),
-              if ((widget.agentEdit, _agent) case (final edit?, _?)
-                  when !_isMarkdown || _source)
-                // Narrow: the pills keep their icons, drop the words (§ the row's
-                // fixed parts cannot shrink).
-                IdeAgentEditActions(edit: edit, hunks: _hunks, compact: tight),
-              ...widget.actions,
+              ),
             ],
           );
         },
