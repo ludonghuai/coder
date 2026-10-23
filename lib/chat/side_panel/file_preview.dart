@@ -529,7 +529,9 @@ class _FilePreviewState extends State<FilePreview> {
                 ),
               if ((widget.agentEdit, _agent) case (final edit?, _?)
                   when !_isMarkdown || _source)
-                IdeAgentEditActions(edit: edit, hunks: _hunks),
+                // Narrow: the pills keep their icons, drop the words (§ the row's
+                // fixed parts cannot shrink).
+                IdeAgentEditActions(edit: edit, hunks: _hunks, compact: tight),
               ...widget.actions,
             ],
           );
