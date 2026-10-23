@@ -206,4 +206,67 @@ VERDICT: pass
 - 修正轮：1 次（评审后 🔵 落地），之后全部判据复跑通过。
 - 终态：clean。
 
+### 实施记录：结构拆分第 3 步（chat_models · 机制 = 新档 + export）
+
+**范围**：设计 `docs/design/structure-splits.md` §4.5（chat_models 839 → ≤800，一段出档）。机制 = 新 library + `export`（设计 §3.2 / KD-1）；本步只用这一种机制，不用 `part`。
+
+**改动**
+
+- `lib/chat/chat_models.dart`：`EditorContext` + `TextContext`（含 doc 注释，HEAD `:52-159`，108 行）整块搬出；删 `import 'package:path/path.dart' as p;`（搬后本档无 `p.` 使用）；加 `import 'editor_context.dart';`（本档 `:30` `List<EditorContext>` 仍需解析）与 `export 'editor_context.dart';`（调用方经原路径继续可见）。
+- 新档 `lib/chat/editor_context.dart`：唯一 import = `package:path`；3 行 face 抬头（沿用第 1 步新档形态）；108 行搬入内容逐字；不 import `chat_models.dart`（无循环）。
+
+**验收读数（命令 + 结果）**
+
+| 验收 | 命令 | 结果 |
+|---|---|---|
+| ① analyze 0 issue（改动面） | `dart analyze lib/chat/chat_models.dart lib/chat/editor_context.dart` | `No issues found!`（exit 0） |
+| ① 附：全项目 analyze | `flutter analyze --no-pub` | `No issues found!`（7.7s，exit 0） |
+| ② 测试基线（开工前，目标档 HEAD 干净） | `flutter test --no-pub test/chat test/kernel` | `+872 -4`：4 个红项见下（Windows 路径/环境既有） |
+| ② 测试（本步后，同命令） | 同上 | `+872 -4`：**红项集合逐条一致**，无新增失败 |
+| ② 附：被搬面定向 | `flutter test --no-pub test/chat/open_editor_test.dart test/chat/thincoder_commands_test.dart test/chat/user_message_selection_test.dart` | `+12: All tests passed!` |
+| ③ 主档行数 | `node -e` 换行符计数（设计 §5 口径） | **732**（≤800；HEAD 839；设计估 ≈733） |
+| ④ 新档行数 | 同上 | **114**（≤500；设计估 ≈110） |
+| ⑤ export 行 | 读取 `chat_models.dart:5` | `export 'editor_context.dart';` |
+| ⑤ 调用方零改动 | `git grep -l "chat_models.dart" -- lib test` + `git status --porcelain` | 137 档命中（含本档自身）⇒ 外部调用方 136；本步改动面 = `M lib/chat/chat_models.dart` + `?? lib/chat/editor_context.dart`，无任何调用方档被改 |
+| ⑥ 签名/渲染逐字不变 | 逐块比对脚本（对照 `git show HEAD:`） | 见下「逐块比对」，`diffs: 0` |
+| ⑦ 新档依赖 | 读取新档 import 清单 | 仅 `package:path`；无 `chat_models.dart`、无 `part of` |
+| 附：格式 | `dart format --output=none --show=changed`（两档） | 新档 clean；主档在 HEAD 版即不 clean（对 HEAD 快照同命令 = `Changed`），故不跑 format（会重排既有代码，违反纯搬运）；首个 formatter 差异在既有 `TurnUsage`（现 `:81`），本步改动区（`:1-6`）无差异 |
+
+**基线红项（开工前后逐条一致，既有且与本步无关）**
+
+1. `test/chat/files_seen_test.dart`：`filesSeen is the same list while no file is new`（实际 `/p\a.dart` vs 期望 `/p/a.dart`，Windows 分隔符；被测在 `chat_session.dart:1114-1130`，本步未碰）
+2. `test/chat/side_panel/side_panel_test.dart`：markdown preview 保存（macOS variant），期望字符串实际 null
+3. `test/chat/side_panel/side_panel_test.dart`：drop 文件链接 `/p/docs\shot.png`（Windows 分隔符）
+4. `test/kernel/dart_core_e2e_test.dart`：期望 `diff: color.txt +2`、实际为完整临时路径
+
+**逐块比对（对照 HEAD 版 `lib/chat/chat_models.dart`）**
+
+- 搬出块：HEAD `:52-159`（108 行）vs 新档 `:7-114`（108 行）逐行比对，`identical: true · diffs: 0`（LF 归一后；工作树 CRLF 由 `core.autocrlf=true` 决定，与全仓一致）。
+- 反推校验：HEAD 全档 − `:52-160` − `package:path` import + `import`/`export` 两行 == 当前主档，732/732 行逐行一致（`diffs: 0`）。
+- 签名面：`EditorContext(this.path, {line, selectedLines, selectedText})`、`static const maxSelectedText = 10000`、
+  `name` / `dedupeKey` / `note` / `editorNote`、`TextContext({required String key, required this.name, required this.text}) : super(key)`
+  与四个 `@override` 全部逐字保留；私有 `_lines` / `_selectedText` / `_reminder` 同迁，主档无残留引用（`grep` 无命中）。
+- 行为面：`test/chat/open_editor_test.dart` 逐字钉住 `note` / `editorNote` / 截断渲染（`:45-116`），本步后全绿。
+
+**工作树基线（开工前已存在，非本步改动）**：`M docs/batches/2026-10-22-browser-biz-test-mode.md` · `M docs/batches/2026-10-23-ledger-sweep.md` · `M lib/ide/git/git_repository.dart`。`git diff --name-only` 原文 = 上述 3 档 + `lib/chat/chat_models.dart`；本步新增文件只有 `lib/chat/editor_context.dart`。
+
+**设计漂移（交父侧 / eng-designer 定位；实施不改文档）**
+
+- 设计 §4.5 估主档 `≈733`，实测 **732**（搬出块后的分隔空行随块一并去掉，比「−108+2」少 1 行）；新档估 `≈110`，实测 **114**（多 3 行 face 抬头 + 2 行空行）。
+- 设计 §4.5 记搬出块坐标 `:54-161`；实施基线（HEAD）实为 **`:52-159`**（doc 注释从 52 起、`TextContext` 收尾于 159），差 2 行——坐标按符号名定位，不影响结论。
+- 设计 §4.5「136 个文件提到 chat_models.dart」：`git grep -l` 实测 137（含本档自身）⇒ 外部调用方 136，与设计一致。
+
+**轮次与终态**
+
+- 内部 explore 偏差审计：1 轮，VERDICT clean（四类偏差均未发现；该装配无 git/shell，行数与依赖方向由其独立读盘复核）。
+- 内部 advisor 代码评审：第 1 轮 VERDICT changes-required —— 1 🟡 must fix（本步验收读数未落盘 + 红基线未交代）· 1 🟡 协调项（SPLIT-4 旧登记行待父侧改指，设计 §9 项 5 归父侧）· 1 🔵（`TextContext` / `dedupeKey` 无测试钉住，由逐块比对覆盖）。must fix 的处置 = 本节读数五项齐备，代码零改动。
+- 修正轮：1 次（补本节读数，无代码改动）。
+- 终态：见本节补记（advisor 第 2 轮复核后）。
+
+**补记（advisor 第 2 轮复核后）**
+
+- 内部 advisor 代码评审第 2 轮：VERDICT **pass**（code · 两档）。第 1 轮三项复核：①must-fix（读数未落盘 + 红基线未交代）→ **Fixed**（复核方逐项对读本节「验收读数」「逐块比对」与当前树，自洽）；②SPLIT-4 旧登记行改指 → **Accepted**（设计把执行权归父侧，本节「轮次与终态」已入账）；③`TextContext` / `dedupeKey` 无测试钉住 → **Fixed**（逐块比对 + 签名清单覆盖）。
+- 第 2 轮新增 1 条 🟡 report-only（不阻塞，文档面）：设计 §5 行 0 ②「先跑该步测试集并记录基线为绿」与 §6 行 5「全绿」门值未含红基线口径。证据 = 本节「验收读数」表的基线/本步后两行（`+872 -4`，红集逐条一致）。建议父侧 / eng-designer 在收口前补一句「基线本红时，判据 = 同命令下红项集合逐条一致且无新增失败；全绿仅适用于基线为绿的档」。本步不改文档。
+- 终态：**clean**（内部 explore 偏差审计 1 轮 clean · 内部 advisor 代码评审 2 轮，终判 pass · 修正轮 1 次 = 补本节读数，代码零改动 · 无未决 🔴）。
+
 ## §6 验证与收口（父代理）
