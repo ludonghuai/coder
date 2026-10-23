@@ -515,6 +515,119 @@ void main() {
     });
   });
 
+  group('the two switches (§9.1 · §3.3)', () {
+    test('point the run when the call says nothing (§7 #35)', () async {
+      state.traversal = BtestTraversal.chain;
+      state.write = false; // The write switch reads 只读.
+      final answer = '${await BtestTools.all.first.run(
+        startInput({'mode': null, 'traversal': null}),
+        call,
+      )}';
+      expect(state.run!.traversal, BtestTraversal.chain);
+      expect(state.run!.face, BtestFace.readonly);
+      expect(answer, contains('traversal=chain'));
+      expect(answer, contains('mode=readonly'));
+      expect(
+        refusal('browser_click', {'tabId': 1, 'text': '提交'}),
+        contains('mode: readonly'),
+      );
+      expect(
+        state.run!.truthLine(noVisibleText: 0),
+        contains('traversal=chain · mode=readonly'),
+      );
+    });
+
+    test('a switch never picked reads the setting (§3.3, tier 3)', () async {
+      final answer = '${await BtestTools.all.first.run(
+        startInput({'mode': null, 'traversal': null}),
+        call,
+      )}';
+      expect(state.run!.traversal, BtestTraversal.surface);
+      expect(
+        state.run!.face,
+        BtestFace.readonly,
+        reason: 'btest.readonly is on by default',
+      );
+      expect(answer, contains('traversal=surface'));
+      expect(answer, contains('mode=readonly'));
+      state.end();
+      BtestSettings.values![BtestSettings.readonlyKey] = false;
+      await BtestTools.all.first.run(
+        startInput({'mode': null, 'traversal': null}),
+        call,
+      );
+      expect(
+        state.run!.face,
+        BtestFace.write,
+        reason: 'the default read-only is off',
+      );
+    });
+
+    test('the call overrides both; the switches keep their values (§7 #36)', () async {
+      state.traversal = BtestTraversal.surface;
+      state.write = true; // 允许写
+      final answer = '${await BtestTools.all.first.run(
+        startInput({'traversal': 'chain', 'mode': 'readonly'}),
+        call,
+      )}';
+      expect(state.run!.traversal, BtestTraversal.chain);
+      expect(state.run!.face, BtestFace.readonly);
+      expect(answer, contains('traversal=chain'));
+      expect(answer, contains('mode=readonly'));
+      expect(state.traversal, BtestTraversal.surface, reason: 'the switch');
+      expect(state.write, isTrue, reason: 'the switch');
+      expect(
+        state.run!.truthLine(noVisibleText: 0),
+        contains('traversal=chain · mode=readonly'),
+      );
+      expect(
+        refusal('browser_click', {'tabId': 1, 'text': '提交'}),
+        contains('mode: readonly'),
+      );
+    });
+
+    test('rule A judges the resolved mode: a switch-derived write in prod (§7 #39)', () async {
+      state.write = true;
+      final said = await startRefusal(startInput({'env': 'prod', 'mode': null}));
+      expect(said, contains('env: prod'));
+      expect(said, contains('mode: write'));
+      expect(said, contains('写开关'), reason: 'an implied write says where it came from');
+      expect(state.run, isNull, reason: 'no run is made');
+    });
+
+    test('rule A names a setting-derived write too (§7 #39)', () async {
+      BtestSettings.values![BtestSettings.readonlyKey] = false;
+      final said = await startRefusal(startInput({'env': 'prod', 'mode': null}));
+      expect(said, contains('env: prod'));
+      expect(said, contains('mode: write'));
+      expect(said, contains('设置'));
+      expect(state.run, isNull, reason: 'no run is made');
+    });
+
+    test('a prod run that resolves to readonly starts (§7 #35)', () async {
+      final answer = '${await BtestTools.all.first.run(
+        startInput({'env': 'prod', 'mode': null}),
+        call,
+      )}';
+      expect(state.run!.face, BtestFace.readonly);
+      expect(answer, contains('mode=readonly'));
+    });
+
+    test('a write run the switch set lets a click through (§7 #35)', () async {
+      state.write = true; // 允许写
+      await BtestTools.all.first.run(
+        startInput({'mode': null, 'traversal': null}),
+        call,
+      );
+      expect(state.run!.face, BtestFace.write);
+      expect(
+        refusal('browser_click', {'tabId': 1, 'text': '提交'}),
+        isNull,
+        reason: 'the switch set the write face; rule B still lets it through',
+      );
+    });
+  });
+
   group('btest_run_end payload checks (§3.3)', () {
     Map<String, Object?> report([Map<String, Object?> over = const {}]) => {
       'runId': state.run!.id,
@@ -567,12 +680,12 @@ void main() {
       expect(answer, isNot(contains('chainBreaks')));
     });
 
-    test('the head line carries traversal and both reconciled readings (§3.8, 4-②③)', () async {
+    test('the head line carries traversal, mode and both reconciled readings (§3.8, 4-②③)', () async {
       await BtestTools.all.first.run(startInput(), call);
       final answer = '${await end()}';
       expect(
         answer,
-        contains('traversal=surface · 操作真实性：入口=0'
+        contains('traversal=surface · mode=write · 操作真实性：入口=0'
             '（navigate=0 · open=0 · 被拒=0）'),
       );
       expect(answer, contains('replay 放行=0/被拒=0'));
@@ -643,6 +756,79 @@ void main() {
       await BtestTools.all.first.run(startInput(), call);
       final answer = '${await end({'issues': 'nope'})}';
       expect(answer, contains('issues is not a list'));
+    });
+
+    test('a break with its cause keeps its shape; reason still four (§7 #41)', () async {
+      await BtestTools.all.first.run(startInput({'traversal': 'chain'}), call);
+      final answer = '${await end({
+        'chainBreaks': [
+          {
+            'path': '首页 → 订舱详情',
+            'at': '点编辑',
+            'reason': '无权限',
+            'verified': '详情页打开了',
+            'cause': '详情页编辑入口被角色权限挡住 · repo/lib/booking/detail.dart:88',
+          },
+        ],
+      })}';
+      expect(answer, contains('chainBreaks 1 条，四字段齐'));
+      expect(answer, isNot(contains('cause is empty')));
+      expect(answer, isNot(contains('cause must be')));
+      expect(answer, isNot(contains('.reason "')), reason: 'reason is unchanged');
+    });
+
+    test('a cause that stands must say something; left out is fine (§7 #41)', () async {
+      await BtestTools.all.first.run(startInput({'traversal': 'chain'}), call);
+      final without = '${await end({
+        'chainBreaks': [
+          {
+            'path': '首页',
+            'at': '列表底',
+            'reason': '没有下一步',
+            'verified': '翻到最后一页',
+          },
+        ],
+      })}';
+      expect(without, contains('chainBreaks 1 条，四字段齐'));
+      await BtestTools.all.first.run(startInput({'traversal': 'chain'}), call);
+      final blank = '${await end({
+        'chainBreaks': [
+          {
+            'path': '首页',
+            'at': '审核',
+            'reason': '门控',
+            'verified': '打开了列表',
+            'cause': '   ',
+          },
+        ],
+      })}';
+      expect(blank, contains('chainBreaks[1].cause is empty'));
+    });
+
+    test('four breaks close the run, the capped one judged like any (§7 #42)', () async {
+      // The cap itself (3 subagents per run, then 未查明（达到本轮研判上限）)
+      // is the card's discipline, not a host rule (design §3.3, check 2:
+      // shape only) — btest_card_test holds the card to it. Here the host is
+      // held to what it can judge: four breaks, causes shaped, run closes.
+      await BtestTools.all.first.run(startInput({'traversal': 'chain'}), call);
+      Map<String, Object?> breakAt(String at, String reason, [String? cause]) => {
+        'path': '首页 → 详情 → $at',
+        'at': at,
+        'reason': reason,
+        'verified': '上一步打开了 $at',
+        'cause': ?cause,
+      };
+      final answer = '${await end({
+        'chainBreaks': [
+          breakAt('审核', '门控', '审核页在 dev 未开放 · repo/lib/booking/audit.dart:41'),
+          breakAt('放单', '无权限', '放单入口只给调度员 · repo/lib/booking/release.dart:88'),
+          breakAt('导出', '数据不足', '详情缺柜号，导出不渲染 · repo/lib/booking/export.dart:12'),
+          breakAt('签收', '没有下一步', '未查明（达到本轮研判上限）'),
+        ],
+      })}';
+      expect(answer, contains('chainBreaks 4 条，四字段齐'));
+      expect(answer, isNot(contains('cause is empty')));
+      expect(state.run, isNull, reason: 'the run closes as usual');
     });
   });
 }

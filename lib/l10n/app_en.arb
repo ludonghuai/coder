@@ -7684,15 +7684,26 @@
       }
     }
   },
-  "btestStatusIdle": "btest · not started",
+  "btestStatusIdle": "btest · not started · {traversal} · {face}",
   "@btestStatusIdle": {
-    "description": "The composer's btest status line while the mode is on and no run has started."
+    "description": "The composer's btest status line while the mode is on and no run has started: how the next run walks and whether it may act, as the two switches read.",
+    "placeholders": {
+      "traversal": {
+        "type": "String"
+      },
+      "face": {
+        "type": "String"
+      }
+    }
   },
-  "btestStatusRun": "btest · {line} · {face} · run {run}",
+  "btestStatusRun": "btest · {line} · {traversal} · {face} · run {run}",
   "@btestStatusRun": {
-    "description": "The composer's btest status line during a run: the business line, read-only or write, and the run's id.",
+    "description": "The composer's btest status line during a run: the business line, how the round walks, read-only or write, and the run's id.",
     "placeholders": {
       "line": {
+        "type": "String"
+      },
+      "traversal": {
         "type": "String"
       },
       "face": {
@@ -7710,6 +7721,14 @@
   "btestFaceWrite": "write",
   "@btestFaceWrite": {
     "description": "A btest run's face: it may act too."
+  },
+  "btestTraversalDepth": "chain",
+  "@btestTraversalDepth": {
+    "description": "The btest traversal switch's first option: down the business chain as far as it goes. The run's value is chain."
+  },
+  "btestTraversalBreadth": "surface",
+  "@btestTraversalBreadth": {
+    "description": "The btest traversal switch's second option: across one interface's whole surface. The run's value is surface."
   },
   "btestSettingsTitle": "Business Testing (btest)",
   "@btestSettingsTitle": {

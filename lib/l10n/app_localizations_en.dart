@@ -10777,11 +10777,18 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get btestStatusIdle => 'btest · not started';
+  String btestStatusIdle(String traversal, String face) {
+    return 'btest · not started · $traversal · $face';
+  }
 
   @override
-  String btestStatusRun(String line, String face, String run) {
-    return 'btest · $line · $face · run $run';
+  String btestStatusRun(
+    String line,
+    String traversal,
+    String face,
+    String run,
+  ) {
+    return 'btest · $line · $traversal · $face · run $run';
   }
 
   @override
@@ -10789,6 +10796,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get btestFaceWrite => 'write';
+
+  @override
+  String get btestTraversalDepth => 'chain';
+
+  @override
+  String get btestTraversalBreadth => 'surface';
 
   @override
   String get btestSettingsTitle => 'Business Testing (btest)';

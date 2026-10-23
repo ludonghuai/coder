@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 
 import '../browser/btest/btest_card.dart';
 import '../browser/btest/btest_mode.dart';
+import '../browser/btest/btest_policy.dart' show BtestTraversal;
 import '../kernel/agent_kernel.dart';
 import '../kernel/kernel_event.dart';
 import '../kernel/kernel_registry.dart';
@@ -185,6 +186,32 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
     cwd: kernelContext.cwd,
     sessionId: _kernel.sessionId,
   );
+
+  /// How the next run walks (§9.1): the status line's traversal switch,
+  /// memory only — never a setting.
+  BtestTraversal get btestTraversal => _btest.traversal;
+
+  /// Picks it (§9.1): the switch alone. A run under way keeps the traversal
+  /// it started with; only the next run takes this (§9.1, #40).
+  void setBtestTraversal(BtestTraversal value) {
+    if (_btest.traversal == value) return;
+    _btest.traversal = value;
+    notifyListeners();
+  }
+
+  /// Whether the next run may act (§9.1): the status line's write switch,
+  /// memory only; before it is picked, `btest.readonly` stands.
+  bool get btestWrite => _btest.write;
+
+  /// Picks it (§9.1): the switch alone — a run under way keeps its own.
+  void setBtestWrite(bool value) {
+    // Compared as the switch's own value, not as what it resolves to: a pick
+    // that lands on the setting's value is still a pick, and rule A's text
+    // then says where the write came from (§3.7).
+    if (_btest.writePicked && _btest.write == value) return;
+    _btest.write = value;
+    notifyListeners();
+  }
 
   /// The turns the kernel reported (see [MarksTurns]), for the folds.
   final List<TurnMark> _turns = [];

@@ -10192,18 +10192,31 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get btestStatusIdle => 'btest · 待开始';
+  String btestStatusIdle(String traversal, String face) {
+    return 'btest · 待开始 · $traversal · $face';
+  }
 
   @override
-  String btestStatusRun(String line, String face, String run) {
-    return 'btest · $line · $face · run $run';
+  String btestStatusRun(
+    String line,
+    String traversal,
+    String face,
+    String run,
+  ) {
+    return 'btest · $line · $traversal · $face · run $run';
   }
 
   @override
   String get btestFaceReadonly => '只读';
 
   @override
-  String get btestFaceWrite => '写';
+  String get btestFaceWrite => '允许写';
+
+  @override
+  String get btestTraversalDepth => '深度';
+
+  @override
+  String get btestTraversalBreadth => '广度';
 
   @override
   String get btestSettingsTitle => '业务测试（btest）';

@@ -17565,17 +17565,17 @@ abstract class AppLocalizations {
   /// **'Delete and close {count} issues…'**
   String stashDeleteAndCloseMany(int count);
 
-  /// The composer's btest status line while the mode is on and no run has started.
+  /// The composer's btest status line while the mode is on and no run has started: how the next run walks and whether it may act, as the two switches read.
   ///
   /// In en, this message translates to:
-  /// **'btest · not started'**
-  String get btestStatusIdle;
+  /// **'btest · not started · {traversal} · {face}'**
+  String btestStatusIdle(String traversal, String face);
 
-  /// The composer's btest status line during a run: the business line, read-only or write, and the run's id.
+  /// The composer's btest status line during a run: the business line, how the round walks, read-only or write, and the run's id.
   ///
   /// In en, this message translates to:
-  /// **'btest · {line} · {face} · run {run}'**
-  String btestStatusRun(String line, String face, String run);
+  /// **'btest · {line} · {traversal} · {face} · run {run}'**
+  String btestStatusRun(String line, String traversal, String face, String run);
 
   /// A btest run's face: it only reads.
   ///
@@ -17588,6 +17588,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'write'**
   String get btestFaceWrite;
+
+  /// The btest traversal switch's first option: down the business chain as far as it goes. The run's value is chain.
+  ///
+  /// In en, this message translates to:
+  /// **'chain'**
+  String get btestTraversalDepth;
+
+  /// The btest traversal switch's second option: across one interface's whole surface. The run's value is surface.
+  ///
+  /// In en, this message translates to:
+  /// **'surface'**
+  String get btestTraversalBreadth;
 
   /// Settings → Browser's section for the browser business test mode.
   ///

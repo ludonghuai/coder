@@ -65,6 +65,39 @@ void main() {
       expect(BtestCard.text, contains('建议'));
       expect(BtestCard.text, contains('待研判 · <原因>'));
     });
+
+    test('a chain break sends its why to a read-only subagent, capped (§3.9, §7 #41/#42)', () {
+      // The rule's only carrier is the card: the host judges the cause's
+      // shape alone (§3.3, check 2), so dropping these sentences would let
+      // the behaviour go with nothing failing.
+      expect(
+        BtestCard.text,
+        contains("write it into that break's cause"),
+        reason: 'a break’s finding goes into cause',
+      );
+      expect(
+        BtestCard.text,
+        contains('explore, else plan'),
+        reason: 'the read-only fallback',
+      );
+      expect(BtestCard.text, contains('reason stays one of the four'));
+      expect(
+        BtestCard.text,
+        contains('At most 3 per run'),
+        reason: 'the cap',
+      );
+      expect(BtestCard.text, contains('未查明（达到本轮研判上限）'));
+      expect(
+        BtestCard.text,
+        contains('未查明（<原因>）'),
+        reason: 'an unavailable subagent still says why it is unknown',
+      );
+      expect(
+        BtestCard.text,
+        contains('not sent to the F8 review'),
+        reason: 'one break is not sent twice (F8)',
+      );
+    });
   });
 
   group('when a turn is assembled (§3.2)', () {

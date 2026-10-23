@@ -102,6 +102,7 @@ class BtestEntry {
 class BtestRun {
   BtestRun({
     required this.id,
+    required this.number,
     required this.line,
     required this.repoRoot,
     required this.startUrl,
@@ -116,6 +117,11 @@ class BtestRun {
   });
 
   final String id;
+
+  /// The run's ordinal, as the status line reads it (`run 1`, §9.1): the
+  /// tools' `runId` is `run-1`, the line says the number it ends with.
+  final String number;
+
   final String line;
 
   /// The business repository's root, absolute.
@@ -130,7 +136,8 @@ class BtestRun {
   final BtestFace face;
 
   /// The way this round walks its pages (§3.9): down the business chain, or
-  /// across one interface's surface.
+  /// across each interface of the run's scope in turn — one swept whole
+  /// before the next is entered.
   final BtestTraversal traversal;
 
   /// The expect file, absolute — derived by the host (§3.4): `expectFile`
@@ -185,12 +192,13 @@ class BtestRun {
       if (entry.detour == null) entry,
   ];
 
-  /// The report's head line (§3.8): the round's traversal first, then the
-  /// counters read from the run — the very line `btest_run_end` hands back
-  /// to be pasted, never self-reported. [noVisibleText] is the payload's
-  /// count, reconciled against the fallback count in check 4-③.
+  /// The report's head line (§3.8): the round's traversal and mode first,
+  /// then the counters read from the run — the very line `btest_run_end`
+  /// hands back to be pasted, never self-reported. [noVisibleText] is the
+  /// payload's count, reconciled against the fallback count in check 4-③.
   String truthLine({required int noVisibleText}) => [
     'traversal=${traversal.name}',
+    'mode=${face.name}',
     '操作真实性：入口=${declared.length}'
         '（navigate=${_count('browser_navigate')}',
     'open=${_count('browser_open')}',
@@ -209,7 +217,7 @@ class BtestRun {
 }
 
 /// A conversation's btest state (§3.1): whether the mode is on, its run,
-/// and how many runs it has had.
+/// the two run switches (§9.1), and how many runs it has had.
 class BtestState {
   BtestState({this.key = ''});
 
@@ -217,6 +225,36 @@ class BtestState {
   String key;
 
   bool on = false;
+
+  /// How the next run walks (§9.1): the traversal switch, kept in memory and
+  /// never written to the settings. Unset until picked; the built-in
+  /// `surface` then stands — the third tier of §3.3's priority.
+  BtestTraversal? _traversal;
+
+  /// Whether the next run may act (§9.1): the write switch, memory only.
+  /// Unset until picked; `btest.readonly` then stands (true ⇒ read-only).
+  bool? _write;
+
+  /// What the traversal switch reads now: its own value, else the built-in
+  /// `surface` — what a round did before the switch existed (KD-21).
+  BtestTraversal get traversal => _traversal ?? BtestTraversal.surface;
+
+  /// Picks how the next run walks: the switch alone. A run under way keeps
+  /// the traversal it started with (§9.1: a click only moves the switch).
+  set traversal(BtestTraversal value) => _traversal = value;
+
+  /// Whether the write switch reads `允许写` now: its own value, else the
+  /// settings' default — read-only unless `btest.readonly` is off.
+  bool get write => _write ?? !BtestSettings.readonlyByDefault;
+
+  /// Picks whether the next run may act: the switch alone; a run under way
+  /// keeps its own (§9.1).
+  set write(bool value) => _write = value;
+
+  /// Whether the write switch was picked in this session: rule A's text says
+  /// where an implied `mode: write` came from — the switch or the setting
+  /// (§3.7).
+  bool get writePicked => _write != null;
 
   /// The run under way; null between runs.
   BtestRun? run;
@@ -236,8 +274,10 @@ class BtestState {
     required String? baseline,
     required List<BtestCase> cases,
   }) {
+    final n = ++_runs;
     final started = BtestRun(
-      id: 'run-${++_runs}',
+      id: 'run-$n',
+      number: '$n',
       line: line,
       repoRoot: repoRoot,
       startUrl: startUrl,
@@ -450,8 +490,9 @@ abstract final class BtestTools {
     description:
         'Starts one btest run for a business line: the business repository, '
         'the one entry URL, dev/test/prod, read-only or write, and the way '
-        'the round walks (traversal: chain dives down the business chain, '
-        'surface walks one interface; surface is the default). The expect '
+        'the round walks (traversal: chain dives down the business chain; '
+        'surface sweeps one interface completely, then the next, until the '
+        "run's scope is covered; surface is the default). The expect "
         'file is derived by the host from the line, the repository and the '
         'QA root, and its absolute path is returned. Returns the run id and '
         'traversal, that path, the case index, the SHA-256 (the write-back '
@@ -480,17 +521,22 @@ abstract final class BtestTools {
         'mode': {
           'type': 'string',
           'enum': ['readonly', 'write'],
-          'description': 'Optional: read-only unless the btest settings say '
-              'otherwise. env: prod with write is refused (rule A).',
+          'description': 'Optional: the composer\'s write switch decides '
+              'when this is left out (read-only unless btest.readonly is '
+              'off). env: prod with write is refused (rule A), implied or '
+              'not.',
         },
         'traversal': {
           'type': 'string',
           'enum': ['chain', 'surface'],
           'description': 'Optional: chain walks down the business chain as '
               'far as it goes (a step that cannot go on is a chainBreak, and '
-              'the run looks for another way); surface walks the whole '
-              'interface (tabs, buttons, forms, filters, the list). Default: '
-              'surface.',
+              'the run looks for another way); surface sweeps this interface '
+              'completely (tabs, buttons, forms, filters, the list), then '
+              'moves on to the next interface and sweeps that too, until the '
+              "run's scope is covered — never one interface alone. Left out, "
+              'the composer\'s traversal switch decides (surface unless it '
+              'was picked).',
         },
         'commitRange': {
           'type': 'string',
@@ -554,7 +600,13 @@ abstract final class BtestTools {
         },
         'blockers': {'type': 'array', 'items': {'type': 'object'}},
         'unconfirmedDiffs': {'type': 'array', 'items': {'type': 'object'}},
-        'uncovered': {'type': 'array', 'items': {'type': 'object'}},
+        'uncovered': {
+          'type': 'array',
+          'items': {'type': 'object'},
+          'description': 'What the round did not reach: on a surface run, '
+              'each interface or branch of the run\'s scope it did not sweep '
+              '(not each control it skipped), as branch / why.',
+        },
         'chainBreaks': {
           'type': 'array',
           'items': {
@@ -567,6 +619,13 @@ abstract final class BtestTools {
                 'enum': ['门控', '无权限', '数据不足', '没有下一步'],
               },
               'verified': {'type': 'string'},
+              'cause': {
+                'type': 'string',
+                'description': 'Optional: why this step could not go on — '
+                    'one line plus one file:line (or a document section), '
+                    'from the read-only subagent a chain break is sent to. '
+                    'Absent when none was sent; reason stays one of the four.',
+              },
             },
           },
         },
@@ -626,35 +685,43 @@ abstract final class BtestTools {
         '"${input['env']}"',
       );
     }
-    final BtestFace face;
+    // The mode's priority (§3.3, written down): the call's parameter, then
+    // the session's write switch, then `btest.readonly` — the switch reads
+    // the setting itself when it was never picked. Resolved before rule A,
+    // which judges the resolved mode (§3.7): env: prod with an implied
+    // write is refused as surely as with the parameter.
     final mode = _text(input['mode']);
-    if (mode == null) {
-      face = BtestSettings.readonlyByDefault
-          ? BtestFace.readonly
-          : BtestFace.write;
-    } else if (BtestFace.parse(mode) case final parsed?) {
-      face = parsed;
-    } else {
+    final explicitFace = mode == null ? null : BtestFace.parse(mode);
+    if (mode != null && explicitFace == null) {
       throw BrowserError(
         'btest_run_start refused: mode must be readonly or write, not '
         '"$mode"',
       );
     }
+    final face =
+        explicitFace ?? (state.write ? BtestFace.write : BtestFace.readonly);
     if (env == BtestEnv.prod && face == BtestFace.write) {
-      throw const BrowserError(BtestPolicy.ruleA);
+      // The refusal names both either way; an implied write also says where
+      // it came from (the switch, or the setting behind it).
+      final from = explicitFace != null
+          ? ''
+          : '（mode: write 由${state.writePicked ? '写开关' : '设置'}得来）';
+      throw BrowserError('${BtestPolicy.ruleA}$from');
     }
-    // The round's traversal (§3.9): absent means surface — the behavior a
-    // run had before the parameter existed; an illegal value is named.
+    // The round's traversal (§3.9 / §9.1), same priority: the parameter,
+    // then the session's traversal switch, then the built-in `surface` —
+    // what a run did before the parameter existed. An illegal value is
+    // named; a surface given stays surface.
     final traversalText = _text(input['traversal']);
-    final BtestTraversal? traversal = traversalText == null
-        ? BtestTraversal.surface
-        : BtestTraversal.parse(traversalText);
-    if (traversal == null) {
+    final explicitTraversal =
+        traversalText == null ? null : BtestTraversal.parse(traversalText);
+    if (traversalText != null && explicitTraversal == null) {
       throw BrowserError(
         'btest_run_start refused: traversal must be chain or surface, not '
         '"$traversalText"',
       );
     }
+    final traversal = explicitTraversal ?? state.traversal;
     final repoRoot = _text(input['repoRoot']);
     if (repoRoot == null || !p.isAbsolute(repoRoot)) {
       throw BrowserError(
@@ -738,8 +805,9 @@ abstract final class BtestTools {
     final source = '来源=${qaRoot.source.label}';
     final reason = qaRoot.reason == null ? '' : ' · 降级原因=${qaRoot.reason}';
     return [
-      '1. btest ${run.id} started · $line · ${env.name} · ${face.name} · '
-          'traversal=${run.traversal.name} · ${run.repo}',
+      '1. btest ${run.id} started · $line · ${env.name} · '
+          'traversal=${run.traversal.name} · mode=${run.face.name} · '
+          '${run.repo}',
       '2. expectFile（解析后的绝对路径）: $expectFile',
       '   $source$reason',
       '3. Case index (${expect.cases.length}):',
@@ -1000,7 +1068,10 @@ abstract final class BtestTools {
 
   /// Check 2's chain half (§3.3): a chain run sends `chainBreaks` (an empty
   /// array is fine), and every break's four fields are filled, its reason one
-  /// of the four named ones. A surface run needs none.
+  /// of the four named ones. `cause` is optional (§3.9): absent when no
+  /// subagent was sent, and when it stands it must say something — the host
+  /// judges the shape alone, never whether the conclusion is true. A surface
+  /// run needs none.
   static ({String text, List<String> problems}) _chainBreaks(
     BtestRun run,
     Object? value,
@@ -1031,6 +1102,15 @@ abstract final class BtestTools {
         problems.add(
           'chainBreaks[${i + 1}].reason "$reason" is not one of '
           '门控 / 无权限 / 数据不足 / 没有下一步',
+        );
+      }
+      // A null is the field left out (nothing was found); a blank or a
+      // non-string is a cause that says nothing.
+      if (item['cause'] case final cause? when _text(cause) == null) {
+        problems.add(
+          cause is String
+              ? 'chainBreaks[${i + 1}].cause is empty'
+              : 'chainBreaks[${i + 1}].cause must be one string',
         );
       }
     }
