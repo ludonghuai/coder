@@ -113,8 +113,9 @@ void main() {
     required String now,
     FileOpenRequest? request,
     List<String>? opened,
+    double width = 1000,
   }) async {
-    tester.view.physicalSize = const Size(1000, 700);
+    tester.view.physicalSize = Size(width, 700);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     files = _Files({_file: now});
@@ -292,6 +293,30 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pump();
     expect(find.byType(IdeFindWidget), findsNothing);
+  });
+
+  testWidgets('the header keeps everything on one row at any pane width', (
+    tester,
+  ) async {
+    // The widths the header was reported at: the words, the icons, and the
+    // narrowest the splitter goes.
+    for (final width in [1000.0, 720.0, 566.0, 424.0, 182.0]) {
+      // A review per width: the session that opens it disposes it with itself.
+      review = _Review(_root, _file, '1\n2\n3\n4\n5\n');
+      await pump(tester, now: '1\n2\n3\n4\n5\n', width: width);
+      final overflows = <String>[];
+      for (var error = tester.takeException();
+          error != null;
+          error = tester.takeException()) {
+        final text = '$error';
+        if (text.contains('file_preview.dart')) overflows.add(text);
+      }
+      expect(
+        overflows,
+        isEmpty,
+        reason: 'at ${width}px:\n${overflows.join('\n\n')}',
+      );
+    }
   });
 }
 
