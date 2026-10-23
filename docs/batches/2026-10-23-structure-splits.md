@@ -119,17 +119,17 @@ KD-3（kernel 取 ≤500，严于设计 ㉓ 的 ≤1345）· KD-4（chat_models 
 | R10 | Requirements traceability | 🟡 | 台账只被引用、未被结案：`:4`「台账：#150（SPLIT-1…4）· #22（kernel 超预算）· #72（step_folds 边界并集段）」——档内从不点名 #150「四个 >800 档」是哪四个、本批之后 #150 是否收口；#153 只在 `:35`「与台账 #22 / #72 / #150 / #153」出现一次再无下文（语义悬空） | 加一列/一小节「结案对照」：#22/#72/#150/#153 各条 → 本批达成条件（如 #22 由 kernel ≤1345 达成、#72 由边界段出档达成）或「不结案」，并点名 #150 的四个 >800 档与 §2 四行的对应关系 |
 | R11 | Acceptance / 测试面 | 🟡 | kernel 的测试面靠枚举而非推导，且与别处口径不一致：`:120` 写调用方含「测试档」（未点名），`:226` 却只列六个测试档；而 chat_session 的调用方是按档逐行枚举（`:186-204`）、chat_models 给了「136 个文件」。搬 1195 行的档用一份说不清来源的清单当验收门，漏档不会被发现 | 按 `:186-204` 的方式从 import 反推 kernel 的测试调用方并落成 §5 第 2 步的命令；`flutter test --no-pub` 改为按目录 + 名单双列，或直接 `flutter test --no-pub test/kernel` |
 | R12 | Acceptance / 门值 | 🟡 | 验收门两处不一致、且无改动前基线：`:225` 各步判据是「`flutter analyze` = 0 issue」，`:244` 功能点 6 变成「`git diff --name-only` 无 `test/`；analyze 0 error」——error 与 issue 是两档门。另 §5 未要求在开工前先记录该步测试集为绿，若基线本就红，全绿门不可判 | §6 第 6 行改成与 §5 同值「0 issue」；§5 行 0 增加「先跑一遍该步测试集并记录基线为绿」 |
-| R13 | Methodology（受限项） | 🔵 | 本次范围无 AGENTS.md、无项目标准档、无 document map：方法学合规（4 步流）只能按设计档自身形态判，文档归属只能按判据本身判。同时所有 `.dart` 行号/符号坐标、以及 `thincoder-adapter.md` §18.4/§21.3、`browser-biz-test.md` §4/`:643`、台账 #22/#72/#150/#153 的引用均在评审范围外，一律 `unverified`——本轮只核了档内算术与档内互证 | 无需改档；若需核坐标，另开一轮带源码/登记档范围的评审 |
+| R13 | Methodology（受限项） | 🔵 | 本次范围无 AGENTS.md、无项目标准档、无 document map：方法学合规（4 步流）只能按设计档自身形态判，文档归属只能按判据本身判。同时所有 `.dart` 行号/符号坐标、以及 `docs/design/thincoder-adapter.md` §18.4/§21.3、`docs/design/browser-biz-test.md` §4/`:643`、台账 #22/#72/#150/#153 的引用均在评审范围外，一律 `unverified`——本轮只核了档内算术与档内互证 | 无需改档；若需核坐标，另开一轮带源码/登记档范围的评审 |
 | R14 | Clarity / 越界应对措辞 | 🔵 | `:252`「（part 档可再分）」措辞不准确：Dart 里 `part` 指令只能写在库根档，part 档只能有 `part of`（本条为语言规则，档内无取证，`unverified`）；再分缝的实操是「在 owner 档补一条 `part` 指令」 | 改成「由 owner 档再补一条 `part` 指令、把该段的一部分再切出去」，不改结论 |
 | R15 | Scope / 结构档位 | 🔵 | `:276` 的收敛选项「可并入 `composer_editing.dart`（合并 ≈680 行，仍 <800）」只比 800 硬顶，未提 500 档：680 行落在「>500 需拆分复核」区间 | 若采纳合并，补一句该 680 行档的分档理由（或改与 `composer_message.dart` 之外的段合并），避免绕开 500 档 |
 | R16 | Numeric drift | 🔵 | kernel 主档留档口径两处小数不一致：`:106`「`part` 指令（9）」未计已存在的 `:30` `part 'thincoder_choices.dart'`（实为 10 条）；`:92`「import 1–28」与 `:106`「import（27）」相差 1 行 | 统一为「part 指令 10（含既有 `thincoder_choices`）」与「import 27 + 1 空行」 |
 
 计数：🔴 1 · 🟡 11 · 🔵 4 —— 共 16 条。
 
-四个点名的复核结论：①**五档缝表能到目标行数**（kernel 九段 1195 行搬出，四条路径均达标；但 chat_session 余量最窄，见 R7，composer 缝表坐标互相重叠见 R9）；②**机制选型判据不自洽**（§3.2 给 chat_models 的理由对 `part` 同样成立，见 R5）；③**五步顺序与回滚粒度**：回滚粒度（一步一提交、提交文件集 ⊆ 目标档+新档）成立，但「风险升序」的说法被表自身否证，且缺中途放弃的回滚（见 R6）；④两点待补均确认成立：(a) 前置未分极（R2）、(b) §4.3 缺「取代 SPLIT-1」的本地句、§4.5 的 SPLIT-4 只写「偏离」且旧登记行无人改（R1）。
-
-VERDICT: changes-required
-
+四个点名的复核结论：①**五档缝表能到目标行数**（kernel 九段 1195 行搬出，四条路径均达标；但 chat_session 余量最窄，见 R7，composer 缝表坐标互相重叠见 R9）。
+②**机制选型判据不自洽**（§3.2 给 chat_models 的理由对 `part` 同样成立，见 R5）。
+③**五步顺序与回滚粒度**：回滚粒度（一步一提交、提交文件集 ⊆ 目标档+新档）成立，但「风险升序」的说法被表自身否证，且缺中途放弃的回滚（见 R6）。
+④两点待补均确认成立：(a) 前置未分极（R2）、(b) §4.3 缺「取代 SPLIT-1」的本地句、§4.5 的 SPLIT-4 只写「偏离」且旧登记行无人改（R1）。
 ### 轮次 2（评审子代理）
 
 ## 第 2 轮复核（#58 修正轮 → docs/design/structure-splits.md，311 行）
@@ -192,9 +192,9 @@ VERDICT: pass
 - `_boundaries` 方法块：原 41 行 → 新 46 行；差异只有三类：① 签名 `_boundaries(int from, int count, List<TurnMark> turns)` → `_boundariesOf(StepFolds folds, int from, int count, List<TurnMark> turns)`（1 行 → 6 行，多出 5 行）；② 3 处实例引用加前缀 `_items[` → `folds._items[`；③ 类成员 → 顶层函数缩进减 2。除此之外逐字一致（脚本判定 true）。
 - 反推校验：HEAD 版主档 − 搬出块 + `part` 指令/空行 + 委托 2 行 + 指路 1 行 == 当前主档，逐字节一致（脚本判定 true）。
 
-**工作树基线（开工前已存在，非本步改动）**：`M docs/batches/2026-10-22-browser-biz-test-mode.md` · `M docs/batches/2026-10-23-ledger-sweep.md` · `M lib/ide/git/git_repository.dart` · `?? docs/batches/2026-10-23-structure-splits.md` · `?? docs/design/structure-splits.md`。`git diff --name-only` 原文因此含 4 档，与本步相关的只有 `lib/chat/step_folds.dart`；本步新增文件只有 `lib/chat/step_folds_boundaries.dart`。
-
-**设计漂移（交父侧 / eng-designer 定位；实施不改文档）**
+**工作树基线（开工前已存在，非本步改动）**
+`M docs/batches/2026-10-22-browser-biz-test-mode.md` · `M docs/batches/2026-10-23-ledger-sweep.md` · `M lib/ide/git/git_repository.dart`
+本步净增量 = 目标档 + 新档；判据 ⑤ 的字面条件被既有脏档占一格，故记录基线供父侧核。
 
 - 设计 §4.2 估新档 `≈45`，实测 56（搬出内容 44 + part 头 1 + 空行 2 + 签名展开 5 + face 抬头 4）；主档估 `≈460`，实测 460。
 - 设计 §4.2 的 `_TurnBoundary` 现坐标 `:35-44` 在实施基线上实为 `:33-35`（其后的 `class StepFolds` 注释不搬）；调用方清单把 `test/chat/fold_view_test.dart` 列为直连调用方，该档实为经 `chat_history_view` 的间接消费者。
