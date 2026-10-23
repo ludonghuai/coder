@@ -6252,6 +6252,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get modelsMissingTooltip => '上游已不再列出此模型；会一直保留，直到你手动移除。';
 
   @override
+  String modelsRemoveMissing(int count) {
+    return '移除已下架（$count）';
+  }
+
+  @override
+  String modelsRemoveMissingConfirm(int count) {
+    return '移除 $count 个上游已下架的模型？';
+  }
+
+  @override
   String get modelsCustom => '手动';
 
   @override
@@ -6305,7 +6315,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get modelsRoles => '角色映射';
 
   @override
-  String get modelsRolesDescription => 'Claude Code 在各类工作中使用的模型；未设置时使用当前所选模型。';
+  String get modelsRolesDescription =>
+      'Claude Code 在各类工作中使用的模型；未设置时使用当前所选模型。除主模型外，都可以选其他上游的模型，请求会经 BaoCode 的本地代理发过去。';
 
   @override
   String get modelsRoleUnset => '未设置';
@@ -6345,10 +6356,10 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get modelsRoleSubagentDescription =>
-      'CLAUDE_CODE_SUBAGENT_MODEL：所有子 Agent 使用的模型，优先于子 Agent 定义或调用时指定的模型（定义为 inherit 的除外）。也可以选其他上游的模型，请求会经 BaoCode 的本地代理发过去。';
+      'CLAUDE_CODE_SUBAGENT_MODEL：所有子 Agent 使用的模型，优先于子 Agent 定义或调用时指定的模型（定义为 inherit 的除外）。';
 
   @override
-  String get modelsRoleMissing => '这个模型已不在它的上游里，子 Agent 的请求会失败。';
+  String get modelsRoleMissing => '这个模型已不在它的上游里，用到它的请求会失败。';
 
   @override
   String get modelsAdvanced => '高级';
@@ -6551,6 +6562,18 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String get modelsKindDescription =>
       '图片模型不出现在模型选择器里：agent 通过 generate_image 工具用它们生成图片。';
+
+  @override
+  String get modelsEndpoint => '端点类型';
+
+  @override
+  String modelsEndpointUpstream(String protocol) {
+    return '跟随上游（$protocol）';
+  }
+
+  @override
+  String get modelsEndpointDescription =>
+      '这个模型的请求发往哪种接口，Base URL 和 Key 与上游相同。中转站同时提供多种接口时，可以让 Claude 模型走 Anthropic 接口、GPT 模型走 Responses。';
 
   @override
   String get modelsImageBadge => '图片';
@@ -9158,47 +9181,6 @@ class AppLocalizationsZh extends AppLocalizations {
       '关闭后 agent 不再有浏览器工具，扩展也会断开连接。';
 
   @override
-  String get btestStatusIdle => 'btest · 待开始';
-
-  @override
-  String btestStatusRun(String line, String face, String run) {
-    return 'btest · $line · $face · run $run';
-  }
-
-  @override
-  String get btestFaceReadonly => '只读';
-
-  @override
-  String get btestFaceWrite => '写';
-
-  @override
-  String get btestSettingsTitle => '业务测试（btest）';
-
-  @override
-  String get btestSettingsDescription =>
-      '一轮只从起点进一次，像用户一样跑完整条业务线，判断依据来自业务仓的 docs/qa/<业务线>.md。下面两个列表决定它能到哪里。';
-
-  @override
-  String get btestAllowHosts => '允许域名';
-
-  @override
-  String get btestAllowHostsDescription => '逗号分隔。为空时 btest 轮里的每个浏览器动作都被拒绝。';
-
-  @override
-  String get btestProdHosts => '生产域名';
-
-  @override
-  String get btestProdHostsDescription =>
-      '逗号分隔。为空时写动作一律拒绝；即便 dev / test，打到这些域名的写动作也拒绝。';
-
-  @override
-  String get btestDefaultReadonly => '默认只读';
-
-  @override
-  String get btestDefaultReadonlyDescription =>
-      '未声明模式的一轮默认只读，关掉则默认写。env: prod 与 write 的组合始终拒绝。';
-
-  @override
   String get browserSettingsStatus => '状态';
 
   @override
@@ -10017,6 +9999,238 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get stashImplementEmpty => '先写点内容，再在 BaoCode 中实施';
+
+  @override
+  String stashIssueDuplicateBanner(String issue, String stash) {
+    return '$issue 来自合并进这条的 Stash $stash，还开着。作为重复关闭？';
+  }
+
+  @override
+  String get stashIssueCloseDuplicate => '作为重复关闭…';
+
+  @override
+  String get stashIssueDuplicateNoIssue => '已合并到另一条记录，作为重复关闭。';
+
+  @override
+  String get stashNewsOpened => '新 issue';
+
+  @override
+  String get stashNewsChanged => '远端有改动';
+
+  @override
+  String get stashNewsCommented => '有新评论';
+
+  @override
+  String get stashNewsClosed => '已在远端关闭';
+
+  @override
+  String get stashNewsReopened => '已在远端重新打开';
+
+  @override
+  String stashNewsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 条新动态',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get stashNewsCountTooltip => '只看与你有关的新动态：你的 issue 和 PR、指派给你的、@ 你的';
+
+  @override
+  String get stashNewsCountTooltipOn => '正在只看与你有关的新动态，点一下看全部';
+
+  @override
+  String get stashFilterNews => '与你有关的动态';
+
+  @override
+  String get stashMarkAllSeen => '全部标为已读';
+
+  @override
+  String stashIssueComments(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 条评论',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get stashIssueDiscussion => '讨论';
+
+  @override
+  String stashIssueDiscussionAll(int count, String forge) {
+    return '在 $forge 上查看全部 $count 条';
+  }
+
+  @override
+  String get stashIssueDiscussionFailed => '评论加载失败。';
+
+  @override
+  String get stashIssueDiscussionLoading => '正在加载评论…';
+
+  @override
+  String stashDeleteAndClose(String issue) {
+    return '删除并关闭 $issue…';
+  }
+
+  @override
+  String stashDeleteOpenIssue(String issue) {
+    return '它的 issue $issue 在远端还开着，除非一并关闭。';
+  }
+
+  @override
+  String stashIssueInSync(String issue) {
+    return '与 $issue 一致';
+  }
+
+  @override
+  String stashIssueSyncedAt(String time) {
+    return '$time 同步';
+  }
+
+  @override
+  String get stashIssueNotPushed => '本地有改动，尚未推送';
+
+  @override
+  String get stashIssueRemoteNewer => '远端有改动';
+
+  @override
+  String get stashIssueBothChanged => '本地和远端都改了';
+
+  @override
+  String get stashIssueDiscussionEmpty => '还没有评论';
+
+  @override
+  String get stashNewsMerged => 'PR 已合并';
+
+  @override
+  String get stashNewsChangesRequested => 'PR 被要求修改';
+
+  @override
+  String get stashNewsChecksFailed => 'PR 检查没通过';
+
+  @override
+  String get stashNewsMarked => '标为未读';
+
+  @override
+  String stashNewsOther(String news) {
+    return '$news（与你无关）';
+  }
+
+  @override
+  String stashNewsSidebar(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 条与你有关的新动态',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get stashFilterAllNews => '所有新动态';
+
+  @override
+  String get stashMarkSeen => '标为已读';
+
+  @override
+  String get stashMarkUnseen => '标为未读';
+
+  @override
+  String stashPullChecksFailedBanner(String pull) {
+    return '$pull 的检查没通过。';
+  }
+
+  @override
+  String stashPullChangesBanner(String pull) {
+    return '$pull 被要求修改。';
+  }
+
+  @override
+  String stashPullMergedBanner(String pull) {
+    return '$pull 已合并。这条也完成了吗？';
+  }
+
+  @override
+  String get stashPullFix => '回到对话修复';
+
+  @override
+  String get stashPullView => '查看';
+
+  @override
+  String stashPullFixChecks(String pull) {
+    return '$pull 的检查没通过，看看哪里失败了并修复。';
+  }
+
+  @override
+  String stashPullFixChanges(String pull) {
+    return '$pull 被要求修改，看一下评审意见并照着改。';
+  }
+
+  @override
+  String stashWriteManyTitle(int count) {
+    return '回复 $count 个 issue';
+  }
+
+  @override
+  String stashWriteCloseManyTitle(int count) {
+    return '关闭 $count 个 issue';
+  }
+
+  @override
+  String stashDeleteOpenIssues(int count, String issues) {
+    return '它们的 issue $issues 在远端还开着，除非一并关闭。';
+  }
+
+  @override
+  String stashDeleteAndCloseMany(int count) {
+    return '删除并关闭 $count 个 issue…';
+  }
+
+  @override
+  String get btestStatusIdle => 'btest · 待开始';
+
+  @override
+  String btestStatusRun(String line, String face, String run) {
+    return 'btest · $line · $face · run $run';
+  }
+
+  @override
+  String get btestFaceReadonly => '只读';
+
+  @override
+  String get btestFaceWrite => '写';
+
+  @override
+  String get btestSettingsTitle => '业务测试（btest）';
+
+  @override
+  String get btestSettingsDescription =>
+      '一轮只从起点进一次，像用户一样跑完整条业务线，判断依据来自业务仓的 docs/qa/<业务线>.md。下面两个列表决定它能到哪里。';
+
+  @override
+  String get btestAllowHosts => '允许域名';
+
+  @override
+  String get btestAllowHostsDescription => '逗号分隔。为空时 btest 轮里的每个浏览器动作都被拒绝。';
+
+  @override
+  String get btestProdHosts => '生产域名';
+
+  @override
+  String get btestProdHostsDescription =>
+      '逗号分隔。为空时写动作一律拒绝；即便 dev / test，打到这些域名的写动作也拒绝。';
+
+  @override
+  String get btestDefaultReadonly => '默认只读';
+
+  @override
+  String get btestDefaultReadonlyDescription =>
+      '未声明模式的一轮默认只读，关掉则默认写。env: prod 与 write 的组合始终拒绝。';
 
   @override
   String get sidePanelEdit => '编辑';

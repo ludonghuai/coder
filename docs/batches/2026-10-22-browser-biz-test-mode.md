@@ -123,8 +123,37 @@
 
 **对实施的影响**：无额外工作——实施方本就按设计在做，现按其上报的处理方式继续。
 
+## 预期文件落点变更：独立 QA 仓（2026-10-23 01:52）
+
+**已定决定**：预期文件**不再写进业务仓 `docs/qa/`**，改为独立 QA 仓；位置**与业务仓所在目录并行**，且可在设置里覆盖 · 用户原话：「可以，这个独立仓就跟着用户的工作区的文件夹并行如何」→「A这样子，但是得有灵活度，因为用户可能在几个文件夹里面操作，所以就跟着用户的工作区文件夹并行，或者大文件夹下行」· 时间：2026-10-23 01:52
+
+**推导规则（写死）**：
+- `btest.qaRoot` 有值 ⇒ 用它。
+- 未设 ⇒ `qaRoot = join(dirname(dirname(repoRoot)), 'qa')`，即「业务仓的父目录（如 `repos`）的同级 `qa`」。
+- 文件 = `join(qaRoot, basename(repoRoot), '<业务线>.md')`。
+- 实例：`C:\Users\\xinbo\repos\v2-booking` ⇒ `C:\Users\\xinbo\qa\v2-booking\订舱.md`；`D:\work\客户A\repos\v2-booking` ⇒ `D:\work\客户A\qa\v2-booking\订舱.md`。
+- **`btest_run_start` 的返回必须带上解析出的绝对路径**，让用户一眼看到落在哪、可当场覆盖。
+
+**为什么不是"跟着 session"**：session 一删预期即失，等于回到"凭记忆判断"，正是本功能要消灭的。**为什么不是业务仓内**：业务仓的 git 历史会被业务提交淹没，且用户明确要求业务仓干净。
+
+**连带影响**：① 业务仓只用于 `git log`（判 `source: new|old`），不再写文件；② 需求 F3 / 设计 §3.3（`repoRoot` + `expectFile` 相对路径）/ §3.4 需改；③ 设置页新增 `qaRoot`；④ 目录与 git init 由宿主自动创建。
+
+## 落点规则更正：与项目文件夹同级（2026-10-23 01:53）
+
+**已定决定**：`qa` 建在业务仓的**父目录**里，与各个项目文件夹并列（不是建在工作区外） · 用户原话：「加入我是几个文件夹并行组成的工作区，文件就放在和这几个文件夹并行的地方；如果是一个大文件夹下面项目，就在大文件夹的下面一级单独开一个文件夹」· 时间：2026-10-23 01:53
+
+**更正前的错误推导**：`join(dirname(dirname(repoRoot)), 'qa')`（落在工作区**外**一层）。**更正后**：`qaRoot = join(dirname(repoRoot), 'qa')`，文件 = `<qaRoot>/<basename(repoRoot)>/<业务线>.md`。
+
+| 业务仓 | 更正前（错） | 更正后（对） |
+|---|---|---|
+| `C:\Users\\xinbo\repos\v2-booking` | `C:\Users\\xinbo\qa\…` | **`C:\Users\\xinbo\repos\qa\v2-booking\…`** |
+| `D:\work\客户A\v2-booking` | `D:\work\qa\…` | **`D:\work\客户A\qa\v2-booking\…`** |
+
+规则只有一条（"与项目文件夹同级"），不为 `客户A\repos\v2-booking` 这类嵌套情况发明例外；`btest.qaRoot` 有值时优先覆盖。
+已同步：需求档 F3.2 已改写；设计修正轮 #22 已收 send 更正指令。
+
 ## §2 批次任务与设计（eng-designer）
-**状态行**：设计完成 · 2026-10-23（第三轮评审 2 条已落地：#14 关→开中间无回合（挂起中和行丢弃分支 + 两种时序用例 #22/#23）、#16 判定代码落点统一到 lib/browser/browser_tools.dart 的 run 包装；设计档实测 551 行；§7 用例 23 条；门禁 PASS）
+**状态行**：设计完成（2026-10-23 · 修正轮 F3.2：预期文件落点改独立 QA 仓（qaRoot = join(dirname(repoRoot), 'qa')）；设计档实测 586 行；§7 用例 25 条；门禁 PASS）
 <§2 模板占位：本批条目（覆盖） / 设计档落点 / 机制设计 / 受影响文件与测试覆盖 / 验收对照 / 关键决策 / 上抛项>
 
 ## 批次任务与设计（eng-designer）
@@ -292,6 +321,31 @@
 **门禁**：`doc_check(mode:"gate", docs:["docs/design/browser-biz-test.md"])` = PASS（1 档 0 条命中）。
 
 **明确不做**：未重开已落地的 13 + 2 + 6 + 3 条；未新增需求点；未改需求档与代码（含 `thincoder/**`）。
+
+## 修正轮（第 16 项）：预期文件落点改为独立 QA 仓（F3.2 · 2026-10-23）
+
+**改动**：`docs/design/browser-biz-test.md` 按需求 F3.2 与用户 2026-10-23 01:53 的澄清改写预期文件落点：业务仓零写入，预期文件落独立 QA 仓。只动点名段落；需求档未改、代码未动、其它已落地条目未重开。
+
+**逐条落点**（判据只引用，不转抄）：
+
+| 验收条 | 设计落点 |
+|---|---|
+| ① `expectFile` 语义 + 返回绝对路径 | §3.3（`expectFile` 不作入参；返回项 2 = 解析后的绝对路径） |
+| ② 推导规则与实例 | §3.4「位置」（`btest.qaRoot` 有值用之；否则 `join(dirname(repoRoot), 'qa')`；文件 `join(qaRoot, basename(repoRoot), '<业务线>.md')`；三个实例 + 盘符根边界） |
+| ③ 设置面 | §9 设置页行（`btest.qaRoot`，可空 = 派生） |
+| ④ 目录与 git init | §3.4「目录与 git init」（`createSync(recursive: true)`；init 失败不阻断 run，返回一行说明） |
+| ⑤ 受影响文件表 | §4（删掉业务仓 `docs/qa/` 行；新增 `qaRoot` 设置与路径派生的档与增量；行数 2026-10-23 复测） |
+| ⑥ 验收对照与用例 | §6 F3.2 行 · §7 #24 / #25（未配 ⇒ 派生；已配 ⇒ 用之）；#10 去掉 `expectFile` 必填 |
+| ⑦ 门禁 | `doc_check(mode:"gate")` = PASS（1 档 0 条命中） |
+| ⑧ 范围 | 只改本条；KD-4 改写、新增 KD-20；§10 第 4 条替换为 `git` 在 PATH 的 unverified |
+
+**受影响文件（本轮增量，现行数与增量见 §4）**：`lib/browser/btest/btest_mode.dart` · `lib/browser/btest/btest_expect_file.dart` · `lib/settings/pages/browser_page.dart` · `lib/l10n/app_en.arb` / `app_zh.arb` · `test/browser/btest_expect_file_test.dart`。代码面零改动（本段只改设计档）。
+
+**设计档行数**：586 行（改前 551）；§7 用例 25 条。
+
+**门禁**：`doc_check(mode:"gate", docs:["docs/design/browser-biz-test.md"])` → 首行 `DOC-CHECK GATE: PASS`（1 档 0 条命中）。
+
+**[上抛·待裁] 需求档 F3.2 的推导式表述需改**：`docs/requirements/browser-biz-test.md:30` 现写「`qaRoot` 未配时 = 业务仓所在目录（如 `repos`）的同级 `qa`」，按字面是 `dirname(dirname(repoRoot))/qa`；用户 2026-10-23 01:53 澄清为 `join(dirname(repoRoot), 'qa')`（`repos/qa`，与各项目文件夹并列）。设计按用户原话落；需求档这一句需主 agent 改（需求档写权不在设计位）。
 
 ## §3 设计评审（评审子代理）
 

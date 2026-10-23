@@ -10797,6 +10797,18 @@ abstract class AppLocalizations {
   /// **'No longer listed by the upstream; kept until you remove it.'**
   String get modelsMissingTooltip;
 
+  /// No description provided for @modelsRemoveMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove Gone ({count})'**
+  String modelsRemoveMissing(int count);
+
+  /// No description provided for @modelsRemoveMissingConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove {count} models the upstream no longer lists?'**
+  String modelsRemoveMissingConfirm(int count);
+
   /// No description provided for @modelsCustom.
   ///
   /// In en, this message translates to:
@@ -10890,7 +10902,7 @@ abstract class AppLocalizations {
   /// No description provided for @modelsRolesDescription.
   ///
   /// In en, this message translates to:
-  /// **'Which model Claude Code uses for each part of its work. Unset, the model picked stands in.'**
+  /// **'Which model Claude Code uses for each part of its work. Unset, the model picked stands in. All but the main model may be another upstream\'s: BaoCode\'s local proxy sends their requests there.'**
   String get modelsRolesDescription;
 
   /// No description provided for @modelsRoleUnset.
@@ -10962,13 +10974,13 @@ abstract class AppLocalizations {
   /// No description provided for @modelsRoleSubagentDescription.
   ///
   /// In en, this message translates to:
-  /// **'CLAUDE_CODE_SUBAGENT_MODEL: the model every subagent runs on, over the one its definition or the agent\'s call names (but inherit). It may be another upstream\'s: BaoCode\'s local proxy sends its requests there.'**
+  /// **'CLAUDE_CODE_SUBAGENT_MODEL: the model every subagent runs on, over the one its definition or the agent\'s call names (but inherit).'**
   String get modelsRoleSubagentDescription;
 
   /// Under a role that picks another upstream's model, once that upstream or model is gone.
   ///
   /// In en, this message translates to:
-  /// **'This model is no longer one of its upstream\'s: subagents\' requests to it will fail.'**
+  /// **'This model is no longer one of its upstream\'s: requests to it will fail.'**
   String get modelsRoleMissing;
 
   /// No description provided for @modelsAdvanced.
@@ -11336,6 +11348,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Image models are not offered in the model picker: agents make pictures with them through the generate_image tool.'**
   String get modelsKindDescription;
+
+  /// No description provided for @modelsEndpoint.
+  ///
+  /// In en, this message translates to:
+  /// **'Endpoint'**
+  String get modelsEndpoint;
+
+  /// The endpoint choice of a model that follows its upstream's protocol, that protocol's name in it.
+  ///
+  /// In en, this message translates to:
+  /// **'As the upstream ({protocol})'**
+  String modelsEndpointUpstream(String protocol);
+
+  /// No description provided for @modelsEndpointDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Which API this model\'s requests go to, at the upstream\'s base URL and with its key: on a relay that serves several, its Claude models at the Anthropic one and its GPT at Responses, say.'**
+  String get modelsEndpointDescription;
 
   /// No description provided for @modelsImageBadge.
   ///
@@ -15801,78 +15831,6 @@ abstract class AppLocalizations {
   /// **'When off, agents have no browser tools and the extension disconnects.'**
   String get browserSettingsEnabledDescription;
 
-  /// The composer's btest status line while the mode is on and no run has started.
-  ///
-  /// In en, this message translates to:
-  /// **'btest · not started'**
-  String get btestStatusIdle;
-
-  /// The composer's btest status line during a run: the business line, read-only or write, and the run's id.
-  ///
-  /// In en, this message translates to:
-  /// **'btest · {line} · {face} · run {run}'**
-  String btestStatusRun(String line, String face, String run);
-
-  /// A btest run's face: it only reads.
-  ///
-  /// In en, this message translates to:
-  /// **'readonly'**
-  String get btestFaceReadonly;
-
-  /// A btest run's face: it may act too.
-  ///
-  /// In en, this message translates to:
-  /// **'write'**
-  String get btestFaceWrite;
-
-  /// Settings → Browser's section for the browser business test mode.
-  ///
-  /// In en, this message translates to:
-  /// **'Business Testing (btest)'**
-  String get btestSettingsTitle;
-
-  /// No description provided for @btestSettingsDescription.
-  ///
-  /// In en, this message translates to:
-  /// **'A run enters once, works a business line like a user, and judges against docs/qa/<line>.md in the business repository. These lists decide what it may reach.'**
-  String get btestSettingsDescription;
-
-  /// Settings → Browser, btest: the hosts a browser action may reach; comma separated.
-  ///
-  /// In en, this message translates to:
-  /// **'Allowed Hosts'**
-  String get btestAllowHosts;
-
-  /// No description provided for @btestAllowHostsDescription.
-  ///
-  /// In en, this message translates to:
-  /// **'Comma separated. Empty refuses every browser action in a btest run.'**
-  String get btestAllowHostsDescription;
-
-  /// Settings → Browser, btest: the hosts that are production; comma separated.
-  ///
-  /// In en, this message translates to:
-  /// **'Production Hosts'**
-  String get btestProdHosts;
-
-  /// No description provided for @btestProdHostsDescription.
-  ///
-  /// In en, this message translates to:
-  /// **'Comma separated. Empty refuses every write action; a write on one of these is refused even on dev or test.'**
-  String get btestProdHostsDescription;
-
-  /// Settings → Browser, btest: whether a run that does not say its mode starts read-only.
-  ///
-  /// In en, this message translates to:
-  /// **'Start Runs Read-Only'**
-  String get btestDefaultReadonly;
-
-  /// No description provided for @btestDefaultReadonlyDescription.
-  ///
-  /// In en, this message translates to:
-  /// **'A run that does not say its mode is read-only unless this is off. env: prod with write is always refused.'**
-  String get btestDefaultReadonlyDescription;
-
   /// No description provided for @browserSettingsStatus.
   ///
   /// In en, this message translates to:
@@ -17330,6 +17288,354 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Write something first, then implement it in BaoCode'**
   String get stashImplementEmpty;
+
+  /// No description provided for @stashIssueDuplicateBanner.
+  ///
+  /// In en, this message translates to:
+  /// **'{issue}, of stash {stash} merged into this one, is still open. Close it as a duplicate?'**
+  String stashIssueDuplicateBanner(String issue, String stash);
+
+  /// No description provided for @stashIssueCloseDuplicate.
+  ///
+  /// In en, this message translates to:
+  /// **'Close as duplicate…'**
+  String get stashIssueCloseDuplicate;
+
+  /// No description provided for @stashIssueDuplicateNoIssue.
+  ///
+  /// In en, this message translates to:
+  /// **'Merged into another note; closing as a duplicate.'**
+  String get stashIssueDuplicateNoIssue;
+
+  /// No description provided for @stashNewsOpened.
+  ///
+  /// In en, this message translates to:
+  /// **'New issue'**
+  String get stashNewsOpened;
+
+  /// No description provided for @stashNewsChanged.
+  ///
+  /// In en, this message translates to:
+  /// **'Changed on the forge'**
+  String get stashNewsChanged;
+
+  /// No description provided for @stashNewsCommented.
+  ///
+  /// In en, this message translates to:
+  /// **'New comments'**
+  String get stashNewsCommented;
+
+  /// No description provided for @stashNewsClosed.
+  ///
+  /// In en, this message translates to:
+  /// **'Closed on the forge'**
+  String get stashNewsClosed;
+
+  /// No description provided for @stashNewsReopened.
+  ///
+  /// In en, this message translates to:
+  /// **'Reopened on the forge'**
+  String get stashNewsReopened;
+
+  /// No description provided for @stashNewsCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 update} other{{count} updates}}'**
+  String stashNewsCount(int count);
+
+  /// No description provided for @stashNewsCountTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Show only the updates about you: your issues and pull requests, those assigned to you or naming you'**
+  String get stashNewsCountTooltip;
+
+  /// No description provided for @stashNewsCountTooltipOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Showing only the updates about you; click for all'**
+  String get stashNewsCountTooltipOn;
+
+  /// No description provided for @stashFilterNews.
+  ///
+  /// In en, this message translates to:
+  /// **'About you'**
+  String get stashFilterNews;
+
+  /// No description provided for @stashMarkAllSeen.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark all as seen'**
+  String get stashMarkAllSeen;
+
+  /// No description provided for @stashIssueComments.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 comment} other{{count} comments}}'**
+  String stashIssueComments(int count);
+
+  /// No description provided for @stashIssueDiscussion.
+  ///
+  /// In en, this message translates to:
+  /// **'Discussion'**
+  String get stashIssueDiscussion;
+
+  /// No description provided for @stashIssueDiscussionAll.
+  ///
+  /// In en, this message translates to:
+  /// **'See all {count} on {forge}'**
+  String stashIssueDiscussionAll(int count, String forge);
+
+  /// No description provided for @stashIssueDiscussionFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load the comments.'**
+  String get stashIssueDiscussionFailed;
+
+  /// No description provided for @stashIssueDiscussionLoading.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading the comments…'**
+  String get stashIssueDiscussionLoading;
+
+  /// No description provided for @stashDeleteAndClose.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete and close {issue}…'**
+  String stashDeleteAndClose(String issue);
+
+  /// No description provided for @stashDeleteOpenIssue.
+  ///
+  /// In en, this message translates to:
+  /// **'Its issue {issue} stays open on the forge unless closed too.'**
+  String stashDeleteOpenIssue(String issue);
+
+  /// No description provided for @stashIssueInSync.
+  ///
+  /// In en, this message translates to:
+  /// **'Same as {issue}'**
+  String stashIssueInSync(String issue);
+
+  /// No description provided for @stashIssueSyncedAt.
+  ///
+  /// In en, this message translates to:
+  /// **'synced {time}'**
+  String stashIssueSyncedAt(String time);
+
+  /// No description provided for @stashIssueNotPushed.
+  ///
+  /// In en, this message translates to:
+  /// **'Changed here, not pushed yet'**
+  String get stashIssueNotPushed;
+
+  /// No description provided for @stashIssueRemoteNewer.
+  ///
+  /// In en, this message translates to:
+  /// **'Changed on the forge'**
+  String get stashIssueRemoteNewer;
+
+  /// No description provided for @stashIssueBothChanged.
+  ///
+  /// In en, this message translates to:
+  /// **'Changed both here and on the forge'**
+  String get stashIssueBothChanged;
+
+  /// No description provided for @stashIssueDiscussionEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No comments yet'**
+  String get stashIssueDiscussionEmpty;
+
+  /// No description provided for @stashNewsMerged.
+  ///
+  /// In en, this message translates to:
+  /// **'Pull request merged'**
+  String get stashNewsMerged;
+
+  /// No description provided for @stashNewsChangesRequested.
+  ///
+  /// In en, this message translates to:
+  /// **'Changes requested'**
+  String get stashNewsChangesRequested;
+
+  /// No description provided for @stashNewsChecksFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Checks failed'**
+  String get stashNewsChecksFailed;
+
+  /// No description provided for @stashNewsMarked.
+  ///
+  /// In en, this message translates to:
+  /// **'Marked as unread'**
+  String get stashNewsMarked;
+
+  /// No description provided for @stashNewsOther.
+  ///
+  /// In en, this message translates to:
+  /// **'{news} (not about you)'**
+  String stashNewsOther(String news);
+
+  /// No description provided for @stashNewsSidebar.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 update about you} other{{count} updates about you}}'**
+  String stashNewsSidebar(int count);
+
+  /// No description provided for @stashFilterAllNews.
+  ///
+  /// In en, this message translates to:
+  /// **'Any updates'**
+  String get stashFilterAllNews;
+
+  /// No description provided for @stashMarkSeen.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark as Read'**
+  String get stashMarkSeen;
+
+  /// No description provided for @stashMarkUnseen.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark as Unread'**
+  String get stashMarkUnseen;
+
+  /// No description provided for @stashPullChecksFailedBanner.
+  ///
+  /// In en, this message translates to:
+  /// **'The checks of {pull} failed.'**
+  String stashPullChecksFailedBanner(String pull);
+
+  /// No description provided for @stashPullChangesBanner.
+  ///
+  /// In en, this message translates to:
+  /// **'Changes were requested on {pull}.'**
+  String stashPullChangesBanner(String pull);
+
+  /// No description provided for @stashPullMergedBanner.
+  ///
+  /// In en, this message translates to:
+  /// **'{pull} was merged. Is this done too?'**
+  String stashPullMergedBanner(String pull);
+
+  /// No description provided for @stashPullFix.
+  ///
+  /// In en, this message translates to:
+  /// **'Fix in Its Conversation'**
+  String get stashPullFix;
+
+  /// No description provided for @stashPullView.
+  ///
+  /// In en, this message translates to:
+  /// **'View'**
+  String get stashPullView;
+
+  /// No description provided for @stashPullFixChecks.
+  ///
+  /// In en, this message translates to:
+  /// **'The checks of {pull} failed. Find out what failed and fix it.'**
+  String stashPullFixChecks(String pull);
+
+  /// No description provided for @stashPullFixChanges.
+  ///
+  /// In en, this message translates to:
+  /// **'Changes were requested on {pull}. Read the review and make them.'**
+  String stashPullFixChanges(String pull);
+
+  /// No description provided for @stashWriteManyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Comment on {count} issues'**
+  String stashWriteManyTitle(int count);
+
+  /// No description provided for @stashWriteCloseManyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Close {count} issues'**
+  String stashWriteCloseManyTitle(int count);
+
+  /// No description provided for @stashDeleteOpenIssues.
+  ///
+  /// In en, this message translates to:
+  /// **'Their issues {issues} stay open on the forge unless closed too.'**
+  String stashDeleteOpenIssues(int count, String issues);
+
+  /// No description provided for @stashDeleteAndCloseMany.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete and close {count} issues…'**
+  String stashDeleteAndCloseMany(int count);
+
+  /// The composer's btest status line while the mode is on and no run has started.
+  ///
+  /// In en, this message translates to:
+  /// **'btest · not started'**
+  String get btestStatusIdle;
+
+  /// The composer's btest status line during a run: the business line, read-only or write, and the run's id.
+  ///
+  /// In en, this message translates to:
+  /// **'btest · {line} · {face} · run {run}'**
+  String btestStatusRun(String line, String face, String run);
+
+  /// A btest run's face: it only reads.
+  ///
+  /// In en, this message translates to:
+  /// **'readonly'**
+  String get btestFaceReadonly;
+
+  /// A btest run's face: it may act too.
+  ///
+  /// In en, this message translates to:
+  /// **'write'**
+  String get btestFaceWrite;
+
+  /// Settings → Browser's section for the browser business test mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Business Testing (btest)'**
+  String get btestSettingsTitle;
+
+  /// No description provided for @btestSettingsDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'A run enters once, works a business line like a user, and judges against docs/qa/<line>.md in the business repository. These lists decide what it may reach.'**
+  String get btestSettingsDescription;
+
+  /// Settings → Browser, btest: the hosts a browser action may reach; comma separated.
+  ///
+  /// In en, this message translates to:
+  /// **'Allowed Hosts'**
+  String get btestAllowHosts;
+
+  /// No description provided for @btestAllowHostsDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Comma separated. Empty refuses every browser action in a btest run.'**
+  String get btestAllowHostsDescription;
+
+  /// Settings → Browser, btest: the hosts that are production; comma separated.
+  ///
+  /// In en, this message translates to:
+  /// **'Production Hosts'**
+  String get btestProdHosts;
+
+  /// No description provided for @btestProdHostsDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Comma separated. Empty refuses every write action; a write on one of these is refused even on dev or test.'**
+  String get btestProdHostsDescription;
+
+  /// Settings → Browser, btest: whether a run that does not say its mode starts read-only.
+  ///
+  /// In en, this message translates to:
+  /// **'Start Runs Read-Only'**
+  String get btestDefaultReadonly;
+
+  /// No description provided for @btestDefaultReadonlyDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'A run that does not say its mode is read-only unless this is off. env: prod with write is always refused.'**
+  String get btestDefaultReadonlyDescription;
 
   /// Shows a markdown file's text in the side panel, to edit.
   ///

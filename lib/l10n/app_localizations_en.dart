@@ -6666,6 +6666,16 @@ class AppLocalizationsEn extends AppLocalizations {
       'No longer listed by the upstream; kept until you remove it.';
 
   @override
+  String modelsRemoveMissing(int count) {
+    return 'Remove Gone ($count)';
+  }
+
+  @override
+  String modelsRemoveMissingConfirm(int count) {
+    return 'Remove $count models the upstream no longer lists?';
+  }
+
+  @override
   String get modelsCustom => 'Manual';
 
   @override
@@ -6721,7 +6731,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get modelsRolesDescription =>
-      'Which model Claude Code uses for each part of its work. Unset, the model picked stands in.';
+      'Which model Claude Code uses for each part of its work. Unset, the model picked stands in. All but the main model may be another upstream\'s: BaoCode\'s local proxy sends their requests there.';
 
   @override
   String get modelsRoleUnset => 'Unset';
@@ -6763,11 +6773,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get modelsRoleSubagentDescription =>
-      'CLAUDE_CODE_SUBAGENT_MODEL: the model every subagent runs on, over the one its definition or the agent\'s call names (but inherit). It may be another upstream\'s: BaoCode\'s local proxy sends its requests there.';
+      'CLAUDE_CODE_SUBAGENT_MODEL: the model every subagent runs on, over the one its definition or the agent\'s call names (but inherit).';
 
   @override
   String get modelsRoleMissing =>
-      'This model is no longer one of its upstream\'s: subagents\' requests to it will fail.';
+      'This model is no longer one of its upstream\'s: requests to it will fail.';
 
   @override
   String get modelsAdvanced => 'Advanced';
@@ -6976,6 +6986,18 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get modelsKindDescription =>
       'Image models are not offered in the model picker: agents make pictures with them through the generate_image tool.';
+
+  @override
+  String get modelsEndpoint => 'Endpoint';
+
+  @override
+  String modelsEndpointUpstream(String protocol) {
+    return 'As the upstream ($protocol)';
+  }
+
+  @override
+  String get modelsEndpointDescription =>
+      'Which API this model\'s requests go to, at the upstream\'s base URL and with its key: on a relay that serves several, its Claude models at the Anthropic one and its GPT at Responses, say.';
 
   @override
   String get modelsImageBadge => 'Image';
@@ -9678,48 +9700,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'When off, agents have no browser tools and the extension disconnects.';
 
   @override
-  String get btestStatusIdle => 'btest · not started';
-
-  @override
-  String btestStatusRun(String line, String face, String run) {
-    return 'btest · $line · $face · run $run';
-  }
-
-  @override
-  String get btestFaceReadonly => 'readonly';
-
-  @override
-  String get btestFaceWrite => 'write';
-
-  @override
-  String get btestSettingsTitle => 'Business Testing (btest)';
-
-  @override
-  String get btestSettingsDescription =>
-      'A run enters once, works a business line like a user, and judges against docs/qa/<line>.md in the business repository. These lists decide what it may reach.';
-
-  @override
-  String get btestAllowHosts => 'Allowed Hosts';
-
-  @override
-  String get btestAllowHostsDescription =>
-      'Comma separated. Empty refuses every browser action in a btest run.';
-
-  @override
-  String get btestProdHosts => 'Production Hosts';
-
-  @override
-  String get btestProdHostsDescription =>
-      'Comma separated. Empty refuses every write action; a write on one of these is refused even on dev or test.';
-
-  @override
-  String get btestDefaultReadonly => 'Start Runs Read-Only';
-
-  @override
-  String get btestDefaultReadonlyDescription =>
-      'A run that does not say its mode is read-only unless this is off. env: prod with write is always refused.';
-
-  @override
   String get browserSettingsStatus => 'Status';
 
   @override
@@ -10598,6 +10578,245 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get stashImplementEmpty =>
       'Write something first, then implement it in BaoCode';
+
+  @override
+  String stashIssueDuplicateBanner(String issue, String stash) {
+    return '$issue, of stash $stash merged into this one, is still open. Close it as a duplicate?';
+  }
+
+  @override
+  String get stashIssueCloseDuplicate => 'Close as duplicate…';
+
+  @override
+  String get stashIssueDuplicateNoIssue =>
+      'Merged into another note; closing as a duplicate.';
+
+  @override
+  String get stashNewsOpened => 'New issue';
+
+  @override
+  String get stashNewsChanged => 'Changed on the forge';
+
+  @override
+  String get stashNewsCommented => 'New comments';
+
+  @override
+  String get stashNewsClosed => 'Closed on the forge';
+
+  @override
+  String get stashNewsReopened => 'Reopened on the forge';
+
+  @override
+  String stashNewsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count updates',
+      one: '1 update',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get stashNewsCountTooltip =>
+      'Show only the updates about you: your issues and pull requests, those assigned to you or naming you';
+
+  @override
+  String get stashNewsCountTooltipOn =>
+      'Showing only the updates about you; click for all';
+
+  @override
+  String get stashFilterNews => 'About you';
+
+  @override
+  String get stashMarkAllSeen => 'Mark all as seen';
+
+  @override
+  String stashIssueComments(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count comments',
+      one: '1 comment',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get stashIssueDiscussion => 'Discussion';
+
+  @override
+  String stashIssueDiscussionAll(int count, String forge) {
+    return 'See all $count on $forge';
+  }
+
+  @override
+  String get stashIssueDiscussionFailed => 'Couldn\'t load the comments.';
+
+  @override
+  String get stashIssueDiscussionLoading => 'Loading the comments…';
+
+  @override
+  String stashDeleteAndClose(String issue) {
+    return 'Delete and close $issue…';
+  }
+
+  @override
+  String stashDeleteOpenIssue(String issue) {
+    return 'Its issue $issue stays open on the forge unless closed too.';
+  }
+
+  @override
+  String stashIssueInSync(String issue) {
+    return 'Same as $issue';
+  }
+
+  @override
+  String stashIssueSyncedAt(String time) {
+    return 'synced $time';
+  }
+
+  @override
+  String get stashIssueNotPushed => 'Changed here, not pushed yet';
+
+  @override
+  String get stashIssueRemoteNewer => 'Changed on the forge';
+
+  @override
+  String get stashIssueBothChanged => 'Changed both here and on the forge';
+
+  @override
+  String get stashIssueDiscussionEmpty => 'No comments yet';
+
+  @override
+  String get stashNewsMerged => 'Pull request merged';
+
+  @override
+  String get stashNewsChangesRequested => 'Changes requested';
+
+  @override
+  String get stashNewsChecksFailed => 'Checks failed';
+
+  @override
+  String get stashNewsMarked => 'Marked as unread';
+
+  @override
+  String stashNewsOther(String news) {
+    return '$news (not about you)';
+  }
+
+  @override
+  String stashNewsSidebar(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count updates about you',
+      one: '1 update about you',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get stashFilterAllNews => 'Any updates';
+
+  @override
+  String get stashMarkSeen => 'Mark as Read';
+
+  @override
+  String get stashMarkUnseen => 'Mark as Unread';
+
+  @override
+  String stashPullChecksFailedBanner(String pull) {
+    return 'The checks of $pull failed.';
+  }
+
+  @override
+  String stashPullChangesBanner(String pull) {
+    return 'Changes were requested on $pull.';
+  }
+
+  @override
+  String stashPullMergedBanner(String pull) {
+    return '$pull was merged. Is this done too?';
+  }
+
+  @override
+  String get stashPullFix => 'Fix in Its Conversation';
+
+  @override
+  String get stashPullView => 'View';
+
+  @override
+  String stashPullFixChecks(String pull) {
+    return 'The checks of $pull failed. Find out what failed and fix it.';
+  }
+
+  @override
+  String stashPullFixChanges(String pull) {
+    return 'Changes were requested on $pull. Read the review and make them.';
+  }
+
+  @override
+  String stashWriteManyTitle(int count) {
+    return 'Comment on $count issues';
+  }
+
+  @override
+  String stashWriteCloseManyTitle(int count) {
+    return 'Close $count issues';
+  }
+
+  @override
+  String stashDeleteOpenIssues(int count, String issues) {
+    return 'Their issues $issues stay open on the forge unless closed too.';
+  }
+
+  @override
+  String stashDeleteAndCloseMany(int count) {
+    return 'Delete and close $count issues…';
+  }
+
+  @override
+  String get btestStatusIdle => 'btest · not started';
+
+  @override
+  String btestStatusRun(String line, String face, String run) {
+    return 'btest · $line · $face · run $run';
+  }
+
+  @override
+  String get btestFaceReadonly => 'readonly';
+
+  @override
+  String get btestFaceWrite => 'write';
+
+  @override
+  String get btestSettingsTitle => 'Business Testing (btest)';
+
+  @override
+  String get btestSettingsDescription =>
+      'A run enters once, works a business line like a user, and judges against docs/qa/<line>.md in the business repository. These lists decide what it may reach.';
+
+  @override
+  String get btestAllowHosts => 'Allowed Hosts';
+
+  @override
+  String get btestAllowHostsDescription =>
+      'Comma separated. Empty refuses every browser action in a btest run.';
+
+  @override
+  String get btestProdHosts => 'Production Hosts';
+
+  @override
+  String get btestProdHostsDescription =>
+      'Comma separated. Empty refuses every write action; a write on one of these is refused even on dev or test.';
+
+  @override
+  String get btestDefaultReadonly => 'Start Runs Read-Only';
+
+  @override
+  String get btestDefaultReadonlyDescription =>
+      'A run that does not say its mode is read-only unless this is off. env: prod with write is always refused.';
 
   @override
   String get sidePanelEdit => 'Edit';

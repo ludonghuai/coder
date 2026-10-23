@@ -92,7 +92,9 @@ enum _Time { all, today, week, month }
 
 /// The stashes shown by their issue (see StashForge): all, those that
 /// are one, those that are not.
-enum _IssueFilter { all, issue, local }
+/// Which a stash's issue makes shown: any, those that are one, those not,
+/// those with news about the user, with any news.
+enum _IssueFilter { all, issue, local, news, allNews }
 
 class StashViewState extends State<StashView>
     with _StashActions, SingleTickerProviderStateMixin {
@@ -374,6 +376,32 @@ class StashViewState extends State<StashView>
     };
   }
 
+  /// The stashes with news (see [StashNote.news]) not seen yet.
+  List<StashNote> get _news => [
+    if (_controller.forge != null)
+      for (final note in _controller.store.notes)
+        if (note.news != null && !note.isBlank) note,
+  ];
+
+  /// Of [_news], those about the user ([StashNote.newsMine]).
+  List<StashNote> get _newsMine => [
+    for (final note in _news)
+      if (note.newsMine) note,
+  ];
+
+  Future<void> _seenAll() async {
+    final forge = _controller.forge;
+    if (forge == null) return;
+    for (final note in _news) {
+      await forge.seen(note.id);
+    }
+    if (mounted &&
+        (_issueFilter == _IssueFilter.news ||
+            _issueFilter == _IssueFilter.allNews)) {
+      _filter(() => _issueFilter = _IssueFilter.all);
+    }
+  }
+
   List<StashNote> get _filtered {
     final store = _controller.store;
     final now = DateTime.now();
@@ -390,6 +418,8 @@ class StashViewState extends State<StashView>
       _IssueFilter.all => true,
       _IssueFilter.issue => note.ownIssue != null,
       _IssueFilter.local => note.ownIssue == null,
+      _IssueFilter.news => note.news != null && note.newsMine,
+      _IssueFilter.allNews => note.news != null,
     };
     final among = store.notes.where(
       (note) =>
@@ -726,7 +756,8 @@ class StashViewState extends State<StashView>
       },
       child: Container(
         width: _sashWidth,
-        alignment: Alignment.centerRight,
+        // Against the list: its scrollbar at the line.
+        alignment: Alignment.centerLeft,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 100),
           width: dragging ? IdeModernUI.gap : 1,
@@ -768,6 +799,18 @@ class StashViewState extends State<StashView>
               '$count',
               style: TextStyle(color: AppColors.textFaint, fontSize: 12),
             ),
+            if (_newsMine case final news when news.isNotEmpty) ...[
+              const SizedBox(width: 10),
+              _NewsPill(
+                count: news.length,
+                on: _issueFilter == _IssueFilter.news,
+                onTap: () => _filter(
+                  () => _issueFilter = _issueFilter == _IssueFilter.news
+                      ? _IssueFilter.all
+                      : _IssueFilter.news,
+                ),
+              ),
+            ],
             const Spacer(),
             if (widget.onHotkeySettings case final onTap?) ...[
               IdeHover(
@@ -1214,6 +1257,13 @@ class StashViewState extends State<StashView>
                     checked: _issueFilter == filter,
                     onSelected: () => _filter(() => _issueFilter = filter),
                   ),
+                if (_news.isNotEmpty) ...[
+                  const IdeMenuSeparator(),
+                  IdeMenuAction(
+                    l10n.stashMarkAllSeen,
+                    onSelected: () => unawaited(_seenAll()),
+                  ),
+                ],
               ]),
             ),
           ),
@@ -1226,6 +1276,8 @@ class StashViewState extends State<StashView>
         _IssueFilter.all => l10n.stashFilterAnyIssue,
         _IssueFilter.issue => l10n.stashFilterIssue,
         _IssueFilter.local => l10n.stashFilterNotIssue,
+        _IssueFilter.news => l10n.stashFilterNews,
+        _IssueFilter.allNews => l10n.stashFilterAllNews,
       };
 
   Widget _buildPickedBar(AppLocalizations l10n) {
@@ -1326,15 +1378,56 @@ mixin _StashActions<T extends StatefulWidget> on State<T> {
 
   Future<void> _delete(List<int> ids) async {
     final l10n = context.l10n;
+    final forge = _controller.forge;
+    // Their issues still open there: closed too, if the user says so (and
+    // what goes there written by them first).
+    final open = <(StashNote, StashIssueLink)>[
+      if (forge != null)
+        for (final id in ids)
+          if (_controller.store.byId(id) case final note?)
+            if (note.ownIssue case final own?)
+              if (note.issueOf(own) case final link?
+                  when forge.canAsk(link.url) &&
+                      (forge.stateOf(link)?.isOpen ?? false))
+                (note, link),
+    ];
+    final tags = [
+      for (final (_, link) in open) forge?.refOf(link.url)?.fullTag ?? link.url,
+    ];
     final choice = await showIdeDialog(
       context,
       message: ids.length == 1
           ? l10n.stashDeleteOne('#${ids.single}')
           : l10n.stashDeleteMany(ids.length),
-      detail: l10n.stashDeleteDetail,
-      buttons: [l10n.stashDelete],
+      detail: [
+        l10n.stashDeleteDetail,
+        if (tags.length == 1)
+          l10n.stashDeleteOpenIssue(tags.single)
+        else if (tags.isNotEmpty)
+          l10n.stashDeleteOpenIssues(tags.length, tags.join(', ')),
+      ].join('\n\n'),
+      buttons: [
+        l10n.stashDelete,
+        if (tags.length == 1)
+          l10n.stashDeleteAndClose(tags.single)
+        else if (tags.isNotEmpty)
+          l10n.stashDeleteAndCloseMany(tags.length),
+      ],
     );
-    if (choice != 0) return;
+    if (choice == 1 && open.isNotEmpty && forge != null && mounted) {
+      final (note, link) = open.first;
+      final closed = await showStashWriteDialog(
+        context,
+        forge: forge,
+        note: note,
+        link: link,
+        others: open.sublist(1),
+        close: true,
+      );
+      if (!closed) return;
+    } else if (choice != 0) {
+      return;
+    }
     for (final id in ids) {
       await _controller.store.delete(id);
     }
@@ -1402,6 +1495,21 @@ mixin _StashActions<T extends StatefulWidget> on State<T> {
             onSelected: () => unawaited(_controller.open(note.id)),
           ),
         ],
+        if (_controller.forge case final forge?)
+          if (ids.any((id) => _controller.store.byId(id)?.news != null))
+            IdeMenuAction(
+              l10n.stashMarkSeen,
+              onSelected: () => unawaited(
+                Future.wait([for (final id in ids) forge.seen(id)]),
+              ),
+            )
+          else
+            IdeMenuAction(
+              l10n.stashMarkUnseen,
+              onSelected: () => unawaited(
+                Future.wait([for (final id in ids) forge.markUnseen(id)]),
+              ),
+            ),
         IdeMenuAction(
           l10n.stashStatus,
           submenu: _statusEntries(ids, current: several ? null : note.status),
@@ -1526,6 +1634,13 @@ class StashDetail extends StatefulWidget {
 class _StashDetailState extends State<StashDetail> with _StashActions {
   final GlobalKey<StashNoteEditorState> _editor = GlobalKey();
 
+  /// What news its stash had as it was shown, seen by that: still said
+  /// while it stays.
+  StashNews? _news;
+
+  /// The stash whose news was last seen here.
+  int? _seenOf;
+
   @override
   StashController get _controller => widget.controller;
 
@@ -1539,6 +1654,7 @@ class _StashDetailState extends State<StashDetail> with _StashActions {
   @override
   void didUpdateWidget(StashDetail oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.id != widget.id) _news = null;
     if (oldWidget.controller != widget.controller) {
       oldWidget.controller.removeListener(_changed);
       oldWidget.controller.store.removeListener(_changed);
@@ -1587,6 +1703,18 @@ class _StashDetailState extends State<StashDetail> with _StashActions {
     final l10n = context.l10n;
     final note = _controller.store.byId(widget.id);
     if (note == null) return const SizedBox.shrink();
+    // Seen as it shows; but marked to come back to while it does, left
+    // so.
+    if (note.news case final news?
+        when _controller.forge != null &&
+            !(news == StashNews.marked && _seenOf == note.id)) {
+      if (news != StashNews.marked) _news = news;
+      final id = note.id;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_controller.forge?.seen(id));
+      });
+    }
+    _seenOf = note.id;
     final suggested = note.suggestedProject;
     final clarifying = _controller.clarifying(note.id);
     final failure = _controller.clarifyFailure(note.id);
@@ -1688,6 +1816,12 @@ class _StashDetailState extends State<StashDetail> with _StashActions {
                   forge: forge,
                   note: note,
                 ),
+              if (_news case final news? when note.ownIssue != null)
+                StashBadge(
+                  icon: Codicons.bell,
+                  label: stashNewsLabel(l10n, news),
+                  color: AppColors.accent,
+                ),
               Text(
                 _sourceText(note),
                 style: TextStyle(color: AppColors.textFaint, fontSize: 11.5),
@@ -1740,6 +1874,17 @@ class _StashDetailState extends State<StashDetail> with _StashActions {
               key: ValueKey(('issues', note.id)),
               forge: forge,
               note: note,
+              onOpenAgent: widget.onOpenAgent,
+            ),
+          ),
+        if (_controller.forge case final forge? when note.ownIssue != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+            child: StashIssueDiscussion(
+              key: ValueKey(('discussion', note.id)),
+              forge: forge,
+              note: note,
+              open: _news == StashNews.commented,
             ),
           ),
         if (failure != null)
@@ -1860,6 +2005,19 @@ String stashStatusLabel(AppLocalizations l10n, StashStatus status) =>
       StashStatus.done => l10n.stashStatusDone,
     };
 
+/// What [news] says of a stash's issue, as the user reads it.
+String stashNewsLabel(AppLocalizations l10n, StashNews news) => switch (news) {
+  StashNews.opened => l10n.stashNewsOpened,
+  StashNews.changed => l10n.stashNewsChanged,
+  StashNews.commented => l10n.stashNewsCommented,
+  StashNews.closed => l10n.stashNewsClosed,
+  StashNews.reopened => l10n.stashNewsReopened,
+  StashNews.merged => l10n.stashNewsMerged,
+  StashNews.changesRequested => l10n.stashNewsChangesRequested,
+  StashNews.checksFailed => l10n.stashNewsChecksFailed,
+  StashNews.marked => l10n.stashNewsMarked,
+};
+
 IconData _statusIcon(StashStatus status) => switch (status) {
   StashStatus.collected => Codicons.inbox,
   StashStatus.requirement => Codicons.checklist,
@@ -1928,6 +2086,26 @@ class _StashRow extends StatelessWidget {
             children: [
               Row(
                 children: [
+                  if (note.news case final news? when forge != null) ...[
+                    IdeHover(
+                      message: note.newsMine
+                          ? stashNewsLabel(l10n, news)
+                          : l10n.stashNewsOther(stashNewsLabel(l10n, news)),
+                      // About the user: filled; else a ring, quieter.
+                      child: Container(
+                        width: 7,
+                        height: 7,
+                        decoration: BoxDecoration(
+                          color: note.newsMine ? AppColors.accent : null,
+                          border: note.newsMine
+                              ? null
+                              : Border.all(color: AppColors.textFaint),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                  ],
                   if (note.pinned) ...[
                     Icon(Codicons.pinned, size: 12, color: AppColors.textMuted),
                     const SizedBox(width: 4),
@@ -1982,6 +2160,12 @@ class _StashRow extends StatelessWidget {
                     TextSpan(text: '  ·  ${stashDateText(note.updated)}'),
                     if (projectName case final name?)
                       TextSpan(text: '  ·  $name'),
+                    if (note.ownIssue case final own? when forge != null)
+                      if (note.issueOf(own)?.comments case final count?
+                          when count > 0)
+                        TextSpan(
+                          text: '  ·  ${l10n.stashIssueComments(count)}',
+                        ),
                     if (summary.isNotEmpty && summary != note.displayTitle)
                       TextSpan(
                         text: '  ·  $summary',
@@ -2255,6 +2439,58 @@ class StashBadge extends StatelessWidget {
   );
 }
 
+/// In the title bar: how many stashes have news, showing only those by a
+/// click ([on]), all again by another.
+class _NewsPill extends StatelessWidget {
+  const _NewsPill({required this.count, required this.on, required this.onTap});
+
+  final int count;
+  final bool on;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    return IdeHover(
+      message: on ? l10n.stashNewsCountTooltipOn : l10n.stashNewsCountTooltip,
+      child: HoverBuilder(
+        cursor: SystemMouseCursors.click,
+        builder: (context, hovered) => GestureDetector(
+          onTap: onTap,
+          child: Container(
+            height: 20,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            decoration: BoxDecoration(
+              color: AppColors.accent.withValues(
+                alpha: on ? .3 : (hovered ? .22 : .14),
+              ),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: AppColors.accent,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 5),
+                Text(
+                  l10n.stashNewsCount(count),
+                  style: TextStyle(color: AppColors.text, fontSize: 11.5),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// A pill that opens a menu: a filter's, or a stash's status, project
 /// and issue.
 class StashChip extends StatelessWidget {
@@ -2265,6 +2501,7 @@ class StashChip extends StatelessWidget {
     required this.onTap,
     this.active = false,
     this.leading,
+    this.tooltip,
   });
 
   final IconData icon;
@@ -2274,9 +2511,15 @@ class StashChip extends StatelessWidget {
 
   /// In place of [icon].
   final Widget? leading;
+  final String? tooltip;
 
   @override
-  Widget build(BuildContext context) => HoverBuilder(
+  Widget build(BuildContext context) => switch (tooltip) {
+    final message? => IdeHover(message: message, child: _build(context)),
+    null => _build(context),
+  };
+
+  Widget _build(BuildContext context) => HoverBuilder(
     cursor: SystemMouseCursors.click,
     builder: (context, hovered) => GestureDetector(
       onTap: () {

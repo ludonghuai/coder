@@ -588,6 +588,18 @@ abstract final class BtestTools {
     if (BtestExpect.writableProblem(expectFile) case final problem?) {
       throw BrowserError('btest_run_start refused: $problem');
     }
+    // The folder the file goes in may not exist yet (a business repo's
+    // docs/qa on its first run). Made here, once, so the run's write-back —
+    // and the agent's own file tools — meet a folder rather than a path that
+    // cannot be resolved. A folder that cannot be made is a readable refusal.
+    try {
+      Directory(p.dirname(expectFile)).createSync(recursive: true);
+    } on FileSystemException catch (error) {
+      throw BrowserError(
+        'btest_run_start refused: ${p.dirname(expectFile)} cannot be made '
+        '(${error.osError?.message ?? error.message})',
+      );
+    }
     final commitRange = _text(input['commitRange']);
     if (commitRange == null) {
       throw const BrowserError(
