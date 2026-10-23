@@ -80,6 +80,7 @@
 - N6：验收第 2 条补一步：`git grep -n 'commandOpenDetails' -- lib/l10n` 须命中 arb 与生成 getter。
 
 
+**重开记录**：2026-10-22 · 原收口 2026-10-22 · 理由 = 合并后用户走查发现输入框打不了字，主 agent 定位并修复（bao_markdown 未传 viewId）；待用户复验后收口 · 操作者 = 主 agent
 ## §2 批次任务与设计（eng-designer）
 **状态行**：设计完成 · 2026-10-22（定稿：戊 · 14 项；§3 评审 13 条已逐条落地）
 
@@ -598,3 +599,32 @@ VERDICT: pass
 ### 收口
 - 文档改动：`docs/release.md:421`（主 agent 就地修正）、需求档两条裁定（`:277` / `:278`）、本档；提交 `b0c128a1`（文档三档）。
 - doc-check gate：合并批文档改动为纯记录/口径修正；本档 §6 追加后复跑见回执。
+
+## 收口后缺陷：输入框打不了字（2026-10-22 21:07 用户走查）
+
+**现象**：合并后 dev 实例里输入框无法输入；日志抛 `PlatformException(Bad Arguments, Could not set client, view ID is null.)` 与 `Internal Consistency Error, Set editing state … but no client`。合并前两次 dev 运行（00:34 / 02:19 日志）**0 次**同类异常。
+
+**根因（实读）**：`packages/bao_markdown/lib/src/editor/md_editor.dart:1347` 的 `_openInput()` 构造 `TextInputConfiguration` 时**未传 `viewId`**；Flutter 自己的 `EditableText` 是传的（`editable_text.dart:3387` `View.of(context).viewId`）。本应用是**多视图**架构（`lib/window/app_windows.dart` 的 `viewId` / 宿主多窗），引擎无法推断视图 ⇒ 拒绝挂载 IME ⇒ 输入框收不到按键。
+
+**修复（主 agent 直笔，轻渠道 · 缺陷修复 · 声明在此）**：`md_editor.dart:1350` 增 `viewId: View.of(context).viewId,`（含注释说明多视图场景）。改动面 = 对话输入框 / stash 编辑器 / markdown 编辑器三处（同一 widget）；可回滚（单行）。
+
+**复验**：重建后 dev 实例启动日志 **无** `view ID is null` 异常；实际打字待用户确认。
+
+**同批发现的非合并回归（不修，记账）**：「全部撤销」按钮消失 —— 实读 `lib/chat/chat_screen.dart:591` 的 `onUndo: canPlan ? … : plans ? null : undo`，与合并前 `44b68d4f` 的同一段**逐字相同**（`git show 44b68d4f:lib/chat/chat_screen.dart` 的 `:555` 处同形）⇒ **不是合并引入**。但 `activity_strip.dart:504` 的条件是 `if (onUndo != null || undoTooltip != null)`，与同档注释「shown disabled, and says why」矛盾（注释说显示为禁用，代码是直接不渲染）——属既有不一致，另立条目。
+
+## 收口后补记：输入框两个缺陷 → 上游已修（2026-10-22 21:22）
+
+**主 agent 临时修复已撤、改吃上游修复。**
+
+| 缺陷 | 我当时的诊断/处置 | 上游修复 |
+|---|---|---|
+| 输入框打不了字（`view ID is null`） | 定位 = `md_editor.dart` 的 `_openInput()` 未传 `viewId`；主 agent 手补 `viewId: View.of(context).viewId`（一行，已验证打字恢复） | **`e860c27d`**（PR #252 `fix/windows-input-view`）：提交正文「the markdown editor asked for the platform's text input without the view it types into; Windows turns such a client down ("view ID is null")」——**同根因**；另修了 browser mirror 的同一缺口 |
+| 中文上字残留拼音 / 顺序错（「直接」+「做」→「做直接」） | 合成 delta 序列**复现失败**（`nihao`→`你好` 正常），改为加临时探针抓真实事件；探针已删除 | **`533e7a0d`**（PR #253 `fix/windows-ime-compose`）：Windows 起手是**零长度组合区**，编辑器当成「无组合」⇒ 把文本再告诉平台一次 ⇒ 上字落到前面；修复在 `md_editor.dart:1621` 一带（`!delta.composing.isCollapsed` 判定） |
+
+**合并**：`112b395b`（3 文件，+89/−2）。`packages/bao_markdown/test/md_editor_test.dart` = **18 通过 / 2 跳过**。用户复验：中文输入正常。
+
+**手改撤销记录**：`md_editor.dart` 的 `viewId` 手补 + 临时 `print` 探针 + `zz_ime_probe_test.dart` 均已回退/删除（`git checkout` + 删档），工作树无残留。
+
+**未修、按用户裁定只记账**：右栏 26 px 横向溢出（见台账 #148）；「全部撤销」按钮消失（既有行为、合并前后逐字相同，用户裁定不改）。
+
+**溢出线索（待定位，未验证）**：`lib/chat/side_panel/side_panel_view.dart:1451` 的 `_actionsWidth = 3 * 22.0 + 2 * 2 + 6`（= 76）与 `origin/main` 同处的 `_actionsWidth = 2 * 22.0 + 2 + 6`（= 52）+ `_leadingWidth = 22.0 + 6`（= 28）是**两套不同布局假设**（我们的 3 按钮、上游的 2 按钮 + leading）；合并取了我们的常量与上游的公式，两者现在同处一档。是否就是这 26 px 的来源，需真机逐处确认。
