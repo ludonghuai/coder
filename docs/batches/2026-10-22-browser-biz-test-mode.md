@@ -185,7 +185,7 @@ SPLIT-5 写「下一批只要动 `btest_mode.dart`，先按本缝拆完再改功
 **③ 批档补记**：本段此前缺 06:46 的裁定行——已由需求 F11（`:43`）与本节 ①② 覆盖，不再单列。
 
 ## §2 批次任务与设计（eng-designer）
-**状态行**：设计完成 2026-10-23（第 24 项第 2 修（评审 #51：三键读写挪进 BtestState · chat_session 净增 ≤ +3）已落 · 设计档 883 行 · 门禁 PASS）
+**状态行**：设计完成 2026-10-23（第 24 项第 2 修后经台账 #164 修正轮：§4 现行列与表头按拆分后实读刷新 · 24 行实测 0 不符 · 门禁 PASS）
 <§2 模板占位：本批条目（覆盖） / 设计档落点 / 机制设计 / 受影响文件与测试覆盖 / 验收对照 / 关键决策 / 上抛项>
 
 ## 批次任务与设计（eng-designer）
@@ -724,6 +724,40 @@ cwd 来源链的结论不变（btest 路径会填 cwd，分支 2 / 3 可达）�
 **门禁**：`DOC-CHECK GATE: PASS`（1 档 0 条命中）。
 
 **记录面说明**：本段之前的两段 §2（第 646 / 676 行起）里「初始化与写回 = 会话层直接读写」「1131 → ≤ +25 / 1484 → ≤ +20」是上一轮口径，已被本段与设计档现状替代；§2 为 append-only，未回改。
+
+## 修正轮：§4「现行」列按拆分后实读刷新（台账 #164 · 2026-10-23）
+
+**改动**：`docs/design/browser-biz-test.md` §4 —— 表头一行 + 两张表的读数列（主表「现行数」24 行、超 800 行表「现行」5 行）。只动读数与表头；判据 / 验收 / 条目 / 行结构 / 节数未动。
+
+**为什么**：结构批（`docs/batches/2026-10-23-structure-splits.md` §6，2026-10-23 冻结）把五个大档全部拆回界内。§4 的原表头写着「各档 2026-10-23 06:58 实测」，此后六个档的读数已全部改变；那张表是「哪些档越界、要不要拆」的唯一依据，不刷就会让下一轮按旧值重做已做完的事（台账 #164 = #71 上抛）。
+
+**表头最终原文**：`## 4. 受影响文件清单（现行数 = 拆分后实测（2026-10-23）：按行尾换行符计行、末行计入；增量 = 本轮「SPLIT-5 拆 run 生命周期 + SPLIT-6 抽状态行开关 + F11 持久化」的预计改动，`—` = 本轮不动）`
+
+**读数来源**：一个口径、一次实读 —— `node` 读盘，行数 = 行尾 `\n` 计数、末行计入（与 §4 原口径同一算法）。读数以设计 §4 两表为准（单一来源，本段不转抄）。
+
+验收等式（六档，值取自设计 §4「现行数 / 现行」列）：`chat_models.dart` 732 · `thincoder_kernel.dart` 480 · `chat_session.dart` 794 · `btest_mode.dart` 556 · `composer.dart` 556 · `step_folds.dart` 460。
+
+**刷新了哪些行（13 行，值见设计 §4）**：5 个被拆主档（`btest_mode` / `thincoder_kernel` / `chat_session` / `chat_models` / `composer`）· 3 个由 SPLIT-5 / SPLIT-6 新生的档（原记 `0（新）`，现按实读填值）· 3 个 l10n 生成物 · 2 个测试档。其余 11 行重测后与原值相等，原样保留。
+
+**没有「行已不存在」的处置**：两张表 24 行全部在盘（逐行实读，0 缺失）；`lib/chat/step_folds.dart` 不在 §4 任何一行，按「行结构不动」不新增行。旧缝（`btest_models.dart` / `mode_selector.dart`）的改指已在 #163 落过，本轮未再动。
+
+**一处口径差（照实记）**：三个 SPLIT-5 / SPLIT-6 新档本表记 394 / 309 / 154；§5 实施记录记的 395 / 310 / 155 用的是 `split('\n')` 计数（把末行之后的空串也算一行），差 1 行，不是行为差异。表头已写明本表口径。
+
+**未动（任务书边界）**：§4 的「增量 / 本轮」两列与「run 生命周期的拆法」段仍以结构批 + F11 为「本轮」（那些工作已收口）。按「行结构一律不动、判据不动」未改，是否另开一轮改写由主编排方决定。
+
+**验收对照**
+
+| 条 | 落点 | 读数 |
+|---|---|---|
+| ① 六档读数一个不差 | 设计 §4 两表 | 24 行逐行实读比对：0 不符 |
+| ② 表头 + 计数口径 | 设计 §4 表头 | 原文见上，含「拆分后实测（2026-10-23）」与换行符口径 |
+| ③ 其余行一并刷新 | 设计 §4 两表 | 13 行改值，11 行重测相同 |
+| ④ 不动判据 / 验收 / 条目 / 行结构 | 全档 | 29 行仍在（24 + 5），节数不变，无新增节 |
+| ⑤ 门禁 | `doc_check(mode:"gate")` | `DOC-CHECK GATE: PASS`（1 档 0 条命中） |
+
+**受影响文件**：仅 `docs/design/browser-biz-test.md`（884 行，与改前等长）；代码面与测试面零改动。
+
+**门禁**：`DOC-CHECK GATE: PASS`（1 档 0 条命中）。
 
 ## §3 设计评审（评审子代理）
 
@@ -1314,6 +1348,87 @@ VERDICT: pass
 - `test/composer_test.dart` 的两条用例在**本批开始前的 HEAD 上就已红**（实测：`git stash` 掉本批 `lib/**` 改动后逐条跑，同样失败）：`mode picker opens on press…` 与 `Shift+Tab in the input goes through the modes`。根因是上一批把 `btest` 追加进模式列表后，用例按「`find.byType(ComposerPicker).first` = 模式药丸」定位，方向键会走到 `btest` 这一项。本批不动它（不在批准改动面）；本批带来的唯一变化是失败读数由 `btest` 变成 `surface`（状态行药丸排在模式药丸之前）。建议单独一批把这两条用例改成按 `_modePickerKey` 定位。
 
 **门禁**：`DOC-CHECK GATE: PASS`（1 档 0 条命中）。
+
+## 实施记录（eng-coder · 2026-10-23 · F11 三键持久化 + SPLIT-5 + SPLIT-6）
+
+**范围**：设计档 `docs/design/browser-biz-test.md`（884 行，第十二轮评审 pass）的 F11（§9.1:846-860 · §4:605-660 · §6:715 · §7 #37 / #43 / #44 / #45）+ SPLIT-5（§4:642 / :648-653）+ SPLIT-6（§4:643 · §9.1:809）。**顺序按裁定**：先拆 `btest_mode.dart`，再落 F11。未改 `docs/**`；未动闸门判据与生产双闸语义；未动报告 13 列；未动 F10 的 `cause` 判据；未动 Claude 内核面。
+
+**口径说明（任务书已点名的已知不自洽）**：批档 §2 前几段仍写旧口径（三键在会话层直接读写 · chat_session 增量 ≤ +25 / ≤ +20）；设计与 §2 最新段（06:55 裁定）已替代它们，本段按设计实施：读写都落 `BtestState`，`chat_session` 只把 `_openBtest` 换成一行构造。
+
+**第 1 步：SPLIT-5（只搬不改行为）**
+
+| 文件 | 实测行数 | 内容 |
+|---|---|---|
+| `lib/browser/btest/btest_run_state.dart` | 395（新） | `BtestEntry` + `BtestRun`（含 `truthLine` 与动作计数）+ `recordAllowed` / `recordDenied`（以 extension `BtestRunRecord` 落本档，调用点不变）+ `btest_run_start` 全体（顶层 `btestStartRun`，参数与返回不变）+ 共享助手 `btestText` |
+| `lib/browser/btest/btest_run_end.dart` | 310（新） | `btest_run_end` 全体（顶层 `btestEndRun`）+ 收尾五项检查 + 载荷助手 `_diffKinds` / `_chainBreaks` / `_short` |
+| `lib/browser/btest/btest_mode.dart` | 557（拆前 1131） | `BtestSettings`（+F11 三键）、`BtestState`（`on` / 两开关 / `run` / `start` / `fromSettings`）、`BtestMode`、`BtestGate`、两个工具的 schema（`run:` 指向新档顶层函数） |
+
+**搬动核验（机械比对，非自述）**：把 `git show HEAD:lib/browser/btest/btest_mode.dart` 的四个块与新档逐行比对（去缩进、归一化改名后）：`BtestEntry`+`BtestRun` 104/104 行完全一致；`btestStartRun` 185/185 完全一致；`btestEndRun` 221/221 完全一致；`recordAllowed` / `recordDenied` 除 `_count` → `_countTarget`（类静态方法变顶层私有函数，避免与 `BtestRun._count` 同名）外一致；`_short` 由三行折成一行（同义）。结论：行为未变。
+
+**第 2 步：F11 持久化（三键）**
+
+- 键：`BtestSettings.onKey` = `btest.on`（`btest_mode.dart:32`）· `traversalKey` = `btest.traversal`（`:35`）· `modeKey` = `btest.mode`（`:39`）。
+- 读（会话打开）：`BtestState.fromSettings`（`btest_mode.dart:180-184`）——直写私有字段、不经 setter，所以读取不写任何键；`on` 只认 bool `true`（`:60`）；`traversal` 解析不出 ⇒ 回落 `surface`（`:65` + `:182` 的 `??`）；`write` 只在键存在且为 `readonly` / `write` 时落实，否则保持未点选（`:73` + `:183`）。非法值不报错、不阻断、不改写键。
+- 写（每次改值）：三个 setter 各写自己的键——`set on`（`:162-165`，on ⇒ `true`，off ⇒ `null` 删键）· `set traversal`（`:193-196`，写 `value.name`）· `set write`（`:204-210`，写 `'write'` / `'readonly'`）。失败口径 = `unawaited(...update(...).catchError((Object error) { debugPrint('$key not kept: $error'); }))`（`:99-115`），与 `storeColorTheme` 同形，不阻断 UI。
+- 会话层：`_openBtest` 现为 `BtestMode.of(cwd, sessionId)..fromSettings()`（`chat_session.dart:159-162`，一条语句）；`setBtest` / `setBtestTraversal` / `setBtestWrite` 只转发（`:173-215`）。`BtestMode.settingKey` 已删，全仓零引用。
+
+**第 3 步：SPLIT-6（状态行抽出）**
+
+- `lib/browser/btest/btest_status_switches.dart`（新，155 行）：`BtestStatusLine`（行文本 + 两个 `ComposerPicker` 开关，`Semantics(container: true)` 原样保留），入参 `session` / `tapRegionGroupId` / `focusNode`。
+- `composer.dart`：`_buildBtestStatus` 与 `_btestSwitch` 删除；调用点 `composer.dart:1672-1676` 共 5 行；原 `btest_policy.dart` 的 import 换成新档 import。2467 → 2346 行（−121）。
+
+**测试（随批删）**
+
+| 文件 | 行数 | 本轮 |
+|---|---|---|
+| `test/browser/btest_policy_test.dart` | 948（+114） | 新组「the three keys (§9.1, F11)」：#43（`:635`）· #44（`:664`）· #45（`:694`）· 真 `settings.json` 写盘（`:706`） |
+| `test/chat/composer_btest_status_test.dart` | 217（+48） | #37 改为「重启读回三键」（`:96`）· 保留只读默认关（`:123`）· 新增「未点选读 `btest.readonly`、点过不再参与」（`:132`）· #45（`:151`）· #38（`:172`）· #38/#40（`:191`） |
+
+**三键读写落点（file:line）**：读 `btest_mode.dart:180-184`（经 `chat_session.dart:162` 调用）· 写 on `:164` / traversal `:195` / write `:206-209` · 删键走 `put(key, null)`（`btest_mode.dart:99-115` → `UserSettings.update` 的 null 语义）· 键常量 `:32` / `:35` / `:39`。
+
+**断言摘要**
+
+- #43：三键写回（`btest.on` = true / `btest.traversal` = chain / `btest.mode` = write）→ `BtestMode.reset()` 后新建 state + `fromSettings` 读回同值（含 `writePicked` = true）→ 起 run 不带 `mode` / `traversal` ⇒ 返回项 1 含 `traversal=chain` / `mode=write`（`btest_policy_test.dart:635-660`）。
+- #44：键全缺 ⇒ 关 / `surface` / 未点选（`write` 由 `btest.readonly` 解析为只读），且三个键不出现；非法值（`'yes'` / `depth` / `maybe`）⇒ 同上回落，且三键原样保留（不重写）（`:664-691`）。
+- #45：`on = true` ⇒ 键 = true；`on = false` ⇒ 键被删（不是写 false）⇒ 新 state `fromSettings` 读作关；composer 侧另断言状态行消失（`composer_btest_status_test.dart:151-170`）。
+- #37：状态行点选后三键写回；重启（新会话）读回 `chain` / `write`，行文 = `btest · not started · chain · write`，且重启不改动三键（`:96-121`）。
+
+**验收实测（本机，命令 + 结果行）**
+
+| # | 验收点 | 实测 |
+|---|---|---|
+| ① | `dart analyze` 零 issue | `dart analyze` → `Analyzing baocode...` / `No issues found!` |
+| ② | 三个测试面全绿、可增不可减 | `flutter test --no-pub test/browser test/chat/composer_btest_status_test.dart test/settings/browser_page_test.dart` → `00:04 +141 ~7: All tests passed!`（基线 135 通过 / 7 跳过，+6） |
+| ③ | 拆分尺寸 | `btest_run_state.dart` 395 ≤ 500 · `btest_run_end.dart` 310 ≤ 500 · `btest_mode.dart` 557 ≤ 560（拆前 1131）· `btest_status_switches.dart` 155 ≤ 300 · composer 调用点 5 行 |
+| ④ | `chat_session.dart` 净增 | `git diff --numstat` = 15 加 / 7 删；其中 8 加 0 删是**另一批在途改动**（`renameConfirmed`），本批 = +7/−7 ⇒ **净 0**（≤ +3） |
+| ⑤ | #43 / #44 / #45 / #37 | 见上「断言摘要」，四条全有断言 |
+| ⑥ | #37 改写、#38 / #40 保持 | #37 现测「重启读回三键」；#38 / #40 原断言保留并加三键断言 |
+| ⑦ | 未点选写开关显示解析后的 `btest.readonly` | `composer_btest_status_test.dart:132-149`：`readonly=false` ⇒ `btest · not started · surface · write`；点「readonly」⇒ 行与键都变，重启仍 `readonly` |
+| ⑧ | F9 / F10 行为不变 | 同 ②（卡片 38 标签、`chainBreaks[].cause` 形状、规则 A 判**定值后**的 `mode` 全绿） |
+| ⑨ | `doc_check` 门禁 | `doc_check(mode:"gate", docs:["docs/design/browser-biz-test.md"])` → 首行 `DOC-CHECK GATE: PASS`（1 档 0 条命中） |
+
+**自行决定（每条一句理由）**
+
+1. 测试注入面上写入落 `BtestSettings.values`（`put` 在 `values != null` 时改注入 map，不碰文件）：该 map 的既有语义就是「代替 settings.json」，且 `testWidgets` 里的异步文件写在假时钟下不可靠、还会落到真实目录；真 `settings.json` 写路径另有一条用例（`btest_policy_test.dart:706`）覆盖。
+2. `btestText` 放 `btest_run_state.dart`（设计把 `_text` 列在 run_end）：run_state 的 `btestStartRun` 用它 6 处，放 run_end 会让 run_state 反向 import run_end。
+3. `fromSettings` 做成实例方法而不是命名构造：`BtestMode.of` 返回的是登记表里的那个实例，新造对象会让工具层和会话看到两个 state。
+4. `BtestSettings.put` 写失败文案用键名本身（`btest.on not kept: ...`），不另拼前缀：设计给的形状就是 `btest.<key> not kept`。
+5. 未点选遍历开关时点「广度」不写键（沿用既有 `if (_btest.traversal == value) return;`）：读回值不变，用户无可观察差异；写开关按「开关自身取值」去重是规则 A 的来源文案需要（§5 F9 轮自行决定 8），遍历侧没有对应需要（评审 🔵 已记）。
+6. `set on` 的 setter 不做同值去重（去重在 `ChatSession.setBtest`）：`BtestState` 的其它入口（如测试）直写字段时行为可预期。
+7. 新增一条真文件用例时用 `addTearDown` 把 `SettingsFiles.instance` 还原成 `DataDirectory.current` 的新实例：该静态没有「置空」写入口，构造实例本身不落盘。
+
+**内部审计与代码评审**
+
+- explore 偏差审计（对照设计 §4 / §6 F11 / §7 #37-#45 / §9.1）：`VERDICT: clean`。0 🔴 / 0 🟡；5 条 🔵 全是文档基线漂移（本段下方「设计漂移」已记）与 `btestText` 落点。审计工具面没有 git，无法逐行比对 HEAD，由本段上方「搬动核验」的机械比对补上。
+- advisor 代码评审（type=code，第 1 轮）：`VERDICT: pass`（0 🔴 · 1 🟡 标「可选，非 must-fix」· 4 🔵）。处置：🟡（单一全局 `btest.on` 与按会话状态不同粒度，两会话并存时关掉一个会删全局键）**不改代码**，属 KD-30 的设计覆盖缺口，交设计位；🔵×4（行数预算漂移 / 遍历开关去重基准不对称 / `fromSettings` 会覆盖同键活实例（可达性未验证）/ `_openBtest` 两行与 §9.1 的「一行」措辞）**保留并披露**，前两条见「自行决定」5 与「设计漂移」，后两条交设计位措辞。无 must-fix，故未开第 2 轮。
+- **terminal state = `clean`**（0 未修 must-fix；1 条可选 🟡 + 4 条 🔵 全部披露）。
+
+**如实记的设计漂移（本段不改文档）**
+
+1. 行数：`btest_run_state.dart` 395（设计 ≤ +380，`:610`）· `btest_status_switches.dart` 155（设计 ≤ +140，`:612`）· `btest_mode.dart` 557（设计拆后 ≈480、F11 后 ≈520，`:653`；验收上限 ≤560 内，>800 硬顶未越）· `btest_policy_test.dart` 948（设计 834 + ≤45）· `composer_btest_status_test.dart` 217（设计 169 + ≤15）。超量来自新档文件头、逐行注释与断言密度，未扩大功能面。
+2. `_openBtest`：§9.1:857 写「只剩一行 `BtestState.fromSettings(...)`」，实现为等价的一条语句 `BtestMode.of(...)..fromSettings()`（两行）。理由是 `BtestState.fromSettings` 须落在登记表里的那个实例上（见自行决定 3）。
+
+**旁证（不在验收面，如实记一行）**：顺带跑 `test/chat` 时 3 条失败——`files_seen_test` 的读数是 Windows 路径分隔符（期望 `/p/a.dart`，实得 `/p\a.dart`）、`side_panel_test` 两条 markdown 用例；均不触及本批改动文件，是否先于本批存在未验证（不在本批范围）。
 
 ## §6 验证与收口（父代理）
 
