@@ -3,8 +3,11 @@ import 'dart:io';
 import 'package:baocode/browser/btest/btest_expect_file.dart';
 import 'package:baocode/browser/btest/btest_mode.dart';
 import 'package:baocode/browser/btest/btest_policy.dart';
+import 'package:baocode/browser/btest/btest_run_state.dart';
 import 'package:baocode/browser/browser_bridge.dart' show BrowserError;
 import 'package:baocode/host_tools/host_tools.dart';
+import 'package:baocode/platform/data_dir.dart';
+import 'package:baocode/settings/user_settings.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
@@ -625,6 +628,116 @@ void main() {
         isNull,
         reason: 'the switch set the write face; rule B still lets it through',
       );
+    });
+  });
+
+  group('the three keys (§9.1, F11)', () {
+    test('the picks write their keys, and a new state reads them back (#43)', () async {
+      state.on = true;
+      state.traversal = BtestTraversal.chain;
+      state.write = true;
+      expect(BtestSettings.values![BtestSettings.onKey], isTrue);
+      expect(BtestSettings.values![BtestSettings.traversalKey], 'chain');
+      expect(BtestSettings.values![BtestSettings.modeKey], 'write');
+
+      // A restart: the state is made again and takes the three keys.
+      BtestMode.reset();
+      final again = BtestMode.of(sandbox.path, '1')..fromSettings();
+      expect(again.on, isTrue);
+      expect(again.traversal, BtestTraversal.chain);
+      expect(again.write, isTrue);
+      expect(again.writePicked, isTrue, reason: 'btest.mode was there');
+
+      // A run that says nothing takes both switches (§3.3's priority).
+      final answer = '${
+        await BtestTools.all.first.run(
+          startInput({'mode': null, 'traversal': null}),
+          call,
+        )
+      }';
+      expect(again.run!.traversal, BtestTraversal.chain);
+      expect(again.run!.face, BtestFace.write);
+      expect(answer, contains('traversal=chain'));
+      expect(answer, contains('mode=write'));
+    });
+
+    test('missing or illegal keys fall back, and reading writes none (#44)', () {
+      final keys = BtestSettings.values!
+        ..remove(BtestSettings.onKey)
+        ..remove(BtestSettings.traversalKey)
+        ..remove(BtestSettings.modeKey);
+      BtestMode.reset();
+      final fresh = BtestMode.of(sandbox.path, '44')..fromSettings();
+      expect(fresh.on, isFalse);
+      expect(fresh.traversal, BtestTraversal.surface);
+      expect(fresh.write, isFalse, reason: 'btest.readonly is on');
+      expect(fresh.writePicked, isFalse);
+      expect(keys.keys, isNot(contains(BtestSettings.onKey)),
+          reason: 'opening a conversation writes none');
+      expect(keys.keys, isNot(contains(BtestSettings.traversalKey)));
+      expect(keys.keys, isNot(contains(BtestSettings.modeKey)));
+
+      // Illegal values read as the key's absence, and are left as they are.
+      keys[BtestSettings.onKey] = 'yes';
+      keys[BtestSettings.traversalKey] = 'depth';
+      keys[BtestSettings.modeKey] = 'maybe';
+      final again = BtestMode.of(sandbox.path, '44b')..fromSettings();
+      expect(again.on, isFalse);
+      expect(again.traversal, BtestTraversal.surface);
+      expect(again.write, isFalse);
+      expect(again.writePicked, isFalse);
+      expect(keys[BtestSettings.onKey], 'yes', reason: 'not rewritten');
+      expect(keys[BtestSettings.traversalKey], 'depth');
+      expect(keys[BtestSettings.modeKey], 'maybe');
+    });
+
+    test('leaving btest removes the key; a restart is off (#45)', () {
+      final keys = BtestSettings.values!;
+      final live = BtestMode.of(sandbox.path, '45')..fromSettings();
+      live.on = true;
+      expect(keys[BtestSettings.onKey], isTrue);
+      live.on = false;
+      expect(keys.containsKey(BtestSettings.onKey), isFalse,
+          reason: 'the key is removed, not set false');
+      final again = BtestMode.of(sandbox.path, '45b')..fromSettings();
+      expect(again.on, isFalse, reason: 'no old true is read back');
+    });
+
+    test('the three keys reach settings.json itself, and a removal takes it out', () async {
+      final data = Directory.systemTemp.createTempSync('btest-keys');
+      final files = SettingsFiles(DataDirectory(data.path));
+      addTearDown(() {
+        SettingsFiles.instance = SettingsFiles(DataDirectory.current);
+        files.dispose();
+        data.deleteSync(recursive: true);
+      });
+      SettingsFiles.instance = files;
+      await files.settings.load();
+      // No injected values: the write path is the file itself (§9.1).
+      BtestSettings.values = null;
+      final live = BtestMode.of(data.path, 'f')..fromSettings();
+      live.on = true;
+      live.traversal = BtestTraversal.chain;
+      live.write = true;
+      // A read queued behind the three writes: they have landed by now.
+      await files.settings.load();
+      expect(files.settings[BtestSettings.onKey], isTrue);
+      expect(files.settings[BtestSettings.traversalKey], 'chain');
+      expect(files.settings[BtestSettings.modeKey], 'write');
+
+      live.on = false;
+      await files.settings.load();
+      expect(
+        files.settings.values.containsKey(BtestSettings.onKey),
+        isFalse,
+        reason: 'leaving btest deletes the key',
+      );
+
+      // A new state reads the file back.
+      final again = BtestMode.of(data.path, 'f2')..fromSettings();
+      expect(again.on, isFalse);
+      expect(again.traversal, BtestTraversal.chain);
+      expect(again.write, isTrue);
     });
   });
 

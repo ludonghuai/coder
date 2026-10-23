@@ -315,6 +315,15 @@ abstract interface class RenamesSession {
   void rename(String title);
 }
 
+/// Confirms its own renames: what it writes comes back as a [SessionRenamed],
+/// and the host leaves the list to that event.
+abstract interface class ConfirmsRename {
+  /// Whether a rename made now would be written and confirmed by this kernel
+  /// (now, or once the turn under way ends). True: the host does not change
+  /// the list ahead of the event; false: it does (today's behaviour).
+  bool get renameConfirmed;
+}
+
 /// Reverts what a turn changed, shown first as a plan rather than done at
 /// once: what goes back, what is left alone and why, then the doing.
 /// Throws when it cannot plan or apply; the kernel says why in the chat.

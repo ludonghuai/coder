@@ -9,7 +9,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 // btest's status line and the two switches at its end (design §9.1 · §7 #37
 // / #38 / #40): what the line reads with no run and during one, that a click
-// writes the switch back, and that a run under way keeps its own values.
+// writes the switch back and a restart reads the three keys again (F11), and
+// that a run under way keeps its own values.
 void main() {
   setUp(() {
     BtestMode.reset();
@@ -92,26 +93,31 @@ void main() {
     await tester.pump(const Duration(milliseconds: 200));
   }
 
-  testWidgets('a session starts from the defaults, and the switches write '
-      'no setting (#37)', (tester) async {
+  testWidgets('a session starts from the defaults, and a restart reads the '
+      'three keys back (#37, F11)', (tester) async {
     final session = await pumpComposer(tester, locale: const Locale('en'));
     expect(session.btestTraversal, BtestTraversal.surface);
     expect(session.btestWrite, isFalse, reason: 'btest.readonly is on');
     expect(find.text('btest · not started · surface · readonly'), findsOne);
 
-    // Moved, then read back: the settings are as they were.
-    final settings = Map<String, Object?>.of(BtestSettings.values!);
-    session.setBtestTraversal(BtestTraversal.chain);
-    session.setBtestWrite(true);
-    await tester.pump();
+    // Picked, then kept: each switch writes its own key (§9.1).
+    await openSwitch(tester, 'btest-traversal-switch');
+    await pick(tester, 'chain');
+    await openSwitch(tester, 'btest-write-switch');
+    await pick(tester, 'write');
     expect(find.text('btest · not started · chain · write'), findsOne);
-    expect(BtestSettings.values, settings, reason: 'the switches persist none');
+    expect(BtestSettings.values![BtestSettings.onKey], isTrue,
+        reason: 'the flask wrote btest.on');
+    expect(BtestSettings.values![BtestSettings.traversalKey], 'chain');
+    expect(BtestSettings.values![BtestSettings.modeKey], 'write');
 
-    // A restart: a new session starts from the settings again.
+    // A restart: a new session reads the three keys back, and writes none.
+    final kept = Map<String, Object?>.of(BtestSettings.values!);
     final again = await pumpComposer(tester, locale: const Locale('en'));
-    expect(again.btestTraversal, BtestTraversal.surface);
-    expect(again.btestWrite, isFalse);
-    expect(find.text('btest · not started · surface · readonly'), findsOne);
+    expect(again.btestTraversal, BtestTraversal.chain);
+    expect(again.btestWrite, isTrue);
+    expect(find.text('btest · not started · chain · write'), findsOne);
+    expect(BtestSettings.values, kept, reason: 'a restart writes nothing');
   });
 
   testWidgets('a session starts write-allowed when the default read-only is '
@@ -123,6 +129,46 @@ void main() {
     expect(find.text('btest · 待开始 · 广度 · 允许写'), findsOne);
   });
 
+  testWidgets('an unpicked write switch reads btest.readonly; a picked one '
+      'leaves the setting out (#37, §9.1)', (tester) async {
+    BtestSettings.values![BtestSettings.readonlyKey] = false;
+    final session = await pumpComposer(tester, locale: const Locale('en'));
+    expect(session.btestWrite, isTrue, reason: 'btest.readonly is off');
+    expect(find.text('btest · not started · surface · write'), findsOne);
+
+    await openSwitch(tester, 'btest-write-switch');
+    await pick(tester, 'readonly');
+    expect(session.btestWrite, isFalse);
+    expect(find.text('btest · not started · surface · readonly'), findsOne);
+    expect(BtestSettings.values![BtestSettings.modeKey], 'readonly');
+
+    // The setting no longer takes part: the picked value comes back even
+    // with the default read-only still off.
+    final again = await pumpComposer(tester, locale: const Locale('en'));
+    expect(again.btestWrite, isFalse);
+  });
+
+  testWidgets('leaving btest removes the key; a restart is off (#45)', (
+    tester,
+  ) async {
+    final session = await pumpComposer(tester, locale: const Locale('en'));
+    expect(BtestSettings.values![BtestSettings.onKey], isTrue);
+
+    session.setBtest(false);
+    await tester.pump();
+    expect(find.textContaining('btest ·'), findsNothing,
+        reason: 'the line goes with the mode');
+    expect(
+      BtestSettings.values!.containsKey(BtestSettings.onKey),
+      isFalse,
+      reason: 'the key is removed, not set false',
+    );
+
+    final again = ChatSession(historyCount: 0);
+    addTearDown(again.dispose);
+    expect(again.btestOn, isFalse, reason: 'no old true is read back');
+  });
+
   testWidgets('picking 深度 writes it back, and the line reads it (#38)', (
     tester,
   ) async {
@@ -132,11 +178,13 @@ void main() {
     await openSwitch(tester, 'btest-traversal-switch');
     await pick(tester, '深度');
     expect(session.btestTraversal, BtestTraversal.chain);
+    expect(BtestSettings.values![BtestSettings.traversalKey], 'chain');
     expect(find.text('btest · 待开始 · 深度 · 只读'), findsOne);
 
     await openSwitch(tester, 'btest-write-switch');
     await pick(tester, '允许写');
     expect(session.btestWrite, isTrue);
+    expect(BtestSettings.values![BtestSettings.modeKey], 'write');
     expect(find.text('btest · 待开始 · 深度 · 允许写'), findsOne);
   });
 

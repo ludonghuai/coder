@@ -37,6 +37,8 @@ import 'package:baocode/kernel/transcript.dart';
 import 'package:baocode/l10n/l10n.dart';
 import 'package:baocode/platform/data_dir.dart';
 import 'package:baocode/platform/event_log.dart';
+import 'package:baocode/workspace/preference_store.dart';
+import 'package:baocode/workspace/workspace.dart';
 import 'package:bao_remote/local.dart' show ClaudeEnvironment;
 
 /// The kernel's descriptor, as the registry gives it (not made here).
@@ -4738,6 +4740,158 @@ void main() {
         isFalse,
       );
       expect(logged('launch: path'), [contains(installed.path)]);
+    });
+  });
+
+  group('a rename the kernel confirms (F25, §28)', () {
+    /// A workspace with a thincoder agent opened on a scripted agent: the
+    /// thread, the kernel it made, the agents it started and its events.
+    ({
+      Workspace workspace,
+      AgentThread thread,
+      ThincoderKernel kernel,
+      List<ThincoderMock> agents,
+      List<KernelEvent> events,
+    })
+    open({bool titleError = false}) {
+      final events = <KernelEvent>[];
+      final agents = <ThincoderMock>[];
+      late final KernelDescriptor descriptor;
+      late final ThincoderKernel kernel;
+      descriptor = KernelDescriptor(
+        id: 'thincoder',
+        label: 'thincoder',
+        icon: Icons.smart_toy_outlined,
+        description: 'The agent of the user’s terminal',
+        create: (context) {
+          kernel = ThincoderKernel(
+            descriptor,
+            context,
+            start: (_) async {
+              final agent = ThincoderMock(serialInbound: true)
+                ..titleError = titleError;
+              agents.add(agent);
+              return agent;
+            },
+            launch: (cwd) async =>
+                ThincoderLaunch(cwd: cwd, executable: '/mock/thincoder'),
+          );
+          kernel.events.listen(events.add);
+          return kernel;
+        },
+      );
+      final workspace = Workspace(
+        projects: const [Project('project', '/project')],
+        kernels: [descriptor],
+        preferences: MemoryPreferenceStore(),
+        drafts: MemoryPreferenceStore(),
+      );
+      addTearDown(workspace.dispose);
+      final thread = workspace.create(project: workspace.projects.single);
+      return (
+        workspace: workspace,
+        thread: thread,
+        kernel: kernel,
+        agents: agents,
+        events: events,
+      );
+    }
+
+    List<NoticeItem> errors(AgentThread thread) => [
+      for (var i = 0; i < thread.session.itemCount; i++)
+        if (thread.session.itemAt(i) case final NoticeItem item
+            when item.kind == NoticeKind.error)
+          item,
+    ];
+
+    test('T131: the agent confirms a rename, and the list follows it '
+        '(F25①, §28.3)', () async {
+      final s = open();
+      s.thread.session.attach();
+      await settle();
+      expect(s.kernel.renameConfirmed, isTrue);
+      expect(s.thread.title, 'New Chat');
+
+      expect(await s.workspace.rename(s.thread, 'A'), isTrue);
+      // Not changed ahead of the agent: the answer is what names it (§28.4).
+      expect(s.thread.title, 'New Chat');
+      await settle();
+
+      final renamed = s.events.whereType<SessionRenamed>().toList();
+      expect(renamed, hasLength(1));
+      expect(renamed.single.title, 'A');
+      expect(s.thread.title, 'A');
+      expect(
+        s.agents.single.requests('session/set_title').map((r) => r['params']),
+        [
+          {'sessionId': '1', 'title': 'A'},
+        ],
+      );
+    });
+
+    test('T132: a rename the agent refuses sends no event, and the list keeps '
+        'its title (F25②, §28.4)', () async {
+      final s = open(titleError: true);
+      s.thread.session.attach();
+      await settle();
+
+      expect(await s.workspace.rename(s.thread, 'A'), isTrue);
+      await settle();
+
+      expect(s.events.whereType<SessionRenamed>(), isEmpty);
+      expect(s.thread.session.takeRenamed(), isNull);
+      expect(s.thread.title, 'New Chat');
+      expect(s.agents.single.requests('session/set_title'), hasLength(1));
+      expect(errors(s.thread).single.text, contains('not confirmed'));
+    });
+
+    test('T134: the title the host lands back is not asked for again '
+        '(F25①, §28.4)', () async {
+      // A chat of its own: the host's write-back of the event is the test's.
+      final events = <KernelEvent>[];
+      final agents = <ThincoderMock>[];
+      late final KernelDescriptor descriptor;
+      descriptor = KernelDescriptor(
+        id: 'thincoder',
+        label: 'thincoder',
+        icon: Icons.smart_toy_outlined,
+        description: 'The agent of the user’s terminal',
+        create: (context) {
+          final kernel = ThincoderKernel(
+            descriptor,
+            context,
+            start: (_) async {
+              final agent = ThincoderMock(serialInbound: true);
+              agents.add(agent);
+              return agent;
+            },
+            launch: (cwd) async =>
+                ThincoderLaunch(cwd: cwd, executable: '/mock/thincoder'),
+          );
+          kernel.events.listen(events.add);
+          return kernel;
+        },
+      );
+      final session = ChatSession(
+        kernel: descriptor,
+        kernels: [descriptor],
+        historyCount: 0,
+      );
+      addTearDown(session.dispose);
+      session.attach();
+      await settle();
+
+      session.rename('A');
+      await settle();
+      expect(events.whereType<SessionRenamed>(), hasLength(1));
+      expect(session.takeRenamed(), 'A');
+      expect(agents.single.requests('session/set_title'), hasLength(1));
+
+      // What workspace._sync does with the title it was just told (§28.4).
+      session.rename('A');
+      await settle();
+      expect(agents.single.requests('session/set_title'), hasLength(1));
+      expect(events.whereType<SessionRenamed>(), hasLength(1));
     });
   });
 }

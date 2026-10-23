@@ -55,6 +55,7 @@ class ThincoderKernel
         AcceptsEditorContext,
         QueuesMessages,
         RenamesSession,
+        ConfirmsRename,
         PlansReverts,
         RewindsConversation,
         GeneratesTitles,
@@ -144,6 +145,10 @@ class ThincoderKernel
   String? _titleTarget;
   bool _titleDeferred = false;
   bool _titleSending = false;
+
+  /// The title the agent last confirmed (§28.4): the host's own write-back of
+  /// it is skipped rather than sent again.
+  String? _titleConfirmed;
 
   /// A title picked before the session was made (§3.4): sent once it is.
   String? _pendingTitle;
@@ -918,8 +923,17 @@ class ThincoderKernel
   @override
   bool get canRevertNow => _turn == null && _pendingAuto == null && _running;
 
+  /// Whether a rename made now would be written and confirmed (§28.3): a
+  /// slot to write it under, a live connection, and no release on its way.
+  /// False otherwise — the host changes the list itself, as it always did.
+  @override
+  bool get renameConfirmed => _slot != null && _running && !_releaseWanted;
+
   @override
   void rename(String title) {
+    // The title the agent confirmed already (§28.4): the host writing it back
+    // after the event is no reason to send it again.
+    if (title.trim() == _titleConfirmed) return;
     // Before the session is made: kept for when it is (§3.4).
     if (_slot == null) {
       _pendingTitle = title;
@@ -1374,8 +1388,17 @@ class ThincoderKernel
 Future<void> _pumpTitle(ThincoderKernel kernel) async {
   final target = kernel._titleTarget;
   if (target == null || kernel._titleSending || kernel._turn != null ||
-      kernel._pendingAuto != null || kernel._releaseWanted) {
+      kernel._pendingAuto != null) {
     return;
+  }
+  if (kernel._releaseWanted) {
+    // The session is closing (§19.2): the title goes with it — said, not
+    // silently dropped (F25②, §28.4). No event: nothing was written.
+    appEvent('thincoder', 'set_title: the session is closing');
+    kernel.emit(ItemUpserted(kernel.nextSeq, 'error:title',
+        NoticeItem(NoticeKind.error,
+            'The title was not confirmed: the session is closing')));
+    return kernel._dropTitleOf();
   }
   final connection = kernel._connection, slot = kernel._slot;
   if (connection == null || slot == null) {
@@ -1394,6 +1417,9 @@ Future<void> _pumpTitle(ThincoderKernel kernel) async {
     });
     if (!identical(connection, kernel._connection)) return;
     kernel._titleSending = false;
+    kernel._titleConfirmed = target;
+    // Written and confirmed: the list follows now (§28.3).
+    kernel.emit(SessionRenamed(kernel.nextSeq, target));
     if (kernel._titleTarget != target) return unawaited(_pumpTitle(kernel));
     kernel._dropTitleOf();
   } on Object catch (error) {

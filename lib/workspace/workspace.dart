@@ -2266,8 +2266,11 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
     if (!_threads.contains(thread)) return;
     final session = thread.session;
     _noteLimit(thread);
-    // Renamed in Claude Code (/rename): named so here too.
-    if (session.takeRenamed() case final title?) rename(thread, title);
+    // Renamed in the kernel itself (/rename there, or one it confirmed):
+    // named so here too.
+    if (session.takeRenamed() case final title?) {
+      unawaited(rename(thread, title, confirmed: true));
+    }
     if (thread._title.isEmpty && session.itemCount > 0) {
       if (session.itemAt(0) case UserMessageItem(:final text)) {
         thread._title = text.trim().split('\n').first;
@@ -2763,19 +2766,39 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
   /// catalog when it is not (the kernel's own record), and the host's names
   /// for a kernel that keeps neither. False when the title was refused: the
   /// thread keeps the one it had.
-  Future<bool> rename(AgentThread thread, String title) async {
+  ///
+  /// [confirmed] is the kernel's own `SessionRenamed` arriving: the title is
+  /// landed once, and not asked of the kernel again.
+  Future<bool> rename(
+    AgentThread thread,
+    String title, {
+    bool confirmed = false,
+  }) async {
     final trimmed = title.trim();
     if (trimmed.isEmpty || trimmed.length > 80) return false;
     if (trimmed == thread._title) return true;
     thread
       .._named = true
       .._wantsTitle = false;
+    // The kernel confirmed this one (§28.4): the list follows it, once.
+    if (confirmed) {
+      _retitle(thread, trimmed);
+      return true;
+    }
     final record = thread.record;
     // Its kernel takes a title only where it can rename (§3.4); anything
     // else falls to the catalog or the host's names, open or not.
     final byKernel = thread.isOpen && thread.session.canRename;
     if (record == null || byKernel) {
-      _retitle(thread, trimmed);
+      // A kernel that confirms its renames: the list waits for its event
+      // (§28.4). One that does not — a new agent with no slot yet, or a
+      // released kernel — is changed here; it says so in the chat if the
+      // write cannot land.
+      if (byKernel && thread.session.renameConfirmed) {
+        thread.session.rename(trimmed);
+      } else {
+        _retitle(thread, trimmed);
+      }
       return true;
     }
     if (thread.kernel.catalog case final RenamesStoredSessions catalog) {

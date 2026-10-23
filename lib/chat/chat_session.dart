@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 import '../browser/btest/btest_card.dart';
 import '../browser/btest/btest_mode.dart';
 import '../browser/btest/btest_policy.dart' show BtestTraversal;
+import '../browser/btest/btest_run_state.dart';
 import '../kernel/agent_kernel.dart';
 import '../kernel/kernel_event.dart';
 import '../kernel/kernel_registry.dart';
@@ -155,11 +156,10 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
   /// here and shared with the tool layer under its session key.
   late final BtestState _btest = _openBtest();
 
-  BtestState _openBtest() {
-    final state = BtestMode.of(kernelContext.cwd, _kernel.sessionId);
-    state.on = kernelContext.settings[BtestMode.settingKey] == 'on';
-    return state;
-  }
+  /// Opens it with the values the settings keep (§9.1, F11): the mode and
+  /// the two switches carry over a restart, and nothing is written here.
+  BtestState _openBtest() =>
+      BtestMode.of(kernelContext.cwd, _kernel.sessionId)..fromSettings();
 
   /// Whether btest, the host's third mode, is on (§3.1).
   bool get btestOn => _btest.on;
@@ -188,7 +188,7 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
   );
 
   /// How the next run walks (§9.1): the status line's traversal switch,
-  /// memory only — never a setting.
+  /// kept in `btest.traversal` so the next session reads it back.
   BtestTraversal get btestTraversal => _btest.traversal;
 
   /// Picks it (§9.1): the switch alone. A run under way keeps the traversal
@@ -200,7 +200,7 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
   }
 
   /// Whether the next run may act (§9.1): the status line's write switch,
-  /// memory only; before it is picked, `btest.readonly` stands.
+  /// kept in `btest.mode`; before it is picked, `btest.readonly` stands.
   bool get btestWrite => _btest.write;
 
   /// Picks it (§9.1): the switch alone — a run under way keeps its own.
@@ -768,6 +768,14 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
   bool get canQueue => _kernel is QueuesMessages;
 
   bool get canRename => _kernel is RenamesSession;
+
+  /// Whether its kernel confirms a rename itself: the list then waits for
+  /// its `SessionRenamed` rather than change ahead of it (F25). False for a
+  /// kernel that does not say so (Claude Code's path, unchanged).
+  bool get renameConfirmed => switch (_kernel) {
+    final ConfirmsRename kernel => kernel.renameConfirmed,
+    _ => false,
+  };
 
   /// Whether its kernel names sessions itself: the host titles none (F1.3).
   bool get ownsTitle => _kernel is GeneratesTitles;

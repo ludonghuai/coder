@@ -119,4 +119,47 @@ VERDICT: pass
 
 ## §4 用户批准（主 agent）
 ## §5 实施记录（eng-coder）
+**状态行**：实施完成
+
+
+
+### 交付摘要（F25 改名同步 / F26 `/` 命令面）
+
+- 按设计 §28（评审 #47 pass + 修正轮）实现：4 个产品档 + 3 个测试档；`lib/kernel/claude_code/claude_code_kernel.dart` / `lib/kernel/thincoder/thincoder_catalog.dart` / `lib/kernel/kernel_event.dart` 零改动（`git status --porcelain` 读数里不出现）。
+- 产品改动：
+  - `lib/kernel/agent_kernel.dart`：新增 `ConfirmsRename`（只声明 `bool get renameConfirmed`），紧邻 `RenamesSession`；不用 extension。
+  - `lib/kernel/thincoder/thincoder_kernel.dart`：实现 `ConfirmsRename`；`renameConfirmed = _slot != null && _running && !_releaseWanted`；`_titleConfirmed` + `rename` 同标题短路；`_pumpTitle` 成功分支 `_titleConfirmed = target` → `emit(SessionRenamed(nextSeq, target))`；**释放旁路**（回合结束、释放已排上）丢弃待写标题时出既有 `The title was not confirmed: the session is closing` 提示（零事件、不改列表）。
+  - `lib/chat/chat_session.dart`：`renameConfirmed` 委托（`_ => false` 兜底）；`rename` 签名与 `commands` 面未动。
+  - `lib/workspace/workspace.dart`：`rename` 增 `{bool confirmed = false}`；`confirmed` 只 `_retitle`；未确认路径 `byKernel && renameConfirmed` 只交内核、不改列表；`_sync` 是唯一传 `confirmed: true` 的调用点（`unawaited(...)`）。
+- 测试：T131/T132/T134 → `test/kernel/thincoder_kernel_test.dart`；T133 → `test/chat/thincoder_commands_test.dart`；T135/T137/T138 → `test/kernel/rename_confirmed_test.dart`；T136 = 既有 `test/chat/command_details_test.dart` 全绿、未改。
+
+### 上抛 → 父代理裁定（2026-10-23）
+
+- 审核发现（🔴）：`renameConfirmed` 在改名前取样；回合在飞时改名被压后、视图随后离开（`chat_session.dart:491` 置 `_releaseWanted`），回合结束 `_pumpTitle` 走释放旁路丢弃标题 ⇒ 零写入、零事件、零提示，宿主因判据为真从未改列表 = 静默丢标题。实测复现（临时探针，已删）：`confirmed-at-rename=true events=0 setTitle=0 notice=false`。设计 §28.3 当时写「为真 ⇒ 一定不走丢弃分支」（`docs/design/thincoder-adapter.md:4178` 原文）。
+- 父代理裁定：**走 A**（释放旁路发既有 not-confirmed 提示；改名仍丢但不静默），否掉 B（释放推迟 = 新机制）、C（回合在飞返假 = 违反 F25「不乐观更新」）、D（静默登记 = 最坏）。
+- 落地：内核释放旁路提示 + T138 + 设计档改字（§28.3 判据表与保守性一句、§28.4 第 3 行 + 新增「改名被回合压后、释放随后排上」行、§28.6 F25② 机检、§28.7 T138、§28.8 ⑤ 覆盖、§28.9 释放窗改为「丢弃 + 可见提示」）。设计档改字属父代理明令的越笔修正（设计席为 eng-designer），已在交付报告登记。
+
+### 审核与评审轮次（终态 clean）
+
+- 内部 explore 差异审计：1 轮，逐条 ✅（§28.2–§28.9 + T131–T137）、无清单外文件。两条非代码发现：① 基准条数口径（见下「验证读数」的 HEAD 干净 worktree 复测）；② `test/chat/thincoder_commands_test.dart` 曾因一次 PowerShell 回写产生乱码/BOM，已整档重写并复核（无乱码、无 BOM、CRLF 与仓内一致）。
+- 内部 advisor 代码评审：1 轮，verdict = changes-required（🔴1 / 🟡1 / 🔵2）。
+  - 🔴 → 父代理裁 A，已落地。
+  - 🟡：thincoder 会话里行首 `/` 仍弹出标题为 Commands、内容为 no-results 的空面板（composer 的空列表判据只在 `trigger.start > 0` 时生效，`lib/chat/composer/composer.dart:869`）；设计 §28.6 把 F26① 映射为「候选表为空」并接受菜单打开 ⇒ 属设计口径 vs 需求字面之差，报父代理裁定，未改。
+  - 🔵1 `_sync` 丢弃 Future → 已加 `unawaited(...)`。
+  - 🔵2 设计档 §28.8 的现值/delta 与实测行数有差（`thincoder_kernel.dart` 现 1462、`chat_session.dart` 1493、`workspace.dart` 2984、两个新增测试档行数超 ≈ 估算）→ 数字归设计席，未改，收尾复核。
+- 收敛：修正 1 轮（A + T138）后重跑，除既有失败外全绿。
+
+### 验证读数
+
+- `dart analyze`（整包）⇒ `No issues found!`（exit 0）。
+- 目标测试 `flutter test --no-pub test/kernel/thincoder_kernel_test.dart test/chat/command_details_test.dart test/kernel` ⇒ **281 passed, 1 failed**；唯一失败 = `test/kernel/dart_core_e2e_test.dart:211`（`Expected: contains 'diff: color.txt +2'`，实际为 Windows 绝对临时路径）。已在 HEAD 干净 worktree（`git worktree add` + 复制 `.dart_tool`）复测：同一失败、同一行，**既有且与本批无关**。HEAD 基线读数 = 274 passed + 1 skipped + 1 failed；本批 +7 例（T131–T135、T137、T138）⇒ 274+1+7 = 282 = 281 pass + 1 fail（基线那条 skip 在本机真实工作树里执行为通过）。
+- `test/workspace_test.dart`（改 `workspace.rename` 后的额外回归）⇒ 28 passed。
+- 设计档 `doc_check(mode:"gate")` ⇒ `DOC-CHECK GATE: PASS`（0 命中）。
+- `git diff --stat`：`chat_session.dart` +8 · `agent_kernel.dart` +9 · `thincoder_kernel.dart` +26 · `workspace.dart` +32/−5 · `thincoder_kernel_test.dart` +154；新增 `rename_confirmed_test.dart`（约 170 行）、`thincoder_commands_test.dart`（约 108 行）。
+
+### 遗留（不在本批收口判据内）
+
+- 🟡 空 `/` 面板（命令口径）与 §28.8 行数差 —— 归父代理/设计席裁定，见上。
+- 同一时序家族的另一子情形：`rename → 写入在飞 → 释放 → teardown`，完成回调的 `identical(connection, kernel._connection)` 检查会静默返回（无提示）；本次裁定只覆盖 `_pumpTitle` 的释放旁路，未动该分支，如实登记。
+
 ## §6 验证与收口（父代理）

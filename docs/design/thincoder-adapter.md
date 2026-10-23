@@ -4173,9 +4173,9 @@ kernel._dropTitleOf();
 |---|---|
 | `_slot != null` | 新会话还没 `session/new` 时写入落在 `_pendingTitle`（`thincoder_kernel.dart:924-927`），槽一到就补写（`:341-342`）——那时宿主走今天的路径即可 |
 | `_running`（`_connection != null && health == ready`，`:228-229`） | **`_slot` 不随释放清掉**：`_teardown` 只置 `_connection = null`（`:509-510`），`_closeSession` 只发 `session/close`（`:542-551`）。只看 `_slot` 会把「槽在、连接没了」判成会被确认，而 `_pumpTitle` 走的是 no-connection 分支（`:1380-1387`）⇒ 提示 + `_dropTitleOf()`，标题丢了、事件也没有 |
-| `!_releaseWanted`（`:162` / `:580`） | 释放已排上时 `_pumpTitle` 提前返回（`:1377`）把标题留着，随后 `_teardown` 的 `_dropTitleOf()`（`:530`）把它丢掉 ⇒ 同样零事件 |
+| `!_releaseWanted`（`:162` / `:580`） | 释放已排上时 `_pumpTitle` 走释放旁路（`:1394-1402`）：待写标题作废，出既有 `The title was not confirmed: …` 提示（理由 = the session is closing）、零事件；判据为真时宿主列表保持旧值——有提示，不是静默 |
 
-- 判据的方向是**保守**：它为真 ⇒ 这次写入一定不走丢弃分支；它为假 ⇒ 宿主退回今天的乐观路径（列表即改，内核照旧尝试写）。误判为真 = 一次静默丢失；误判为假 = 只是少了新行为 ⇒ 临界取严（健康未 ready、释放已排上都算假）。
+- 判据的方向是**保守**：它为真 ⇒ 不走丢弃分支，**除非释放已开始**（判据在改名前取样，视图随后离开时写入作废；那一路必出 `The title was not confirmed: …` 提示，不静默，见 §28.4 与 T138）；它为假 ⇒ 宿主退回今天的乐观路径（列表即改，内核照旧尝试写）。误判为真 = 一次静默丢失；误判为假 = 只是少了新行为 ⇒ 临界取严（健康未 ready、释放已排上都算假）。
 - 判据看不出服务端拒绝：`session/set_title` 被拒仍算「会确认」，那一路按 §28.4 出提示、零事件、列表保持旧值——那是设计的失败面，不是静默丢失。
 
 **宿主侧一处改动**（`workspace.dart:2776-2779`）：
@@ -4220,7 +4220,8 @@ Future<bool> rename(AgentThread thread, String title,
 | `session/set_title` 成功 | `_titleConfirmed = target` → 发一条 `SessionRenamed(target)` | `thincoder_kernel.dart:1391-1398` |
 | `session/set_title` 抛错 | **零事件**、列表保持旧值；对话里出现既有提示「The title was not confirmed: <error>」 | `thincoder_kernel.dart:1399-1407`（`:1402-1403` 的 `error:title` 项） |
 | 新会话还没槽（`_slot == null`） | 标题存进 `_pendingTitle`，槽一到就补写；`renameConfirmed` 为假 ⇒ 宿主先改列表（今天的路径） | `thincoder_kernel.dart:924-927` / `:341-342` |
-| 槽在、连接没了（视图已离开 / 已释放 / 释放已排上） | `renameConfirmed` 为假 ⇒ 宿主先改列表；内核走 no-connection 或释放旁路 ⇒ 提示「no connection」并把待写标题丢掉；**列表与 CLI 到下一次成功改名才一致**（§28.9 登记该形状） | `thincoder_kernel.dart:1377` / `:1380-1387` / `:509-510` / `:530` |
+| 槽在、连接没了（视图已离开 / 已释放 / 释放已排上） | `renameConfirmed` 为假 ⇒ 宿主先改列表；内核走 no-connection 或释放旁路 ⇒ 出既有 `The title was not confirmed: …` 提示（理由 = no connection / the session is closing）并把待写标题丢掉；**列表与 CLI 到下一次成功改名才一致**（§28.9 登记该形状） | `thincoder_kernel.dart:1394-1411` / `:509-510` / `:530` |
+| 改名被回合压后、释放随后排上（改名时判据为真，视图离开后回合才结束） | 宿主未改列表（判据为真）；回合结束 `_pumpTitle` 走释放旁路：**零事件**、待写标题作废，出 `error:title` 提示「… the session is closing」；列表保持旧值（= CLI 的旧值） | `thincoder_kernel.dart:933-951` / `:1394-1402` / `chat_session.dart:491` |
 | 确认事件回到宿主后再 `rename` 同一标题 | 一次写入都不多发 | `rename` 开头 `title.trim() == _titleConfirmed` 短路（§28.3） |
 | 没开的会话改名失败 | `catalog.rename` 抛错 ⇒ `workspace.rename` 返回 false，**零列表改动** | `workspace.dart:2782-2788` |
 
@@ -4249,12 +4250,12 @@ Future<bool> rename(AgentThread thread, String title,
 | 判据 | 本档落点 | 机制 | 机检 |
 |---|---|---|---|
 | F25① thincoder 会话改名 ⇒ 列表项与标题都变新，不需要切换会话 | §28.3 / §28.4 | 确认后 `emit(SessionRenamed)`；`_sync` 以 `confirmed: true` 落地 | T131 / T134：`flutter test test/kernel/thincoder_kernel_test.dart` |
-| F25② `session/set_title` 抛错 ⇒ 事件数 0、列表标题仍是旧值 | §28.4 | 失败分支只发既有 `error:title` 提示，零事件 | T132（同档） |
+| F25② `session/set_title` 抛错 ⇒ 事件数 0、列表标题仍是旧值 | §28.4 | 失败分支只发既有 `error:title` 提示，零事件；释放旁路的作废同形（零事件 + 提示 + 列表旧值） | T132（`test/kernel/thincoder_kernel_test.dart`）/ T138（`test/kernel/rename_confirmed_test.dart`） |
 | F25③ Claude 内核路径行为不变（回归） | §28.3 | `ClaudeCodeKernel` 不实现 `ConfirmsRename` ⇒ `renameConfirmed` 恒假 ⇒ 仍走 `_retitle`；`SessionRenamed` 的发出点（`claude_code_kernel.dart:1704`）与消费面零改动 | T135（`test/kernel/rename_confirmed_test.dart`） |
 | F26① thincoder 会话里 `/` 不弹命令面板 | §28.5 | 不实现 `ProvidesCommands` ⇒ `commands` 恒 `[]` ⇒ 候选表为空 | T133（能力接口 + `commands` 为空 + widget 层无 command 类建议） |
 | F26② Claude 内核会话里命令面板行为不变（回归） | §28.5 | 本批不动 `ProvidesCommands` 与 `_commandSuggestions`（`chat_screen.dart:624-641`） | T136（`flutter test test/chat/command_details_test.dart` 既有 Claude 用例全绿） |
 
-### 28.7 用例表（T131–T137）
+### 28.7 用例表（T131–T138）
 
 | # | 场景 | 输入 | 期望 |
 |---|---|---|---|
@@ -4265,6 +4266,7 @@ Future<bool> rename(AgentThread thread, String title,
 | T135 | Claude 不实现该能力 ⇒ 路径不变 | `test/kernel/rename_confirmed_test.dart`：一个 Claude 会话 | `expect(claudeKernel, isNot(isA<ConfirmsRename>()))`；`ChatSession.renameConfirmed == false`；`workspace.rename` 走 `_retitle`（列表即改，不等事件） |
 | T136 | Claude 命令面板回归 | `flutter test test/chat/command_details_test.dart` | 该档既有 Claude 用例全绿（本批不改该档任何 Claude 断言）；`_commandSuggestions` 零改动 |
 | T137 | 判据三态（含释放窗） | 同一 thincoder 内核：① `session/new` 完成；② `release()` 之后（视图离开，`_slot` 仍在）；③ 新会话还没 `session/new` | ① `renameConfirmed == true`；② `false`（连接已断 / `_releaseWanted` 真）；③ `false`（走 `_pendingTitle`）。②③ 两态下尚无 `session/set_title` 请求发出，宿主列表已先改（今天的路径） |
+| T138 | 改名被回合压后、释放随后排上 | `test/kernel/rename_confirmed_test.dart`：开着的 thincoder 会话；回合在飞时 `rename('A')`，随后 `detach()`（置 `_releaseWanted`），再让回合结束 | 事件流**零条** `SessionRenamed`；`session/set_title` 请求零条；列表标题仍是旧值（`'go'`）；对话里恰一条 `error:title` 提示，含 `not confirmed` 与 `closing` |
 
 侧栏那一跳（`SessionRenamed` → `_sync` → `_retitle`）由 T131 / T134 覆盖到机检；真机上再走一次：改名后侧栏立刻是新标题，失败时保持旧标题并出现错误提示。
 
@@ -4276,7 +4278,7 @@ Future<bool> rename(AgentThread thread, String title,
 | ② | `lib/kernel/thincoder/thincoder_kernel.dart` | 1436 | 实现 `ConfirmsRename` + `renameConfirmed` 判据（槽 ∧ 连接 ∧ 未释放）+ `_titleConfirmed` + `rename` 同标题短路 + `_pumpTitle` 成功分支发事件 | ≈ +12 |
 | ③ | `lib/chat/chat_session.dart` | 1485 | 只加 `renameConfirmed` 委托（`_ => false` 兜底，紧邻 `canRename` `:770`）；`rename` 签名不动 | ≈ +4 |
 | ④ | `lib/workspace/workspace.dart` | 2962 | `rename()` 增具名参数 `confirmed` + 确认分支 + `renameConfirmed` 分支（`:2766-2795`）；`_sync` 调用点传 `confirmed: true`（`:2270`） | ≈ +9 / −1 |
-| ⑤ | `test/kernel/rename_confirmed_test.dart` | 新增 | T135 / T137（Claude 不实现该能力；判据在开会话 / 释放后 / 无槽三态） | ≈ +40 |
+| ⑤ | `test/kernel/rename_confirmed_test.dart` | 新增 | T135 / T137 / T138（Claude 不实现该能力；判据在开会话 / 释放后 / 无槽三态；改名被回合压后、释放随后排上的可见丢失） | ≈ +40 |
 | ⑥ | `test/kernel/thincoder_kernel_test.dart` | 4814 | T131–T134 追加到文件末尾 | ≈ +90 |
 | ⑦ | `test/chat/thincoder_commands_test.dart` | 新增 | T133 的 widget 层（thincoder 会话 `/` 无 command 类建议） | ≈ +70 |
 
@@ -4292,7 +4294,7 @@ Future<bool> rename(AgentThread thread, String title,
 - 不实现 `/` 命令面，不从 Claude Code 的定制文件合成命令表。
 - 不解决跨客户端同步：终端里改同一会话的标题，本仓下一次刷新前不跟（超出本批）。
 - 不改外仓 `thincoder/`；不动 btest 面（`lib/browser/btest/**`）。
-- **不补「释放窗内的改名」**：视图离开且内核已释放时改名，`_slot` 仍在、连接已断 ⇒ 宿主按今天的路径先改列表，内核出「no connection」提示并丢掉待写标题，列表与 CLI 到下一次成功改名才一致（§28.4 第 3 行）。要补就得让内核跨释放留住待写标题（`_pendingTitle` 只在无槽时用，`:924-927`），那是新机制，不在本批。
+- **释放窗内的改名：丢弃 + 可见提示，不跨释放保留标题**：视图离开后（或释放已排上、回合结束时）改名，`_slot` 仍在、连接已断或正在断开 ⇒ 内核把待写标题丢掉，并出既有 `The title was not confirmed: …` 提示（理由 = no connection / the session is closing），**零 `SessionRenamed`**；宿主按判据在改名前是否成立，决定列表是先改（假）还是保持旧值（真，随后收到提示）。要跨释放留住待写标题需新机制（`_pendingTitle` 只在无槽时用，`:924-927`），不在本批。
 - **不把 `renameConfirmed` 扩成通用能力**：只有 thincoder 实现；Claude 走 `_ => false`（今天的路径），Codex 本就没有改名面。
 
 ### 28.10 未验证项（单列，不静默省略）
