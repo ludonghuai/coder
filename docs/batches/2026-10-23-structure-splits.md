@@ -437,4 +437,111 @@ VERDICT: pass
 - 第 2 轮新增 1 条 🔵（非阻塞，记录面）：本节上段把 `_runningTask` 列在「字段 / 私有 getter」小标题下，而 `:415` 已说明它是私有方法。本条补记即更正口径：`_runningTask` 为**私有方法，留 owner**。
 - 终态：**clean**（内部 explore 偏差审计 1 轮 · 内部 advisor 代码评审 2 轮，终判 pass · 修正轮 1 次 = 本节落盘 + `file_paths.dart` 注释归位；无未决 🔴）。
 
+### 实施记录：结构拆分第 5 步（composer · 机制 = part ×6）
+
+**范围**：设计 `docs/design/structure-splits.md` §4.3 六段（`lib/chat/composer/composer.dart` 2350 → ≤800，台账 #150 行 3）。
+机制 = `part` + 顶层函数 `<name>Of(ChatComposerState state, …)` + 类里一行委托（§3.3）；字段与后备存储留 owner；注解随委托逐字保留；`part` 档之间不互相 import。
+
+**改动**
+
+- `lib/chat/composer/composer.dart`：2350 → **556** 行（≤800，余量 244）。import 50 行不动；`part` 指令 0 → 6；
+  类头/构造/字段/`_rankOthers` 不动；82 个方法体出档、原位留 82 条委托（78 条一行 + 4 条带 `super` 的生命周期委托）；
+  11 处 `@override` 随委托保留。
+- 六个新档（同级，首行均 `part of 'composer.dart';`，无 import）：
+  `composer_toolbar.dart` **414** · `composer_editing.dart` **475** · `composer_menu.dart` **248** ·
+  `composer_pointer.dart` **221** · `composer_view.dart` **345** · `composer_message.dart` **325**（均 ≤500，最大 475，余量 25）。
+- 整体搬出的顶层声明：5 个小部件类 `ComposerPermissionSwitch` / `_PolishButton` / `_ContextRing` / `_RingPainter` / `_SendButton` → toolbar；
+  `_ShownOfText` typedef → editing（与产出它的 `_shownOfText` 同档；主档保留其类型引用 `_ShownOfText? _shownBuilt`）。
+- 按 §3.3 留 owner 的字段（缝表点名但字段不动）：`_suggestion` `_suggestionKey` `_lookups` `_menuOwner` `_menuRegistered`
+  `_ghostAt` `_ghost` `_ghostFiles` `_ghosting` `_menuPressAt` `_clickDownAt` `_clickWindow` `_clickUpAt` `_clickOnSelection`
+  `_secondClick` `_editor` `_shownBuilt` `_editorColors` `_built` `_builtFrom` `_hovers` `_historyAt` `_historyDraft` `_historyShown`
+  `_recalling` `_menuKind` `_highlighted` `_menuX`，以及静态常量 `_fontSize` `_textStyle` `_lineHeight` `_minEditorHeight`
+  `_maxEditorLines` `_maxImages` `_suggestionKeyContext` `_clickSlop`。
+- **机制侧新增一行转发（`_notify` 同类，单列）**：`void _setState(VoidCallback fn) => setState(fn);`（`composer.dart:205`）。
+  `State.setState` 是 `@protected`，part 顶层函数直呼报 `invalid_use_of_protected_member`；`state._setState(...)` 与原 `setState(...)` 同一实例同一调用。
+  这是第 4 步 `_notify()` 先例的同一形态，行为等价。
+- **super 调用留在类内**：`initState` / `didUpdateWidget` / `didChangeDependencies` / `dispose` 的 `super.*` 无法出现在顶层函数，
+  故四条委托写成块体，`super` 保持原相对位置（前三条在前、`dispose` 在后），part 函数只承接其余函数体。
+  顶层函数的 `didUpdateWidgetOf` 去掉 `covariant`（该修饰只对实例方法参数成立；类的委托签名逐字保留 `covariant ChatComposer oldWidget`）。
+- `static bool _inAtom(...)` 的委托不带 owner：`=> _inAtomOf(text, offset)`。
+
+**验收读数（命令 + 结果）**
+
+| 验收 | 命令 | 结果 |
+|---|---|---|
+| ① analyze 0 issue | `dart analyze`（全项目） | `No issues found!`（exit 0） |
+| ② 测试基线（任务书记法，开工前目标档 HEAD 干净） | `flutter test --no-pub test/chat test/composer_test.dart`（基线，父侧记） | 红项 5 条：`test/chat` 3 · `composer_test` 2（见下） |
+| ② 测试（本步后，同命令） | 同上 | `+648 -5`：**红项集合逐条一致，无新增失败** |
+| ② 附：设计 §5 第 5 步命令的差集 | `flutter test --no-pub test/kernel_ui_test.dart` | `+31: All tests passed!` |
+| ③ 主档行数 | `node -e` 换行符计数（设计 §5 口径） | **556**（≤800；HEAD 2350；设计估 379–520） |
+| ④ 六档行数 | 同上 | 414 / **475** / 248 / 221 / 345 / 325（均 ≤500） |
+| ⑤ 逐块比对 | 令牌级脚本（对照 HEAD 快照；归一化只允许 owner 前缀、签名展开、缩进、`this`→`state`、`_setState`） | **82/82** 成员 `bodyDiffs: 0`；见下「逐块比对」 |
+| ⑥ 反推校验 | 行级 LCS 对 HEAD 快照 + 新增行分类 | 309 行保留、1874 行删除（全部落在搬出块内，另 1 行为旧类尾 `}`）、97 行新增（分类见下），无未解释行 |
+| ⑦ 改动面 | `git diff --name-only` / `git status --porcelain` | 本步增量 = `M lib/chat/composer/composer.dart` + 六个 `??` 新档；无 `test/`、无其他 `lib/`（基线见下） |
+| ⑧ 新档首行 | 逐档读取 | 六档均 `part of 'composer.dart';`（同级形态） |
+| 附：格式 | 未跑整档 `dart format` | HEAD 版主档即非 format-clean，整档重排会重排既有代码并改变逐行比对；第 2–4 步同口径 |
+
+**基线红项（开工前与本步后逐条一致，既有且与本步无关；`test/**` 未改一行）**
+
+1. `test/chat/files_seen_test.dart`：`filesSeen is the same list while no file is new`（Windows 分隔符）
+2. `test/chat/side_panel/side_panel_test.dart`：markdown preview 保存（macOS variant）
+3. `test/chat/side_panel/side_panel_test.dart`：drop 文件链接（Windows 分隔符）
+4. `test/composer_test.dart`：`mode picker opens on press, animates, and follows the mouse`
+5. `test/composer_test.dart`：`Shift+Tab in the input goes through the modes`
+
+注：设计档 `:279` 记 `test/chat` 4 项（另含 `test/kernel` 1 项）；`test/chat` 单跑本机实测 3 项，批档 `:403` 已按 3 + 1 记账，本步按实测 3 + `composer_test` 2 = 5 记账。
+
+**逐块比对（对照 HEAD 版 `lib/chat/composer/composer.dart`）**
+
+- 82 个成员的函数体令牌比对：`diffs: 0`。差异只有已声明的几类：① 签名展开为 `<name>Of(ChatComposerState state, …)`（静态方法无 owner 参数）；
+  ② 实例/静态引用加前缀 `state.` / `ChatComposerState.`；③ 类成员 → 顶层函数缩进减 2；④ `this` → `state`（含 `by: this`、`delegate: this`、`identical(…, this)`）；
+  ⑤ `setState` → `state._setState`（上列入账的一行转发）；⑥ 四条生命周期委托的 `super` 留在类内（结构需要，行为位置不变）。
+- 六个整体搬出的小部件类与 `_ShownOfText` typedef 与 HEAD 逐字一致（仅缩进不变；类在顶层，不减 2）。
+- 逐段读数（成员数 / 令牌 diff）：toolbar 1/0 · editing 21/0（含 typedef）· view 16/0 · message 15/0 · menu 16/0 · pointer 17/0。
+
+**反推校验**
+
+`HEAD 非空行 2183 = 保留 309 + 删除 1874`；`当前主档非空行 406 = 保留 309 + 新增 97`。
+删除行：1873 行全部落在 82 个成员块 + 6 个顶层块内，另 1 行是旧类尾 `}`（`HEAD:2062`，类闭合位置随其后类搬出而上移）。
+新增 97 行 = 6 条 `part` 指令 + 78 条一行委托 + 4 条生命周期委托的调用行 + 1 行 `_setState` 转发 + 8 行注释
+（`_setState` 文档 3 行 + 分档说明 5 行）；其余委托的 `@override` / 签名 / `super` 行均由 LCS 匹配为 HEAD 保留行。无未分类新增行。
+
+**工作树基线（开工前已存在，非本步改动）**
+
+`M docs/batches/2026-10-22-browser-biz-test-mode.md` · `M docs/batches/2026-10-23-ledger-sweep.md` ·
+`M docs/design/browser-biz-test.md` · `M docs/design/structure-splits.md` · `M lib/ide/git/git_repository.dart` ·
+`M lib/kernel/thincoder/thincoder_warm.dart`。本步净增量 = 目标档 + 六个新档。
+开工前 `git status` 中作曲家档案为空；HEAD 快照 `git show HEAD:lib/chat/composer/composer.dart` 与本步对照副本逐字节一致。
+
+**设计漂移（交父侧 / eng-designer；实施不改文档）**
+
+- **缝 2 的四处草稿方法改落 message 档**：设计 §4.3 缝 2 点名 `_takeDraftFiles` `_takeDraftMessage` `_saveDraft` `_handleDraftChanged` → `composer_editing.dart`；
+  若照字面执行，editing 为 547 行内容 + 头部/空行 ≈ 575 > 500。按设计 `:176`「判据以行数门为准（主档 ≤800、新档 ≤500）」把该四块（106 行）落在
+  `composer_message.dart`（草稿 = 未发出的消息；`_submit` 直呼 `_saveDraft` 的写方/消费方因此同档）。六档档名与总数不变，主档搬出面不变。
+- **`state.setState` 表述**：设计 §4.3 风险行写「`setState` … 改成 `state.setState` 等」；实际用一行 `_setState` 转发（`@protected` 不可从顶层函数直呼）。
+- **尺寸估值**：设计估主档 379–520 / 委托 ≈65 行 / editing ≈460；实测主档 **556**、委托 **82** 条、editing **475**。
+  按设计 `:110` 已记的实测口径（≈2.13 行/成员）重算即约 175 行委托；硬门全部成立。
+- **测试基线计数**：设计 `:279` 记 `test/chat` 4 项，本机单跑为 3 项（第 4 项在 `test/kernel`），与批档 `:403` 的实测记账一致。
+
+**轮次与终态**
+
+- 内部 explore 偏差审计：1 轮，0 🔴 · 2 🟡 · 4 🔵。代码面全部达标（主档/六档行数、首行、btest 边界、seam 覆盖、无未限定成员引用）；
+  2 条 🟡 = ①本节尚未落盘（本轮已补，即本段）②缝 2 改落（已在上「设计漂移」入账）；4 条 🔵 = 设计档的 `state.setState` 表述、尺寸估值、测试基线计数、`.thincoder/tmp/split5/` 校验脚本（gitignore 的临时区，不进 git 面）。
+- 内部 advisor 代码评审：见下补记。
+- 修正轮：1 次（analyze 首跑 8 条：四个生命周期 part 函数名与委托不匹配、`_inAtom` 静态成员经实例访问、两处字段初始化器改用 `_xOf(this)` 致委托未引用；同轮改为 `_initStateOf` 等四名、`ChatComposerState._inAtom`、字段初始化器保持 `_createController()` / `_initialPool()`；复跑 analyze 0 issue、测试门与比对全绿）。
+- 终态：见下补记。
+
+**补记（advisor 代码评审后）**
+
+- 内部 advisor 代码评审：第 1 轮 **pass**（code · 七档）。0 🔴 · 1 🟡（报告项）· 3 🔵，均无代码 must-fix：
+  ① 🟡 设计 §4.3 缝 2 仍点名四个草稿方法落 `composer_editing.dart`，实现落 `composer_message.dart`（设计 `:170` 的 `composer_editing.dart` 一侧 vs 代码 `composer_message.dart:222` 起）——
+  **Accepted**（本步按设计 `:176`「判据以行数门为准」处置并在本节「设计漂移」入账；设计档归 eng-designer / 父侧收口前回填，代码不改）。
+  ② 🔵 十个公开方法的委托助手无 `_` 前缀（`buildOf` / `focusOf` / `insertFilesOf` / `chatContextKeyOf` / `chatCommandsOf` / `chatComposingOf` /
+  `fileDragOverOf` / `fileDragLeaveOf` / `fileDropOf` / `editorScrollPositionOf`），使 `composer.dart` 的公开命名面多出十个符号，与设计 §3.3「顶层私有函数」不一致 ——
+  **Accepted**（kernel 第 2 步 `canRevertNowOf` 为同形先例；本轮改名会动 10 个委托与 10 个函数名并需全量复跑，收益不抵风险。建议父侧收口时在 §3.3 记一句口径，或另轮统一加 `_`）。
+  ③ 🔵 设计估值漂移未回填（主档估 379–520 实测 556、委托估 ≈65 实测 82、message 估 ≈240 实测 325）—— **Accepted**（本节「设计漂移」已记账，设计档归父侧 / eng-designer）。
+  ④ 🔵 六个新档未过 `dart format`（如 `composer_toolbar.dart:139` 两名同行）—— **Accepted**（批档已述理由：主档 HEAD 即非 format-clean，整档重排会改变逐行比对；六个 part 档可在另轮单独 format）。
+- 内部 explore 偏差审计 1 轮 + advisor 1 轮 + 本节落盘，代码在审计后**零改动**（两轮的发现均为记录/文档面，无代码 must-fix）。
+- 终态：**clean**（内部 explore 偏差审计 1 轮 · 内部 advisor 代码评审 1 轮，终判 pass · 无未决 🔴）。
+
 ## §6 验证与收口（父代理）
