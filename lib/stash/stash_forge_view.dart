@@ -60,11 +60,14 @@ class StashIssueBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final own = note.ownIssue;
     final links = [
       for (final link in note.issues)
         if (forge.refOf(link.url) case final ref?) (link, ref),
     ];
     if (links.isEmpty) return const SizedBox.shrink();
+    // The issue it is first.
+    links.sort((a, b) => (b.$1.url == own ? 1 : 0) - (a.$1.url == own ? 1 : 0));
     final (link, ref) = links.first;
     final state = forge.stateOf(link);
     final (icon, color) = forgeStateLook(ref.kind, state);
@@ -224,6 +227,17 @@ class _StashIssueSectionState extends State<StashIssueSection> {
     final faint = TextStyle(color: AppColors.textFaint, fontSize: 12);
     final openSettings = accountsOpener(context);
     final details = <Widget>[
+      if (_forge.asking(link.url) && item == null)
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IdeSpinning(
+              Icon(Codicons.sync, size: 11, color: AppColors.textFaint),
+            ),
+            const SizedBox(width: 4),
+            Text(l10n.stashIssueLoading, style: faint),
+          ],
+        ),
       if (state != null)
         Text(forgeStateLabel(l10n, ref.kind, state), style: faint),
       if (item?.author case final author?) Text('@$author', style: faint),

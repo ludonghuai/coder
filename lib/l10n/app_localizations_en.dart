@@ -1662,9 +1662,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sidePanelSource => 'Source';
 
   @override
-  String get sidePanelEdit => 'Edit';
-
-  @override
   String get commandOpenDetails => 'Open details';
 
   @override
@@ -3549,7 +3546,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get generalSettingsQueuedMessagesDescription =>
-      'When a message sent while the agent is still working is taken up. Applies to messages sent after a change. Joining the task is Claude Code only for now.';
+      'When a message sent while the agent is still working is taken up. Applies to messages sent after a change; Claude Code only for now.';
 
   @override
   String get generalSettingsQueuedAfterTurn => 'After the Current Task';
@@ -4214,21 +4211,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get scmFetchFromAllRemotes => 'Fetch From All Remotes';
-
-  @override
-  String get scmScanFailed =>
-      'Can\'t look for repositories here right now; trying again shortly.';
-
-  @override
-  String get scmFetchAndPullAll => 'Fetch and Pull All Repositories';
-
-  @override
-  String get scmFetchAndPull => 'Fetch and pull remote commits';
-
-  @override
-  String scmBehindCommits(int count) {
-    return '$count remote commits to pull';
-  }
 
   @override
   String get scmPull => 'Pull';
@@ -7030,11 +7012,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get modelsSwitchConfirm => 'Switch';
 
   @override
-  String modelsSwitchPending(String model) {
-    return 'Switches to $model when this turn ends';
-  }
-
-  @override
   String get modelsAuxiliary => 'Auxiliary Model';
 
   @override
@@ -9329,15 +9306,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get branchBarWorkspace => 'Branches of the folders';
 
   @override
-  String get settingsSectionAccounts => 'Accounts';
+  String get settingsSectionAccounts => 'Git Accounts';
 
   @override
   String get settingsAccountsKeywords =>
-      'GitHub GitLab Gitee sign in login token issue pull request merge request';
+      'GitHub GitLab sign in login token issue pull request merge request';
 
   @override
   String get accountsDescription =>
-      'Sign in to GitHub, GitLab or Gitee to see the state of the issues and pull requests linked in Stash, import issues as stashes, and reply to them once you confirm.';
+      'Sign in to GitHub or GitLab to see the state of the issues and pull requests linked in Stash, import issues as stashes, and reply to them once you confirm.';
 
   @override
   String get accountsSignedIn => 'Signed in';
@@ -9347,7 +9324,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get accountsKeptLocally =>
-      'Tokens are kept in this computer\'s keychain and are sent only to the GitHub, GitLab or Gitee they are for. Nothing is posted without your confirmation.';
+      'Tokens are kept in this computer\'s keychain and are sent only to the GitHub or GitLab they are for. Nothing is posted without your confirmation.';
 
   @override
   String get accountsGitHubHosts =>
@@ -9355,9 +9332,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get accountsGitLabHosts => 'gitlab.com, or a self-managed GitLab';
-
-  @override
-  String get accountsGiteeHosts => 'gitee.com';
 
   @override
   String get accountsSignInBrowser => 'Sign in with Browser';
@@ -9410,10 +9384,6 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get accountsTokenGitLabScopes =>
       'A personal access token with the api scope.';
-
-  @override
-  String get accountsTokenGiteeScopes =>
-      'A personal access token with the user_info, projects, issues, pull_requests and notes scopes.';
 
   @override
   String accountsTokenCreate(String host) {
@@ -9582,7 +9552,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get stashImportNotALink =>
-      'Not a GitHub, GitLab or Gitee issue or pull request link.';
+      'Not a GitHub or GitLab issue or pull request link.';
 
   @override
   String stashImportSignIn(String forge) {
@@ -9609,7 +9579,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get stashImportNoRepos =>
-      'No project has a GitHub, GitLab or Gitee remote. Paste an issue link above.';
+      'No project has a GitHub or GitLab remote. Paste an issue link above.';
 
   @override
   String get stashImportNone => 'No open issues here.';
@@ -9657,7 +9627,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get stashWelcomeTrack =>
-      'Cards show their conversations live, and the GitHub, GitLab or Gitee issues and pull requests they link to stay in sync.';
+      'Cards show their conversations live, and the GitHub and GitLab issues and pull requests they link to stay in sync.';
 
   @override
   String get stashWelcomeStart => 'Get Started';
@@ -10409,6 +10379,213 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aboutOpen => 'Open';
+
+  @override
+  String get stashSettingsIssueSync => 'Issues as stashes';
+
+  @override
+  String get stashSettingsIssueSyncDescription =>
+      'A project that is a Git repository on GitHub or GitLab (signed in under Accounts): its open issues are stashes, each once, kept in step both ways. A stash deleted, or unlinked from its issue, does not come back.';
+
+  @override
+  String get stashIssueSyncMine => 'Only those assigned to or opened by me';
+
+  @override
+  String get stashIssueSyncOff => 'Off: imported or published ones only';
+
+  @override
+  String get stashIssueLocal => 'Local only';
+
+  @override
+  String get stashIssueAllow => 'Allow publishing as an issue';
+
+  @override
+  String get stashIssueNotPublished => 'Not an issue yet';
+
+  @override
+  String stashIssuePublishTo(String repo) {
+    return 'Publish as an issue of $repo…';
+  }
+
+  @override
+  String get stashIssueKeepLocal => 'Keep it local';
+
+  @override
+  String get stashIssuePush => 'Push changes to the issue…';
+
+  @override
+  String get stashIssuePushShort => 'Push';
+
+  @override
+  String get stashIssueTakeRemote => 'Discard local changes, use the issue\'s';
+
+  @override
+  String get stashIssueUnlinkOwn => 'Unlink, keep it local';
+
+  @override
+  String stashIssueConflict(String tag) {
+    return '$tag was changed on the forge too. Which version to keep?';
+  }
+
+  @override
+  String get stashIssueKeepMine => 'Keep mine (push)';
+
+  @override
+  String get stashIssueKeepTheirs => 'Use the issue\'s';
+
+  @override
+  String stashIssueChangedHere(String tag) {
+    return 'Changes here are not on $tag yet.';
+  }
+
+  @override
+  String get stashIssueDiscard => 'Discard';
+
+  @override
+  String stashIssuePublishTitle(String repo) {
+    return 'Publish as an issue of $repo';
+  }
+
+  @override
+  String stashIssuePushTitle(String tag) {
+    return 'Push changes to $tag';
+  }
+
+  @override
+  String get stashIssuePublish => 'Publish';
+
+  @override
+  String get stashIssueNoText => '(no description)';
+
+  @override
+  String stashIssuePicturesGitHub(int count, String branch) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count pictures are uploaded to the repository\'s $branch branch, for the issue to show them.',
+      one:
+          '1 picture is uploaded to the repository\'s $branch branch, for the issue to show it.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String stashIssuePicturesGitLab(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count pictures are uploaded to the project, for the issue to show them.',
+      one: '1 picture is uploaded to the project, for the issue to show it.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get stashImplementShort => 'Implement';
+
+  @override
+  String stashImplementIssue(String issue) {
+    return 'It is issue $issue: the pull request should say it fixes it.';
+  }
+
+  @override
+  String get stashIssueSyncAll => 'All open issues';
+
+  @override
+  String get stashIssueChecking => 'Looking for its repository…';
+
+  @override
+  String get stashIssueRefresh => 'Refresh now';
+
+  @override
+  String get stashIssuePublishButton => 'Publish as Issue';
+
+  @override
+  String get stashIssuePushButton => 'Push to Issue';
+
+  @override
+  String get stashIssueLoading => 'Loading…';
+
+  @override
+  String get stashSyncing => 'Syncing issues…';
+
+  @override
+  String stashSyncingRepo(String repo, int index, int total) {
+    return 'Syncing the issues of $repo ($index/$total)…';
+  }
+
+  @override
+  String get stashSyncTooltip => 'Sync issues now';
+
+  @override
+  String stashSyncTooltipLast(String time) {
+    return 'Sync issues now · last at $time';
+  }
+
+  @override
+  String stashSyncFailed(String repo, String error) {
+    return 'Could not sync the issues of $repo: $error';
+  }
+
+  @override
+  String stashSyncSignIn(String forge, String repo, int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          'Sign in to $forge for the issues of $repo and $count more repositories to be stashes.',
+      one: 'Sign in to $forge for the issues of $repo to be stashes.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get stashSyncingEmpty => 'Syncing the projects\' issues…';
+
+  @override
+  String get stashFilterAnyIssue => 'Any source';
+
+  @override
+  String get stashFilterIssue => 'Issues';
+
+  @override
+  String get stashFilterNotIssue => 'Local only';
+
+  @override
+  String get stashImplementEmpty =>
+      'Write something first, then implement it in BaoCode';
+
+  @override
+  String get sidePanelEdit => 'Edit';
+
+  @override
+  String get scmScanFailed =>
+      'Can\'t look for repositories here right now; trying again shortly.';
+
+  @override
+  String get scmFetchAndPullAll => 'Fetch and Pull All Repositories';
+
+  @override
+  String get scmFetchAndPull => 'Fetch and pull remote commits';
+
+  @override
+  String scmBehindCommits(int count) {
+    return '$count remote commits to pull';
+  }
+
+  @override
+  String modelsSwitchPending(String model) {
+    return 'Switches to $model when this turn ends';
+  }
+
+  @override
+  String get accountsGiteeHosts => 'gitee.com';
+
+  @override
+  String get accountsTokenGiteeScopes =>
+      'A personal access token with the user_info, projects, issues, pull_requests and notes scopes.';
 
   @override
   String get turnTokensSpentHint =>

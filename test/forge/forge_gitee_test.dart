@@ -7,7 +7,7 @@ import 'package:baocode/forge/forge_ref.dart';
 import 'package:baocode/models/secret_store.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'fake_forge_http.dart';
+import 'forge_test.dart' show FakeForgeHttp;
 
 void main() {
   group('Gitee links', () {

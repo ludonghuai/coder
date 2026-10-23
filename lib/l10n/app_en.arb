@@ -647,7 +647,9 @@
   "sidePanelFiles": "Files",
   "sidePanelTerminal": "Terminal",
   "sidePanelBrowser": "Browser",
-  "@sidePanelBrowser": {"description": "The side panel's browser page, there once the browser plugin is installed."},
+  "@sidePanelBrowser": {
+    "description": "The side panel's browser page, there once the browser plugin is installed."
+  },
   "browserNotConnected": "No browser is connected. Add BaoCode's extension to Chrome (or Edge, Brave, Arc) and agents can use the tabs you share with them.",
   "browserNoSharedTab": "No tab is shared yet. Ask an agent to open a page, or click BaoCode in the browser toolbar to share the tab in front.",
   "browserOtherApp": "Another BaoCode is connected to the browser.",
@@ -658,31 +660,56 @@
   "browserReconnect": "Reconnect",
   "browserShowInPanel": "Show in Side Panel",
   "browserWatchTitle": "Watching you in the browser",
-  "@browserWatchTitle": {"description": "The card in the conversation while an agent watches the user do something in their browser (browser_watch), recording it."},
+  "@browserWatchTitle": {
+    "description": "The card in the conversation while an agent watches the user do something in their browser (browser_watch), recording it."
+  },
   "browserWatchHint": "Do it in the BaoCode tab of your browser. When you're done, click Done here or the BaoCode button in the browser's toolbar.",
   "browserWatchSteps": "{count, plural, =0{Nothing recorded yet} =1{1 step recorded} other{{count} steps recorded}}",
-  "@browserWatchSteps": {"placeholders": {"count": {"type": "int"}}},
+  "@browserWatchSteps": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "browserWatchCancel": "Cancel",
   "browserWatchDone": "Done",
   "browserWatchedStep": "{kind, select, click{Clicked} input{Set} key{Pressed} submit{Submitted} navigate{Went to} closed{Closed the tab} other{Did}}",
   "@browserWatchedStep": {
     "description": "A step the user took while watched, by its kind; what it was on follows (an element, a URL).",
-    "placeholders": {"kind": {"type": "String"}}
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
   },
   "browserTraceReveal": "Show the trace in {app} (drop it into DevTools' Performance panel to look closer)",
   "@browserTraceReveal": {
     "description": "{app} is the system's file manager, as the system names it (Finder, File Explorer).",
-    "placeholders": {"app": {"type": "String", "example": "Finder"}}
+    "placeholders": {
+      "app": {
+        "type": "String",
+        "example": "Finder"
+      }
+    }
   },
   "browserStepDone": "{action, select, tabs{Listed tabs} open{Opened} navigate{Went to} back{Went back} forward{Went forward} reload{Reloaded} snapshot{Read the page} screenshot{Took a screenshot} click{Clicked} type{Typed} press{Pressed} scroll{Scrolled} evaluate{Ran} close{Closed the tab} console{Read the console} network{Listed requests} request{Read the request} performance{Profiled} recordStart{Started profiling} recordStop{Profiled} emulate{Emulated} watch{Watched you} act{Acted} inspect{Inspected} sources{Read the sources} breakpoints{Set breakpoints} debugger{Debugged} intercept{Intercepted requests} storage{Read site data} dialog{Answered the dialog} coverage{Measured coverage} memory{Measured memory} history{Read the debugging history} other{Used the browser}}",
   "@browserStepDone": {
     "description": "A browser step's verb once done, by the browser tool it called; what it did it on follows (a URL, an element's name).",
-    "placeholders": {"action": {"type": "String"}}
+    "placeholders": {
+      "action": {
+        "type": "String"
+      }
+    }
   },
   "browserStepRunning": "{action, select, tabs{Listing tabs} open{Opening} navigate{Going to} back{Going back} forward{Going forward} reload{Reloading} snapshot{Reading the page} screenshot{Taking a screenshot} click{Clicking} type{Typing} press{Pressing} scroll{Scrolling} evaluate{Running} close{Closing the tab} console{Reading the console} network{Listing requests} request{Reading the request} performance{Profiling} recordStart{Starting to profile} recordStop{Profiling} emulate{Emulating} watch{Watching you} act{Acting} inspect{Inspecting} sources{Reading the sources} breakpoints{Setting breakpoints} debugger{Debugging} intercept{Intercepting requests} storage{Reading site data} dialog{Answering the dialog} coverage{Measuring coverage} memory{Measuring memory} history{Reading the debugging history} other{Using the browser}}",
   "@browserStepRunning": {
     "description": "A browser step's verb while it runs (see browserStepDone).",
-    "placeholders": {"action": {"type": "String"}}
+    "placeholders": {
+      "action": {
+        "type": "String"
+      }
+    }
   },
   "sidePanelPlan": "Plan",
   "@sidePanelPlan": {
@@ -742,10 +769,6 @@
   "sidePanelSource": "Source",
   "@sidePanelSource": {
     "description": "Shows a markdown file's text."
-  },
-  "sidePanelEdit": "Edit",
-  "@sidePanelEdit": {
-    "description": "Shows a markdown file's text in the side panel, to edit."
   },
   "commandOpenDetails": "Open details",
   "@commandOpenDetails": {
@@ -2341,7 +2364,9 @@
   "@composerCopyToHostFailed": {
     "description": "Files of this computer put in a remote project's composer could not be copied to its host, for its agent to read.",
     "placeholders": {
-      "error": {"type": "String"}
+      "error": {
+        "type": "String"
+      }
     }
   },
   "explorerNewFile": "New File...",
@@ -2398,7 +2423,7 @@
     "description": "Claude Code core choice: Anthropic's Claude Code command-line program, run as a process."
   },
   "generalSettingsQueuedMessages": "Messages Sent While Working",
-  "generalSettingsQueuedMessagesDescription": "When a message sent while the agent is still working is taken up. Applies to messages sent after a change. Joining the task is Claude Code only for now.",
+  "generalSettingsQueuedMessagesDescription": "When a message sent while the agent is still working is taken up. Applies to messages sent after a change; Claude Code only for now.",
   "generalSettingsQueuedAfterTurn": "After the Current Task",
   "@generalSettingsQueuedAfterTurn": {
     "description": "Queued messages choice: each waits for the turn running to end, then they run one after another."
@@ -2846,27 +2871,6 @@
   "scmSynchronizingChanges": "Synchronizing Changes...",
   "scmFetch": "Fetch",
   "scmFetchFromAllRemotes": "Fetch From All Remotes",
-  "scmScanFailed": "Can't look for repositories here right now; trying again shortly.",
-  "@scmScanFailed": {
-    "description": "A warning when the project's subfolders could not be scanned for repositories; the panel would otherwise say there is none."
-  },
-  "scmFetchAndPullAll": "Fetch and Pull All Repositories",
-  "@scmFetchAndPullAll": {
-    "description": "The workspace menu's Fetch: fetches every repository and merges its upstream."
-  },
-  "scmFetchAndPull": "Fetch and pull remote commits",
-  "@scmFetchAndPull": {
-    "description": "The Get action's tooltip: it fetches the branch's upstream and merges it in."
-  },
-  "scmBehindCommits": "{count} remote commits to pull",
-  "@scmBehindCommits": {
-    "description": "The ↓N badge's tooltip in a repository's header: the commits its upstream has that it does not.",
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
   "scmPull": "Pull",
   "scmPush": "Push",
   "scmPullCommits": "Pull {count} commits from {upstream}",
@@ -4956,14 +4960,6 @@
   },
   "modelsSwitchDetail": "Claude Code restarts on the other upstream and resumes this conversation (--resume). Its history is sent to the new model as it is; some upstreams take it slower the first time. A reply still running stops when you send the next message.",
   "modelsSwitchConfirm": "Switch",
-  "modelsSwitchPending": "Switches to {model} when this turn ends",
-  "@modelsSwitchPending": {
-    "placeholders": {
-      "model": {
-        "type": "String"
-      }
-    }
-  },
   "modelsAuxiliary": "Auxiliary Model",
   "modelsAuxiliaryDescription": "Used for auxiliary work, such as generating conversation titles and commit messages. Automatic: the session's model (for commit messages, new sessions' default); an upstream's by its Haiku tier.",
   "modelsAuxiliaryAuto": "Automatic",
@@ -6358,9 +6354,21 @@
   "generalSettingsLiveTurnStats": "Live Speed and Time",
   "generalSettingsLiveTurnStatsDescription": "While the agent works, a line under the reply with how long the turn has taken, how fast the model writes and the tokens so far, changing as it goes. The figures under a finished turn always show.",
   "usageLimitScheduled": "Usage limit reached · continues automatically after it resets at {time}",
-  "@usageLimitScheduled": {"placeholders": {"time": {"type": "String"}}},
+  "@usageLimitScheduled": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
   "usageLimitTomorrow": "tomorrow {time}",
-  "@usageLimitTomorrow": {"placeholders": {"time": {"type": "String"}}},
+  "@usageLimitTomorrow": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
   "resumeAfterResetPrompt": "The usage limit has reset. Continue where you left off.",
   "resumeAfterLimitToggle": "Continue After Limit Reset",
   "stashPolishFailed": "Could not polish: {error}",
@@ -6705,15 +6713,14 @@
   "@branchBarWorkspace": {
     "description": "Tooltip and menu title of the branch picker under the chat input of a multi-folder workspace."
   },
-  "settingsSectionAccounts": "Accounts",
-  "settingsAccountsKeywords": "GitHub GitLab Gitee sign in login token issue pull request merge request",
-  "accountsDescription": "Sign in to GitHub, GitLab or Gitee to see the state of the issues and pull requests linked in Stash, import issues as stashes, and reply to them once you confirm.",
+  "settingsSectionAccounts": "Git Accounts",
+  "settingsAccountsKeywords": "GitHub GitLab sign in login token issue pull request merge request",
+  "accountsDescription": "Sign in to GitHub or GitLab to see the state of the issues and pull requests linked in Stash, import issues as stashes, and reply to them once you confirm.",
   "accountsSignedIn": "Signed in",
   "accountsAdd": "Add an account",
-  "accountsKeptLocally": "Tokens are kept in this computer's keychain and are sent only to the GitHub, GitLab or Gitee they are for. Nothing is posted without your confirmation.",
+  "accountsKeptLocally": "Tokens are kept in this computer's keychain and are sent only to the GitHub or GitLab they are for. Nothing is posted without your confirmation.",
   "accountsGitHubHosts": "github.com, or your company's GitHub Enterprise",
   "accountsGitLabHosts": "gitlab.com, or a self-managed GitLab",
-  "accountsGiteeHosts": "gitee.com",
   "accountsSignInBrowser": "Sign in with Browser",
   "accountsSignInToken": "Use a Token…",
   "accountsViaBrowser": "signed in with browser",
@@ -6759,7 +6766,6 @@
   "accountsToken": "Token",
   "accountsTokenGitHubScopes": "A classic token with the repo and read:user scopes, or a fine-grained token with read and write access to issues and pull requests.",
   "accountsTokenGitLabScopes": "A personal access token with the api scope.",
-  "accountsTokenGiteeScopes": "A personal access token with the user_info, projects, issues, pull_requests and notes scopes.",
   "accountsTokenCreate": "Create a Token on {host}",
   "@accountsTokenCreate": {
     "placeholders": {
@@ -6893,7 +6899,7 @@
   },
   "stashImportPaste": "Paste an issue or pull request link",
   "stashImportAdd": "Add",
-  "stashImportNotALink": "Not a GitHub, GitLab or Gitee issue or pull request link.",
+  "stashImportNotALink": "Not a GitHub or GitLab issue or pull request link.",
   "stashImportSignIn": "Sign in to {forge} in Settings → Accounts to list its issues.",
   "@stashImportSignIn": {
     "placeholders": {
@@ -6908,7 +6914,7 @@
   "stashImportAll": "All open",
   "stashImportSearch": "Search",
   "stashImportLoading": "Loading…",
-  "stashImportNoRepos": "No project has a GitHub, GitLab or Gitee remote. Paste an issue link above.",
+  "stashImportNoRepos": "No project has a GitHub or GitLab remote. Paste an issue link above.",
   "stashImportNone": "No open issues here.",
   "stashImportKnown": "in Stash #{id}",
   "@stashImportKnown": {
@@ -6942,7 +6948,7 @@
   "stashWelcomeAgentTitle": "Hand it to an agent",
   "stashWelcomeAgent": "Click Implement in BaoCode, or mention it in a conversation; the conversation and the stash stay linked.",
   "stashWelcomeTrackTitle": "See how it goes",
-  "stashWelcomeTrack": "Cards show their conversations live, and the GitHub, GitLab or Gitee issues and pull requests they link to stay in sync.",
+  "stashWelcomeTrack": "Cards show their conversations live, and the GitHub and GitLab issues and pull requests they link to stay in sync.",
   "stashWelcomeStart": "Get Started",
   "stashWelcomeNoteBody": "Text, screenshots and links all go in, and each one gets a number of its own, like an issue.",
   "stashWelcomeHotkeyTitle": "Set a shortcut to note things down",
@@ -6971,11 +6977,32 @@
   "browserSettingsSandboxed": "Snap and Flatpak browsers can't connect",
   "browserSettingsSandboxedDescription": "Their sandbox keeps BaoCode's helper from running. Install the browser from its own .deb or .rpm package instead, such as Google Chrome from google.com/chrome.",
   "browserSettingsConnected": "{browser} connected",
-  "@browserSettingsConnected": {"description": "A browser connected, by its name (Google Chrome, Microsoft Edge…).", "placeholders": {"browser": {"type": "String"}}},
+  "@browserSettingsConnected": {
+    "description": "A browser connected, by its name (Google Chrome, Microsoft Edge…).",
+    "placeholders": {
+      "browser": {
+        "type": "String"
+      }
+    }
+  },
   "browserSettingsIncompatible": "{browser}: extension version doesn't match",
-  "@browserSettingsIncompatible": {"description": "A browser connected whose extension BaoCode cannot use: one too old, or newer than the app.", "placeholders": {"browser": {"type": "String"}}},
+  "@browserSettingsIncompatible": {
+    "description": "A browser connected whose extension BaoCode cannot use: one too old, or newer than the app.",
+    "placeholders": {
+      "browser": {
+        "type": "String"
+      }
+    }
+  },
   "browserSettingsExtensionVersion": "Extension {version}",
-  "@browserSettingsExtensionVersion": {"description": "The version of BaoCode's extension in a connected browser.", "placeholders": {"version": {"type": "String"}}},
+  "@browserSettingsExtensionVersion": {
+    "description": "The version of BaoCode's extension in a connected browser.",
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
   "browserSettingsExtensionOld": "The extension is out of date. From the store, it updates automatically, or click Update in chrome://extensions; installed manually, download the zip again, replace the folder's contents and click reload.",
   "browserSettingsAppOld": "The extension is newer than this BaoCode. Update BaoCode.",
   "browserSettingsInstall": "Get the Extension",
@@ -6991,12 +7018,24 @@
   "browserHistoryDetailed": "Detailed history",
   "browserHistoryDetailedDescription": "Also keeps the request and response bodies, what you do (clicks and typing, never passwords) and every console message. Takes more space.",
   "browserHistorySize": "Using {size}",
-  "@browserHistorySize": {"placeholders": {"size": {"type": "String"}}},
+  "@browserHistorySize": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
   "browserHistoryClear": "Clear",
   "browserHistoryClearConfirm": "Clear the debugging history?",
   "browserHistoryClearDetail": "The pages, requests and console messages kept are deleted. This cannot be undone.",
   "browserHistoryTooLarge": "The browser's debugging history takes {size}",
-  "@browserHistoryTooLarge": {"placeholders": {"size": {"type": "String"}}},
+  "@browserHistoryTooLarge": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
   "browserHistoryTooLargeDetail": "Clear it, or look at it in Settings → Browser.",
   "browserHistoryOpenSettings": "Browser settings",
   "browserWelcomeTitle": "Agents can use your browser now",
@@ -7011,7 +7050,14 @@
   "browserWelcomeInstall": "For Chrome, Edge, Brave and Arc. It connects by itself, and this turns green.",
   "browserWelcomeTurnedOff": "The browser is turned off in Settings → Browser.",
   "browserWelcomeConnected": "{browser} is connected",
-  "@browserWelcomeConnected": {"description": "The welcome's step once a browser connected, by its name.", "placeholders": {"browser": {"type": "String"}}},
+  "@browserWelcomeConnected": {
+    "description": "The welcome's step once a browser connected, by its name.",
+    "placeholders": {
+      "browser": {
+        "type": "String"
+      }
+    }
+  },
   "browserWelcomeTry": "Try telling an agent: “Open baocode.dev and look at the download page.”",
   "browserWelcomeUnpacked": "Developer Mode Zip",
   "browserWelcomeDone": "Got It",
@@ -7058,12 +7104,30 @@
   "sshSettingsConnect": "Connect",
   "sshSettingsDisconnect": "Disconnect",
   "sshSettingsDisconnectTitle": "Disconnect from {host}?",
-  "@sshSettingsDisconnectTitle": {"placeholders": {"host": {"type": "String"}}},
+  "@sshSettingsDisconnectTitle": {
+    "placeholders": {
+      "host": {
+        "type": "String"
+      }
+    }
+  },
   "sshSettingsDisconnectDetail": "The conversations and terminals running there end.",
   "sshSettingsCore": "Core: {core}",
-  "@sshSettingsCore": {"placeholders": {"core": {"type": "String"}}},
+  "@sshSettingsCore": {
+    "placeholders": {
+      "core": {
+        "type": "String"
+      }
+    }
+  },
   "sshSettingsVia": "through {host}",
-  "@sshSettingsVia": {"placeholders": {"host": {"type": "String"}}},
+  "@sshSettingsVia": {
+    "placeholders": {
+      "host": {
+        "type": "String"
+      }
+    }
+  },
   "sshSettingsTyped": "As typed",
   "sshSettingsConfigHosts": "Hosts of ~/.ssh/config",
   "sshSettingsConfigHostsDescription": "Changed in that file; their core is Automatic.",
@@ -7158,21 +7222,48 @@
   "channelSetupUnavailable": "The channel this installer came from doesn't have accounts set up yet. If you downloaded it through another channel, confirm where you came from in your browser; otherwise contact whoever gave you the installer, or download the standard edition from baocode.dev.",
   "channelSetupConfirmAgain": "Confirm in Browser",
   "channelWelcomeTitle": "Welcome to {channel}",
-  "@channelWelcomeTitle": {"description": "A channel's welcome's title when its channels.json entry has none, by its name.", "placeholders": {"channel": {"type": "String"}}},
+  "@channelWelcomeTitle": {
+    "description": "A channel's welcome's title when its channels.json entry has none, by its name.",
+    "placeholders": {
+      "channel": {
+        "type": "String"
+      }
+    }
+  },
   "channelWelcomeText": "Sign in to your {channel} account to get started.",
-  "@channelWelcomeText": {"description": "A channel's welcome's text when its entry has none.", "placeholders": {"channel": {"type": "String"}}},
+  "@channelWelcomeText": {
+    "description": "A channel's welcome's text when its entry has none.",
+    "placeholders": {
+      "channel": {
+        "type": "String"
+      }
+    }
+  },
   "channelWelcomeSignIn": "Sign In",
   "channelWelcomeSigningIn": "Sign in in the window that opened…",
   "channelWelcomePreparing": "Getting ready…",
   "channelWelcomeFailed": "Couldn't finish signing in: {error}",
-  "@channelWelcomeFailed": {"description": "Signing in to the channel's account site failed; the site's or the network's error.", "placeholders": {"error": {"type": "String"}}},
+  "@channelWelcomeFailed": {
+    "description": "Signing in to the channel's account site failed; the site's or the network's error.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "channelAccountTitle": "Account",
   "channelAccountBalance": "Balance",
   "channelAccountRefresh": "Refresh",
   "channelAccountSignOut": "Sign Out",
   "channelAccountSignOutTitle": "Sign out?",
   "channelAccountSignOutDetail": "You'll need to sign in to {channel} again to keep using BaoCode.",
-  "@channelAccountSignOutDetail": {"placeholders": {"channel": {"type": "String"}}},
+  "@channelAccountSignOutDetail": {
+    "placeholders": {
+      "channel": {
+        "type": "String"
+      }
+    }
+  },
   "channelAccountOpenSite": "Open Website",
   "channelAccountDefaultModel": "Default model for new chats",
   "channelAccountNoModels": "The key in use doesn't reach any models.",
@@ -7186,21 +7277,233 @@
   "channelAccountSignedOut": "You're not signed in.",
   "channelAccountUnavailable": "This channel isn't available. Contact whoever gave you the installer.",
   "channelAccountFailed": "Something went wrong: {error}",
-  "@channelAccountFailed": {"placeholders": {"error": {"type": "String"}}},
+  "@channelAccountFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "channelAccountBlocked": "{site} refused this computer's connection ({request}); its firewall may be blocking the IP of your network or proxy. Try another network, or reach {site} without the proxy.",
-  "@channelAccountBlocked": {"description": "The channel's account site's firewall (e.g. Cloudflare) refused the app's requests; not a sign-out.", "placeholders": {"site": {"type": "String"}, "request": {"type": "String", "example": "POST /api/v1/auth/refresh"}}},
+  "@channelAccountBlocked": {
+    "description": "The channel's account site's firewall (e.g. Cloudflare) refused the app's requests; not a sign-out.",
+    "placeholders": {
+      "site": {
+        "type": "String"
+      },
+      "request": {
+        "type": "String",
+        "example": "POST /api/v1/auth/refresh"
+      }
+    }
+  },
   "settingsSectionAbout": "About",
   "aboutTagline": "An awesome, easy-to-use desktop UI for Claude Code, with a millisecond-fast IDE built in.",
   "aboutVersion": "Version {version} ({build})",
-  "@aboutVersion": {"placeholders": {"version": {"type": "String"}, "build": {"type": "int"}}},
+  "@aboutVersion": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      },
+      "build": {
+        "type": "int"
+      }
+    }
+  },
   "aboutRepository": "{repository} · free and open source, under the GPL-3.0",
-  "@aboutRepository": {"placeholders": {"repository": {"type": "String"}}},
+  "@aboutRepository": {
+    "placeholders": {
+      "repository": {
+        "type": "String"
+      }
+    }
+  },
   "aboutWebsite": "Website",
   "aboutChangelog": "Changelog",
   "aboutChangelogDetail": "What each version changed",
   "aboutFeedback": "Report an Issue",
   "aboutFeedbackDetail": "Open an issue on GitHub, or see those others opened",
-  "aboutOpen": "Open",
+  "aboutOpen": "Open",
+  "stashSettingsIssueSync": "Issues as stashes",
+  "stashSettingsIssueSyncDescription": "A project that is a Git repository on GitHub or GitLab (signed in under Accounts): its open issues are stashes, each once, kept in step both ways. A stash deleted, or unlinked from its issue, does not come back.",
+  "stashIssueSyncMine": "Only those assigned to or opened by me",
+  "stashIssueSyncOff": "Off: imported or published ones only",
+  "stashIssueLocal": "Local only",
+  "stashIssueAllow": "Allow publishing as an issue",
+  "stashIssueNotPublished": "Not an issue yet",
+  "stashIssuePublishTo": "Publish as an issue of {repo}…",
+  "@stashIssuePublishTo": {
+    "placeholders": {
+      "repo": {
+        "type": "String"
+      }
+    }
+  },
+  "stashIssueKeepLocal": "Keep it local",
+  "stashIssuePush": "Push changes to the issue…",
+  "stashIssuePushShort": "Push",
+  "stashIssueTakeRemote": "Discard local changes, use the issue's",
+  "stashIssueUnlinkOwn": "Unlink, keep it local",
+  "stashIssueConflict": "{tag} was changed on the forge too. Which version to keep?",
+  "@stashIssueConflict": {
+    "placeholders": {
+      "tag": {
+        "type": "String"
+      }
+    }
+  },
+  "stashIssueKeepMine": "Keep mine (push)",
+  "stashIssueKeepTheirs": "Use the issue's",
+  "stashIssueChangedHere": "Changes here are not on {tag} yet.",
+  "@stashIssueChangedHere": {
+    "placeholders": {
+      "tag": {
+        "type": "String"
+      }
+    }
+  },
+  "stashIssueDiscard": "Discard",
+  "stashIssuePublishTitle": "Publish as an issue of {repo}",
+  "@stashIssuePublishTitle": {
+    "placeholders": {
+      "repo": {
+        "type": "String"
+      }
+    }
+  },
+  "stashIssuePushTitle": "Push changes to {tag}",
+  "@stashIssuePushTitle": {
+    "placeholders": {
+      "tag": {
+        "type": "String"
+      }
+    }
+  },
+  "stashIssuePublish": "Publish",
+  "stashIssueNoText": "(no description)",
+  "stashIssuePicturesGitHub": "{count, plural, =1{1 picture is uploaded to the repository's {branch} branch, for the issue to show it.} other{{count} pictures are uploaded to the repository's {branch} branch, for the issue to show them.}}",
+  "@stashIssuePicturesGitHub": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "branch": {
+        "type": "String"
+      }
+    }
+  },
+  "stashIssuePicturesGitLab": "{count, plural, =1{1 picture is uploaded to the project, for the issue to show it.} other{{count} pictures are uploaded to the project, for the issue to show them.}}",
+  "@stashIssuePicturesGitLab": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "stashImplementShort": "Implement",
+  "stashImplementIssue": "It is issue {issue}: the pull request should say it fixes it.",
+  "@stashImplementIssue": {
+    "placeholders": {
+      "issue": {
+        "type": "String"
+      }
+    }
+  },
+  "stashIssueSyncAll": "All open issues",
+  "stashIssueChecking": "Looking for its repository…",
+  "stashIssueRefresh": "Refresh now",
+  "stashIssuePublishButton": "Publish as Issue",
+  "stashIssuePushButton": "Push to Issue",
+  "stashIssueLoading": "Loading…",
+  "stashSyncing": "Syncing issues…",
+  "stashSyncingRepo": "Syncing the issues of {repo} ({index}/{total})…",
+  "@stashSyncingRepo": {
+    "placeholders": {
+      "repo": {
+        "type": "String"
+      },
+      "index": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "stashSyncTooltip": "Sync issues now",
+  "stashSyncTooltipLast": "Sync issues now · last at {time}",
+  "@stashSyncTooltipLast": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "stashSyncFailed": "Could not sync the issues of {repo}: {error}",
+  "@stashSyncFailed": {
+    "placeholders": {
+      "repo": {
+        "type": "String"
+      },
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "stashSyncSignIn": "{count, plural, =1{Sign in to {forge} for the issues of {repo} to be stashes.} other{Sign in to {forge} for the issues of {repo} and {count} more repositories to be stashes.}}",
+  "@stashSyncSignIn": {
+    "placeholders": {
+      "forge": {
+        "type": "String"
+      },
+      "repo": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "stashSyncingEmpty": "Syncing the projects' issues…",
+  "stashFilterAnyIssue": "Any source",
+  "stashFilterIssue": "Issues",
+  "stashFilterNotIssue": "Local only",
+  "stashImplementEmpty": "Write something first, then implement it in BaoCode",
+  "sidePanelEdit": "Edit",
+  "@sidePanelEdit": {
+    "description": "Shows a markdown file's text in the side panel, to edit."
+  },
+  "scmScanFailed": "Can't look for repositories here right now; trying again shortly.",
+  "@scmScanFailed": {
+    "description": "A warning when the project's subfolders could not be scanned for repositories; the panel would otherwise say there is none."
+  },
+  "scmFetchAndPullAll": "Fetch and Pull All Repositories",
+  "@scmFetchAndPullAll": {
+    "description": "The workspace menu's Fetch: fetches every repository and merges its upstream."
+  },
+  "scmFetchAndPull": "Fetch and pull remote commits",
+  "@scmFetchAndPull": {
+    "description": "The Get action's tooltip: it fetches the branch's upstream and merges it in."
+  },
+  "scmBehindCommits": "{count} remote commits to pull",
+  "@scmBehindCommits": {
+    "description": "The ↓N badge's tooltip in a repository's header: the commits its upstream has that it does not.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "modelsSwitchPending": "Switches to {model} when this turn ends",
+  "@modelsSwitchPending": {
+    "placeholders": {
+      "model": {
+        "type": "String"
+      }
+    }
+  },
+  "accountsGiteeHosts": "gitee.com",
+  "accountsTokenGiteeScopes": "A personal access token with the user_info, projects, issues, pull_requests and notes scopes.",
   "turnTokensSpentHint": "This turn: input and output tokens together",
   "usageSessionTotal": "Session total",
   "generalSettingsEditorContext": "Editor Context",
@@ -7256,12 +7559,20 @@
   "gitPeriodMinutes": "{minutes} min",
   "@gitPeriodMinutes": {
     "description": "The fetch period's choice in Settings: how many minutes.",
-    "placeholders": {"minutes": {"type": "String"}}
+    "placeholders": {
+      "minutes": {
+        "type": "String"
+      }
+    }
   },
   "gitLastFetched": "Last fetched: {time}",
   "@gitLastFetched": {
     "description": "In the branch's tooltip: when the remote's commits last came in.",
-    "placeholders": {"time": {"type": "String"}}
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
   },
   "gitAutoFetchDirty": "Not pulled: there are uncommitted changes",
   "@gitAutoFetchDirty": {
@@ -7279,14 +7590,22 @@
   "@gitAutoFetchBuffered": {
     "description": "The automatic fetch's notification and tooltip: files the remote changed have unsaved changes in the editor.",
     "placeholders": {
-      "repository": {"type": "String"},
-      "files": {"type": "String"}
+      "repository": {
+        "type": "String"
+      },
+      "files": {
+        "type": "String"
+      }
     }
   },
   "gitAutoFetchFilesMore": "{files} and more",
   "@gitAutoFetchFilesMore": {
     "description": "After the first three files an issue names: there are more.",
-    "placeholders": {"files": {"type": "String"}}
+    "placeholders": {
+      "files": {
+        "type": "String"
+      }
+    }
   },
   "gitAutoFetchNetwork": "The network is not available: retrying automatically",
   "@gitAutoFetchNetwork": {
@@ -7299,62 +7618,140 @@
   "gitAutoFetchAuth": "{repository}: sign-in is needed to fetch",
   "@gitAutoFetchAuth": {
     "description": "The automatic fetch's notification: Git wants a sign-in the app cannot give.",
-    "placeholders": {"repository": {"type": "String"}}
+    "placeholders": {
+      "repository": {
+        "type": "String"
+      }
+    }
   },
   "gitAutoFetchConflict": "{repository}: cannot be pulled without your attention",
   "@gitAutoFetchConflict": {
     "description": "The automatic fetch's notification: Git refused to fast-forward, for the user to look at.",
-    "placeholders": {"repository": {"type": "String"}}
+    "placeholders": {
+      "repository": {
+        "type": "String"
+      }
+    }
   },
   "gitAutoFetchOther": "{repository}: the automatic fetch failed",
   "@gitAutoFetchOther": {
     "description": "The automatic fetch's tooltip for a failure that is not one of the known kinds.",
-    "placeholders": {"repository": {"type": "String"}}
+    "placeholders": {
+      "repository": {
+        "type": "String"
+      }
+    }
   },
   "renameTitleRequired": "A title is required",
-  "@renameTitleRequired": {"description": "The title field's hint when the title is empty."},
+  "@renameTitleRequired": {
+    "description": "The title field's hint when the title is empty."
+  },
   "renameTitleTooLong": "A title is at most 80 characters",
-  "@renameTitleTooLong": {"description": "The title field's hint when the title is over 80 characters."},
+  "@renameTitleTooLong": {
+    "description": "The title field's hint when the title is over 80 characters."
+  },
   "revertFromTurn": "Revert files from this turn…",
-  "@revertFromTurn": {"description": "The user message's context menu: reverts every file the turn and the ones after it changed."},
+  "@revertFromTurn": {
+    "description": "The user message's context menu: reverts every file the turn and the ones after it changed."
+  },
   "revertTitle": "Revert files from this turn?",
-  "@revertTitle": {"description": "The confirmation's title before a turn's files are reverted."},
+  "@revertTitle": {
+    "description": "The confirmation's title before a turn's files are reverted."
+  },
   "revertWarning": "Changes made after this turn will be lost.",
-  "@revertWarning": {"description": "The confirmation's warning: changes made after the turn are lost."},
+  "@revertWarning": {
+    "description": "The confirmation's warning: changes made after the turn are lost."
+  },
   "revertConfirm": "Revert",
-  "@revertConfirm": {"description": "The confirmation's button: it carries the revert out."},
+  "@revertConfirm": {
+    "description": "The confirmation's button: it carries the revert out."
+  },
   "revertDone": "Revert complete",
-  "@revertDone": {"description": "The result's title once the revert is done."},
+  "@revertDone": {
+    "description": "The result's title once the revert is done."
+  },
   "revertFileCount": "{count, plural, =0{No files} =1{1 file} other{{count} files}}",
-  "@revertFileCount": {"description": "The confirmation's count of the files the revert brings back.", "placeholders": {"count": {"type": "int"}}},
+  "@revertFileCount": {
+    "description": "The confirmation's count of the files the revert brings back.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "revertGroupRestored": "Restored",
-  "@revertGroupRestored": {"description": "The result's group of the files the revert brought back."},
+  "@revertGroupRestored": {
+    "description": "The result's group of the files the revert brought back."
+  },
   "revertGroupSkipped": "Skipped",
-  "@revertGroupSkipped": {"description": "The result's group of the files left as they are, having changed after the turn."},
+  "@revertGroupSkipped": {
+    "description": "The result's group of the files left as they are, having changed after the turn."
+  },
   "revertUnrevertable": "Cannot be reverted",
-  "@revertUnrevertable": {"description": "The result's group of the files the kernel cannot revert."},
+  "@revertUnrevertable": {
+    "description": "The result's group of the files the kernel cannot revert."
+  },
   "revertGroupFailed": "Failed",
-  "@revertGroupFailed": {"description": "The result's group of the files the revert could not write."},
+  "@revertGroupFailed": {
+    "description": "The result's group of the files the revert could not write."
+  },
   "revertReasonChanged": "Changed after the turn",
-  "@revertReasonChanged": {"description": "Why a file was skipped: it changed after the turn."},
+  "@revertReasonChanged": {
+    "description": "Why a file was skipped: it changed after the turn."
+  },
   "revertReasonOversize": "Too large to revert",
-  "@revertReasonOversize": {"description": "Why a file cannot be reverted: it is too large for a copy to be kept."},
+  "@revertReasonOversize": {
+    "description": "Why a file cannot be reverted: it is too large for a copy to be kept."
+  },
   "revertReasonEvicted": "No longer kept",
-  "@revertReasonEvicted": {"description": "Why a file cannot be reverted: its copy is no longer kept, the undo history having dropped it."},
+  "@revertReasonEvicted": {
+    "description": "Why a file cannot be reverted: its copy is no longer kept, the undo history having dropped it."
+  },
   "revertReasonAfterUnknown": "Cannot tell if it changed",
-  "@revertReasonAfterUnknown": {"description": "Why a file cannot be reverted: the state it was left in is unknown, so whether it changed cannot be told."},
+  "@revertReasonAfterUnknown": {
+    "description": "Why a file cannot be reverted: the state it was left in is unknown, so whether it changed cannot be told."
+  },
   "revertSummaryRestored": "{count, plural, =0{Reverted no files} =1{Reverted 1 file} other{Reverted {count} files}}",
-  "@revertSummaryRestored": {"description": "The conversation's notice: how many files the revert brought back.", "placeholders": {"count": {"type": "int"}}},
+  "@revertSummaryRestored": {
+    "description": "The conversation's notice: how many files the revert brought back.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "revertSummarySkipped": "{count, plural, =0{Skipped no files} =1{Skipped 1 file} other{Skipped {count} files}}",
-  "@revertSummarySkipped": {"description": "The conversation's notice: how many files were skipped.", "placeholders": {"count": {"type": "int"}}},
+  "@revertSummarySkipped": {
+    "description": "The conversation's notice: how many files were skipped.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "revertSummaryUnrevertable": "{count, plural, =0{No files are unrevertable} =1{1 file cannot be reverted} other{{count} files cannot be reverted}}",
-  "@revertSummaryUnrevertable": {"description": "The conversation's notice: how many files cannot be reverted.", "placeholders": {"count": {"type": "int"}}},
+  "@revertSummaryUnrevertable": {
+    "description": "The conversation's notice: how many files cannot be reverted.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "revertNothingToRevert": "Nothing to revert.",
-  "@revertNothingToRevert": {"description": "Said when the turn has no changes to revert."},
+  "@revertNothingToRevert": {
+    "description": "Said when the turn has no changes to revert."
+  },
   "revertTurnInFlight": "Unavailable while a turn is running",
-  "@revertTurnInFlight": {"description": "The tooltip of a revert entry while a turn runs: the revert has to wait."},
+  "@revertTurnInFlight": {
+    "description": "The tooltip of a revert entry while a turn runs: the revert has to wait."
+  },
   "rewindNotInThisRun": "This message cannot be edited — only messages sent in this run can be.",
-  "@rewindNotInThisRun": {"description": "Said when a message cannot be edited: only messages sent in this run can be."},
+  "@rewindNotInThisRun": {
+    "description": "Said when a message cannot be edited: only messages sent in this run can be."
+  },
   "rewindTurnInFlight": "Cannot edit while a turn is running",
-  "@rewindTurnInFlight": {"description": "Said when a message cannot be edited while a turn runs."}
+  "@rewindTurnInFlight": {
+    "description": "Said when a message cannot be edited while a turn runs."
+  }
 }

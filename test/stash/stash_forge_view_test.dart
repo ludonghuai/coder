@@ -12,7 +12,7 @@ import 'package:baocode/workspace/workspace.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import '../forge/fake_forge_http.dart';
+import '../forge/forge_test.dart' show FakeForgeHttp;
 
 const issueUrl = 'https://github.com/o/r/issues/3';
 const pullUrl = 'https://github.com/o/r/pull/7';

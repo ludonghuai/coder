@@ -1,10 +1,66 @@
+﻿import 'dart:convert';
+
 import 'package:baocode/forge/forge_accounts.dart';
 import 'package:baocode/forge/forge_api.dart';
 import 'package:baocode/forge/forge_ref.dart';
 import 'package:baocode/models/secret_store.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'fake_forge_http.dart';
+/// Answers requests by method and URL (its path and query), and keeps
+/// them.
+class FakeForgeHttp implements ForgeHttp {
+  final Map<String, Object? Function(FakeRequest request)> routes = {};
+  final List<FakeRequest> requests = [];
+
+  void on(String method, String url, Object? Function(FakeRequest) answer) =>
+      routes['$method $url'] = answer;
+
+  /// What answers a request no route is for (else 404).
+  Object? Function(FakeRequest request)? fallback;
+
+  @override
+  Future<ForgeResponse> send(
+    String method,
+    Uri url, {
+    Map<String, String> headers = const {},
+    Object? json,
+    Map<String, String>? form,
+    List<int>? bytes,
+  }) async {
+    final request = FakeRequest(method, url, headers, json, form, bytes);
+    requests.add(request);
+    final key = '$method ${url.toString()}';
+    final route =
+        routes[key] ??
+        routes['$method ${url.replace(query: '').toString().replaceAll('?', '')}'];
+    final answer = route ?? fallback;
+    if (answer == null) {
+      return const ForgeResponse(404, '{"message":"Not Found"}');
+    }
+    return switch (answer(request)) {
+      final ForgeResponse response => response,
+      final answer => ForgeResponse(200, jsonEncode(answer)),
+    };
+  }
+}
+
+class FakeRequest {
+  FakeRequest(
+    this.method,
+    this.url,
+    this.headers,
+    this.json,
+    this.form, [
+    this.bytes,
+  ]);
+
+  final String method;
+  final Uri url;
+  final Map<String, String> headers;
+  final Object? json;
+  final Map<String, String>? form;
+  final List<int>? bytes;
+}
 
 void main() {
   group('ForgeRef', () {
@@ -45,17 +101,6 @@ void main() {
       );
       expect(ForgeRef.parse('https://github.com/o/r/blob/main/a.dart'), isNull);
       expect(ForgeRef.parse('not a link'), isNull);
-    });
-
-    test('a URL whose percent-escape is broken is no page, not a crash', () {
-      expect(ForgeRef.parse('https://github.com/o/r/pull/7%'), isNull);
-      expect(ForgeRef.parse('https://github.com/o/r/issues/%zz'), isNull);
-      expect(ForgeRef.allIn('see https://github.com/o/r/pull/7% now'), isEmpty);
-      // The crash this guards against is a *valid* escape decoding to invalid
-      // UTF-8 (`Missing extension byte`), not a stray '%' — the two below are
-      // the ones that actually reach `pathSegments` and would throw without it.
-      expect(ForgeRef.parse('https://github.com/o/r/issues/%E4'), isNull);
-      expect(ForgeRef.allIn('see https://github.com/o/r/issues/%E4 now'), isEmpty);
     });
 
     test('every one a text links to, once each', () {

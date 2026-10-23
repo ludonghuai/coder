@@ -1622,9 +1622,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get sidePanelSource => '源码';
 
   @override
-  String get sidePanelEdit => '编辑';
-
-  @override
   String get commandOpenDetails => '查看详情';
 
   @override
@@ -3411,7 +3408,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get generalSettingsQueuedMessagesDescription =>
-      'Agent 还在工作时发出的消息何时被处理。更改对之后发送的消息生效；「插入当前任务」目前仅支持 Claude Code。';
+      'Agent 还在工作时发出的消息何时被处理。更改对之后发送的消息生效；目前仅支持 Claude Code。';
 
   @override
   String get generalSettingsQueuedAfterTurn => '当前任务完成后依次执行';
@@ -3961,20 +3958,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get scmFetchFromAllRemotes => '从所有远程获取';
-
-  @override
-  String get scmScanFailed => '暂时无法扫描这里的仓库，稍后自动重试。';
-
-  @override
-  String get scmFetchAndPullAll => '获取并拉取所有仓库';
-
-  @override
-  String get scmFetchAndPull => '获取并拉取远端提交';
-
-  @override
-  String scmBehindCommits(int count) {
-    return '$count 个远端提交待拉取';
-  }
 
   @override
   String get scmPull => '拉取';
@@ -6604,11 +6587,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get modelsSwitchConfirm => '切换';
 
   @override
-  String modelsSwitchPending(String model) {
-    return '回合结束后切换到 $model';
-  }
-
-  @override
   String get modelsAuxiliary => '辅助模型';
 
   @override
@@ -8819,15 +8797,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get branchBarWorkspace => '各文件夹的分支';
 
   @override
-  String get settingsSectionAccounts => '账号';
+  String get settingsSectionAccounts => 'Git 账号';
 
   @override
   String get settingsAccountsKeywords =>
-      'GitHub GitLab Gitee 登录 令牌 token issue PR 合并请求';
+      'GitHub GitLab 登录 令牌 token issue PR 合并请求';
 
   @override
   String get accountsDescription =>
-      '登录 GitHub、GitLab 或 Gitee 后，Stash 中链接的 issue 和 PR 会显示最新状态，可以把 issue 导入为 Stash，并在你确认后回帖。';
+      '登录 GitHub 或 GitLab 后，Stash 中链接的 issue 和 PR 会显示最新状态，可以把 issue 导入为 Stash，并在你确认后回帖。';
 
   @override
   String get accountsSignedIn => '已登录';
@@ -8837,16 +8815,13 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get accountsKeptLocally =>
-      '令牌只保存在本机钥匙串里，只会发给对应的 GitHub、GitLab 或 Gitee。未经你确认，不会发布任何内容。';
+      '令牌只保存在本机钥匙串里，只会发给对应的 GitHub 或 GitLab。未经你确认，不会发布任何内容。';
 
   @override
   String get accountsGitHubHosts => 'github.com，或公司的 GitHub Enterprise';
 
   @override
   String get accountsGitLabHosts => 'gitlab.com，或自建的 GitLab';
-
-  @override
-  String get accountsGiteeHosts => 'gitee.com';
 
   @override
   String get accountsSignInBrowser => '在浏览器中登录';
@@ -8898,10 +8873,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get accountsTokenGitLabScopes => '需要勾选 api 范围的个人访问令牌。';
-
-  @override
-  String get accountsTokenGiteeScopes =>
-      '需要勾选 user_info、projects、issues、pull_requests、notes 范围的个人访问令牌。';
 
   @override
   String accountsTokenCreate(String host) {
@@ -9066,7 +9037,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get stashImportAdd => '添加';
 
   @override
-  String get stashImportNotALink => '不是 GitHub、GitLab 或 Gitee 的 issue / PR 链接。';
+  String get stashImportNotALink => '不是 GitHub 或 GitLab 的 issue / PR 链接。';
 
   @override
   String stashImportSignIn(String forge) {
@@ -9093,7 +9064,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get stashImportNoRepos =>
-      '没有项目的 Git 远程在 GitHub、GitLab 或 Gitee 上，可以在上面粘贴 issue 链接。';
+      '没有项目的 Git 远程在 GitHub 或 GitLab 上，可以在上面粘贴 issue 链接。';
 
   @override
   String get stashImportNone => '这里没有打开的 issue。';
@@ -9139,7 +9110,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get stashWelcomeTrack =>
-      '卡片上实时显示对话状态，链接的 GitHub、GitLab 或 Gitee issue 和 PR 也会同步状态。';
+      '卡片上实时显示对话状态，链接的 GitHub、GitLab issue 和 PR 也会同步状态。';
 
   @override
   String get stashWelcomeStart => '开始使用';
@@ -9845,6 +9816,195 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get aboutOpen => '打开';
+
+  @override
+  String get stashSettingsIssueSync => 'Issue 同步为 Stash';
+
+  @override
+  String get stashSettingsIssueSyncDescription =>
+      '项目是 GitHub / GitLab 上的 Git 仓库（并已在「账号」中登录）时，它的未关闭 issue 会成为 Stash，一个 issue 只对应一条，双向保持一致。删除或取消关联的不会再被拉回来。';
+
+  @override
+  String get stashIssueSyncMine => '只同步指派给我或我创建的';
+
+  @override
+  String get stashIssueSyncOff => '关闭：只保留手动导入或发布的';
+
+  @override
+  String get stashIssueLocal => '仅本地';
+
+  @override
+  String get stashIssueAllow => '允许发布为 issue';
+
+  @override
+  String get stashIssueNotPublished => '尚未发布为 issue';
+
+  @override
+  String stashIssuePublishTo(String repo) {
+    return '发布为 $repo 的 issue…';
+  }
+
+  @override
+  String get stashIssueKeepLocal => '仅本地保存';
+
+  @override
+  String get stashIssuePush => '把本地改动推送到 issue…';
+
+  @override
+  String get stashIssuePushShort => '推送';
+
+  @override
+  String get stashIssueTakeRemote => '放弃本地改动，用 issue 上的版本';
+
+  @override
+  String get stashIssueUnlinkOwn => '取消关联，仅本地保存';
+
+  @override
+  String stashIssueConflict(String tag) {
+    return '$tag 在远端也被改过了，保留哪一边？';
+  }
+
+  @override
+  String get stashIssueKeepMine => '保留本地（推送）';
+
+  @override
+  String get stashIssueKeepTheirs => '用 issue 的';
+
+  @override
+  String stashIssueChangedHere(String tag) {
+    return '本地改动还没同步到 $tag。';
+  }
+
+  @override
+  String get stashIssueDiscard => '放弃改动';
+
+  @override
+  String stashIssuePublishTitle(String repo) {
+    return '发布为 $repo 的 issue';
+  }
+
+  @override
+  String stashIssuePushTitle(String tag) {
+    return '把改动推送到 $tag';
+  }
+
+  @override
+  String get stashIssuePublish => '发布';
+
+  @override
+  String get stashIssueNoText => '（没有描述）';
+
+  @override
+  String stashIssuePicturesGitHub(int count, String branch) {
+    return '$count 张图片会上传到仓库的 $branch 分支，供 issue 显示。';
+  }
+
+  @override
+  String stashIssuePicturesGitLab(int count) {
+    return '$count 张图片会上传到项目，供 issue 显示。';
+  }
+
+  @override
+  String get stashImplementShort => '实施';
+
+  @override
+  String stashImplementIssue(String issue) {
+    return '它对应 issue $issue，提 PR 时写明修复了它。';
+  }
+
+  @override
+  String get stashIssueSyncAll => '全部打开的 issue';
+
+  @override
+  String get stashIssueChecking => '正在查找仓库…';
+
+  @override
+  String get stashIssueRefresh => '立即刷新';
+
+  @override
+  String get stashIssuePublishButton => '发布为 issue';
+
+  @override
+  String get stashIssuePushButton => '推送到 issue';
+
+  @override
+  String get stashIssueLoading => '正在获取…';
+
+  @override
+  String get stashSyncing => '正在同步 issue…';
+
+  @override
+  String stashSyncingRepo(String repo, int index, int total) {
+    return '正在同步 $repo 的 issue（$index/$total）…';
+  }
+
+  @override
+  String get stashSyncTooltip => '立即同步 issue';
+
+  @override
+  String stashSyncTooltipLast(String time) {
+    return '立即同步 issue · 上次 $time';
+  }
+
+  @override
+  String stashSyncFailed(String repo, String error) {
+    return '同步 $repo 的 issue 失败：$error';
+  }
+
+  @override
+  String stashSyncSignIn(String forge, String repo, int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '登录 $forge 后，$repo 等 $count 个仓库的 issue 会同步为 Stash。',
+      one: '登录 $forge 后，$repo 的 issue 会同步为 Stash。',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get stashSyncingEmpty => '正在同步项目的 issue…';
+
+  @override
+  String get stashFilterAnyIssue => '所有来源';
+
+  @override
+  String get stashFilterIssue => '来自 issue';
+
+  @override
+  String get stashFilterNotIssue => '仅本地';
+
+  @override
+  String get stashImplementEmpty => '先写点内容，再在 BaoCode 中实施';
+
+  @override
+  String get sidePanelEdit => '编辑';
+
+  @override
+  String get scmScanFailed => '暂时无法扫描这里的仓库，稍后自动重试。';
+
+  @override
+  String get scmFetchAndPullAll => '获取并拉取所有仓库';
+
+  @override
+  String get scmFetchAndPull => '获取并拉取远端提交';
+
+  @override
+  String scmBehindCommits(int count) {
+    return '$count 个远端提交待拉取';
+  }
+
+  @override
+  String modelsSwitchPending(String model) {
+    return '回合结束后切换到 $model';
+  }
+
+  @override
+  String get accountsGiteeHosts => 'gitee.com';
+
+  @override
+  String get accountsTokenGiteeScopes =>
+      '需要勾选 user_info、projects、issues、pull_requests、notes 范围的个人访问令牌。';
 
   @override
   String get turnTokensSpentHint => '本轮：输入与输出合计';

@@ -3068,12 +3068,6 @@ abstract class AppLocalizations {
   /// **'Source'**
   String get sidePanelSource;
 
-  /// Shows a markdown file's text in the side panel, to edit.
-  ///
-  /// In en, this message translates to:
-  /// **'Edit'**
-  String get sidePanelEdit;
-
   /// Under a /command's description: opens its file (a skill's SKILL.md, a command's markdown) in the side panel.
   ///
   /// In en, this message translates to:
@@ -6005,7 +5999,7 @@ abstract class AppLocalizations {
   /// No description provided for @generalSettingsQueuedMessagesDescription.
   ///
   /// In en, this message translates to:
-  /// **'When a message sent while the agent is still working is taken up. Applies to messages sent after a change. Joining the task is Claude Code only for now.'**
+  /// **'When a message sent while the agent is still working is taken up. Applies to messages sent after a change; Claude Code only for now.'**
   String get generalSettingsQueuedMessagesDescription;
 
   /// Queued messages choice: each waits for the turn running to end, then they run one after another.
@@ -6967,30 +6961,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Fetch From All Remotes'**
   String get scmFetchFromAllRemotes;
-
-  /// A warning when the project's subfolders could not be scanned for repositories; the panel would otherwise say there is none.
-  ///
-  /// In en, this message translates to:
-  /// **'Can\'t look for repositories here right now; trying again shortly.'**
-  String get scmScanFailed;
-
-  /// The workspace menu's Fetch: fetches every repository and merges its upstream.
-  ///
-  /// In en, this message translates to:
-  /// **'Fetch and Pull All Repositories'**
-  String get scmFetchAndPullAll;
-
-  /// The Get action's tooltip: it fetches the branch's upstream and merges it in.
-  ///
-  /// In en, this message translates to:
-  /// **'Fetch and pull remote commits'**
-  String get scmFetchAndPull;
-
-  /// The ↓N badge's tooltip in a repository's header: the commits its upstream has that it does not.
-  ///
-  /// In en, this message translates to:
-  /// **'{count} remote commits to pull'**
-  String scmBehindCommits(int count);
 
   /// No description provided for @scmPull.
   ///
@@ -11427,12 +11397,6 @@ abstract class AppLocalizations {
   /// **'Switch'**
   String get modelsSwitchConfirm;
 
-  /// No description provided for @modelsSwitchPending.
-  ///
-  /// In en, this message translates to:
-  /// **'Switches to {model} when this turn ends'**
-  String modelsSwitchPending(String model);
-
   /// No description provided for @modelsAuxiliary.
   ///
   /// In en, this message translates to:
@@ -15222,19 +15186,19 @@ abstract class AppLocalizations {
   /// No description provided for @settingsSectionAccounts.
   ///
   /// In en, this message translates to:
-  /// **'Accounts'**
+  /// **'Git Accounts'**
   String get settingsSectionAccounts;
 
   /// No description provided for @settingsAccountsKeywords.
   ///
   /// In en, this message translates to:
-  /// **'GitHub GitLab Gitee sign in login token issue pull request merge request'**
+  /// **'GitHub GitLab sign in login token issue pull request merge request'**
   String get settingsAccountsKeywords;
 
   /// No description provided for @accountsDescription.
   ///
   /// In en, this message translates to:
-  /// **'Sign in to GitHub, GitLab or Gitee to see the state of the issues and pull requests linked in Stash, import issues as stashes, and reply to them once you confirm.'**
+  /// **'Sign in to GitHub or GitLab to see the state of the issues and pull requests linked in Stash, import issues as stashes, and reply to them once you confirm.'**
   String get accountsDescription;
 
   /// No description provided for @accountsSignedIn.
@@ -15252,7 +15216,7 @@ abstract class AppLocalizations {
   /// No description provided for @accountsKeptLocally.
   ///
   /// In en, this message translates to:
-  /// **'Tokens are kept in this computer\'s keychain and are sent only to the GitHub, GitLab or Gitee they are for. Nothing is posted without your confirmation.'**
+  /// **'Tokens are kept in this computer\'s keychain and are sent only to the GitHub or GitLab they are for. Nothing is posted without your confirmation.'**
   String get accountsKeptLocally;
 
   /// No description provided for @accountsGitHubHosts.
@@ -15266,12 +15230,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'gitlab.com, or a self-managed GitLab'**
   String get accountsGitLabHosts;
-
-  /// No description provided for @accountsGiteeHosts.
-  ///
-  /// In en, this message translates to:
-  /// **'gitee.com'**
-  String get accountsGiteeHosts;
 
   /// No description provided for @accountsSignInBrowser.
   ///
@@ -15356,12 +15314,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'A personal access token with the api scope.'**
   String get accountsTokenGitLabScopes;
-
-  /// No description provided for @accountsTokenGiteeScopes.
-  ///
-  /// In en, this message translates to:
-  /// **'A personal access token with the user_info, projects, issues, pull_requests and notes scopes.'**
-  String get accountsTokenGiteeScopes;
 
   /// No description provided for @accountsTokenCreate.
   ///
@@ -15642,7 +15594,7 @@ abstract class AppLocalizations {
   /// No description provided for @stashImportNotALink.
   ///
   /// In en, this message translates to:
-  /// **'Not a GitHub, GitLab or Gitee issue or pull request link.'**
+  /// **'Not a GitHub or GitLab issue or pull request link.'**
   String get stashImportNotALink;
 
   /// No description provided for @stashImportSignIn.
@@ -15690,7 +15642,7 @@ abstract class AppLocalizations {
   /// No description provided for @stashImportNoRepos.
   ///
   /// In en, this message translates to:
-  /// **'No project has a GitHub, GitLab or Gitee remote. Paste an issue link above.'**
+  /// **'No project has a GitHub or GitLab remote. Paste an issue link above.'**
   String get stashImportNoRepos;
 
   /// No description provided for @stashImportNone.
@@ -15768,7 +15720,7 @@ abstract class AppLocalizations {
   /// No description provided for @stashWelcomeTrack.
   ///
   /// In en, this message translates to:
-  /// **'Cards show their conversations live, and the GitHub, GitLab or Gitee issues and pull requests they link to stay in sync.'**
+  /// **'Cards show their conversations live, and the GitHub and GitLab issues and pull requests they link to stay in sync.'**
   String get stashWelcomeTrack;
 
   /// No description provided for @stashWelcomeStart.
@@ -17048,6 +17000,312 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Open'**
   String get aboutOpen;
+
+  /// No description provided for @stashSettingsIssueSync.
+  ///
+  /// In en, this message translates to:
+  /// **'Issues as stashes'**
+  String get stashSettingsIssueSync;
+
+  /// No description provided for @stashSettingsIssueSyncDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'A project that is a Git repository on GitHub or GitLab (signed in under Accounts): its open issues are stashes, each once, kept in step both ways. A stash deleted, or unlinked from its issue, does not come back.'**
+  String get stashSettingsIssueSyncDescription;
+
+  /// No description provided for @stashIssueSyncMine.
+  ///
+  /// In en, this message translates to:
+  /// **'Only those assigned to or opened by me'**
+  String get stashIssueSyncMine;
+
+  /// No description provided for @stashIssueSyncOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Off: imported or published ones only'**
+  String get stashIssueSyncOff;
+
+  /// No description provided for @stashIssueLocal.
+  ///
+  /// In en, this message translates to:
+  /// **'Local only'**
+  String get stashIssueLocal;
+
+  /// No description provided for @stashIssueAllow.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow publishing as an issue'**
+  String get stashIssueAllow;
+
+  /// No description provided for @stashIssueNotPublished.
+  ///
+  /// In en, this message translates to:
+  /// **'Not an issue yet'**
+  String get stashIssueNotPublished;
+
+  /// No description provided for @stashIssuePublishTo.
+  ///
+  /// In en, this message translates to:
+  /// **'Publish as an issue of {repo}…'**
+  String stashIssuePublishTo(String repo);
+
+  /// No description provided for @stashIssueKeepLocal.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep it local'**
+  String get stashIssueKeepLocal;
+
+  /// No description provided for @stashIssuePush.
+  ///
+  /// In en, this message translates to:
+  /// **'Push changes to the issue…'**
+  String get stashIssuePush;
+
+  /// No description provided for @stashIssuePushShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Push'**
+  String get stashIssuePushShort;
+
+  /// No description provided for @stashIssueTakeRemote.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard local changes, use the issue\'s'**
+  String get stashIssueTakeRemote;
+
+  /// No description provided for @stashIssueUnlinkOwn.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlink, keep it local'**
+  String get stashIssueUnlinkOwn;
+
+  /// No description provided for @stashIssueConflict.
+  ///
+  /// In en, this message translates to:
+  /// **'{tag} was changed on the forge too. Which version to keep?'**
+  String stashIssueConflict(String tag);
+
+  /// No description provided for @stashIssueKeepMine.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep mine (push)'**
+  String get stashIssueKeepMine;
+
+  /// No description provided for @stashIssueKeepTheirs.
+  ///
+  /// In en, this message translates to:
+  /// **'Use the issue\'s'**
+  String get stashIssueKeepTheirs;
+
+  /// No description provided for @stashIssueChangedHere.
+  ///
+  /// In en, this message translates to:
+  /// **'Changes here are not on {tag} yet.'**
+  String stashIssueChangedHere(String tag);
+
+  /// No description provided for @stashIssueDiscard.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard'**
+  String get stashIssueDiscard;
+
+  /// No description provided for @stashIssuePublishTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Publish as an issue of {repo}'**
+  String stashIssuePublishTitle(String repo);
+
+  /// No description provided for @stashIssuePushTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Push changes to {tag}'**
+  String stashIssuePushTitle(String tag);
+
+  /// No description provided for @stashIssuePublish.
+  ///
+  /// In en, this message translates to:
+  /// **'Publish'**
+  String get stashIssuePublish;
+
+  /// No description provided for @stashIssueNoText.
+  ///
+  /// In en, this message translates to:
+  /// **'(no description)'**
+  String get stashIssueNoText;
+
+  /// No description provided for @stashIssuePicturesGitHub.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 picture is uploaded to the repository\'s {branch} branch, for the issue to show it.} other{{count} pictures are uploaded to the repository\'s {branch} branch, for the issue to show them.}}'**
+  String stashIssuePicturesGitHub(int count, String branch);
+
+  /// No description provided for @stashIssuePicturesGitLab.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 picture is uploaded to the project, for the issue to show it.} other{{count} pictures are uploaded to the project, for the issue to show them.}}'**
+  String stashIssuePicturesGitLab(int count);
+
+  /// No description provided for @stashImplementShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Implement'**
+  String get stashImplementShort;
+
+  /// No description provided for @stashImplementIssue.
+  ///
+  /// In en, this message translates to:
+  /// **'It is issue {issue}: the pull request should say it fixes it.'**
+  String stashImplementIssue(String issue);
+
+  /// No description provided for @stashIssueSyncAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All open issues'**
+  String get stashIssueSyncAll;
+
+  /// No description provided for @stashIssueChecking.
+  ///
+  /// In en, this message translates to:
+  /// **'Looking for its repository…'**
+  String get stashIssueChecking;
+
+  /// No description provided for @stashIssueRefresh.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh now'**
+  String get stashIssueRefresh;
+
+  /// No description provided for @stashIssuePublishButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Publish as Issue'**
+  String get stashIssuePublishButton;
+
+  /// No description provided for @stashIssuePushButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Push to Issue'**
+  String get stashIssuePushButton;
+
+  /// No description provided for @stashIssueLoading.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading…'**
+  String get stashIssueLoading;
+
+  /// No description provided for @stashSyncing.
+  ///
+  /// In en, this message translates to:
+  /// **'Syncing issues…'**
+  String get stashSyncing;
+
+  /// No description provided for @stashSyncingRepo.
+  ///
+  /// In en, this message translates to:
+  /// **'Syncing the issues of {repo} ({index}/{total})…'**
+  String stashSyncingRepo(String repo, int index, int total);
+
+  /// No description provided for @stashSyncTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync issues now'**
+  String get stashSyncTooltip;
+
+  /// No description provided for @stashSyncTooltipLast.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync issues now · last at {time}'**
+  String stashSyncTooltipLast(String time);
+
+  /// No description provided for @stashSyncFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not sync the issues of {repo}: {error}'**
+  String stashSyncFailed(String repo, String error);
+
+  /// No description provided for @stashSyncSignIn.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Sign in to {forge} for the issues of {repo} to be stashes.} other{Sign in to {forge} for the issues of {repo} and {count} more repositories to be stashes.}}'**
+  String stashSyncSignIn(String forge, String repo, int count);
+
+  /// No description provided for @stashSyncingEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Syncing the projects\' issues…'**
+  String get stashSyncingEmpty;
+
+  /// No description provided for @stashFilterAnyIssue.
+  ///
+  /// In en, this message translates to:
+  /// **'Any source'**
+  String get stashFilterAnyIssue;
+
+  /// No description provided for @stashFilterIssue.
+  ///
+  /// In en, this message translates to:
+  /// **'Issues'**
+  String get stashFilterIssue;
+
+  /// No description provided for @stashFilterNotIssue.
+  ///
+  /// In en, this message translates to:
+  /// **'Local only'**
+  String get stashFilterNotIssue;
+
+  /// No description provided for @stashImplementEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Write something first, then implement it in BaoCode'**
+  String get stashImplementEmpty;
+
+  /// Shows a markdown file's text in the side panel, to edit.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get sidePanelEdit;
+
+  /// A warning when the project's subfolders could not be scanned for repositories; the panel would otherwise say there is none.
+  ///
+  /// In en, this message translates to:
+  /// **'Can\'t look for repositories here right now; trying again shortly.'**
+  String get scmScanFailed;
+
+  /// The workspace menu's Fetch: fetches every repository and merges its upstream.
+  ///
+  /// In en, this message translates to:
+  /// **'Fetch and Pull All Repositories'**
+  String get scmFetchAndPullAll;
+
+  /// The Get action's tooltip: it fetches the branch's upstream and merges it in.
+  ///
+  /// In en, this message translates to:
+  /// **'Fetch and pull remote commits'**
+  String get scmFetchAndPull;
+
+  /// The ↓N badge's tooltip in a repository's header: the commits its upstream has that it does not.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} remote commits to pull'**
+  String scmBehindCommits(int count);
+
+  /// No description provided for @modelsSwitchPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Switches to {model} when this turn ends'**
+  String modelsSwitchPending(String model);
+
+  /// No description provided for @accountsGiteeHosts.
+  ///
+  /// In en, this message translates to:
+  /// **'gitee.com'**
+  String get accountsGiteeHosts;
+
+  /// No description provided for @accountsTokenGiteeScopes.
+  ///
+  /// In en, this message translates to:
+  /// **'A personal access token with the user_info, projects, issues, pull_requests and notes scopes.'**
+  String get accountsTokenGiteeScopes;
 
   /// No description provided for @turnTokensSpentHint.
   ///

@@ -20,7 +20,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import '../forge/fake_forge_http.dart';
+import '../forge/forge_test.dart' show FakeForgeHttp;
 
 void main() {
   testWidgets('a conversation\'s row shows the stash it carries out, which '

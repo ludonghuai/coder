@@ -6,7 +6,7 @@ import 'package:baocode/settings/pages/accounts_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import '../forge/fake_forge_http.dart';
+import '../forge/forge_test.dart' show FakeForgeHttp;
 
 void main() {
   late FakeForgeHttp http;
