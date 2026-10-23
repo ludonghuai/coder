@@ -4064,7 +4064,7 @@ node -e "const r=JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));
 ## 28. 批 22：改名同步与 `/` 命令面（台账 #146）
 
 > 回指：需求档 `docs/requirements/thincoder-adapter.md` §10 的 2026-10-22 19:37 裁定（「我们主要用的是thincoder，所以新功能要适配一下」）。
-> 一句结论：改名同步由**内核在 `session/set_title` 确认后发 `SessionRenamed`**；`/` 命令面**对 thincoder 隐藏**——不实现 `ProvidesCommands`，列表恒空，因为 thincoder 没有命令源。
+> 一句结论：改名同步由**内核在 `session/set_title` 确认后发 `SessionRenamed`**；`/` 命令面**对 thincoder 隐藏**——判据 = 内核是否提供命令源（实现 `ProvidesCommands`），与候选表是否为空无关：thincoder 没有源 ⇒ 行首 `/` 不弹面板；Claude 有源 ⇒ 命令表未到 / 表空 / 查询无匹配时面板都照开（T139 钉住）。
 
 **最近先例（对齐 ∥ 偏离及理由）**
 
@@ -4083,7 +4083,7 @@ node -e "const r=JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));
 | 列表更新时机 | 宿主对「内核会确认的改名」不再乐观改标题：等 `SessionRenamed` 到 `workspace._sync`（`workspace.dart:2270`）再改 |
 | 「会不会被确认」的判据 | 新增能力接口 `ConfirmsRename.renameConfirmed`（只 thincoder 实现）；判据 = 槽在 ∧ 连接活着 ∧ 未在释放（§28.3）。判据为假 ⇒ 走今天的路径，故它误判只损失新行为、不丢标题 |
 | catalog 路径 | 零改动：调用方 `await` 返回后自己 `_retitle`（`workspace.dart:2781-2788`），不需要事件 |
-| `/` 命令面 | 不实现 `ProvidesCommands`；`ChatSession.commands` 恒 `[]`（`lib/chat/chat_session.dart:659-662`） |
+| `/` 命令面 | thincoder 不实现 `ProvidesCommands` ⇒ 无命令源（`ChatSession.hasCommandSource == false`，`chat_session.dart:440` / `kernel_proxy.dart:47`）⇒ 行首 `/` 不弹面板；判据 = 内核能力，不看候选表是否为空；Claude 有源 ⇒ 行为不变（T139） |
 | 外仓 | 零改动（不改 `thincoder/`） |
 
 ### 28.2 现状实读（两条路今天怎么走）
@@ -4231,11 +4231,13 @@ Future<bool> rename(AgentThread thread, String title,
 
 ### 28.5 `/` 命令面：结论与理由
 
-**结论：隐藏（现状即如此，本批把它钉成判据，不加任何入口）。**
+**结论：thincoder 隐藏（行首 `/` 不弹面板）；Claude 侧行为不变。**
 
-- `ChatSession.commands`（`lib/chat/chat_session.dart:659-662`）对不实现 `ProvidesCommands` 的内核给 `const []`。
+- 判据是**内核有没有命令源**，不是候选表满不满：`ChatSession.hasCommandSource`（`lib/chat/chat_session.dart:440`）的取值 = 内核是否实现 `ProvidesCommands`（探针 `lib/chat/session/kernel_proxy.dart:47`）。
+- 组合器的面板开关读它（`lib/chat/composer/composer.dart:863-877`）：`visible = commands.isNotEmpty || (trigger.start == 0 && widget.session.hasCommandSource)`。
 - `ThincoderKernel` 的 implements 列表（`thincoder_kernel.dart:42-57`）没有 `ProvidesCommands`；实现它的只有 Claude（`claude_code_kernel.dart:99`）与 Codex（`lib/kernel/codex/codex_kernel.dart:22`）。
-- ⇒ thincoder 会话里输入 `/` 没有任何候选；这是**空列表**，不是「假装有」。
+- ⇒ thincoder 会话里行首 `/`（以及 `/pl` 这类查询）都不弹面板；`ChatSession.commands` 对无源内核恒 `[]`（`chat_session.dart:439`），所以不是「假装有」，也不是弹一个空壳。
+- ⇒ Claude 会话有命令源：`/` 在**命令表未到 / 表空 / 查询无匹配**三个窗口里面板都照开（空壳 + no-results 说明），与批 22 之前一致；判据 = T139（F26②）。
 
 **为什么否掉「对齐」方案**：宿主唯一的命令书写源是 Claude Code 的定制文件
 （`lib/customize/customizations.dart:1-2` 的「skills, subagents, slash commands, rules」；读取面 `lib/customize/customization_store.dart:62-70`）。
@@ -4243,7 +4245,7 @@ Future<bool> rename(AgentThread thread, String title,
 `lib/kernel/thincoder/**` 里 `command` 只作**终端命令**字段出现（`lib/kernel/thincoder/thincoder_events.dart:335-337`、`:392`）。
 照搬过去会造出一个点了不生效、或把 `/x` 当普通文本发出去的菜单，正是「假装有」。
 
-**已知行为（不是缺陷）**：thincoder 会话里输入 `/x` 没有候选，发送后就是一条普通消息；CLI 收到什么由它自己解释。
+**已知行为（不是缺陷）**：thincoder 会话里输入 `/x` 不弹面板，发送后就是一条普通消息；CLI 收到什么由它自己解释。
 
 ### 28.6 验收对照（回指 F25 / F26 验收 ①–③）
 
@@ -4252,40 +4254,43 @@ Future<bool> rename(AgentThread thread, String title,
 | F25① thincoder 会话改名 ⇒ 列表项与标题都变新，不需要切换会话 | §28.3 / §28.4 | 确认后 `emit(SessionRenamed)`；`_sync` 以 `confirmed: true` 落地 | T131 / T134：`flutter test test/kernel/thincoder_kernel_test.dart` |
 | F25② `session/set_title` 抛错 ⇒ 事件数 0、列表标题仍是旧值 | §28.4 | 失败分支只发既有 `error:title` 提示，零事件；释放旁路的作废同形（零事件 + 提示 + 列表旧值） | T132（`test/kernel/thincoder_kernel_test.dart`）/ T138（`test/kernel/rename_confirmed_test.dart`） |
 | F25③ Claude 内核路径行为不变（回归） | §28.3 | `ClaudeCodeKernel` 不实现 `ConfirmsRename` ⇒ `renameConfirmed` 恒假 ⇒ 仍走 `_retitle`；`SessionRenamed` 的发出点（`claude_code_kernel.dart:1704`）与消费面零改动 | T135（`test/kernel/rename_confirmed_test.dart`） |
-| F26① thincoder 会话里 `/` 不弹命令面板 | §28.5 | 不实现 `ProvidesCommands` ⇒ `commands` 恒 `[]` ⇒ 候选表为空 | T133（能力接口 + `commands` 为空 + widget 层无 command 类建议） |
-| F26② Claude 内核会话里命令面板行为不变（回归） | §28.5 | 本批不动 `ProvidesCommands` 与 `_commandSuggestions`（`chat_screen.dart:624-641`） | T136（`flutter test test/chat/command_details_test.dart` 既有 Claude 用例全绿） |
+| F26① thincoder 会话里 `/` 不弹命令面板 | §28.5 | 内核无命令源（不实现 `ProvidesCommands`）⇒ 面板开关为假 ⇒ 行首 `/` 与 `/pl` 都不弹；判据不看候选表是否为空 | T133（能力接口 + `commands` 为空 ∧ `hasCommandSource == false` + 行首 `/` 与 `/pl` 的 `SuggestionMenu findsNothing`） |
+| F26② Claude 内核会话里命令面板行为不变（回归） | §28.5 | 本批不动 `ProvidesCommands` 与 `_commandSuggestions`（`chat_screen.dart:624-641`）；面板开关只读内核能力（`composer.dart:871-876`），表未到 / 表空 / 无匹配都照开 | T136（`flutter test test/chat/command_details_test.dart` 既有 Claude 用例全绿）+ T139（Claude 表空仍开面板，含 `/pl` 无匹配） |
 
-### 28.7 用例表（T131–T138）
+### 28.7 用例表（T131–T139）
 
 | # | 场景 | 输入 | 期望 |
 |---|---|---|---|
 | T131 | 改名成功同步 | mock 传输 + 开着的 thincoder 会话；`rename('A')`；`session/set_title` 正常应答 | 事件流里恰一条 `SessionRenamed` 且 `title == 'A'`；`session.takeRenamed() == 'A'`；`_sync` 以 `confirmed: true` 落地标题；没有别的 `SessionRenamed` |
 | T132 | 改名失败不发事件 | 同上，`session/set_title` 抛错 | 事件流里**零条** `SessionRenamed`；对话里出现 `error:title` 提示；`takeRenamed()` 为 null；线程标题仍是旧值 |
-| T133 | 命令面对该内核为空（三层） | 内核层的 `ThincoderKernel` 实例 + widget 层的 thincoder `ChatScreen` | ① `expect(kernel, isNot(isA<ProvidesCommands>()))`；② `ChatSession.commands` 为空；③ `/` 后建议列表里没有 `SuggestionKind.command` 项（`_commandSuggestions` 由 `_session.commands` 逐项生成，`chat_screen.dart:624-641`；说明行与命令文件对空列表返回 null，`:651-674`） |
+| T133 | 命令面对该内核为空（三处断言） | 内核层的 `ThincoderKernel` 实例 + widget 层的 thincoder `ChatScreen` | ① `expect(kernel, isNot(isA<ProvidesCommands>()))`；② `ChatSession.commands` 为空 ∧ `hasCommandSource == false`；③ 行首 `/` 与 `/pl` 后 `SuggestionMenu findsNothing`（面板不出现；开关见 `composer.dart:871-876`） |
 | T134 | 确认回来的标题不成环 | T131 之后再 `rename('A')` 一次（模拟 `workspace._sync` 的回写） | `session/set_title` 请求数不再增加；无第二条 `SessionRenamed`（内核 `_titleConfirmed` 短路） |
 | T135 | Claude 不实现该能力 ⇒ 路径不变 | `test/kernel/rename_confirmed_test.dart`：一个 Claude 会话 | `expect(claudeKernel, isNot(isA<ConfirmsRename>()))`；`ChatSession.renameConfirmed == false`；`workspace.rename` 走 `_retitle`（列表即改，不等事件） |
 | T136 | Claude 命令面板回归 | `flutter test test/chat/command_details_test.dart` | 该档既有 Claude 用例全绿（本批不改该档任何 Claude 断言）；`_commandSuggestions` 零改动 |
 | T137 | 判据三态（含释放窗） | 同一 thincoder 内核：① `session/new` 完成；② `release()` 之后（视图离开，`_slot` 仍在）；③ 新会话还没 `session/new` | ① `renameConfirmed == true`；② `false`（连接已断 / `_releaseWanted` 真）；③ `false`（走 `_pendingTitle`）。②③ 两态下尚无 `session/set_title` 请求发出，宿主列表已先改（今天的路径） |
 | T138 | 改名被回合压后、释放随后排上 | `test/kernel/rename_confirmed_test.dart`：开着的 thincoder 会话；回合在飞时 `rename('A')`，随后 `detach()`（置 `_releaseWanted`），再让回合结束 | 事件流**零条** `SessionRenamed`；`session/set_title` 请求零条；列表标题仍是旧值（`'go'`）；对话里恰一条 `error:title` 提示，含 `not confirmed` 与 `closing` |
+| T139 | Claude 有命令源、表空仍开面板（三个窗口） | `test/chat/thincoder_commands_test.dart`：`FakeCli(answers: {'initialize': {}})` ⇒ 握手回包无 `commands`；Claude 会话开 `ChatScreen` | `kernel is ProvidesCommands`；启动前后 `session.commands` 均空 ∧ `hasCommandSource == true`；行首 `/` ⇒ `SuggestionMenu` 出现且 `matches` 为空；再输 `pl` ⇒ 面板仍在、`matches` 仍为空 |
 
 侧栏那一跳（`SessionRenamed` → `_sync` → `_retitle`）由 T131 / T134 覆盖到机检；真机上再走一次：改名后侧栏立刻是新标题，失败时保持旧标题并出现错误提示。
 
 ### 28.8 受影响文件清单（行数 = 本轮实测）
 
-| # | 坐标 | 现值 | 改动 | delta |
+| # | 坐标 | 现值（本轮实测） | 改动 | delta |
 |---|---|---|---|---|
-| ① | `lib/kernel/agent_kernel.dart` | 531 | `ConfirmsRename` 能力接口（紧邻 `RenamesSession`，`:314-316`） | ≈ +10 |
-| ② | `lib/kernel/thincoder/thincoder_kernel.dart` | 1436 | 实现 `ConfirmsRename` + `renameConfirmed` 判据（槽 ∧ 连接 ∧ 未释放）+ `_titleConfirmed` + `rename` 同标题短路 + `_pumpTitle` 成功分支发事件 | ≈ +12 |
-| ③ | `lib/chat/chat_session.dart` | 1485 | 只加 `renameConfirmed` 委托（`_ => false` 兜底，紧邻 `canRename` `:770`）；`rename` 签名不动 | ≈ +4 |
-| ④ | `lib/workspace/workspace.dart` | 2962 | `rename()` 增具名参数 `confirmed` + 确认分支 + `renameConfirmed` 分支（`:2766-2795`）；`_sync` 调用点传 `confirmed: true`（`:2270`） | ≈ +9 / −1 |
-| ⑤ | `test/kernel/rename_confirmed_test.dart` | 新增 | T135 / T137 / T138（Claude 不实现该能力；判据在开会话 / 释放后 / 无槽三态；改名被回合压后、释放随后排上的可见丢失） | ≈ +40 |
-| ⑥ | `test/kernel/thincoder_kernel_test.dart` | 4814 | T131–T134 追加到文件末尾 | ≈ +90 |
-| ⑦ | `test/chat/thincoder_commands_test.dart` | 新增 | T133 的 widget 层（thincoder 会话 `/` 无 command 类建议） | ≈ +70 |
+| ① | `lib/kernel/agent_kernel.dart` | 539 | `ConfirmsRename` 能力接口（紧邻 `RenamesSession`，`:314-316`） | ≈ +10 |
+| ② | `lib/kernel/thincoder/thincoder_kernel.dart` | 480 | 实现 `ConfirmsRename` + `renameConfirmed` 判据（槽 ∧ 连接 ∧ 未释放）+ `_titleConfirmed` + `rename` 同标题短路 + `_pumpTitle` 成功分支发事件 | ≈ +12 |
+| ③ | `lib/chat/chat_session.dart` | 794 | `renameConfirmed` 委托（`_ => false` 兜底，紧邻 `canRename` `:770`）+ 能力面 `hasCommandSource`（`:440`，+1 行，走 `_hasCommandsOf`）；`rename` 签名不动 | ≈ +5 |
+| ④ | `lib/workspace/workspace.dart` | 2984 | `rename()` 增具名参数 `confirmed` + 确认分支 + `renameConfirmed` 分支（`:2766-2795`）；`_sync` 调用点传 `confirmed: true`（`:2270`） | ≈ +9 / −1 |
+| ⑤ | `lib/chat/composer/composer.dart` | 2350 | `_handleEditorChanged` 的命令分支：面板开关读 `session.hasCommandSource`（`visible = commands.isNotEmpty || (trigger.start == 0 && session.hasCommandSource)`，`:863-877`）——行首 `/` 对有源内核恒开、对无源内核不开 | +10 / −6 |
+| ⑥ | `lib/chat/session/kernel_proxy.dart` | 203 | `_hasCommandsOf`：`owner._kernel is ProvidesCommands`（`:47`） | +2 |
+| ⑦ | `test/kernel/rename_confirmed_test.dart` | 新增 | T135 / T137 / T138（Claude 不实现该能力；判据在开会话 / 释放后 / 无槽三态；改名被回合压后、释放随后排上的可见丢失） | 193 |
+| ⑧ | `test/kernel/thincoder_kernel_test.dart` | 4967 | T131–T134 追加到文件末尾 | ≈ +90 |
+| ⑨ | `test/chat/thincoder_commands_test.dart` | 168 | T133（thincoder 无命令源：能力接口 / `commands` 空 ∧ `hasCommandSource == false` / 行首 `/` 与 `/pl` 不弹面板）+ T139（Claude 有命令源、表未到与表空仍开面板） | 新增 |
 
 - **零改动（产品面）**：`lib/kernel/claude_code/claude_code_kernel.dart`（不实现 `ConfirmsRename`，不进改动面）· `lib/kernel/thincoder/thincoder_catalog.dart`（150——调用方已 `await` 后 `_retitle`，不需要事件通道）· `lib/kernel/kernel_event.dart`（`SessionRenamed` 已存在 `:135-139`）。
 - **零改动（消费面）**：`lib/sidebar/sidebar.dart` 与 `lib/chat/chat_screen.dart` 的改名框（继续读既有 `pendingTitle`）· 外仓 `thincoder/**` 全部。
-- **体量立场（`chat_session.dart` 1485 行，已过 >800 硬顶）**：本批只加一个委托 getter（≈ +4），不动结构与既有成员；缝候选 = `ChatSession` 的横向委托面（改名 / 模型 / 权限 / 命令，`:770-790`）整段出档；**触发条件 = 下一次向该档追加 > 10 行**（届时先立拆分批，本批不拆）。
-- **体量立场（`thincoder_kernel.dart` 1436 与 `workspace.dart` 2962，均在 >800 名单）**：只在既有 `rename` / `_pumpTitle` / `workspace.rename` 内加分支与字段，不动结构；缝候选沿用 §18.4 / §19.4 的会话面与释放面两条；触发 = 下一次结构级触碰或独立拆分批立项（本批不拆）。
+- **体量立场（`chat_session.dart` 794 行，本轮实测，< 800 硬顶）**：本批只加两个委托 getter（`renameConfirmed` / `hasCommandSource`，≈ +5），不动结构与既有成员；缝候选 = `ChatSession` 的横向委托面（改名 / 模型 / 权限 / 命令，`:437-452`）整段出档；本批不拆。
+- **体量立场（`composer.dart` 2350 · `workspace.dart` 2984，均在 >800 名单）**：只在既有 `_handleEditorChanged` / `workspace.rename` 内改判据、加分支，不动结构；缝候选沿用 §17.4（composer 右下角固定组）与 §19.4（会话面）；触发 = 下一次结构级触碰或独立拆分批立项（本批不拆）。`thincoder_kernel.dart` 现 480 行（< 800），本批只在既有 `rename` / `_pumpTitle` 内加分支与字段。
 
 ### 28.9 边界（本批不做）
 
@@ -4302,6 +4307,6 @@ Future<bool> rename(AgentThread thread, String title,
 | # | 项 | 现状 | 处置 |
 |---|---|---|---|
 | U17 | thincoder CLI 是否会主动把标题变更通知宿主 | 本轮实读：内核侧只有发送侧三个字段（`thincoder_kernel.dart:144-146` 的 `_titleTarget` / `_titleDeferred` / `_titleSending`），没有接收面 | 本批按 `session/set_title` 的确认发，不依赖 CLI 通知；若日后出现该通知，翻译它即可，本档判据不变 |
-| U18 | `test/kernel/thincoder_kernel_test.dart` 的现行行数 | **已闭合**：本轮实读 4814（`node -e` 计行，§28.8 ⑥ 的现值即此读数） | 实施轮按 diff 核 delta；不再引用 §27.9 的 4299 |
+| U18 | `test/kernel/thincoder_kernel_test.dart` 的现行行数 | **已闭合**：本轮实读 4967（`node -e` 计行，§28.8 ⑧ 的现值即此读数） | 实施轮按 diff 核 delta；不再引用 §27.9 的 4299 |
 
-**将来触发条件（登记）**：需求 F26 功能点 ③——外仓 ACP 面提供命令清单与执行通道时，`/` 从「隐藏」改为「对齐」：那时 `ThincoderKernel` 实现 `ProvidesCommands`、`ChatSession.commands` 由空变实，T133 的三层空集断言改成「候选非空 + 面板出现」，§28.5 的结论随之重写。当前无此通道（`thincoder_events.dart:335-337` / `:392` 的 `command` 是终端命令，不是 `/` 命令）。
+**将来触发条件（登记）**：需求 F26 功能点 ③——外仓 ACP 面提供命令清单与执行通道时，`/` 从「隐藏」改为「对齐」：那时 `ThincoderKernel` 实现 `ProvidesCommands`、`ChatSession.commands` 由空变实，T133 的断言（能力接口 / 无命令源 / 面板不出现）改成「候选非空 + 面板出现」，§28.5 的结论随之重写。当前无此通道（`thincoder_events.dart:335-337` / `:392` 的 `command` 是终端命令，不是 `/` 命令）。

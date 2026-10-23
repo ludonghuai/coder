@@ -89,6 +89,20 @@
 
 **受影响文件变化**：设计档 §28.8 由 5 行改为 7 行（产品 4 + 测试 3，新增 `test/kernel/rename_confirmed_test.dart` 与 `test/chat/thincoder_commands_test.dart`）；用例表由 T131–T134 扩到 T131–T137。验收对照见设计档 §28.6，用例见 §28.7。
 
+### 修正轮 2：F26① 机制改成能力判据（台账 #161 已收口；父代理 2026-10-23 裁定）
+
+**背景**：实现（提交 `98ffa013`）的判据已是「会话的内核是否实现 `ProvidesCommands`」（`lib/chat/session/kernel_proxy.dart:47` → `lib/chat/chat_session.dart:440` → `lib/chat/composer/composer.dart:863-877`），设计档 §28 仍写「候选表为空」——同一机制两处说法。父代理裁定：需求 F26② 字面「Claude 内核会话里该面板行为不变」，"表还没到"也是 Claude 的现场，不能算例外。
+
+**覆盖条目**：需求档 F26①（`docs/requirements/thincoder-adapter.md:185-189`）；F26② 的三个窗口（表未到 / 表空 / 查询无匹配）本轮写死为「行为不变（面板照开）」，判据 = T139。
+
+**落点**（设计档 §28，逐处）：档头一句结论 · §28.1 决议总表 · §28.5 机制（含 Claude 三窗口不变一条）· §28.6 F26① / F26② 两行 · §28.7 用例表 T133③ + 新增 T139 · §28.8 受影响文件 · §28.10 U18 引用与将来触发条件。
+
+**受影响文件（现值本轮实测）**：产品 3 档——`lib/chat/composer/composer.dart` 2350（判据改写，+10 / −6）· `lib/chat/chat_session.dart` 794（能力面 `hasCommandSource` +1）· `lib/chat/session/kernel_proxy.dart` 203（`_hasCommandsOf` +2）；用例档 `test/chat/thincoder_commands_test.dart` 168（T133 改为「面板不出现」+ 新增 T139）。完整清单与 delta 见设计档 §28.8。
+
+**验收**：机制最终原文见设计档 §28.5；T133③ 见 §28.7；Claude 三窗口不变 + T139 见 §28.5 末条与 §28.6 F26② 行；§28.8 收三产品档 + T139。设计档全文检索「候选表为空 / 空列表」在 §28 内 0 命中（§1–§27 的 3 处为其他批语境，未动）。`doc_check(mode:"gate")` 首行 PASS。
+
+**边界**：零代码改动；只改 `docs/design/thincoder-adapter.md` §28（+ §28.8 的陈旧现值按本轮实测回填）；需求档与其他批档未动；既有判据编号与 T 号未改。
+
 ## §3 设计评审（评审子代理）
 
 ### 轮次 1（评审子代理）
