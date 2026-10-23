@@ -269,4 +269,78 @@ VERDICT: pass
 - 第 2 轮新增 1 条 🟡 report-only（不阻塞，文档面）：设计 §5 行 0 ②「先跑该步测试集并记录基线为绿」与 §6 行 5「全绿」门值未含红基线口径。证据 = 本节「验收读数」表的基线/本步后两行（`+872 -4`，红集逐条一致）。建议父侧 / eng-designer 在收口前补一句「基线本红时，判据 = 同命令下红项集合逐条一致且无新增失败；全绿仅适用于基线为绿的档」。本步不改文档。
 - 终态：**clean**（内部 explore 偏差审计 1 轮 clean · 内部 advisor 代码评审 2 轮，终判 pass · 修正轮 1 次 = 补本节读数，代码零改动 · 无未决 🔴）。
 
+### 实施记录：结构拆分第 2 步（kernel · 机制 = part ×9）
+
+**范围**：设计 `docs/design/structure-splits.md` §4.1 九段（台账 #22：kernel 1461 > 预算 1345，本批目标 ≤500）。机制 = `part` + 顶层函数 `<name>Of(ThincoderKernel owner, …)` + 类里一行委托（设计 §3.3）；字段与后备存储留 owner；注解随委托逐字保留；缝表点名的符号均为本源档声明。
+
+**改动**
+
+- `lib/kernel/thincoder/thincoder_kernel.dart`：1461 → **480** 行。`import` 26 条不动；`part` 指令 1 → 10（新增九条）；类头/构造/字段/getter 不动；
+  53 个方法体出档，原位留 53 条一行委托（113 行），`@override` 等注解随委托保留；
+  静态字段（`imageMaxBytes` `turnMaxBytes` `_letters` `_random` `_content` `_turnKey` `_startingId`）与共享助手（`_setHealth` `_running` `_cwd`）留 owner。
+- 九个新档（同级，首行均为 `part of 'thincoder_kernel.dart';`，无 `import`、无跨 part 引用）：
+  `thincoder_lifecycle.dart`（170）· `thincoder_records.dart`（111）· `thincoder_release.dart`（187）· `thincoder_turns.dart`（279）· `thincoder_title.dart`（84）· `thincoder_revert.dart`（131）· `thincoder_requests.dart`（117）· `thincoder_inbound.dart`（48）· `thincoder_images.dart`（98）。
+- 顶层函数随段搬运：`_pumpTitle`（title）· `_planOf` / `_revertFiles` / `_revertSkips` / `_revertFailures`（revert）。
+- 段内坐标覆盖、但设计点名清单未列的四个符号，按符号搬并记入漂移：`_hostMcpServers`（lifecycle）· `_revert`（revert）· `_attachImages` / `_nativePrompt`（images）——均为私有、且只被本段调用。
+
+**验收读数（命令 + 结果）**
+
+| 验收 | 命令 | 结果 |
+|---|---|---|
+| ① analyze 0 issue | `dart analyze`（全项目） | `No issues found!`（exit 0） |
+| ① 附：改动面 | `dart analyze lib/kernel/thincoder/thincoder_kernel.dart` | `No issues found!` |
+| ② 测试基线（开工前，目标档 HEAD 干净） | `flutter test --no-pub test/kernel/thincoder_kernel_test.dart test/kernel/rename_confirmed_test.dart test/kernel/thincoder_fixtures_test.dart test/chat/thincoder_commands_test.dart test/composer_test.dart` | `+230 -2`，2 个红项见下（`test/composer_test.dart` 既有） |
+| ② 测试（本步后，同命令） | 同上 | `+230 -2`：**红项集合逐条一致，无新增失败** |
+| ③ 主档行数 | `node -e` 换行符计数（设计 §5 口径） | **480**（≤500；设计估 ≈311） |
+| ④ 九个新档行数 | 同上 | 170 / 111 / 187 / **279** / 84 / 131 / 117 / 48 / 98（最大 279 ≤500） |
+| ⑤ 逐块比对（对照 `git show HEAD:`） | 令牌级比对脚本（归一化只允许三类差异：`<name>Of(owner, …)` 签名展开、`owner.`/`ThincoderKernel.` 前缀、缩进） | 53 个成员逐块 `diffs: 0`（无差异）；另：`${_version}` 一处因前缀加花括号，属前缀类 |
+| ⑥ 反推校验 | HEAD 主档 − 1114 行搬出 + 9 条 `part` + 53 条委托 + 11 条指路注释 | 左 233 行 / 右 233 行（非空行），**0 处不一致**；53 条委托共 113 行 |
+| ⑦ 改动面 | `git status --porcelain` / `git diff --name-only` | 增量 = `M lib/kernel/thincoder/thincoder_kernel.dart` + 9 个 `??` 新档；无 `test/`、无其他 `lib/`（基线见下）；根目录 `?? 300` 为开工前既存 0 字节空档（mtime 08:22，早于本步），未碰 |
+| ⑧ 新档首行 | 逐档读取 | 九档均为 `part of 'thincoder_kernel.dart';`（同级形态） |
+| 附：格式 | `dart format --output=none --show=changed`（十档） | 十档均为 `Changed`：差异全是 `owner.` 前缀把行推过 80 列后的重排（对照副本验证：仅换行/折行，无语义）；主档在 HEAD 版即非 format-clean，故不跑 format（会重排既有代码，违反纯搬运；第 3 步同口径） |
+
+**基线红项（开工前后逐条一致，既有且与本步无关；`test/**` 未改一行）**
+
+1. `test/composer_test.dart`：`mode picker opens on press, animates, and follows the mouse`（`:1283`，期望 `ComposerPicker` 下有 `Agent`，实得 0）
+2. `test/composer_test.dart`：`Shift+Tab in the input goes through the modes`（`:1322`，期望 `['Ask','Plan','Agent']`，实得 `['Ask','Plan','surface']`）
+
+**逐块比对（对照 HEAD 版 `lib/kernel/thincoder/thincoder_kernel.dart`）**
+
+- 53 个成员逐块令牌比对：`diffs: 0`。每段的搬出内容与 HEAD 逐行一致，差异只在三类：签名展开为 `<name>Of(ThincoderKernel owner, …)`（多行签名展开出额外行）、实例引用加 `owner.` 前缀（`this` 参数改为 `owner`）、静态成员以 `ThincoderKernel.<name>` 访问、类成员 → 顶层函数缩进减 2。
+- 三处「两条/三条语句写在同一行」经 `git show HEAD:` 逐行取证为 HEAD 原文，非本步引入：HEAD `:629` `_dropModelOf(); _dropTitleOf();` · `:954` `_titleTarget = null; _titleDeferred = false; _titleSending = false;` · `:1030` `_queue.clear(); _next = null;`（设计 §1 的「不合并语句」边界未破）。
+- 反推校验：HEAD 全档 − 1114 行（53 成员 + 5 个顶层函数） + 9 条 `part` 指令 + 53 条委托（113 行） + 11 条指路注释 + 2 处分组注释 == 当前主档，左右各 233 个非空行，逐行一致（`diffs: 0`）。
+- 行为面：`_ensureStarted` 的 `??=` 赋值、`_drain` 的队列取头、`_endTurn` 的 `_pumpModelOf` / `_pumpTitle` 调用顺序、`dispose` 的 `closeEvents` 位置、`rewind` 的 `-32602` / `-32002` 分支均逐字保留；委托不改变调用路径（`owner.method()` 与原 `this.method()` 同一对象）。
+
+**工作树基线（开工前已存在，非本步改动）**：`M docs/batches/2026-10-22-browser-biz-test-mode.md` · `M docs/batches/2026-10-23-ledger-sweep.md` · `M lib/ide/git/git_repository.dart` · `?? 300`（0 字节空档）。`git diff --name-only` 原文 = 上述 3 档 + `lib/kernel/thincoder/thincoder_kernel.dart`；本步新增文件只有九个 `??` part 档。
+
+**设计漂移（交父侧 / eng-designer 定位；实施不改文档）**
+
+- **委托行数假设偏乐观**：设计 §4.1 `:119` 写「约 45 行委托 ⇒ 估 310–360 行」，实测 53 条委托 / 113 行（委托段 `:247`–`:477`，231 行），主档 480（估 ≈311）。`≤500` 门成立，但下一步 chat_session 余量仅 ≈38（设计 §4.4），按同一假设会低估 ⇒ 第 4 步预算需按实测口径重算。
+- **坐标漂移 ≤5 行**（按符号名搬，结论不变）：段 1 设计 `:239-369` 实为 `:238-362` + `:466-503`（`_applyStartMode` / `_handshake` / `_fail` 在 466 起，不是 469）；
+  段 2 `:370-468` 实为 `:364-464`（doc 注释从 364 起）；段 4 `:647-929` 实为 `:646-924`；段 5 `:930-958` 实为 `:926-956`；
+  段 6 `:959-1054` 实为 `:958-1049`；段 7 `:1055-1162` 实为 `:1053-1159`；段 8 `:1219-1234` 实为 `:1218-1225`（doc 从 1218 起）。
+- **点名符号不能搬**：段 9 点名的 `_letters` `_random`（与段 8 的 `_content` `_turnKey`）是类 `static` 字段 ⇒ 按设计 §3.3「字段与后备存储留 owner」留主档，搬出的函数以 `ThincoderKernel.<name>` 访问。
+- **跨档行号引用失效**：`lib/kernel/thincoder/thincoder_warm.dart:12` 的 `clientCapabilities`（`thincoder_kernel.dart:249-251`）现指向委托行，真实代码在 `thincoder_lifecycle.dart:48`。设计 §1 禁止本步改别的档 ⇒ 父侧协调项。
+- **设计 §5 第 2 步门值**：门写「5 档全绿」，而 `test/composer_test.dart` 基线本红 ⇒ 与第 3 步同一条口径问题，建议按批档 `:269` 的表述改为「红项集合逐条一致且无新增失败」。
+
+**轮次与终态**
+
+- 内部 explore 偏差审计：1 轮，VERDICT clean（四类偏差：无；九段落点逐条对齐；§5 记录缺口在收口前由本节补齐）。
+- 内部 advisor 代码评审：第 1 轮 VERDICT changes-required —— 1 🟡 must fix（本步验收读数与红基线未落盘 + 门值「全绿」字面不可达）· 1 🟡 协调项（`thincoder_warm.dart:12` 行号引用失效，父侧）· 4 🔵（双 `Of` 命名、三处合并语句需取证、主档指路注释与落点不符、设计估值漂移）。
+- 第 1 轮处置：①must-fix → **Fixed**（本节六项读数 + 基线红项逐条比对）；②协调项 → **Accepted**（设计禁止改别的档，列入本节漂移交父侧）；③合并语句 → **Fixed**（`git show` 取证为 HEAD 原文，记 `:629` / `:954` / `:1030`）；④指路注释 → **Fixed**（主档补两行：`// Exiting and the waiting line: see thincoder_release.dart.`、`// A revert can start now: see thincoder_turns.dart.`；主档 478 → 480，analyze 与 5 档测试已复跑）；⑤双 `Of` 命名与设计估值 → **Accepted**（设计侧事项，交父侧/eng-designer）。
+- 修正轮：1 次（2 行注释 + 本节），之后 analyze / 测试 / 逐块比对 / 反推校验全部复跑通过。
+- 终态：**clean**（审计 1 轮 clean · 代码评审 2 轮，终判 pass · 修正轮 1 次 · 无未决 🔴）。
+
+**补记（advisor 第 2 轮复核后）**
+
+- 内部 advisor 代码评审第 2 轮：VERDICT **pass**（code · 十档）。第 1 轮六项逐条复核：
+  ①must-fix（本步读数与红基线未落盘）→ **Fixed**（本节八项读数 + 两条基线红项；盘上可核读数逐条吻合：主档 480、九档 170/111/187/279/84/131/117/48/98、首行九档 `part of`、`_exitedOf` / `_sayWaitingOf` / `canRevertNowOf` 落点、`clientCapabilities` 新址 `thincoder_lifecycle.dart:48`）；
+  ②设计估值漂移 → **Accepted**（记入本节漂移；建议第 4 步按实测口径重算 chat_session 预算）；
+  ③`thincoder_warm.dart:12` 行号引用失效 → **Accepted**（设计禁止本步改别的档，交父侧）；
+  ④三处合并语句 → **Fixed**（HEAD `:629` / `:954` / `:1030` 逐行取证）；
+  ⑤主档指路注释 → **Fixed**（补两行，主档 478 → 480，analyze 与 5 档测试已复跑）；
+  ⑥双 `Of` 命名 → **Accepted**（设计侧命名例外）。
+- 第 2 轮新增 1 条 🔵 report-only（不阻塞，记录面）：本节「三处」表述与树不完全对应——`thincoder_title.dart:62` 的 `kernel._titleDeferred = false; kernel._titleSending = true;` 是同形合并行，未被本节所列 HEAD `:629` / `:954` / `:1030` 的取证覆盖。该行第 1 轮未点名，非本步引入；建议父侧/设计侧做 HEAD 取证时补这一行。本步不改。
+- 终态：**clean**（内部 explore 偏差审计 1 轮 clean · 内部 advisor 代码评审 2 轮，终判 pass · 修正轮 1 次 = 2 行注释 + 本节记录 · 无未决 🔴）。
+
 ## §6 验证与收口（父代理）
