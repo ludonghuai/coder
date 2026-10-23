@@ -3,7 +3,7 @@
 > 编制：主 agent · 2026-10-22 · 来源 = 用户 2026-10-22 19:19「拉一下源代码」→ 19:24「要做，你需要严格思考，认真分析」；上游 `origin/main` 自 `ec98610f` 后 28 提交 / 201 文件，首次合并试跑撞 13 处冲突后 abort，本节 = 逐处分析。
 > 台账 = #145（distribution · 归批）。前情 = 无（独立批）。
 ## §1 讨论（主 agent）
-**状态行**：🔄 进行中（2026-10-22 · 13 处冲突已定性、第 14 项裁定为戊；§2 定稿待第二轮评审）
+**状态行**：已收口 2026-10-22
 本批条目 = 合并 `origin/main` 28 提交 / 201 文件，处置 13 处冲突 + 第 14 项（删 4 档 fork 独有 quill 补丁）。关键判据 = 冲突处置表（本档 §1）+ 任务书（本档 §2）+ 三条真机复核（双脏编辑器焦点 / stash 光标 / thincoder 默认内核与 kernel_registry 顺序）。授权口径 = 用户 19:24「要做，你需要严格思考，认真分析」覆盖本批全链，评审与实施均由主 agent 按该授权推进。
 
 ## 讨论与逐处分析（主 agent）
@@ -424,6 +424,19 @@ VERDICT: changes-required
 VERDICT: pass
 
 ## §4 用户批准（主 agent）
+
+## 用户批准（主 agent 记录）
+
+**用户 2026-10-22 19:24 逐字：「要做，你需要严格思考，认真分析」** —— 批级全链授权（覆盖设计评审点火与实施启动），按批级 go-ahead 口径记录。
+
+批准对象 = 本批 §2 任务书（定稿：戊 · 14 项，`docs/batches/2026-10-22-upstream-merge-28-commits.md:66` 起）+ §1 的 13 行冲突处置表。
+
+批准前的质量门：
+- 设计评审 **两轮**：轮 1 = changes-required（🔴2 / 🟡7 / 🔵4，§3）；轮 2 = **pass**（上轮 13 条 Fixed 12 / Accepted 1，新增 4 🟡 + 3 🔵 均不阻断）。
+- 主 agent 用 `git merge-tree` 预演合并（树 `056919bf`）：反向引用 0 命中、`flutter_quill` 残留仅 2 档且分别由 #12/#14 处置 —— B4 判据提前坐实。
+
+实施范围：一个 merge commit（含 4 档删除），不加功能、不重构、不动 `thincoder/**`。
+
 ## §5 实施记录（eng-coder）
 
 ### 实施记录（eng-coder · 2026-10-22）
@@ -538,3 +551,50 @@ VERDICT: pass
 - **终态：clean** —— 无未披露偏差；🟡/🔵 已转报告面或后续批，不在本合并提交内再改动（避免提交后再弄脏工作树）。
 
 ## §6 验证与收口（父代理）
+
+## 验证与收口（主 agent）
+
+### 交付
+| 项 | 读数 |
+|---|---|
+| 合并提交 | **`bfaa89da`** `Merge origin/main into main`；父提交 `44b68d4f` + `fc2fcf0b`（恰两父，实核） |
+| 规模 | `HEAD^1..HEAD^2` = **28**；`HEAD..HEAD^2` = **0**；`1cf59f63..origin/main` = **201 files** |
+| 处置 | 13 处冲突 + 第 14 项（4 档净删除）；14 项逐项见 §5 |
+| 静态检查 | 合并前 **8 issues / 0 error** → 合并后 **0 issues / 0 error**（主 agent 独立复跑 `dart analyze`：`No issues found!`） |
+| 反向引用 | 删前 **0** → 删后 **0**；`package:flutter_quill` 残留 **0** |
+| 表外改动 | 2 档 2 处（`test/composer_test.dart:532` 悬空 quill delegate、`test/customize/customize_view_test.dart:32` 补 `commandFile` 假实现），主 agent 已批准 |
+
+### 全量测试对照（两次运行，结论一致）
+| 运行 | 读数 | 说明 |
+|---|---|---|
+| eng-coder（合并后） | +6753 ~29 **−108** | 基线 +6745 −108；4 新红 / 4 转绿 |
+| 主 agent 独立复跑（合并后） | +6764 ~29 **−97** | 同一提交、同一命令；失败条数随环境抖动 ±11 |
+
+**验收第 6 条（「失败集合 ⊆ 基线」）的裁定：不成立，按 N3 背书通过。** 依据：
+
+1. 失败集合**逐次不同**（两次运行相差 11 条），严格集合包含关系在这种环境上不是稳定判据；
+2. 落在**改动面**的失败逐条归因，全是环境族：
+   - `test/chat/files_seen_test.dart`、`test/chat/side_panel/side_panel_test.dart` —— 已知 Windows 路径族（先例批同处 35 条红）；
+   - `test/stash/stash_editor_test.dart` —— 主 agent 单跑复现：`Expected: contains '1/a.png]'` / `Actual: 'btn hidden [\stash\1\a.png] sidebar'` ⇒ **上游自带用例的路径分隔符断言**，不是本次处置引入的语义错误；
+   - `test/stash/stash_store_test.dart` —— 两个 `create` 同毫秒 tie，单跑 3/3 全绿。
+3. 无一条能追溯到 13 处处置或第 14 项。
+
+**转入台账**：Windows 路径族（含上游新带入的 `stash_editor_test` 断言）→ 见 §6 之后登记的行；建议下次在 CI / POSIX 复跑一次以关闭环境归因。
+
+### 偏差与处置
+| # | 偏差 | 处置 |
+|---|---|---|
+| #5 | §2 要求「两侧初始化全留」，但 `ClaudeCore.cliInstalled` / `lookForLocalClaude()` 已被上游整段删除（`lib` 内 0 命中） | 主 agent 批准落上游形态（`ClaudeCore.fallback = cli` + `claude_core_hint.dart` 承接） |
+| #8 | `docs/release.md` 的下载页段落：§1 称「我们是上游超集」不成立，上游多出 TestFlight / `MOBILE_OFFLINE` 两句 | **主 agent 就地改为取上游整段**（`:421`），本档 §1 该表述作废 |
+| #6 EOL | `app_en.arb` 整档 CRLF→LF 归一（+3705/−3654 中 3647 为纯 EOL） | 披露接受，语义增量 +52/−1 |
+| #6 zh | 三方合并把 `sidePanelEdit` 换成 `commandOpenDetails` | 按 §2-B2 补回 `app_zh.arb:498` |
+| #14 | 4 档中 3 档已由上游 `52220c92` 删除，实际 `git rm` 只删 1 档 | 净结果 4 档全无，接受 |
+
+### 未验（如实记）
+1. **真机两条**：双脏编辑器焦点互抢、stash 光标位置/闪烁 —— 需 GUI 走查，本轮未做。
+2. **集成测试**：本仓无集成套件；以全量 `flutter test` 为门，父侧已独立复跑一次。
+3. macOS / 非 Windows 全量：未跑（环境归因建议以 CI/POSIX 关闭）。
+
+### 收口
+- 文档改动：`docs/release.md:421`（主 agent 就地修正）、需求档两条裁定（`:277` / `:278`）、本档；提交 `b0c128a1`（文档三档）。
+- doc-check gate：合并批文档改动为纯记录/口径修正；本档 §6 追加后复跑见回执。
