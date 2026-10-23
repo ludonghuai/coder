@@ -274,6 +274,9 @@ thincoder 将来补能力 → 改能力映射表（§5）+ 适配层小改即可
 - 2026-10-19 · 用户 01:37：「运行改thincoder仓库」——F19 的 B1 例外获准（方案 A）；CLI 侧另立 out-of-repo 轮，保持上游可合并。
 
 - 2026-10-19 · 用户 19:45：「模型以后都用视觉型即可，大模型厂商也会逐渐做的综合全面」——图片/视觉面不为「非视觉模型」加提示（#96 撤回）；模型选型以视觉模型为准。
+- 2026-10-22 · 用户 19:32：**「我们默认还是保留thincoder」**——新会话的默认内核保持 **thincoder**（`KernelRegistry._all = [thincoder, claudeCode]`，取列表首位即默认）；上游把 Claude 侧内核默认值改成 CLI（`ClaudeCore.fallback = cli`）只作用于 Claude 内核自身，不改变本仓的默认内核选择。合并上游时该顺序不得被改写。
+- 2026-10-22 · 用户 19:37：**「我们主要用的是thincoder，所以新功能要适配一下」**——上游合并（批 21）后，内核相关的新功能必须在 thincoder 内核下也可用。实测依赖内核的只有两条：① `SessionRenamed`（上游仅 `claude_code_kernel.dart` 发出；本仓全仓 0 处，thincoder 改名走 `thincoder_catalog.dart:72` → `session/set_title`，不发该事件）② `/command` 完整描述与打开文件（thincoder 内核无 slash 命令面）。其余（文件改动菜单 / `@` 找文件夹 / Enter 发排队 / 模型复制 / markdown 拖放 / SSH 重连 / Skia / 内存）为宿主面，不依赖内核。适配归**批 22**（独立设计轮），不混进纯合并批。
+
 
 - 「加上 thincoder 内核，Claude 保留，thincoder 为默认，需要和终端的 thincoder 相通；全做；
   thincoder 用户自己的事情；thincoder 的配置去用户电脑里面找……我做出来桌面版之后只需要添加配置即可；不改 thincoder 仓库」。
