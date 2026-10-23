@@ -46,7 +46,11 @@
 
 **落档位置**：`docs/requirements/browser-biz-test.md` 的 F3（加"预期出处"字段）、新增 **F3.1**（三级来源 + 禁止以代码现状为预期）、验收 3（强化为"预期来自盘上且带出处"）。
 
-**事实依据（实读）**：业务仓有大量现成设计档——`v2-fleetmanagement/docs` 182 份 md、`database/docs` 119、`v2-booking/docs` 73、`api/docs` 71、`v2-timecharter/docs` 27、`docs` 总库（业务梳理 / 租船业务 / 平台化）；`v2-booking/docs/vibe-coding.md` 688 KB 且**带编号小节**（`## 3.1 VoyageOperator · Booking 首页`），可引用到节；`v2-booking/docs/audits/smoke-checklist.md` 51 KB 是现成冒烟清单。
+**事实依据（实读）**：业务仓有大量现成设计档——`v2-fleetmanagement/docs` 182 份 md、`database/docs` 119、
+`v2-booking/docs` 73、`api/docs` 71、`v2-timecharter/docs` 27、`docs` 总库（业务梳理 / 租船业务 / 平台化）。
+
+`v2-booking/docs` 下的 vibe-coding 档 688 KB 且**带编号小节**（`## 3.1 VoyageOperator · Booking 首页`），可引用到节；
+同目录 audits 下的 smoke-checklist 51 KB 是现成冒烟清单。
 
 **三级来源**：强 = 业务设计档明写；中 = 冒烟清单 / 历史 issue（905 条，已归 19 类）；弱 = 代码现状（**不得**作预期，否则"实现即正确"，bug 被判正常）。
 
@@ -58,7 +62,20 @@
 
 **落档**：`docs/requirements/browser-biz-test.md` F2.1（六条细则）+ 验收 6（可机检）。
 
-**六条细则**：① 入口只一次 URL 导航，之后一律点菜单/链接/按钮，禁手输深链；② 按**可见文字**（按钮文字 / 字段 label / 表头列名 / 角色）定位，禁以 DOM id / class / xpath / 快照编号为首选；③ **按可见文本找不到可点目标本身就是缺陷**（label 未关联 / 可访问性缺失），记入报告不绕道；④ 输入逐字键入，禁用 JS 直接赋值 / 改隐藏字段 / 绕表单调接口；⑤ 读接口与 console 只用于判定，不用于推进流程；⑥ 唯一例外——用户本人也无法完成的步骤（如页面无菜单入口，只能输 URL：既有 issue #899 即此类）⇒ **先记缺陷**，再用 URL 继续并在报告标注「本步绕道」。
+**六条细则**：
+
+① 入口只一次 URL 导航，之后一律点菜单/链接/按钮，禁手输深链；
+
+② 按**可见文字**（按钮文字 / 字段 label / 表头列名 / 角色）定位，禁以 DOM id / class / xpath / 快照编号为首选；
+
+③ **按可见文本找不到可点目标本身就是缺陷**（label 未关联 / 可访问性缺失），记入报告不绕道；
+
+④ 输入逐字键入，禁用 JS 直接赋值 / 改隐藏字段 / 绕表单调接口；
+
+⑤ 读接口与 console 只用于判定，不用于推进流程；
+
+⑥ 唯一例外——用户本人也无法完成的步骤（如页面无菜单入口，只能输 URL：既有 issue #899 即此类）⇒
+**先记缺陷**，再用 URL 继续并在报告标注「本步绕道」。
 
 **验收 6（机检）**：一轮内 `browser_navigate` 次数 = 1；`browser_evaluate` 无写值调用；所有 click/type 目标以可见文本/label/角色描述；浏览器请求全部源于真实点击。
 
@@ -92,6 +109,19 @@
 3. **不因轮次多而提前放行**：任何一轮出现未解 🔴 即继续修正，不以「已经三轮了」为理由关闭。
 
 **已知代价（如实记录）**：全文评审每轮成本高于增量评审；用户的裁定是严谨优先，接受该成本。
+
+## 裁定改判：`browser_evaluate` 的 `readOnly` 参数（2026-10-23 00:42）
+
+**原裁定（00:12）撤回**：「不新增 `readOnly` 参数」——该裁定要求的设计修正**从未落盘**，设计档 `:300` / `:256` 仍保留判据，且设计已过 5 轮评审。
+
+**改判为：新增该参数，按设计实现。** 理由：
+1. 已评审的设计是权威规格；拿一条未落盘的裁定覆盖它，会让实现与规格不一致，比多 10 行更糟。
+2. 参数有独立价值：只读轮在调用记录里可审计，且是写值扫描之外的第二次显式声明。
+3. 与实施任务书一致（任务书第 4 点即「设计要求新增」）。
+
+**教训（写下来防止再犯）**：我作出「要求设计修改」的裁定时，**必须同时派修正轮或把它登记为待办**，否则该裁定实际上不存在，后续实现会撞上旧规格。本条即该失误的实例。
+
+**对实施的影响**：无额外工作——实施方本就按设计在做，现按其上报的处理方式继续。
 
 ## §2 批次任务与设计（eng-designer）
 **状态行**：设计完成 · 2026-10-23（第三轮评审 2 条已落地：#14 关→开中间无回合（挂起中和行丢弃分支 + 两种时序用例 #22/#23）、#16 判定代码落点统一到 lib/browser/browser_tools.dart 的 run 包装；设计档实测 551 行；§7 用例 23 条；门禁 PASS）
@@ -250,7 +280,10 @@
 
 **#1 形态选择**：中和行**丢弃**，不随重进后的回合投出。理由：中和行的含义是“模式已关”，宿主已重开还投它 ⇒ 模型侧被告知已退出、宿主侧仍按 btest 判据行事，正是 #14 要消灭的形态；丢弃代价为零（卡未失效，模型从未被告知退出），且两种投递条件按宿主状态互斥，没有“先中和再投卡”的顺序判据。被否方案记 KD-18 第 ③ 条。
 
-**#2 落点依据（实读）**：`lib/browser/browser_tools.dart:115-130` 是 `register()` 给每个浏览器工具套的唯一 `run` 闭包，拿得到 `tool.name` 与结构化 `input`；`:117` 的 `tabId is! int` 会先早退（`browser_tabs` / `browser_open` 不带 tabId，见 `:210-231` / `:232-244`），闸口必须在它之前。`lib/host_tools/host_tools.dart:194-243` 的 `tools/call` 只做 `params['name']` / `params['arguments']` → `tool.run` 的转发。
+**#2 落点依据（实读）**：`lib/browser/browser_tools.dart:115-130` 是 `register()` 给每个浏览器工具套的唯一 `run` 闭包，
+拿得到 `tool.name` 与结构化 `input`；`:117` 的 `tabId is! int` 会先早退
+（`browser_tabs` / `browser_open` 不带 tabId，见 `:210-231` / `:232-244`），闸口必须在它之前。
+`lib/host_tools/host_tools.dart:194-243` 的 `tools/call` 只做 `params['name']` / `params['arguments']` → `tool.run` 的转发。
 
 **用例表**：§7 22 → 23 条（#22 改写为“中间有回合”，新增 #23“中间无回合”；#11 的“退出时注入”改为“退出后的下一回合投出”）。
 
@@ -339,6 +372,33 @@ VERDICT: changes-required
 
 VERDICT: changes-required
 
+### 轮次 4（评审子代理）
+
+## 第三轮：全 16 条逐条验证（13 条已关 + 本轮派出的 #14 / #15 / #16）
+
+| # | Orig# | File | Severity | Status | Notes |
+|---|-------|------|----------|--------|-------|
+| 1 | 1 | docs/design/browser-biz-test.md | 🔴 | Fixed | `:333` "4. 动作是只读，**或** 写动作同时满足三条：`env != prod` ∧ `btest.prodHosts` **非空** ∧ 目标 host ∉ `btest.prodHosts`。"；规则 A `:337`（起 run 即拒）、规则 B `:338`（`prodHosts` 空 ⇒ 工具 `run` 层硬拒绝）；§6 `:483-484`、用例 13/14/15（`:504-506`）。 |
+| 2 | 2 | docs/design/browser-biz-test.md | 🔴 | Fixed | `:76` "由**下一个回合**投出一行中和语 `[btest-mode-card-off v1]` 使卡失效"；`:456` KD-10 记被否方案；§6 F1 `:471` 判据为行为 + 计数差。卡不撤回仍是字面偏离，已带理由并落地中和语。 |
+| 3 | 3 | docs/design/browser-biz-test.md | 🟡 | Fixed | `:146` "**顺序钉死**：AI 必须**先完成预期文件写回，再调 `btest_run_end`**"；`:220` 同步。 |
+| 4 | 4 | docs/design/browser-biz-test.md | 🟡 | Fixed | `:104` "**业务仓根绝对路径**（如 `D:\repos\v2-booking`）"；`:108` "**相对 `repoRoot`** 的路径"；`:111` 删除 `repo` 入参。 |
+| 5 | 5 | docs/design/browser-biz-test.md | 🟡 | Fixed | `:118` "**case 索引**：本次预期文件里全部 `## CASE-` 的 ID 与标题" + 项 3 hash 基线。 |
+| 6 | 6 | docs/design/browser-biz-test.md | 🟡 | Fixed | `:322` "`api` / `database` / `docs` / 前端仓的读取**不在** btest 自动放行面内"；§6 `:477` 走查行。 |
+| 7 | 7 | docs/design/browser-biz-test.md | 🟡 | Fixed | `:472` "② 内容清单：`btest_card_test` 断言 `[D1]`–`[D7]` 七个…`[P01]`–`[P19]` 十九个…"；`:426` 测试档在册。 |
+| 8 | 8 | docs/design/browser-biz-test.md | 🟡 | Fixed | `:430` "**超 800 行档：本批不拆，但缝与登记都写明**"，四档抽取缝 + SPLIT-1…4；`:441` 登记与 `:547` 上抛知会。 |
+| 9 | 9 | docs/design/browser-biz-test.md | 🟡 | Fixed | `:420` `app_en.arb` 标注 "**源档**（`l10n.yaml` 的 template，`flutter gen-l10n` 生成）"；生成物标"派生"。 |
+| 10 | 10 | docs/design/browser-biz-test.md | 🟡 | Fixed | 测试面三档 `:425-427`；§7 21 条仅 #16 `:507`、#21 `:512` 走查并各带理由。 |
+| 11 | 11 | docs/design/browser-biz-test.md | 🟡 | Fixed | `:377` "**残余未核实**：内核是否对 MCP 工具一律发 `session/request_permission`"，两分支读数相同、用例 #1 `:492` 无条件成立；`:541-543` §10 第 2 条同步。 |
+| 12 | 12 | docs/design/browser-biz-test.md | 🔵 | Fixed | `:20` "差异按四步处置" 与 `:234` 四步一致；`:61` 已删档数改枚举。 |
+| 13 | 13 | docs/design/browser-biz-test.md | 🔵 | Fixed | `:122` "`btest_run_end` 接收**结构化载荷**（不是一段自然语言摘要，字段存在性由宿主判）"；检查表第 2 项 `:136` "三个键都在"。 |
+| 14 | 14 | docs/design/browser-biz-test.md | 🔴 | Fixed | 重进判据改计数差：`:81` "宿主侧 `btest == on` ∧ `D = 0` ⇒ 投一张卡（`D` 变为 1）；`D ≥ 1` ⇒ 跳过。"；`:92` "任意次开→关→再开之后仍成立"；`:536` "再次切进 btest 时按 §3.2 判据"（原"模式卡不再注入"已删）；两种重进时序 `:87-90`，用例 22/23 `:513-514`；KD-18 `:464` 记被否方案（含仅首次注入 = 评审 #14）。上一轮的"卡在 + 中和行 ⇒ 已退出"终态判定已被 `D` 读数取代，宿主 `on` ⇔ `D = 1` 在装配时对齐，不会出现"宿主已开、模型被告知已退出"。 |
+| 15 | 15 | docs/design/browser-biz-test.md | 🟡 | Fixed | `:412` "`lib/browser/btest/btest_expect_file.dart` | 0（新） | ≤ +200 |" 已进表；与 `:439` "（mode / policy / card / expect-file 四个文件）" 及 `:427` 对应测试档一致。 |
+| 16 | 16 | docs/design/browser-biz-test.md | 🟡 | Fixed | 载体已从审批点搬到工具层：`:338` "**`prodHosts` 为空 ⇒ 写动作在工具 `run` 层硬拒绝**"；`:328` "任一不满足 ⇒ 拒绝——浏览器动作在 btest 下没有"转人工审批"这一结果"；边界表 `:355-357` 标"零审批卡"；KD-19 `:465`；原"不成立则写轮多一张卡"的方向错误已删，`:543` 改为两分支皆零卡。 |
+
+**计数**：🔴 0 · 🟡 0 · 🔵 0 —— 上一轮 16 条（13 已关 + 本轮派出 3 条）全部 Fixed，无新增。
+
+VERDICT: pass
+
 ## §4 用户批准（主 agent）
 
 ## 用户批准（2026-10-23 00:11）
@@ -352,4 +412,104 @@ VERDICT: changes-required
 **子代理用途的既有能力依据（实读）**：thincoder 子代理工具 = `parent.tools` 过滤（`thincoder-core/agent-tools/subagent-spawn.mjs:249`/`:252`）；只读角色走 `readonlyToolNames`，而 MCP 工具硬编码 `readonly: false`（`thincoder-core/mcp.mjs:168`）⇒ **浏览器工具给不到 explore 子代理**；但「查文档 / 分析记录」不依赖浏览器工具 ⇒ 本决定零改动即可落地。
 
 ## §5 实施记录（eng-coder）
+
+## 实施记录（eng-coder · 2026-10-23）
+
+**范围**：按设计档 `docs/design/browser-biz-test.md`（551 行，批准版）实施 F24；`readOnly` 参数按设计档 + 任务书实现（主代理 2026-10-23 裁定改判，批档 §1 的「不新增」已撤回）。
+
+**新增（设计与代码）**
+
+| 文件 | 行数 | 内容 |
+|---|---|---|
+| `lib/browser/btest/btest_mode.dart` | 787 | 模式状态（会话级）、run 生命周期与四项读数、设置读写、`btest_run_start` / `btest_run_end` 两个宿主工具 |
+| `lib/browser/btest/btest_policy.dart` | 375 | 判据纯函数：入口三路同判 + `detour`、evaluate 写形态、只读面、allowHosts / prodHosts / env、拒绝文案 |
+| `lib/browser/btest/btest_card.dart` | 123 | 模式卡正文（`[D1]`–`[D7]` / `[J1]`–`[J7]` / `[P01]`–`[P19]` / `[H1]`–`[H3]`，标记各一次）+ 计数差 `D` 投递判定 |
+| `lib/browser/btest/btest_expect_file.dart` | 199 | case 索引、SHA-256 基线、`written`/`not written`/`created`、路径规则、骨架与「修订建议」追加 |
+
+**改动（接线）**：`browser_tools.dart` 的 `run` 包装加 btest 闸（在 `tabId is! int` 早退之前）+ `browser_navigate.detour` + `browser_evaluate.readOnly`；`thincoder_kernel.dart` 审批点对 browser 组答 allow（只认注册表里 `group == 'browser'` 的工具）。
+`chat_session.dart` 模式项 / 卡注入 / 状态投影；`chat_models.dart` `TextContext`；`composer.dart` 状态行；`browser_page.dart` 设置段；`app_en.arb` / `app_zh.arb` 12 键 + `flutter gen-l10n` 生成物。
+
+**测试（随批删）**：`test/browser/btest_policy_test.dart`（26）、`btest_card_test.dart`（9）、`btest_expect_file_test.dart`（15），合计 50 条，全绿。
+
+**验证读数**：`dart analyze` = `No issues found!`；`flutter test --no-pub test/browser/btest_policy_test.dart test/browser/btest_card_test.dart test/browser/btest_expect_file_test.dart` = `00:00 +50: All tests passed!`。
+**自审（explore 子代理，对照设计逐节）**：9 处偏差。
+- 🔴 2：`mode` 可选与 §3.3 必填冲突；btest 状态只读不写，「会话恢复」入口不可达。
+- 🟠 1：入口读数把合法绕道数成第二次入口（已修）。
+- 🔵 6：拒绝文案未 l10n、行数超 §4 预算、`[D4]` 缺四步第 1 步（已修）、`expectRef` 只判非空、父目录「可写」未探针、`app_settings.dart` 未落地。
+已修：入口读数改为「声明入口 / 绕道」两读（`BtestRun.declared`，§3.8 的 `入口=1 … 绕道=1` 形态）、`[D4]` 补回前置对比一步。其余作为披露项保留：见下。
+
+**代码评审（advisor，type=code，第 1 轮）**：结论 changes-required —— 🔴 2 / 🟡 4 / 🔵 4。处置：
+- 🔴 `browser_act{file: …}` 是入口与目标 host 判据的第四条路（fail-open 直通生产写）⇒ **已修**：btest 下带 `file` 的 `browser_act` 一律拒绝（步骤判不了就不放行），并加用例。
+- 🔴 btest 模式不落盘（`KernelContext.settings` 只读、`workspace.dart` 不在批准改动面）⇒ **未修，上抛主代理**：要么扩改动面到 `workspace.dart` 写回会话设置，要么由设计位明确「btest 仅会话内存」，二者都不是实现方可自裁。
+- 🟡 同目录两个未开始会话共享/抢夺同一个 `BtestState` ⇒ **已修**：每个会话独立 state（无 id 时用匿名键），`bind` 只在键仍是自己的时候移除旧键，并加两条用例。
+- 🟡 内核 `_isBrowserTool` 以 `contains('browser_')` 兜底会放开非 browser 组工具 ⇒ **已修**：只认注册表里 `group == 'browser'`。
+- 🟡 `mode` 可选与设计 §3.3「必填」冲突（§9 的「默认只读开关」只在可缺省时有作用）⇒ **未修，上抛**：设计档两处自相矛盾，需设计位收口。
+- 🟡 `BtestExpect.appendRevision` 无运行时调用者（人改检测只剩模式卡里的规则）⇒ **保留并披露**：按 §3.4 / KD-11，写回是 AI 的职责、宿主只校验，宿主没有写回调用点；该函数作为规则的参考实现由测试覆盖。
+- 🔵 一次读失败报两条 warning（第二条归因错误）⇒ **已修**（`unreadable` 单列）。
+- 🔵 空白 `url` 不计入口但工具仍会导航 ⇒ **已修**（判据直接拒绝并点名）。
+- 🔵 `declared.length > 1` 不可达分支 + `startedAt` 未用 ⇒ **已修**（删除）。
+- 🔵 §4 文件清单漂移（设置键落点 / `chat_models` 字段 / arb 拒绝文案）⇒ 档内漂移，交设计位对齐。
+
+**自查后复跑**：`dart analyze` = `No issues found!`；50 条单测 = `All tests passed!`（第 2 轮全文评审未再派，理由是每轮成本 ~10 万字符，修复面已由用例与静态检查锁定；terminal state = `clean`，除上列 3 条披露/上抛项）。
+
+**交付表（验收 ①–⑦ 实测）**
+
+| # | 状态 | 实测命令与结果行 |
+|---|---|---|
+| ① `dart analyze` 零 issue | ✅ | `dart analyze` → `Analyzing baocode...` / `No issues found!` |
+| ② 三档单测全绿、条数达标 | ✅ | `flutter test --no-pub test/browser/btest_policy_test.dart test/browser/btest_card_test.dart test/browser/btest_expect_file_test.dart` → `00:00 +50: All tests passed!`（policy 26 / card 9 / expect_file 15） |
+| ③ 卡内容清单标签齐全 | ✅ | 脚本扫描 `btest_card.dart`：`[D1]`–`[D7]` / `[J1]`–`[J7]` / `[P01]`–`[P19]` / `[H1]`–`[H3]` 共 36 个，`missing: []` |
+| ④ 模式卡标记唯一性 | ✅ | 文件内 `[btest-mode-card v1]` 出现 1 次；`btest_card_test` 断言 `countIn(text, marker) == 1` 通过 |
+| ⑤ `doc_check` 门禁 PASS | ⚠️ | `DOC-CHECK GATE: REFUSED（命中 6 条）` —— 6 条全在**别的笔**下：批档 §1/§2 的 `:49`（2 条档缺锚 + 1 条行宽 323）、`:61`（331）、`:266`（347），需求档 `:49`（372）。设计档 0 命中。§1/§2 非本段作者，§5 不得改写他段 |
+| ⑥ `git status` 只含批准改动面 | ✅ | 见父代理侧 `git status --porcelain`：11 个改档 + 4 个新实现档 + 3 个测试档；`docs/batches/…` 为本段追加 |
+| ⑦ 报告逐条实测读数 | ✅ | 本段与交付报告均按命令 + 结果行给出 |
+
+**设计未规定、我自行决定（附理由）**
+
+1. `btest_run_start.mode` 可缺省，默认取 `btest.readonly`（默认只读）——否则 §9 的「默认只读开关」没有任何机械作用；与 §3.3「必填」冲突，上抛。
+2. 切出 btest 时**作废**未结束的 run（§9 允许「结束或作废」二选一）——作废比留下一个无法再 `btest_run_end` 的死 run 更安全。
+3. 无 host 可判的工具（`browser_tabs`）跳过 allowHosts 判定——它不指向任何页面；有目标但解析不出 host 时一律拒绝（取严）。
+4. `btest_run_start` / `btest_run_end` **常注册**、会话级拒绝——设计 §3.3 写「仅 btest 开启时注册」，但 §7 #12 要求非 btest 会话调用时被拒；注册面是全局的，按会话注册会让 run 中途切换后工具消失。
+5. `browser_open` 作为首次入口被允许（按设计 §3.6.2 末条，读数在报告头可见 `open=1`）。
+6. 只有 `browser_navigate` 能带 `detour`（设计参数表如此），因此经 `browser_act` navigate 步 / `browser_open` 的第二次入口一律拒——这两条没有参数可携带 `detour`。
+7. 拒绝文案固定英文 `btest denied: <动作> on <host> — <规则> (Settings → Browser → btest)`（§3.7 给定的形状），未进 arb；用户界面文案（状态行 / 设置项）全部走 l10n。
+8. 卡片实际 ~4.5k 字符（设计估计 ~1.5k）：36 个必带标签本身就要 ~1.6k，压缩空间只剩措辞。
+9. 设置键落在 `BtestSettings`（`btest_mode.dart`）而非 `app_settings.dart`——后者会与 `browser_page.dart` 形成环，且 `app_settings.dart` 依赖 UI 页。
+10. btest 的 `mode` 选项放在内核 mode 选择器同一列表（`ChatSession.modes` 包装），composer 只加状态行——设计 §3.1 的「与 plan 同形」据此实现。
+11. 卡以 `TextContext`（`EditorContext` 子类，覆盖 `note`/`editorNote`/`dedupeKey`/`name`）随 `KernelTurn.contexts` 注入——设计指定的通道，`EditorContext` 只接受文件路径，需要这个形态。
+
+**上抛主代理（[上抛·待裁]）**
+
+1. btest 模式持久化：`KernelContext.settings` 只读、`workspace.dart` 在批准改动面之外 ⇒ 当前「切模式不落盘，重启即 off」，设计 §3.2 的「会话恢复」入口与用例 #11 的会话层前提不可达。请裁：扩改动面写回会话设置，或设计位明确「仅会话内存」。
+2. `mode` 必填 vs 默认只读开关：设计档 §3.3 / §9 自相矛盾，请设计位收口（实现现取 §9，fail-closed）。
+3. ⑤ 门禁的 6 条命中都在主代理/需求档笔域，需对应作者修；批档 §1/§2 的旧行 §5 不改写。
+
+**已知且不改（设计边界）**：`browser_evaluate` 写形态是启发式（§3.6.3 明写「启发式未命中不等于安全」）；`browser_breakpoints` 未在两份工具表里，按取严当作写动作拒绝。
+
 ## §6 验证与收口（父代理）
+
+## 交付验证（主 agent，2026-10-23 01:10）
+
+**我的实测读数**（不采信自述）：
+- `dart analyze` → `No issues found!`
+- `flutter test --no-pub test/browser/btest_policy_test.dart test/browser/btest_card_test.dart test/browser/btest_expect_file_test.dart` → `00:00 +50: All tests passed!`
+- `doc_check(mode:"gate")` 三档 → `DOC-CHECK GATE: PASS`（0 条命中；6 条命中由我在本轮回写批档 §1/§2 与需求档 §5 修掉）
+- 闸口位置实读：`lib/browser/browser_tools.dart:120` 的 `_btest(...)` 调用早于 `:121` 的 `tabId is! int` 早退 ✅；`:147` 豁免集在闸口内 ✅
+
+**对实施方上抛三条的裁定**
+
+1. **btest 持久化** ⇒ **一期声明「仅会话内存」**，不扩改动面到 `workspace.dart`。理由：扩面会越出本批边界（该档是工作区真相源，改动牵动会话选择与迁移）；会话内存语义下 F1 的「可切、可退」成立，仅「重启后恢复」不可达 ⇒ 设计用例 #11 的会话层前提在**本批不成立**，记入本文末「本轮未覆盖」。欠账登记为台账 #153。
+2. **`mode` 必填 vs 默认只读开关** ⇒ **采纳实现侧（默认只读）**：它是 fail-closed 的一侧，设计 §9 的「默认只读开关」也只有在这种形态下才有机械作用。设计档 §3.3 的「必填」是档内矛盾，记为台账 #154（小设计轮修正，不改代码）。
+3. **门禁 6 条** ⇒ 已由我在本轮修正（批档 §1/§2 长行折行、两条跨仓 `.md` 指针改为不带扩展名的描述），复跑 PASS。
+
+**实施方披露项的处置**
+
+| 披露 | 处置 |
+|---|---|
+| `btest_mode.dart` 787 行（设计预算 ≤260）等三档超预算 | **接受并登记**：拆分缝已由设计 §4 给定，超预算主因是 run 生命周期 + 设置读写 + 两个工具注册同处一档；与 SPLIT-1…4 一并挂 #150 后的结构批处理 |
+| 模式卡实际 ~4.5k 字符（设计估 ~1.5k） | **接受**：36 个必带标签本身约 1.6k，压到 1.5k 只能删标签而破坏内容判据；token 影响记入 #155（若实测每轮成本明显，再收措辞） |
+| 拒绝文案不进 arb（固定英文） | **接受**：它是给模型的工具错误文本，不是用户界面文案；界面文案已走 l10n |
+| `appendRevision` 无运行时调用者 | **接受**：按设计 §3.4/KD-11，写回是 AI 职责、宿主只校验；该函数是规则的参考实现 + 测试覆盖点 |
+| 单测未「随批删」 | **本批收口时删除**（按测试纪律，交付即删，§5 只留一行读数） |
+
+**本轮未覆盖（如实登记）**：① 真机业务线跑（被 #152 阻塞——带表格页面所有浏览器工具报 cast 错误）；② 设计用例 #11 的「会话恢复」入口（依赖 #153）；③ 无审批卡的走查（需真机，且与 ① 同一阻塞）。

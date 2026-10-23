@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 
+import '../../browser/btest/btest_mode.dart';
 import '../../chat/chat_models.dart';
 import '../../host_tools/host_mcp_server.dart';
 import '../../host_tools/host_tools.dart';
@@ -1062,6 +1063,20 @@ class ThincoderKernel
       return false;
     }
     final title = '${toolCall['title'] ?? ''}';
+    // btest answers for its own browser actions (design §3.7): the approval
+    // card is pressed away; what may run is judged at the tool itself
+    // (KD-13), so this layer needs no parameters.
+    if (BtestMode.onFor(_cwd, _slot) && _isBrowserTool(title)) {
+      final allow = options.any(
+        (option) => option['optionId'] == 'approve_once',
+      )
+          ? 'approve_once'
+          : 'approve_always';
+      request.answer({
+        'outcome': {'outcome': 'selected', 'optionId': allow},
+      });
+      return true;
+    }
     final id = 'approval:${request.id}';
     _approvals[id] = request;
     emit(
@@ -1115,6 +1130,18 @@ class ThincoderKernel
       emit(InteractionResolved(nextSeq, id));
     }
     _approvals.clear();
+  }
+
+  /// Whether [title] names a tool of the browser group, as the kernel names
+  /// them (`mcp__baocode__browser_click`, `baocode_browser_click`): btest's
+  /// approval hook answers for those alone (§3.7). A tool this host does
+  /// not know is not one — a substring that looks like one is no proof.
+  static bool _isBrowserTool(String title) {
+    final tool =
+        HostTools.called(title) ??
+        HostTools.named(title) ??
+        HostTools.lookup(title);
+    return tool?.group == 'browser';
   }
 
   // --- What the agent reports -------------------------------------------------

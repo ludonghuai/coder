@@ -9678,6 +9678,48 @@ class AppLocalizationsEn extends AppLocalizations {
       'When off, agents have no browser tools and the extension disconnects.';
 
   @override
+  String get btestStatusIdle => 'btest · not started';
+
+  @override
+  String btestStatusRun(String line, String face, String run) {
+    return 'btest · $line · $face · run $run';
+  }
+
+  @override
+  String get btestFaceReadonly => 'readonly';
+
+  @override
+  String get btestFaceWrite => 'write';
+
+  @override
+  String get btestSettingsTitle => 'Business Testing (btest)';
+
+  @override
+  String get btestSettingsDescription =>
+      'A run enters once, works a business line like a user, and judges against docs/qa/<line>.md in the business repository. These lists decide what it may reach.';
+
+  @override
+  String get btestAllowHosts => 'Allowed Hosts';
+
+  @override
+  String get btestAllowHostsDescription =>
+      'Comma separated. Empty refuses every browser action in a btest run.';
+
+  @override
+  String get btestProdHosts => 'Production Hosts';
+
+  @override
+  String get btestProdHostsDescription =>
+      'Comma separated. Empty refuses every write action; a write on one of these is refused even on dev or test.';
+
+  @override
+  String get btestDefaultReadonly => 'Start Runs Read-Only';
+
+  @override
+  String get btestDefaultReadonlyDescription =>
+      'A run that does not say its mode is read-only unless this is off. env: prod with write is always refused.';
+
+  @override
   String get browserSettingsStatus => 'Status';
 
   @override

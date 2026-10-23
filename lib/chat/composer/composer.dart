@@ -8,6 +8,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:bao_markdown/bao_markdown.dart';
 
+import '../../browser/btest/btest_policy.dart' show BtestFace;
 import '../../kernel/agent_kernel.dart';
 import '../../kernel/kernel_types.dart';
 import '../../keybindings/chat_keybindings.dart';
@@ -1621,6 +1622,10 @@ class ChatComposerState extends State<ChatComposer>
       _hovers,
       session.kernel,
       _showsStop,
+      session.btestOn,
+      session.btestRun?.id,
+      session.btestRun?.line,
+      session.btestRun?.face,
       session.health.noModel,
       session.context?.fraction,
       for (final choice in [
@@ -1659,6 +1664,7 @@ class ChatComposerState extends State<ChatComposer>
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (widget.session.btestOn) _buildBtestStatus(),
             ComposerImages(
               images: _pool,
               child: _editor!,
@@ -1908,6 +1914,37 @@ class ChatComposerState extends State<ChatComposer>
           placeholder: TextStyle(
             color: colors['agentsChatInput.placeholderForeground'],
           ),
+        ),
+      ),
+    );
+  }
+
+  /// btest's status line at the composer's top while the mode is on
+  /// (design §9): the line, how it runs, and the run's id; or that none has
+  /// started.
+  Widget _buildBtestStatus() {
+    final l10n = context.l10n;
+    final run = widget.session.btestRun;
+    final text = switch (run) {
+      final run? => l10n.btestStatusRun(
+        run.line,
+        run.face == BtestFace.readonly
+            ? l10n.btestFaceReadonly
+            : l10n.btestFaceWrite,
+        run.id,
+      ),
+      null => l10n.btestStatusIdle,
+    };
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 7, 12, 0),
+      child: Text(
+        text,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: AppColors.textMuted,
+          fontSize: 11,
+          height: 1.2,
         ),
       ),
     );

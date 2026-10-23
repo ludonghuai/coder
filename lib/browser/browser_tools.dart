@@ -11,6 +11,8 @@ import 'package:path/path.dart' as p;
 import '../chat/chat_models.dart' show ToolKind;
 import '../host_tools/host_tools.dart';
 import '../platform/data_dir.dart';
+import 'btest/btest_mode.dart';
+import 'btest/btest_policy.dart';
 import 'browser_analysis.dart';
 import 'browser_bridge.dart';
 import 'browser_records.dart';
@@ -73,6 +75,7 @@ abstract final class BrowserTools {
     ..._debugTools,
     ..._inspectTools,
     ..._sourceTools,
+    ...BtestTools.all,
     _interceptTool,
     _watchTool,
     _historyTool,
@@ -113,23 +116,103 @@ abstract final class BrowserTools {
           summary: (input, output) =>
               browserStepSummary(tool.name, input, output),
           run: (input, call) async {
-            final tabId = input['tabId'];
-            if (tabId is! int) return tool.run(input, call);
-            // What the page logs and loads, kept from now on.
-            await _watch(tabId);
-            final tab = BrowserTab(_browser(), tabId);
-            _blocked(tool.name, tab);
-            // The dialogs its page opens meanwhile answered (see
-            // BrowserRecords.acting).
-            final answer = await BrowserRecords.instance.acting(
-              tab,
-              () => tool.run(input, call),
-            );
-            if (tool.name != 'browser_close') _used(tabId);
-            return answer;
+            // Tool arguments come as JSON from a model: a number it read out of
+            // text arrives quoted ("406885479"), and every tool below casts its
+            // tabId to int. Coerced once here — the one place all browser tools
+            // pass through — instead of at each of them.
+            final args = _numbers(input);
+            return _runTool(tool, args, call);
           },
         ),
       );
+    }
+  }
+
+  /// [input] with the numbers a model may have quoted read back as numbers:
+  /// `tabId`, `ref`, `nth`, `limit`. A copy only when something changed.
+  static Map<String, Object?> _numbers(Map<String, Object?> input) {
+    Map<String, Object?>? copy;
+    for (final key in const ['tabId', 'ref', 'nth', 'limit']) {
+      if (input[key] case final String text) {
+        if (int.tryParse(text.trim()) case final number?) {
+          (copy ??= {...input})[key] = number;
+        }
+      }
+    }
+    return copy ?? input;
+  }
+
+  /// One tool's run, with the page watched and the dialogs answered.
+  static Future<Object> _runTool(
+    HostTool tool,
+    Map<String, Object?> input,
+    HostToolCall call,
+  ) async {
+    final tabId = input['tabId'];
+    await _btest(tool.name, input, call);
+    if (tabId is! int) return tool.run(input, call);
+    // What the page logs and loads, kept from now on.
+    await _watch(tabId);
+    final tab = BrowserTab(_browser(), tabId);
+    _blocked(tool.name, tab);
+    // The dialogs its page opens meanwhile answered (see
+    // BrowserRecords.acting).
+    final answer = await BrowserRecords.instance.acting(
+      tab,
+      () => tool.run(input, call),
+    );
+    if (tool.name != 'browser_close') _used(tabId);
+    return answer;
+  }
+
+  /// The btest gate (design §3.7): the operation's rules and the release's,
+  /// before the tool runs. A session with btest off passes untouched.
+  static Future<void> _btest(
+    String tool,
+    Map<String, Object?> input,
+    HostToolCall call,
+  ) async {
+    if (BtestGate.exempt.contains(tool)) return;
+    if (BtestGate.stateOf(call) == null) return;
+    final found = await _hostsOf(tool, input);
+    BtestGate.check(
+      tool,
+      input,
+      call,
+      hosts: found.hosts,
+      targeted: found.targeted,
+    );
+  }
+
+  /// The hosts a call targets: the entry urls it goes to, else the tab's
+  /// current page (§3.7: the target host is what the allow lists judge).
+  static Future<({bool targeted, List<String> hosts})> _hostsOf(
+    String tool,
+    Map<String, Object?> input,
+  ) async {
+    final urls = BtestPolicy.entryUrls(tool, input);
+    if (urls.isNotEmpty) {
+      final hosts = <String>[];
+      for (final url in urls) {
+        final host = Uri.tryParse(url)?.host;
+        if (host != null && host.isNotEmpty) hosts.add(host);
+      }
+      return (targeted: true, hosts: hosts);
+    }
+    final tabId = input['tabId'];
+    if (tabId is! int) return (targeted: false, hosts: const <String>[]);
+    final host = await _tabHost(tabId);
+    return (targeted: true, hosts: [?host]);
+  }
+
+  /// [tabId]'s page's host now; null when the tab or its URL is not known.
+  static Future<String?> _tabHost(int tabId) async {
+    try {
+      final tab = await _tab(_browser(), tabId);
+      final host = Uri.tryParse('${tab?['url'] ?? ''}')?.host;
+      return host == null || host.isEmpty ? null : host;
+    } on Object {
+      return null;
     }
   }
 
@@ -273,6 +356,14 @@ Do not use the browser tools to scrape or bulk-collect data from government, hea
             'enum': ['back', 'forward', 'reload'],
             'description': 'Instead of a URL.',
           },
+          'detour': {
+            'type': 'string',
+            'description':
+                'With a second entry navigation, and only then: the defect '
+                'already recorded (one line: what is missing), e.g. "no menu '
+                'entry for the agreement form, the URL has to be typed". '
+                'Without it a second entry is refused.',
+          },
         },
         'required': ['tabId'],
       },
@@ -299,6 +390,12 @@ Do not use the browser tools to scrape or bulk-collect data from government, hea
         'properties': {
           'tabId': _tabId,
           'expression': {'type': 'string'},
+          'readOnly': {
+            'type': 'boolean',
+            'description':
+                'In a readonly btest run: true says this script only reads '
+                '(a script that writes is refused in every run).',
+          },
         },
         'required': ['tabId', 'expression'],
       },

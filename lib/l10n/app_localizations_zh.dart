@@ -9158,6 +9158,47 @@ class AppLocalizationsZh extends AppLocalizations {
       '关闭后 agent 不再有浏览器工具，扩展也会断开连接。';
 
   @override
+  String get btestStatusIdle => 'btest · 待开始';
+
+  @override
+  String btestStatusRun(String line, String face, String run) {
+    return 'btest · $line · $face · run $run';
+  }
+
+  @override
+  String get btestFaceReadonly => '只读';
+
+  @override
+  String get btestFaceWrite => '写';
+
+  @override
+  String get btestSettingsTitle => '业务测试（btest）';
+
+  @override
+  String get btestSettingsDescription =>
+      '一轮只从起点进一次，像用户一样跑完整条业务线，判断依据来自业务仓的 docs/qa/<业务线>.md。下面两个列表决定它能到哪里。';
+
+  @override
+  String get btestAllowHosts => '允许域名';
+
+  @override
+  String get btestAllowHostsDescription => '逗号分隔。为空时 btest 轮里的每个浏览器动作都被拒绝。';
+
+  @override
+  String get btestProdHosts => '生产域名';
+
+  @override
+  String get btestProdHostsDescription =>
+      '逗号分隔。为空时写动作一律拒绝；即便 dev / test，打到这些域名的写动作也拒绝。';
+
+  @override
+  String get btestDefaultReadonly => '默认只读';
+
+  @override
+  String get btestDefaultReadonlyDescription =>
+      '未声明模式的一轮默认只读，关掉则默认写。env: prod 与 write 的组合始终拒绝。';
+
+  @override
   String get browserSettingsStatus => '状态';
 
   @override

@@ -46,7 +46,17 @@
 3. **预期来自盘上且带出处**：报告里每条"预期不符"能指到 F3 文件的某一行（而不是"模型认为"），且该行的 `expectFrom` 指到具体业务设计档的节 / 冒烟清单条目 / issue 号；`expectFrom` 指向代码现状的条目**不得**判为「预期不符」。
 4. **来源可追溯**：每个 case 带 `source` 与出处；差异处置路径在报告里可见。
 5. 稳定性读数：同一业务线连续两次只读跑，步骤序列一致率可报（用于后续改进，不作为本批硬门槛）。
-6. **操作真实性（F2.1）可机检**：一轮跑完，会话记录里**入口动作（`browser_navigate` / `browser_act` 的 navigate 步 / `browser_open`）次数 = 1**（仅起始，其余均须带 `detour`）；**`detour` 计数 = 报告「绕道」行数**；`browser_evaluate` 无写值调用；所有 `browser_click` / `browser_type` 的目标都以可见文本 / label / 角色描述（不是 id / class / 编号），`ref` 兜底次数与报告「无可见文字」行数相等；`browser_request` 的 `replay` 调用 = 0；浏览器发起的请求全部源于真实点击（对照 `browser_network` 与操作序列）。
+6. **操作真实性（F2.1）可机检**：一轮跑完，下列读数全部成立。
+
+   ① **入口动作**（`browser_navigate` / `browser_act` 的 navigate 步 / `browser_open`）次数 = 1（仅起始）；
+   其余入口动作必须带 `detour`，且 **`detour` 计数 = 报告「绕道」行数**。
+
+   ② `browser_evaluate` 无写值调用；`browser_request` 的 `replay` 调用 = 0。
+
+   ③ 所有 `browser_click` / `browser_type` 的目标都以可见文本 / label / 角色描述（不是 id / class / 编号）；
+   `ref` 兜底次数与报告「无可见文字」行数相等。
+
+   ④ 浏览器发起的请求全部源于真实点击（对照 `browser_network` 与操作序列）。
 
 ## 6. 依赖
 

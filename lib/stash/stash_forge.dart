@@ -655,7 +655,11 @@ class StashForge extends ChangeNotifier {
     }, touch: false);
     _items[url] = item;
     _asked[url] = _clock();
-    return store.byId(note.id)!;
+    // Not `byId(note.id)!`: the store can be replaced while this awaits (a
+    // workspace switch, a restore at startup) and the id then belongs to a
+    // store this one does not hold — the note made above is the answer either
+    // way, and `update` changed it in place.
+    return store.byId(note.id) ?? note;
   }
 
   // --- Its issue, from the stash -------------------------------------------------

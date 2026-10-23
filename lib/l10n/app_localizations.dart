@@ -15801,6 +15801,78 @@ abstract class AppLocalizations {
   /// **'When off, agents have no browser tools and the extension disconnects.'**
   String get browserSettingsEnabledDescription;
 
+  /// The composer's btest status line while the mode is on and no run has started.
+  ///
+  /// In en, this message translates to:
+  /// **'btest · not started'**
+  String get btestStatusIdle;
+
+  /// The composer's btest status line during a run: the business line, read-only or write, and the run's id.
+  ///
+  /// In en, this message translates to:
+  /// **'btest · {line} · {face} · run {run}'**
+  String btestStatusRun(String line, String face, String run);
+
+  /// A btest run's face: it only reads.
+  ///
+  /// In en, this message translates to:
+  /// **'readonly'**
+  String get btestFaceReadonly;
+
+  /// A btest run's face: it may act too.
+  ///
+  /// In en, this message translates to:
+  /// **'write'**
+  String get btestFaceWrite;
+
+  /// Settings → Browser's section for the browser business test mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Business Testing (btest)'**
+  String get btestSettingsTitle;
+
+  /// No description provided for @btestSettingsDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'A run enters once, works a business line like a user, and judges against docs/qa/<line>.md in the business repository. These lists decide what it may reach.'**
+  String get btestSettingsDescription;
+
+  /// Settings → Browser, btest: the hosts a browser action may reach; comma separated.
+  ///
+  /// In en, this message translates to:
+  /// **'Allowed Hosts'**
+  String get btestAllowHosts;
+
+  /// No description provided for @btestAllowHostsDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Comma separated. Empty refuses every browser action in a btest run.'**
+  String get btestAllowHostsDescription;
+
+  /// Settings → Browser, btest: the hosts that are production; comma separated.
+  ///
+  /// In en, this message translates to:
+  /// **'Production Hosts'**
+  String get btestProdHosts;
+
+  /// No description provided for @btestProdHostsDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Comma separated. Empty refuses every write action; a write on one of these is refused even on dev or test.'**
+  String get btestProdHostsDescription;
+
+  /// Settings → Browser, btest: whether a run that does not say its mode starts read-only.
+  ///
+  /// In en, this message translates to:
+  /// **'Start Runs Read-Only'**
+  String get btestDefaultReadonly;
+
+  /// No description provided for @btestDefaultReadonlyDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'A run that does not say its mode is read-only unless this is off. env: prod with write is always refused.'**
+  String get btestDefaultReadonlyDescription;
+
   /// No description provided for @browserSettingsStatus.
   ///
   /// In en, this message translates to:

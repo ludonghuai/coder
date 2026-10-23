@@ -6969,6 +6969,53 @@
   "browserSettingsUnsupported": "The browser is available on macOS, Windows and Linux only.",
   "browserSettingsEnabled": "Let Agents Use the Browser",
   "browserSettingsEnabledDescription": "When off, agents have no browser tools and the extension disconnects.",
+  "btestStatusIdle": "btest · not started",
+  "@btestStatusIdle": {
+    "description": "The composer's btest status line while the mode is on and no run has started."
+  },
+  "btestStatusRun": "btest · {line} · {face} · run {run}",
+  "@btestStatusRun": {
+    "description": "The composer's btest status line during a run: the business line, read-only or write, and the run's id.",
+    "placeholders": {
+      "line": {
+        "type": "String"
+      },
+      "face": {
+        "type": "String"
+      },
+      "run": {
+        "type": "String"
+      }
+    }
+  },
+  "btestFaceReadonly": "readonly",
+  "@btestFaceReadonly": {
+    "description": "A btest run's face: it only reads."
+  },
+  "btestFaceWrite": "write",
+  "@btestFaceWrite": {
+    "description": "A btest run's face: it may act too."
+  },
+  "btestSettingsTitle": "Business Testing (btest)",
+  "@btestSettingsTitle": {
+    "description": "Settings → Browser's section for the browser business test mode."
+  },
+  "btestSettingsDescription": "A run enters once, works a business line like a user, and judges against docs/qa/<line>.md in the business repository. These lists decide what it may reach.",
+  "btestAllowHosts": "Allowed Hosts",
+  "@btestAllowHosts": {
+    "description": "Settings → Browser, btest: the hosts a browser action may reach; comma separated."
+  },
+  "btestAllowHostsDescription": "Comma separated. Empty refuses every browser action in a btest run.",
+  "btestProdHosts": "Production Hosts",
+  "@btestProdHosts": {
+    "description": "Settings → Browser, btest: the hosts that are production; comma separated."
+  },
+  "btestProdHostsDescription": "Comma separated. Empty refuses every write action; a write on one of these is refused even on dev or test.",
+  "btestDefaultReadonly": "Start Runs Read-Only",
+  "@btestDefaultReadonly": {
+    "description": "Settings → Browser, btest: whether a run that does not say its mode starts read-only."
+  },
+  "btestDefaultReadonlyDescription": "A run that does not say its mode is read-only unless this is off. env: prod with write is always refused.",
   "browserSettingsStatus": "Status",
   "browserSettingsNotInstalled": "No browser has connected yet",
   "browserSettingsNotInstalledDescription": "Install the extension either way below, then open the browser: it connects automatically.",

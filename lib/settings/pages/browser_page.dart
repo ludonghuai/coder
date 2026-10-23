@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/widgets.dart';
 
+import '../../browser/btest/btest_mode.dart';
 import '../../browser/browser_bridge.dart';
 import '../../browser/browser_tools.dart' show BrowserHistory;
 import '../../browser/extension_store.dart';
@@ -82,9 +83,40 @@ class BrowserSettingsPage extends StatelessWidget {
     );
   }
 
+  /// A host list as the text field shows it.
+  String _hosts(String key) => BtestSettings.hostsOf(settings?[key]).join(', ');
+
+  void _setHosts(String key, String text) {
+    final settings = this.settings;
+    if (settings == null) return;
+    unawaited(
+      settings.update(key, BtestSettings.listOf(text)).catchError((
+        Object error,
+      ) {
+        debugPrint('$key not kept: $error');
+      }),
+    );
+  }
+
+  void _setReadonly(bool on) {
+    final settings = this.settings;
+    if (settings == null) return;
+    unawaited(
+      settings.update(BtestSettings.readonlyKey, on ? null : false).catchError((
+        Object error,
+      ) {
+        debugPrint('${BtestSettings.readonlyKey} not kept: $error');
+      }),
+    );
+  }
+
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-    listenable: Listenable.merge([bridge, kept]),
+    listenable: Listenable.merge([
+      bridge,
+      kept,
+      ?settings,
+    ]),
     builder: (context, _) => _page(context),
   );
 
@@ -160,6 +192,43 @@ class BrowserSettingsPage extends StatelessWidget {
               ],
             ),
         ],
+        if (bridge.enabled)
+          SettingsGroup(
+            title: l10n.btestSettingsTitle,
+            description: l10n.btestSettingsDescription,
+            children: [
+              SettingsRow(
+                label: l10n.btestAllowHosts,
+                description: l10n.btestAllowHostsDescription,
+                trailing: SettingsTextField(
+                  value: _hosts(BtestSettings.allowHostsKey),
+                  semanticLabel: l10n.btestAllowHosts,
+                  hint: 'booking.dev.example.com',
+                  width: 260,
+                  onSubmitted: (text) =>
+                      _setHosts(BtestSettings.allowHostsKey, text),
+                ),
+              ),
+              SettingsRow(
+                label: l10n.btestProdHosts,
+                description: l10n.btestProdHostsDescription,
+                trailing: SettingsTextField(
+                  value: _hosts(BtestSettings.prodHostsKey),
+                  semanticLabel: l10n.btestProdHosts,
+                  hint: 'booking.example.com',
+                  width: 260,
+                  onSubmitted: (text) =>
+                      _setHosts(BtestSettings.prodHostsKey, text),
+                ),
+              ),
+              SettingsSwitchRow(
+                label: l10n.btestDefaultReadonly,
+                description: l10n.btestDefaultReadonlyDescription,
+                value: settings?[BtestSettings.readonlyKey] != false,
+                onChanged: _setReadonly,
+              ),
+            ],
+          ),
         SettingsGroup(
           title: l10n.browserSettingsInstall,
           children: [

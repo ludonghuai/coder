@@ -130,6 +130,34 @@ class EditorContext {
       'This may or may not be related to the current task.</system-reminder>';
 }
 
+/// A turn's context that has no file behind it: the host's own words to the
+/// agent, told as they are (btest's mode card, and the line that ends it).
+class TextContext extends EditorContext {
+  const TextContext({
+    required String key,
+    required this.name,
+    required this.text,
+  }) : super(key);
+
+  /// What it shows as, where a file's name would.
+  @override
+  final String name;
+
+  /// What the agent is told, as it stands.
+  final String text;
+
+  /// The same context never repeats: [path] (its key) as it is, not a path
+  /// made absolute.
+  @override
+  String get dedupeKey => path;
+
+  @override
+  String get note => text;
+
+  @override
+  String get editorNote => text;
+}
+
 /// What a turn spent, as its kernel reported at its end.
 class TurnUsage {
   const TurnUsage({

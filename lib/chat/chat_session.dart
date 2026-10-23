@@ -2,8 +2,11 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart' show Icons;
 import 'package:path/path.dart' as p;
 
+import '../browser/btest/btest_card.dart';
+import '../browser/btest/btest_mode.dart';
 import '../kernel/agent_kernel.dart';
 import '../kernel/kernel_event.dart';
 import '../kernel/kernel_registry.dart';
@@ -147,6 +150,42 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
   StreamSubscription<KernelEvent>? _subscription;
   late Transcript _transcript;
 
+  /// The conversation's btest state (§3.1): the host's own overlay, kept
+  /// here and shared with the tool layer under its session key.
+  late final BtestState _btest = _openBtest();
+
+  BtestState _openBtest() {
+    final state = BtestMode.of(kernelContext.cwd, _kernel.sessionId);
+    state.on = kernelContext.settings[BtestMode.settingKey] == 'on';
+    return state;
+  }
+
+  /// Whether btest, the host's third mode, is on (§3.1).
+  bool get btestOn => _btest.on;
+
+  /// The run under way, or null between runs (§3.3).
+  BtestRun? get btestRun => _btest.run;
+
+  /// Picks btest beside the kernel's modes; picking another one turns it
+  /// off (§3.1: normal / plan end it).
+  void setBtest(bool on) {
+    if (_btest.on == on) return;
+    _btest.on = on;
+    // Leaving with a run open drops it: a run's rules are btest's, and it
+    // is never ended after the mode is off (§9: ended, or made void).
+    if (!on) _btest.end();
+    _publishBtest();
+    notifyListeners();
+  }
+
+  /// Keeps the state under the session it is now (§3.1): a conversation
+  /// gets its id after its first message.
+  void _publishBtest() => BtestMode.bind(
+    _btest,
+    cwd: kernelContext.cwd,
+    sessionId: _kernel.sessionId,
+  );
+
   /// The turns the kernel reported (see [MarksTurns]), for the folds.
   final List<TurnMark> _turns = [];
 
@@ -204,6 +243,7 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
     final changed = event is! KernelInfoChanged && _transcript.apply(event);
     if (changed) _markTurn(event, before, atMessage);
     if (event is KernelInfoChanged || changed) {
+      _publishBtest();
       _cache.clear();
       _timeQuiet();
       _reviewEvent(event);
@@ -458,6 +498,7 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
     _turns.clear();
     _prependedSeen = 0;
     _connect(descriptor);
+    _publishBtest();
     // The view never went away, so its attach will not come again: the new
     // kernel is started here, or it would sit unstarted and say nothing of
     // what it offers (mode, model) until the first message.
@@ -498,10 +539,36 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
     _ => null,
   };
 
-  KernelChoice? get modes => switch (_kernel) {
-    final SelectsMode kernel => _choice(kernel.mode),
-    _ => null,
-  };
+  /// btest's option in the same picker as the kernel's modes (§3.1, §9:
+  /// `btest` is not translated).
+  static const _btestId = 'btest';
+  static const _btestOption = KernelOption(
+    _btestId,
+    'btest',
+    Icons.science_outlined,
+    'Browser business testing: one run on the real pages, the expectations '
+        'read from the files, one report at the end',
+  );
+
+  KernelChoice? get modes {
+    final choice = switch (_kernel) {
+      final SelectsMode kernel => _choice(kernel.mode),
+      _ => null,
+    };
+    if (choice == null) return null;
+    return KernelChoice(
+      options: [...choice.options, _btestOption],
+      selected: _btest.on ? _btestOption : choice.selected,
+      onSelected: (option) {
+        if (option.id == _btestId) {
+          setBtest(true);
+          return;
+        }
+        setBtest(false);
+        choice.onSelected(option);
+      },
+    );
+  }
 
   KernelChoice? get permissions => switch (_kernel) {
     final SelectsPermission kernel => _choice(kernel.permission),
@@ -1235,7 +1302,10 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
       },
       mentions: message.mentions,
       images: acceptsImages ? message.images : const [],
-      contexts: open == null ? const [] : _contexts([open]),
+      contexts: [
+        if (open != null) ..._contexts([open]),
+        ..._btestContexts(),
+      ],
       now: now,
       notes: takesContext || editor == null ? const [] : _editorNotes(editor()),
     );
@@ -1245,6 +1315,30 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
       unawaited(review.refresh());
     }
     _kernel.send(turn);
+  }
+
+  /// What btest adds to the turn being assembled (§3.2): the card on the
+  /// first turn in the mode, the line that ends it on the first turn after
+  /// — counted from the conversation itself, never from a flag in memory.
+  List<EditorContext> _btestContexts() {
+    final told = BtestCard.forTurn(on: _btest.on, transcript: _toldTexts());
+    if (told == null) return const [];
+    return [
+      TextContext(key: BtestCard.contextKey, name: 'btest', text: told),
+    ];
+  }
+
+  /// Every text the conversation holds, for the card count: the messages',
+  /// and the notes of the contexts sent with them.
+  Iterable<String> _toldTexts() sync* {
+    for (var i = 0; i < _transcript.length; i++) {
+      if (_transcript.itemAt(i) case final UserMessageItem message) {
+        yield message.text;
+        for (final context in message.contexts) {
+          yield context.editorNote;
+        }
+      }
+    }
   }
 
   static final _random = math.Random.secure();
@@ -1350,6 +1444,7 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
   @override
   void dispose() {
     _disposed = true;
+    BtestMode.release(_btest);
     _quietTimer?.cancel();
     _review
       ?..removeListener(_reviewChanged)
