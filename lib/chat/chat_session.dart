@@ -27,6 +27,15 @@ import 'review/change_review.dart';
 import 'review/change_reviews.dart';
 import 'review/review_store.dart';
 
+part 'session/mode_state.dart';
+part 'session/kernel_proxy.dart';
+part 'session/transcript_proxy.dart';
+part 'session/file_edits.dart';
+part 'session/file_paths.dart';
+part 'session/send_contexts.dart';
+part 'session/session_commands.dart';
+part 'session/lifecycle.dart';
+
 /// Opens the review of a project's changes (see [ChangeReview.open]).
 typedef ChangeReviewOpener = Future<ChangeReview?> Function(
   String root, {
@@ -46,48 +55,6 @@ class ComposerMessage {
   final List<ImageAttachment> images;
 
   bool get isEmpty => text.trim().isEmpty && mentions.isEmpty && images.isEmpty;
-}
-
-/// A choice a kernel offers (its model, its mode, the kernel itself): the
-/// options, the one in effect, and how to pick another.
-class KernelChoice {
-  const KernelChoice({
-    required this.options,
-    required this.selected,
-    required this.onSelected,
-  });
-
-  final List<KernelOption> options;
-  final KernelOption selected;
-  final ValueChanged<KernelOption> onSelected;
-}
-
-/// A setting picked beside a model, e.g. its effort (see [ModelSetting]).
-class ModelSettingChoice {
-  const ModelSettingChoice({
-    required this.kind,
-    required this.options,
-    required this.selected,
-    required this.onSelected,
-    this.toggle = false,
-  });
-
-  /// The kernel's setting it is; null for the app's own, shown beside them
-  /// (`chat.resumeAfterLimitReset`, in the model picker).
-  final KernelChoiceKind? kind;
-  final List<KernelOption> options;
-
-  /// What is in effect, or would stay so with the model picked; null
-  /// while not known.
-  final KernelOption? selected;
-
-  /// Whether this setting is on or off, shown and picked as a switch: what
-  /// it shows under an option is not a check but a switch, and picking it
-  /// leaves the menu open (see [ComposerPicker]).
-  final bool toggle;
-
-  /// Picks the option, and the model with it.
-  final ValueChanged<KernelOption> onSelected;
 }
 
 /// One agent conversation, as the UI sees it, over an [AgentKernel].
@@ -229,17 +196,7 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
   /// sequence.
   final Map<String, int> _keptPaths = {};
 
-  void _connect(KernelDescriptor descriptor) {
-    final warm = _warm.remove(descriptor.id);
-    if (warm != null && warm.health.status == KernelHealthStatus.failed) {
-      warm.dispose();
-      _kernel = descriptor.create(kernelContext);
-    } else {
-      _kernel = warm ?? descriptor.create(kernelContext);
-    }
-    _subscription = _kernel.events.listen(_apply);
-  }
-
+  void _connect(KernelDescriptor descriptor) => _connectOf(this, descriptor);
   /// The kernels switched away from before the conversation started, kept
   /// warm: switching back to one skips its start and the handshake its
   /// choices wait for. Dropped once the conversation starts (the kernel is
@@ -247,13 +204,7 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
   final Map<String, AgentKernel> _warm = {};
   Stopwatch? _switching; // A switch's t0 (§25.5): read once it is ready.
 
-  void _dropWarm() {
-    for (final kernel in _warm.values) {
-      kernel.dispose();
-    }
-    _warm.clear();
-  }
-
+  void _dropWarm() => _dropWarmOf(this);
   void _apply(KernelEvent event) {
     // A frame may land between `cancel()` and the kernel letting go: there is
     // then no listener left to tell.
@@ -432,140 +383,34 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
 
   KernelDescriptor get kernel => _kernel.descriptor;
 
-  KernelHealth get health => _kernel.health;
-
-  /// Whether the conversation it continues is still being read.
-  bool get loadingHistory => switch (_kernel) {
-    LoadsHistory(:final loadingHistory) => loadingHistory,
-    _ => false,
-  };
-
-  /// Whether there is more of that conversation before what was read.
-  bool get hasEarlierHistory => switch (_kernel) {
-    LoadsHistory(:final hasEarlierHistory) => hasEarlierHistory,
-    _ => false,
-  };
-
+  KernelHealth get health => _healthOf(this);
+  bool get loadingHistory => _loadingHistoryOf(this);
+  bool get hasEarlierHistory => _hasEarlierHistoryOf(this);
   /// How many items were put before the others by [loadEarlier] so far: the
   /// indexes of those there were moved by as many.
   int get prependedCount => _transcript.prepended;
-
-  /// Whether that is being read.
-  bool get loadingEarlier => switch (_kernel) {
-    LoadsHistory(:final loadingEarlier) => loadingEarlier,
-    _ => false,
-  };
-
-  /// Reads some more of the conversation, before what was.
-  Future<void> loadEarlier() => switch (_kernel) {
-    final LoadsHistory kernel => kernel.loadEarlier(),
-    _ => Future.value(),
-  };
-
-  /// The id the kernel keeps this conversation under, once known.
-  String? get sessionId => _kernel.sessionId;
-
-  /// Completes once the kernel has stopped, after [dispose].
-  Future<void> get stopped => _kernel.stopped;
-
-  /// Tries the kernel again after it failed.
-  void restart() => _kernel.restart();
-
+  bool get loadingEarlier => _loadingEarlierOf(this);
+  Future<void> loadEarlier() => _loadEarlierOf(this);
+  String? get sessionId => _sessionIdOf(this);
+  Future<void> get stopped => _stoppedOf(this);
+  void restart() => _restartOf(this);
   int _views = 0;
 
-  /// A view shows the conversation: the kernel gets ready.
-  void attach() {
-    _views++;
-    final opened = Stopwatch()..start(); // A11's first read (§25.6).
-    appEvent('thincoder', 'timing: open');
-    _kernel.prepare();
-    _startReview();
-    if (canSend) appEvent('thincoder', 'timing: input-ready ${opened.elapsedMilliseconds}ms');
-  }
-
-  /// A view no longer shows it. With none left, an idle kernel frees what
-  /// it holds (a view may come right back, e.g. as the layout changes).
-  void detach() {
-    _views--;
-    scheduleMicrotask(() {
-      if (_views == 0 && !_disposed) _kernel.release();
-    });
-  }
-
-  /// Once the conversation has started, its kernel stays: kernels cannot
-  /// read each other's sessions.
-  bool get kernelLocked =>
-      _transcript.length > 0 || kernelContext.resume != null;
-
+  void attach() => _attachOf(this);
+  void detach() => _detachOf(this);
+  bool get kernelLocked => _kernelLockedOf(this);
   late final List<KernelOption> _kernelOptions = [
     for (final descriptor in kernels) descriptor.option,
   ];
 
-  /// Null once locked, or with nothing to choose from.
-  KernelChoice? get kernelChoice {
-    if (kernelLocked || kernels.length < 2) return null;
-    return KernelChoice(
-      options: _kernelOptions,
-      selected: _kernelOptions[kernels.indexOf(kernel)],
-      onSelected: (option) =>
-          setKernel(kernels.firstWhere((k) => k.id == option.id)),
-    );
-  }
-
-  void setKernel(KernelDescriptor descriptor) {
-    if (kernelLocked || descriptor.id == kernel.id) return;
-    _switching = Stopwatch()..start(); // t0 (§25.5).
-    unawaited(_subscription?.cancel());
-    // Kept warm rather than disposed: before the first message there is no
-    // conversation to protect, and the switch back skips the start.
-    _warm[_kernel.descriptor.id] = _kernel;
-    _transcript = Transcript(
-      changes: [for (final edit in _transcript.edits) edit.change],
-    );
-    _turns.clear();
-    _prependedSeen = 0;
-    _connect(descriptor);
-    _publishBtest();
-    // The view never went away, so its attach will not come again: the new
-    // kernel is started here, or it would sit unstarted and say nothing of
-    // what it offers (mode, model) until the first message.
-    if (_views > 0) {
-      _kernel.prepare();
-      _startReview();
-    }
-    _readSwitch();
-    notifyListeners();
-  }
-
-  /// `timing: kernel-switch` (§25.5), once the kernel switched to is ready.
-  void _readSwitch() {
-    final clock = _switching;
-    if (clock == null || _kernel.health.status != KernelHealthStatus.ready) return;
-    _switching = null;
-    appEvent('thincoder', 'timing: kernel-switch ${clock.elapsedMilliseconds}ms');
-  }
-
+  KernelChoice? get kernelChoice => _kernelChoiceOf(this);
+  void setKernel(KernelDescriptor descriptor) => _setKernelOf(this, descriptor);
+  void _readSwitch() => _readSwitchOf(this);
   // --- Facets: what the kernel declares ------------------------------------------
 
-  KernelChoice? get models => switch (_kernel) {
-    final SelectsModel kernel => _choice(kernel.model),
-    _ => null,
-  };
-
-  /// Whether picking [model] (one of [models]' options) restarts the
-  /// conversation's agent on another upstream: asked first.
-  bool switchRestarts(String model) => switch (_kernel) {
-    final ConfirmsModelSwitch kernel => kernel.switchRestarts(model),
-    _ => false,
-  };
-
-  /// The model picked while a turn ran, to be applied when it is over: null
-  /// when none waits.
-  String? get pendingModel => switch (_kernel) {
-    final DefersModelSwitch kernel => kernel.pendingModel,
-    _ => null,
-  };
-
+  KernelChoice? get models => _modelsOf(this);
+  bool switchRestarts(String model) => _switchRestartsOf(this, model);
+  String? get pendingModel => _pendingModelOf(this);
   /// btest's option in the same picker as the kernel's modes (§3.1, §9:
   /// `btest` is not translated).
   static const _btestId = 'btest';
@@ -577,48 +422,9 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
         'read from the files, one report at the end',
   );
 
-  KernelChoice? get modes {
-    final choice = switch (_kernel) {
-      final SelectsMode kernel => _choice(kernel.mode),
-      _ => null,
-    };
-    if (choice == null) return null;
-    return KernelChoice(
-      options: [...choice.options, _btestOption],
-      selected: _btest.on ? _btestOption : choice.selected,
-      onSelected: (option) {
-        if (option.id == _btestId) {
-          setBtest(true);
-          return;
-        }
-        setBtest(false);
-        choice.onSelected(option);
-      },
-    );
-  }
-
-  KernelChoice? get permissions => switch (_kernel) {
-    final SelectsPermission kernel => _choice(kernel.permission),
-    _ => null,
-  };
-
-  /// The settings that go with [model] (one of [models]' options), in
-  /// the order they are picked in: only those with a choice to make.
-  List<ModelSettingChoice> modelSettings(String model) => [
-    for (final (kind, setting) in _modelSettings)
-      if (setting.optionsFor(model) case final options when options.isNotEmpty)
-        ModelSettingChoice(
-          kind: kind,
-          options: options,
-          // Another model's own, not the one in use's.
-          selected: options
-              .where((o) => o.id == setting.selectedFor(model))
-              .firstOrNull,
-          toggle: setting.toggle,
-          onSelected: (option) => setting.select(model, option.id),
-        ),
-  ];
-
+  KernelChoice? get modes => _modesOf(this);
+  KernelChoice? get permissions => _permissionsOf(this);
+  List<ModelSettingChoice> modelSettings(String model) => _modelSettingsOf(this, model);
   List<(KernelChoiceKind, ModelSetting)> get _modelSettings => [
     if (_kernel case final SelectsContextSize kernel)
       (KernelChoiceKind.context, kernel.contextSize),
@@ -628,355 +434,66 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
       (KernelChoiceKind.fast, kernel.fast),
   ];
 
-  /// The choice [kind] as it stands, e.g. for a new agent to start with.
-  String? selected(KernelChoiceKind kind) => switch (kind) {
-    KernelChoiceKind.model => models?.selected.id,
-    KernelChoiceKind.mode => modes?.selected.id,
-    KernelChoiceKind.permission => permissions?.selected.id,
-    KernelChoiceKind.effort ||
-    KernelChoiceKind.context ||
-    KernelChoiceKind.fast =>
-      _modelSettings
-          .where((setting) => setting.$1 == kind)
-          .firstOrNull
-          ?.$2
-          .selected,
-  };
-
-  KernelChoice? _choice(KernelChoiceSource source) {
-    final options = source.options;
-    if (options.isEmpty) return null;
-    return KernelChoice(
-      options: options,
-      selected: options.firstWhere(
-        (option) => option.id == source.selected,
-        orElse: () => options.first,
-      ),
-      onSelected: (option) => source.select(option.id),
-    );
-  }
-
-  List<KernelCommand> get commands => switch (_kernel) {
-    final ProvidesCommands kernel => kernel.commands,
-    _ => const [],
-  };
-
-  /// Files matching an `@` query; null when the kernel does not look.
-  Future<List<FileSuggestion>> Function(String query)? get suggestFiles =>
-      switch (_kernel) {
-        final SuggestsFiles kernel => kernel.suggestFiles,
-        _ => null,
-      };
-
-  ContextUsage? get context => switch (_kernel) {
-    final ReportsContext kernel =>
-      _transcript.usage ?? ContextUsage(window: kernel.contextWindow, used: 0),
-    _ => null,
-  };
-
-  /// Cost and account limits; null when the kernel does not report them.
-  UsageStats? get stats => switch (_kernel) {
-    final ReportsUsage kernel =>
-      _transcript.stats ?? UsageStats(limits: kernel.accountLimits),
-    _ => null,
-  };
-
-  /// Asks for the account's limits now (see [ReportsUsage.refreshUsage]).
-  void refreshUsage() {
-    if (_kernel case final ReportsUsage kernel) {
-      unawaited(kernel.refreshUsage());
-    }
-  }
-
-  /// When the usage limit the agent stopped at resets (see
-  /// [ReportsUsageLimit]); null with none hit, and while a turn runs.
-  DateTime? get usageLimitResetsAt => switch (_kernel) {
-    ReportsUsageLimit(:final usageLimitResetsAt) when !isStreaming =>
-      usageLimitResetsAt,
-    _ => null,
-  };
-
-  /// Whether the next message is held to the account's usage limit: not
-  /// once on another provider's model.
-  bool get usageLimitApplies => switch (_kernel) {
-    ReportsUsageLimit(:final usageLimitApplies) => usageLimitApplies,
-    _ => true,
-  };
-
-  /// Whether an agent on [model] can go on by itself once the usage limit
-  /// it stopped at resets: on the account's own plan, which says when.
-  bool continuesAfterLimit(String model) => switch (_kernel) {
-    final ReportsUsageLimit kernel => kernel.usageLimitAppliesTo(model),
-    _ => false,
-  };
-
-  /// Whether pictures sent with a message are taken: by the protocol
-  /// ([AcceptsImages]), or as files it is told of ([AcceptsImageFiles]).
-  bool get acceptsImages =>
-      _kernel is AcceptsImages || _kernel is AcceptsImageFiles;
-
-  /// Whether the file open in the editor goes with each message
-  /// ([AcceptsEditorContext]): its chip shows in the composer, and the
-  /// message carries it.
-  bool get acceptsEditorContext => _kernel is AcceptsEditorContext;
-
-  /// What the user would likely send next: offered while the agent waits
-  /// for them.
-  String? get promptSuggestion => switch (_kernel) {
-    final SuggestsPrompts kernel
-        when !isStreaming && pendingInteraction == null =>
-      kernel.promptSuggestion,
-    _ => null,
-  };
-
-  /// The kernel's MCP servers; null when it has none to manage, empty
-  /// until first reported.
-  List<McpServer>? get mcpServers => switch (_kernel) {
-    final ManagesMcpServers kernel => kernel.mcpServers ?? const [],
-    _ => null,
-  };
-
-  void refreshMcpServers() {
-    if (_kernel case final ManagesMcpServers kernel) kernel.refreshMcpServers();
-  }
-
-  void setMcpServerEnabled(McpServer server, bool enabled) {
-    if (_kernel case final ManagesMcpServers kernel) {
-      kernel.setMcpServerEnabled(server.name, enabled);
-    }
-  }
-
-  void reconnectMcpServer(McpServer server) {
-    if (_kernel case final ManagesMcpServers kernel) {
-      kernel.reconnectMcpServer(server.name);
-    }
-  }
-
-  /// Starts signing in to [server]: the page to open for the user, if any.
-  Future<Uri?> authenticateMcpServer(McpServer server) async =>
-      switch (_kernel) {
-        final ManagesMcpServers kernel => kernel.authenticateMcpServer(
-          server.name,
-        ),
-        _ => null,
-      };
-
+  String? selected(KernelChoiceKind kind) => _selectedOf(this, kind);
+  KernelChoice? _choice(KernelChoiceSource source) => _choiceOf(this, source);
+  List<KernelCommand> get commands => _commandsOf(this);
+  Future<List<FileSuggestion>> Function(String query)? get suggestFiles => _suggestFilesOf(this);
+  ContextUsage? get context => _contextOf(this);
+  UsageStats? get stats => _statsOf(this);
+  void refreshUsage() => _refreshUsageOf(this);
+  DateTime? get usageLimitResetsAt => _usageLimitResetsAtOf(this);
+  bool get usageLimitApplies => _usageLimitAppliesOf(this);
+  bool continuesAfterLimit(String model) => _continuesAfterLimitOf(this, model);
+  bool get acceptsImages => _acceptsImagesOf(this);
+  bool get acceptsEditorContext => _acceptsEditorContextOf(this);
+  String? get promptSuggestion => _promptSuggestionOf(this);
+  List<McpServer>? get mcpServers => _mcpServersOf(this);
+  void refreshMcpServers() => _refreshMcpServersOf(this);
+  void setMcpServerEnabled(McpServer server, bool enabled) => _setMcpServerEnabledOf(this, server, enabled);
+  void reconnectMcpServer(McpServer server) => _reconnectMcpServerOf(this, server);
+  Future<Uri?> authenticateMcpServer(McpServer server) async => _authenticateMcpServerOf(this, server);
   @override
-  bool get canEditMessages => _kernel is RewindsConversation;
-
-  /// Messages can be sent while the agent works.
-  bool get canQueue => _kernel is QueuesMessages;
-
-  bool get canRename => _kernel is RenamesSession;
-
-  /// Whether its kernel confirms a rename itself: the list then waits for
-  /// its `SessionRenamed` rather than change ahead of it (F25). False for a
-  /// kernel that does not say so (Claude Code's path, unchanged).
-  bool get renameConfirmed => switch (_kernel) {
-    final ConfirmsRename kernel => kernel.renameConfirmed,
-    _ => false,
-  };
-
-  /// Whether its kernel names sessions itself: the host titles none (F1.3).
-  bool get ownsTitle => _kernel is GeneratesTitles;
-
-  /// The title picked while a turn ran (§3.5); null when none waits.
-  String? get pendingTitle => switch (_kernel) {
-    final DefersRename kernel => kernel.pendingTitle,
-    _ => null,
-  };
-
-  /// Whether the conversation can be copied into a new one (see [fork]).
-  bool get canFork => switch (_kernel) {
-    final ForksConversation kernel => kernel.canFork,
-    _ => false,
-  };
-
-  /// Copies the conversation into a new session titled [title] (see
-  /// [ForksConversation.fork]): all of it but a turn under way; null when
-  /// it could not.
-  Future<SessionRecord?> fork({required String title}) async {
-    if (_kernel case final ForksConversation kernel when kernel.canFork) {
-      final before = switch (_transcript.activeTurn) {
-        final turn? when _transcript.indexOf(turn) != null => turn,
-        _ => null,
-      };
-      return kernel.fork(before: before, title: title);
-    }
-    return null;
-  }
-
+  bool get canEditMessages => _canEditMessagesOf(this);
+  bool get canQueue => _canQueueOf(this);
+  bool get canRename => _canRenameOf(this);
+  bool get renameConfirmed => _renameConfirmedOf(this);
+  bool get ownsTitle => _ownsTitleOf(this);
+  String? get pendingTitle => _pendingTitleOf(this);
+  bool get canFork => _canForkOf(this);
+  Future<SessionRecord?> fork({required String title}) async => _forkOf(this, title: title);
   // --- Projections ------------------------------------------------------------
 
   @override
-  bool get isStreaming => _transcript.activeTurn != null;
-
+  bool get isStreaming => _isStreamingOf(this);
   @override
-  bool get isUnprompted => _transcript.activeTurnUnprompted;
-
-  /// Whether the composer may send now.
-  bool get canSend => !isStreaming || canQueue;
-
-  InteractionRequest? get pendingInteraction => _transcript.pendingInteraction;
-
+  bool get isUnprompted => _isUnpromptedOf(this);
+  bool get canSend => _canSendOf(this);
+  InteractionRequest? get pendingInteraction => _pendingInteractionOf(this);
   /// The plan the agent last wrote this run, and the sequence it was
   /// reported at: higher each time it writes it again.
   ({String path, int seq})? get plan => _transcript.plan;
 
-  /// The plan put to the user for them to start (see [startPlan]): the
-  /// last round's, until a message is sent after it.
-  PlanItem? get awaitingPlan {
-    if (_kernel is! StartsPlans) return null;
-    // Looked up once a change: asked on each, as the turn streams.
-    final key = (_transcript, _transcript.version, _transcript.length);
-    if (_awaitingPlan case (final at, final plan) when at == key) return plan;
-    PlanItem? found;
-    for (var i = _transcript.length - 1; i >= 0; i--) {
-      final item = _transcript.itemAt(i);
-      if (item is UserMessageItem) break;
-      if (item is PlanItem) {
-        if (item.status == PlanStatus.awaiting) found = item;
-        break;
-      }
-    }
-    _awaitingPlan = (key, found);
-    return found;
-  }
-
+  PlanItem? get awaitingPlan => _awaitingPlanOf(this);
   ((Transcript, int, int), PlanItem?)? _awaitingPlan;
 
-  /// Whether the plan awaiting can be started now: not while the turn
-  /// that put it is still under way.
-  bool get canStartPlan => awaitingPlan != null && !isStreaming;
-
-  /// Starts the plan awaiting: out of planning, into building with the
-  /// approvals and the model picked, [text] sent to say so.
-  void startPlan(String text) {
-    if (!canStartPlan) return;
-    (_kernel as StartsPlans).startBuilding();
-    send(ComposerMessage(text: text));
-  }
-
-  /// Sequence of the last turn to end, to tell whether it was seen.
-  int get lastTurnEndSeq => _transcript.lastTurnEndSeq;
-
-  /// What the agent said last, if it said anything after the last message
-  /// sent (this run, or in the history read).
-  String? get lastReply {
-    for (var i = _transcript.length - 1; i >= 0; i--) {
-      switch (_transcript.itemAt(i)) {
-        case UserMessageItem():
-          return null;
-        case AssistantTextItem(:final text) when text.trim().isNotEmpty:
-          return text;
-        default:
-      }
-    }
-    return null;
-  }
-
-  /// Whether the last turn to end was stopped rather than done.
-  bool get lastTurnInterrupted => _transcript.lastTurnInterrupted;
-
-  /// Whether the last turn to end was one the agent took up on its own,
-  /// e.g. about a background subagent's report.
-  bool get lastTurnUnprompted => _transcript.lastTurnUnprompted;
-
-  /// The history, and a status row at its end while a turn runs: the agent
-  /// is live. Hidden (but there, to come and go smoothly) where something
-  /// else says so, or it would only flash.
+  bool get canStartPlan => _canStartPlanOf(this);
+  void startPlan(String text) => _startPlanOf(this, text);
+  int get lastTurnEndSeq => _lastTurnEndSeqOf(this);
+  String? get lastReply => _lastReplyOf(this);
+  bool get lastTurnInterrupted => _lastTurnInterruptedOf(this);
+  bool get lastTurnUnprompted => _lastTurnUnpromptedOf(this);
   @override
-  int get itemCount =>
-      _transcript.length + _notices.length + (isStreaming ? 1 : 0);
-
+  int get itemCount => _itemCountOf(this);
   @override
-  ChatItem itemAt(int index) {
-    if (index < _transcript.length) return _transcript.itemAt(index);
-    final notice = index - _transcript.length;
-    if (notice < _notices.length) return _notices[notice];
-    // Waiting on its model unless its kernel says otherwise.
-    final output = _transcript.output;
-    return switch (_transcript.activity?.kind) {
-      KernelActivityKind.compacting => LiveStatusItem(
-        'Compacting conversation',
-        visible: _statusVisible,
-        output: output,
-        startedAt: _transcript.turnStartedAt,
-      ),
-      _ => LiveStatusItem(
-        'Planning next move',
-        whimsical: true,
-        visible: _statusVisible,
-        output: output,
-        startedAt: _transcript.turnStartedAt,
-        cue: MusingCue.after(_last),
-      ),
-    };
-  }
-
-  /// Not while the agent waits on the user; nor after a thought under way,
-  /// which says so itself; nor after its text, unless all has been quiet
-  /// for [quietAfterText].
-  bool get _statusVisible {
-    if (pendingInteraction != null) return false;
-    return switch (_last) {
-      ThinkingItem() => !_transcript.isStreamingAt(_transcript.length - 1),
-      AssistantTextItem() => _quiet,
-      _ => true,
-    };
-  }
-
-  /// Tasks running beside the conversation, gone once they end (their
-  /// outcome stays on their step); null when none runs.
-  List<KernelTask>? get tasks {
-    final running = _cached(
-      #tasks,
-      () => [
-        for (final task in _transcript.tasks)
-          if (task.background && task.status == CommandStatus.running) task,
-      ],
-    );
-    return running.isEmpty ? null : running;
-  }
-
-  /// Background commands, including completed ones for their output tabs.
-  List<KernelTask> get terminalTasks => _cached(
-    #terminalTasks,
-    () => [
-      for (final task in _transcript.tasks)
-        if (task.background && task.kind == KernelTaskKind.command) task,
-    ],
-  );
-
-  void stopTask(KernelTask task) {
-    if (_kernel case final RunsBackgroundTasks kernel) kernel.stopTask(task.id);
-  }
-
-  /// Whether the kernel can stop what runs beside the conversation: the
-  /// ones that cannot (thincoder's subagents — F11) show it with no stop
-  /// button.
-  bool get canStopTasks => _kernel is RunsBackgroundTasks;
-
-  /// Moves what the item at [index] runs (a command, a subagent) to the
-  /// background, so the turn goes on; null unless the kernel reports it
-  /// running in the foreground.
+  ChatItem itemAt(int index) => _itemAtOf(this, index);
+  bool get _statusVisible => _statusVisibleOf(this);
+  List<KernelTask>? get tasks => _tasksOf(this);
+  List<KernelTask> get terminalTasks => _terminalTasksOf(this);
+  void stopTask(KernelTask task) => _stopTaskOf(this, task);
+  bool get canStopTasks => _canStopTasksOf(this);
   @override
-  VoidCallback? moveToBackgroundAt(int index) => index < _transcript.length
-      ? moveToBackgroundOf(_transcript.idAt(index))
-      : null;
-
-  /// As [moveToBackgroundAt], for what the tool call [id] runs, wherever it
-  /// shows (e.g. in a subagent).
-  VoidCallback? moveToBackgroundOf(String? id) {
-    if ((_kernel, _runningTask(id)) case (
-      final RunsBackgroundTasks kernel,
-      KernelTask(background: false),
-    )) {
-      return () => kernel.moveToBackground(id!);
-    }
-    return null;
-  }
-
+  VoidCallback? moveToBackgroundAt(int index) => _moveToBackgroundAtOf(this, index);
+  VoidCallback? moveToBackgroundOf(String? id) => _moveToBackgroundOfOf(this, id);
   /// The subagent [task] runs, wherever it shows: in the conversation
   /// itself or in another subagent's (one a subagent started). With the ids
   /// of those leading to it, outermost first and its own last: the path a
@@ -1015,29 +532,10 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
     return null;
   }
 
-  /// The command the tool call [id] ran, in the conversation itself: what a
-  /// background command's task does.
-  String? commandOf(String? id) {
-    final index = id == null ? null : _transcript.indexOf(id);
-    if (index == null) return null;
-    return switch (_transcript.itemAt(index)) {
-      TerminalItem(:final command) when command.isNotEmpty => command,
-      _ => null,
-    };
-  }
-
-  /// Stops the subagent at [index]; null unless it runs as a task.
+  String? commandOf(String? id) => _commandOfOf(this, id);
   @override
-  VoidCallback? stopAt(int index) =>
-      index < _transcript.length ? stopOf(_transcript.idAt(index)) : null;
-
-  /// Stops what the tool call [id] runs, e.g. a subagent; null unless it
-  /// runs as a task the kernel can stop.
-  VoidCallback? stopOf(String? id) => switch (_runningTask(id)) {
-    final task? when _kernel is RunsBackgroundTasks => () => stopTask(task),
-    _ => null,
-  };
-
+  VoidCallback? stopAt(int index) => _stopAtOf(this, index);
+  VoidCallback? stopOf(String? id) => _stopOfOf(this, id);
   KernelTask? _runningTask(String? toolUseId) => toolUseId == null
       ? null
       : _transcript.tasks
@@ -1048,105 +546,20 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
             )
             .firstOrNull;
 
-  List<TodoEntry> get todos => _transcript.todos;
-
-  /// The goal the agent works toward (`/goal`), if any: just met, it is
-  /// still here, met, until [dismissGoal].
-  KernelGoal? get goal => switch (_transcript.goal) {
-    final goal? when !identical(goal, _dismissedGoal) => goal,
-    _ => null,
-  };
+  List<TodoEntry> get todos => _todosOf(this);
+  KernelGoal? get goal => _goalOf(this);
   KernelGoal? _dismissedGoal;
 
-  /// Hides the [goal] there is; a new one shows again.
-  void dismissGoal() {
-    if (goal == null) return;
-    _dismissedGoal = _transcript.goal;
-    notifyListeners();
-  }
-
-  /// Sets [condition] as the goal, in place of any there is, and sets the
-  /// agent to work toward it. At once: Claude Code takes up `/goal` only
-  /// between turns.
-  void setGoal(String condition) =>
-      send(ComposerMessage(text: '/goal ${condition.trim()}'), now: true);
-
-  /// Clears the goal there is, at once.
-  void clearGoal() =>
-      send(const ComposerMessage(text: '/goal clear'), now: true);
-
-  /// The project's directory, which [fileChanges]' paths are in (on its
-  /// host, for a remote one).
-  String? get root =>
-      _activeReview?.root ??
-      switch (kernelContext.cwd) {
-        final cwd? => RemoteLocation.pathOf(cwd),
-        null => null,
-      };
-
-  /// Files changed and neither kept nor undone, one entry per file, with
-  /// absolute paths where the project is known: as the review of the
-  /// project has them, else as the kernel reported them.
-  List<FileChange> get fileChanges {
-    if (_activeReview case final review?) return review.changes;
-    return _cached(#fileChanges, () {
-      final byPath = <String, FileChange>{};
-      for (final (seq: _, :change, turnId: _) in _pendingEdits) {
-        final path = _absolute(change.path);
-        final before = byPath[path];
-        byPath[path] = FileChange(
-          path: path,
-          added: (before?.added ?? 0) + change.added,
-          removed: (before?.removed ?? 0) + change.removed,
-        );
-      }
-      return byPath.values.toList();
-    });
-  }
-
-  /// The files the agent read or changed (or was given: a picture a tool
-  /// returned, saved), absolute: what its text may link to outside the
-  /// project, and where a file it names by a path gone wrong (relative to
-  /// some other folder) may be.
-  ///
-  /// The same list while they stay the same, as the reply streams: what
-  /// looks a path up in it indexes each list once (FileOpenScope).
-  List<String> get filesSeen => _cached(#filesSeen, () {
-    final files = {
-      for (var i = 0; i < _transcript.length; i++)
-        if (_transcript.itemAt(i) case ToolCallItem(
-          :final path,
-          :final imageFiles,
-        )) ...[
-          if (path != null && path.isNotEmpty) _absolute(path),
-          // The pictures the CLI saved for it: the agent may link them.
-          for (final file in imageFiles) _absolute(file),
-        ],
-      for (final edit in _transcript.edits) _absolute(edit.change.path),
-    }.toList();
-    if (listEquals(files, _filesSeen)) return _filesSeen;
-    return _filesSeen = files;
-  });
+  void dismissGoal() => _dismissGoalOf(this);
+  void setGoal(String condition) => _setGoalOf(this, condition);
+  void clearGoal() => _clearGoalOf(this);
+  String? get root => _rootOf(this);
+  List<FileChange> get fileChanges => _fileChangesOf(this);
+  List<String> get filesSeen => _filesSeenOf(this);
   List<String> _filesSeen = const [];
 
-  /// [path] absolute, on the project's host (a remote project's paths are
-  /// its host's).
-  /// How the project's paths are spelled: its host's way (POSIX) for a
-  /// remote one, this machine's otherwise.
-  p.Context get paths => switch (kernelContext.cwd) {
-    final cwd? => RemoteLocation.pathsOf(cwd),
-    null => p.context,
-  };
-
-  String _absolute(String path) {
-    final cwd = kernelContext.cwd;
-    if (cwd == null) return path;
-    final paths = RemoteLocation.pathsOf(cwd);
-    return paths.isAbsolute(path)
-        ? path
-        : paths.join(RemoteLocation.pathOf(cwd), path);
-  }
-
+  p.Context get paths => _pathsOf(this);
+  String _absolute(String path) => _absoluteOf(this, path);
   Iterable<({int seq, FileChange change, String? turnId})> get _pendingEdits {
     final settled = math.max(_keptSeq, _transcript.revertedSeq);
     return _transcript.edits.where(
@@ -1156,66 +569,14 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
     );
   }
 
-  void keepAllChanges() {
-    _keptSeq = _transcript.lastSeq;
-    _keptPaths.clear();
-    if (_activeReview case final review?) unawaited(review.keepAll());
-    _cache.clear();
-    notifyListeners();
-  }
-
-  /// Keeps the changes to [changes]' files: they are no longer listed.
-  void keepChanges(List<FileChange> changes) {
-    if (_activeReview case final review?) {
-      unawaited(review.keep([for (final change in changes) change.path]));
-      return;
-    }
-    for (final change in changes) {
-      _keptPaths[change.path] = _transcript.lastSeq;
-    }
-    _cache.clear();
-    notifyListeners();
-  }
-
-  /// Puts the pending changes back; null when there is no way to.
-  VoidCallback? get undoAllChanges {
-    if (_activeReview case final review?) {
-      if (!review.changes.any((change) => change.tracked)) return null;
-      return () => unawaited(review.undoAll());
-    }
-    if ((_kernel, _pendingEdits.firstOrNull?.turnId) case (
-      final RevertsChanges kernel,
-      final since?,
-    )) {
-      return () => kernel.revertChanges(sinceTurn: since);
-    }
-    return null;
-  }
-
-  /// The turn the earliest change not kept or undone came from (F2.1).
-  String? get revertTurn => _pendingEdits.firstOrNull?.turnId;
-
-  /// Whether a revert can be planned and done now (§3.3, §3.5).
-  bool get canPlanRevert => switch (_kernel) {
-    final PlansReverts kernel => kernel.canRevertNow,
-    _ => false,
-  };
-  /// Whether the kernel plans reverts at all: its entry never falls back
-  /// to the host's own undo (the kernel holds the stack, §9).
-  bool get plansReverts => _kernel is PlansReverts;
-
-  /// What a revert from [sinceTurn] on would do; nothing is written.
-  Future<RevertPlan> revertPlan(String sinceTurn) => switch (_kernel) {
-    final PlansReverts kernel => kernel.revertPlan(sinceTurn: sinceTurn),
-    _ => Future.error(UnsupportedError('revertPlan')),
-  };
-
-  /// Does what [revertPlan] planned for [sinceTurn], each file on its own.
-  Future<RevertOutcome> applyRevert(String sinceTurn) => switch (_kernel) {
-    final PlansReverts kernel => kernel.applyRevert(sinceTurn: sinceTurn),
-    _ => Future.error(UnsupportedError('applyRevert')),
-  };
-
+  void keepAllChanges() => _keepAllChangesOf(this);
+  void keepChanges(List<FileChange> changes) => _keepChangesOf(this, changes);
+  VoidCallback? get undoAllChanges => _undoAllChangesOf(this);
+  String? get revertTurn => _revertTurnOf(this);
+  bool get canPlanRevert => _canPlanRevertOf(this);
+  bool get plansReverts => _plansRevertsOf(this);
+  Future<RevertPlan> revertPlan(String sinceTurn) => _revertPlanOf(this, sinceTurn);
+  Future<RevertOutcome> applyRevert(String sinceTurn) => _applyRevertOf(this, sinceTurn);
   /// What the host itself put in the conversation (§9): after the kernel's.
   final List<NoticeItem> _notices = [];
 
@@ -1226,20 +587,8 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
     notifyListeners();
   }
 
-  /// Puts [changes]' files back; null when files cannot be undone one by
-  /// one (no review of the project).
-  ValueChanged<List<FileChange>>? get undoChanges => switch (_activeReview) {
-    final review? => (changes) => unawaited(
-      review.undo([for (final change in changes) change.path]),
-    ),
-    null => null,
-  };
-
-  /// Reads the text of [change]'s file before the agent changed it, for a
-  /// diff; null when it is not known.
-  Future<String> Function()? originalOf(FileChange change) =>
-      _activeReview?.original(change.path);
-
+  ValueChanged<List<FileChange>>? get undoChanges => _undoChangesOf(this);
+  Future<String> Function()? originalOf(FileChange change) => _originalOfOf(this, change);
   /// The review of the agent's changes while it holds (the editor keeps
   /// and undoes them part by part with it); null without one.
   ChangeReviews? get changeReview => _activeReview;
@@ -1247,27 +596,7 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
   final Map<Symbol, Object> _cache = {};
   int _cacheVersion = -1;
 
-  /// The number of the last image in the conversation (0 before any): a
-  /// new one is numbered on from it, as Claude Code numbers what is pasted.
-  /// Counts what its messages say (`[Image #3]`) too, as Claude Code does.
-  int get lastImageNumber => _cached(#lastImageNumber, () {
-    var last = 0;
-    for (var i = 0; i < _transcript.length; i++) {
-      if (_transcript.itemAt(i) case UserMessageItem(
-        :final text,
-        :final images,
-      )) {
-        for (final image in images) {
-          last = math.max(last, image.number ?? 0);
-        }
-        for (final match in imageReferencePattern.allMatches(text)) {
-          last = math.max(last, int.parse(match[1]!));
-        }
-      }
-    }
-    return last;
-  });
-
+  int get lastImageNumber => _lastImageNumberOf(this);
   T _cached<T extends Object>(Symbol key, T Function() compute) {
     if (_cacheVersion != _transcript.version) {
       _cache.clear();
@@ -1283,29 +612,8 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
   OpenEditor? _toldEditor;
   bool _toldOfEditor = false;
 
-  /// What the agent is told of [editor], the file open beside the chat now:
-  /// nothing where it was told so already, nor of no file before any.
-  List<String> _editorNotes(OpenEditor? editor) {
-    if (_toldOfEditor ? editor == _toldEditor : editor == null) {
-      return const [];
-    }
-    _toldOfEditor = true;
-    _toldEditor = editor;
-    return [editor?.note ?? OpenEditor.closedNote];
-  }
-
-  /// [editors] as a turn's contexts: one per file, by canonical absolute
-  /// path (a turn may gather them from several sources).
-  static List<EditorContext> _contexts(Iterable<OpenEditor> editors) {
-    final seen = <String>{};
-    final contexts = <EditorContext>[];
-    for (final editor in editors) {
-      final context = editor.toContext();
-      if (seen.add(context.dedupeKey)) contexts.add(context);
-    }
-    return contexts;
-  }
-
+  List<String> _editorNotes(OpenEditor? editor) => _editorNotesOf(this, editor);
+  static List<EditorContext> _contexts(Iterable<OpenEditor> editors) => _contextsOf(editors);
   /// Sends [message]; [now], taken up at once, the turn running stopped
   /// for it (rather than queued behind it). With a plan awaiting (see
   /// [awaitingPlan]), it says what should change in it.
@@ -1449,18 +757,9 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
     }
   }
 
-  void stop() => _kernel.cancel();
-
-  void answer(InteractionAnswer answer) {
-    if (pendingInteraction case final request?) {
-      _kernel.answer(request.id, answer);
-    }
-  }
-
-  void rename(String title) {
-    if (_kernel case final RenamesSession kernel) kernel.rename(title);
-  }
-
+  void stop() => _stopOf(this);
+  void answer(InteractionAnswer answer) => _answerOf(this, answer);
+  void rename(String title) => _renameOf(this, title);
   String? _renamed;
 
   /// The name it was last given in the agent itself (Claude Code's
@@ -1471,10 +770,12 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
     return renamed;
   }
 
-  /// The conversation is deleted: what its review kept goes too.
-  void discardChanges() => unawaited(_review?.discard());
-
+  void discardChanges() => _discardChangesOf(this);
   bool _disposed = false;
+
+  /// Tells its listeners: the part files' functions reach `notifyListeners`
+  /// through here, as the protected member is the class's own to call.
+  void _notify() => notifyListeners();
 
   @override
   void dispose() {

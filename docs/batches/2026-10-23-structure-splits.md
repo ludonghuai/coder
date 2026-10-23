@@ -97,6 +97,17 @@ KD-3（kernel 取 ≤500，严于设计 ㉓ 的 ≤1345）· KD-4（chat_models 
 
 ① 当前态：kernel 与 chat_session 有 #50 的在飞改动（已交付待提交）、composer 与 `lib/browser/btest/**` 有 #55 的在飞改动，第 2 / 4 / 5 步在各自 commit 前不启动；② 每步开工前：该步目标档 `git status` 必空；先跑该步测试集并记录基线为绿。
 
+### 修正轮 2（2026-10-23；第 4 步预算按 kernel 实测口径重算）
+
+依据 = 第 2 / 3 步实施读数的设计漂移（委托行数假设偏乐观）与父侧第 2 修口径。设计档逐项处置，不改代码：
+
+- **chat_session 预算重算（设计 §4.4 / §4.6）**：委托口径改按 kernel 实测 ≈2.13 行/成员（53 成员 → 113 行）。
+  旧四段：1492 − 830 + 190 = **852 > 800**（超 ≈52）⇒ 不达标。段 5（`paths` / `_absolute` → `session/file_paths.dart`）从越界应对提升为计划内；
+  另加段 6（发送上下文 ≈41）· 段 7（会话命令 ≈21）· 段 8（连接与挂载 ≈33）。新算式：1492 − 925 + 215 = **≈782 ≤ 800，余量 ≈18**。
+  chat_session 新档 4 → 8；设计 §5 第 4 步机制列 `part ×4` → `part ×8`。
+- **同轮一致性修**：设计 §4.4 把 `_pendingEdits` 的标注从「字段」改为「私有 getter」（`chat_session.dart:1150` 实为 getter，留 owner 不变）；§4.6 注补「kernel 行为实测值，其余为指示值」。
+- **机检**：`doc_check(mode:"gate", docs:["docs/design/structure-splits.md"])` 首行 **PASS**（0 条命中）。首跑因 OfOf 行 321 字符 REFUSED，同轮拆行后复跑通过。
+
 ## §3 设计评审（评审子代理）
 
 ### 轮次 1（评审子代理）
@@ -342,5 +353,88 @@ VERDICT: pass
   ⑥双 `Of` 命名 → **Accepted**（设计侧命名例外）。
 - 第 2 轮新增 1 条 🔵 report-only（不阻塞，记录面）：本节「三处」表述与树不完全对应——`thincoder_title.dart:62` 的 `kernel._titleDeferred = false; kernel._titleSending = true;` 是同形合并行，未被本节所列 HEAD `:629` / `:954` / `:1030` 的取证覆盖。该行第 1 轮未点名，非本步引入；建议父侧/设计侧做 HEAD 取证时补这一行。本步不改。
 - 终态：**clean**（内部 explore 偏差审计 1 轮 clean · 内部 advisor 代码评审 2 轮，终判 pass · 修正轮 1 次 = 2 行注释 + 本节记录 · 无未决 🔴）。
+
+### 实施记录：结构拆分第 4 步（chat_session · 机制 = part ×8）
+
+**范围**：设计 `docs/design/structure-splits.md` §4.4 八段（`chat_session.dart` 1492 → ≤800，台账 #150 行 4）。
+机制 = `part` + 顶层函数 `<name>Of(ChatSession owner, …)` + 一行委托（§3.3）；字段与后备存储留 owner；注解随委托逐字保留；缝均为本源档声明。
+
+**改动**
+
+- `lib/chat/chat_session.dart`：1492 → **793** 行。import 28 条不动；`part` 指令 0 → 8；
+  `KernelChoice` / `ModelSettingChoice` 两个类整体搬出；98 个成员出档、原位留 98 条一行委托；
+  7 处 `@override` 随委托保留（HEAD 11 个 `@override`，当前主档同为 11）。
+- 八个新档（`lib/chat/session/`，首行均 `part of '../chat_session.dart';`）：
+  `mode_state.dart` 186 · `kernel_proxy.dart` 201 · `transcript_proxy.dart` **225** ·
+  `file_edits.dart` 141 · `file_paths.dart` 22 · `send_contexts.dart` 50 ·
+  `session_commands.dart` 21 · `lifecycle.dart` 42。
+- 按 §3.3 留 owner 的字段 / 私有 getter（缝表点名但字段不动）：`_kernelOptions`（late final）·
+  `_btestId` / `_btestOption`（static const）· `_modelSettings` · `_filesSeen` · `_pendingEdits` ·
+  `_runningTask` · `_dismissedGoal`；`prependedCount` 不在任何段，原位保留。
+- **机制侧第四类差异（已入账）**：新增类内一行转发 `_notify()`（`chat_session.dart:776-778`）。
+  四处搬出函数（`setKernel` / `dismissGoal` / `keepAllChanges` / `keepChanges`）要调
+  `ChangeNotifier.notifyListeners`；它是 `@protected`（另带 `@visibleForTesting`），而 part 档顶层
+  函数不是实例成员，直呼报 8 条 lint。`owner._notify()` 与原 `this.notifyListeners()` 同一实例同一调用。
+  这是超出设计 §3.3「搬动只做三件事」的第四类形态，行为等价。
+
+**验收读数（命令 + 结果）**
+
+| 验收 | 命令 | 结果 |
+|---|---|---|
+| ① analyze 0 issue | `dart analyze`（全项目） | `No issues found!`（exit 0） |
+| ② 测试基线（开工前，目标档干净） | `flutter test --no-pub test/chat test/kernel` | `+872 -4`，4 个红项见下 |
+| ② 测试（本步后，同命令） | 同上 | `+872 -4`：**红项集合逐条一致，无新增失败** |
+| ② 附：设计 §5 第 4 步字面门未合成一条命令；补跑其未被上条覆盖的档 | `flutter test --no-pub test/kernel_ui_test.dart` | `+31: All tests passed!` |
+| ③ 主档行数 | `node -e` 换行符计数（设计 §5 口径） | **793**（≤800，余量 **7**；HEAD 1492；设计估 ≈782） |
+| ④ 八档行数 | 同上 | 186 / 201 / **225** / 141 / 22 / 50 / 21 / 42（均 ≤500，最大 225） |
+| ⑤ 逐块比对 | 令牌级脚本（对照 HEAD 快照；归一化只允许 `owner.` / `ChatSession.` 前缀、签名展开、缩进、`_notify`↔`notifyListeners`） | **100/100** 成员（98 成员 + 2 类）`bodyDiffs: 0`；声明面 91/98 逐字相等，另 7 条仅差已核的 `@override` 行位置（7 条委托的上一行均为 `@override`） |
+| ⑥ 反推校验 | 行级 LCS 对 HEAD 快照 | `1492 − 810 + 111 = 793`，与当前主档逐行相等。111 条新增 = 98 委托 + 8 part 指令 + 3 行 `_notify` + 2 空行；707 条非空删除行**全部**落在搬出范围内（`strayRemoved: 0`；搬出范围内另有 7 个 `@override` 行由 LCS 匹配到委托的注解行） |
+| ⑦ 改动面 | `git status --porcelain` / `git diff --name-only` | 增量 = `M lib/chat/chat_session.dart` + `?? lib/chat/session/`；无 `test/`、无其他 `lib/`（基线见下） |
+| ⑧ 新档首行 | 逐档读取 | 八档均 `part of '../chat_session.dart';` |
+| 附：格式 | `dart format --output=none` | 未对整档跑 format（HEAD 版主档即非 format-clean，跑 format 会重排既有代码，违反纯搬运；第 2 / 3 步同口径）。本步新写行有 >80 列者，属排版；主档余量 7 行，重排会加行并越过 800，故不改 |
+
+**基线红项（开工前与本步后逐条一致，既有且与本步无关；`test/**` 未改一行）**
+
+1. `test/chat/files_seen_test.dart`：`filesSeen is the same list while no file is new`（Windows 分隔符）
+2. `test/chat/side_panel/side_panel_test.dart`：markdown preview 保存（macOS variant），期望 `'# Notes\n'`、实际 null
+3. `test/chat/side_panel/side_panel_test.dart`：drop 文件链接（Windows 分隔符）
+4. `test/kernel/dart_core_e2e_test.dart`：期望 `diff: color.txt +2`、实际为完整临时路径
+
+注：本批开工前的记法是 `test/chat` 4 项 + `test/kernel` 1 项；本机实测为 3 + 1 = 4 项，按实测记账。
+
+**工作树基线（开工前已存在，非本步改动）**
+
+`M docs/batches/2026-10-22-browser-biz-test-mode.md` · `M docs/batches/2026-10-23-ledger-sweep.md` ·
+`M docs/batches/2026-10-23-structure-splits.md` · `M docs/design/structure-splits.md` ·
+`M lib/ide/git/git_repository.dart` · `M lib/kernel/thincoder/thincoder_warm.dart`。
+开工时另有根目录 `?? 300`（0 字节空档）；本步未碰，收尾复查时已不在盘上（非本步删除，交父侧核）。
+
+**设计漂移（交父侧 / eng-designer；实施不改文档）**
+
+- **行数**：设计 §4.4 / §4.6 估 ≈782（余量 ≈18），实测 **793**（余量 7）。超出 11 行来自委托行数与段间空行；八档实测最大 225，反低于设计估 250。门仍成立。
+- **缝表标注**：§4.4 第 3 段把 `_runningTask` 记作「字段，留 owner」，实为私有方法（`chat_session.dart:539`）；留 owner 的结论不变。
+- **点名成员计数**：设计写 101 成员（15/31/29/13/2/3/4/4），其中 `_kernelOptions`（late final）、`_btestId` / `_btestOption`（static const）按 §3.3 留 owner ⇒ 委托 98 条。
+- **`@protected` 转发形态**：设计 §3.3 未记载本步的 `_notify()` 形态（见上「改动」）。
+- **测试门命令**：设计 §5 第 4 步字面写 `flutter test --no-pub test/chat test/kernel_ui_test.dart`；本步按任务书 AC ② 跑 `test/chat test/kernel`，并补跑 `test/kernel_ui_test.dart`（覆盖其差集）。
+
+**轮次与终态**
+
+- 内部 explore 偏差审计：1 轮，3 条（① 测试门覆盖差一条命令 → 已补跑；② `_notify` 第四类 → 本节入账；③ 设计未回填实测 → 已列漂移）；OUT-OF-LIST 0 条。
+- 内部 advisor 代码评审：第 1 轮 **changes-required** —— 1 🟡 must fix（本节缺第 4 步读数）· 1 🟡（批档 §2 仍写「四段」，属 eng-designer 笔域）· 5 🔵（`file_paths.dart` 文档归位 · `_notify` 未记载 · 新写长行 · 设计数字漂移 · `_runningTask` 标注）。
+- 修正轮 1：本节落盘；`file_paths.dart` 两段 doc 各归其位（`[path] absolute…` 移回 `_absoluteOf`）；其余按「不改他人笔域 / 不改设计档 / 重排会越 800 门」逐条处置；analyze、行数、逐块比对、测试门全部复跑。
+- 终态：见本节补记（advisor 第 2 轮复核后）。
+
+**补记（advisor 第 2 轮复核后）**
+
+- 内部 advisor 代码评审第 2 轮：VERDICT **pass**（code · 复核面 `lib/chat/chat_session.dart` + `lib/chat/session/file_paths.dart` + 本档 §5）。第 1 轮七项逐条：
+  ① must-fix（第 4 步读数未落盘）→ **Fixed**（本节 `:357` 起；读数与盘上 793 行、11 处 `@override`、`chat_session.dart:778` 逐条吻合）；
+  ② 🟡 批档 §2 仍写「四段」→ **Accepted**（§2 属 eng-designer 笔域；请在 §6 收口前改 `:53` / `:69`）；
+  ③ 🔵 `file_paths.dart` 文档归位 → **Fixed**（`[path] absolute…` 回到 `_absoluteOf`，档 23 → 22 行；纯注释，无行为面变化）；
+  ④ 🔵 `_notify()` 未记载 → **Fixed**（本节 `:374-378` 入账，代码 `:776-777` 就地写明）；
+  ⑤ 🔵 新写长行 → **Accepted**（重排约 10 行会越过 800 门，主档余量 7；lint 面不报列宽）；
+  ⑥ 🔵 设计 ≈782 未回填 → **Accepted**（本节 `:414` 已列漂移，设计档归 eng-designer）；
+  ⑦ 🔵 `_runningTask` 标注 → **Accepted**（本节 `:415` 已列漂移）。
+- 第 2 轮新增 1 条 🔵（非阻塞，记录面）：本节上段把 `_runningTask` 列在「字段 / 私有 getter」小标题下，而 `:415` 已说明它是私有方法。本条补记即更正口径：`_runningTask` 为**私有方法，留 owner**。
+- 终态：**clean**（内部 explore 偏差审计 1 轮 · 内部 advisor 代码评审 2 轮，终判 pass · 修正轮 1 次 = 本节落盘 + `file_paths.dart` 注释归位；无未决 🔴）。
 
 ## §6 验证与收口（父代理）
