@@ -30,6 +30,20 @@ enum BtestFace {
   };
 }
 
+/// Which way a run walks its pages (§3.9): down the business chain as far
+/// as it goes, or across one interface's whole surface. Absent means
+/// [surface] — the behavior runs had before the parameter existed.
+enum BtestTraversal {
+  chain,
+  surface;
+
+  static BtestTraversal? parse(String? value) => switch (value?.trim()) {
+    'chain' => BtestTraversal.chain,
+    'surface' => BtestTraversal.surface,
+    _ => null,
+  };
+}
+
 /// How a call aims at its element (§3.3, check 4-③): by the words it shows,
 /// or by a ref / selector where there are none.
 enum BtestTarget { words, fallback }
@@ -39,7 +53,8 @@ class BtestDecision {
   const BtestDecision.allow({this.entry, this.target})
     : message = null,
       evaluateWrite = false,
-      entryDenied = false;
+      entryDenied = false,
+      replayDenied = false;
 
   const BtestDecision.deny(
     this.message, {
@@ -47,6 +62,7 @@ class BtestDecision {
     this.target,
     this.evaluateWrite = false,
     this.entryDenied = false,
+    this.replayDenied = false,
   });
 
   /// Why it is refused; null when allowed.
@@ -64,10 +80,18 @@ class BtestDecision {
   /// Refused as an entry action (§3.6.2): counted on its own.
   final bool entryDenied;
 
+  /// Refused as a replay — the script making the request (§3.6.3, rule 3);
+  /// counted apart (§3.3, check 4-②).
+  final bool replayDenied;
+
   bool get allowed => message == null;
 }
 
 abstract final class BtestPolicy {
+  /// The four reasons a `chain` break carries (§3.3, check 2 / §3.9): the
+  /// run names why it could not go further, verbatim.
+  static const chainBreakReasons = {'门控', '无权限', '数据不足', '没有下一步'};
+
   /// The tools a read-only run lets through, by tool (§3.6.4) — everything
   /// else is a write action. `browser_evaluate` is judged apart: only with
   /// `readOnly: true` (§3.6.3, rule 2).
@@ -298,6 +322,7 @@ abstract final class BtestPolicy {
     if (tool == 'browser_request' && input['replay'] == true) {
       return BtestDecision.deny(
         _deny(tool, host, 'replay is refused in btest: it bypasses the form'),
+        replayDenied: true,
       );
     }
 

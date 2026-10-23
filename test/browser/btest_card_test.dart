@@ -21,11 +21,13 @@ void main() {
     });
 
     test('holds every label the content check lists', () {
-      for (var i = 1; i <= 7; i++) {
+      for (var i = 1; i <= 8; i++) {
         expect(BtestCard.text, contains('[D$i]'));
+      }
+      for (var i = 1; i <= 7; i++) {
         expect(BtestCard.text, contains('[J$i]'));
       }
-      for (var i = 1; i <= 19; i++) {
+      for (var i = 1; i <= 20; i++) {
         expect(
           BtestCard.text,
           contains('[P${i.toString().padLeft(2, '0')}]'),
@@ -35,8 +37,33 @@ void main() {
       for (var i = 1; i <= 3; i++) {
         expect(BtestCard.text, contains('[H$i]'));
       }
-      // The label form above is what the card reads: D1 … D7, J1 … J7.
-      expect(BtestCard.text, contains('[D7]'));
+      // The label form above is what the card reads: D1 … D8, J1 … J7.
+      expect(BtestCard.text, contains('[D8]'));
+      expect(BtestCard.text, contains('[P20]'));
+    });
+
+    test('carries the traversal discipline, the weight order and the report face (§3.8, §3.9)', () {
+      expect(BtestCard.text, contains('chain'));
+      expect(BtestCard.text, contains('surface'));
+      expect(BtestCard.text, contains('lost on refresh'));
+      expect(BtestCard.text, contains('amount reconciliation'));
+      expect(BtestCard.text, contains('duplicate submit'));
+      expect(BtestCard.text, contains('已修'));
+      expect(
+        BtestCard.text,
+        contains('take the one tied to the higher-weight class'),
+        reason: 'a chain round picks its next step by the weights (§3.9)',
+      );
+      expect(BtestCard.text, contains('traversal=<chain|surface>'));
+      expect(
+        BtestCard.text,
+        contains('# | 业务线 | case | source | 步骤 | 现象 | 证据 | 严重度 | 判定 | '
+            '复现前置 | 预期出处 | 绕道 | 建议'),
+        reason: '13 columns, the row number and both judgement columns in',
+      );
+      expect(BtestCard.text, contains('判定'));
+      expect(BtestCard.text, contains('建议'));
+      expect(BtestCard.text, contains('待研判 · <原因>'));
     });
   });
 

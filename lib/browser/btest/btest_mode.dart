@@ -9,6 +9,7 @@ import '../../settings/user_settings.dart';
 import '../browser_bridge.dart' show BrowserError;
 import 'btest_expect_file.dart';
 import 'btest_policy.dart';
+import 'btest_weights.dart';
 
 /// btest's own settings, in settings.json (§4: the settings page's two host
 /// lists and the read-only default).
@@ -106,7 +107,9 @@ class BtestRun {
     required this.startUrl,
     required this.env,
     required this.face,
+    required this.traversal,
     required this.expectFile,
+    required this.qaRoot,
     required this.commitRange,
     required this.baseline,
     required this.cases,
@@ -126,9 +129,17 @@ class BtestRun {
   final BtestEnv env;
   final BtestFace face;
 
+  /// The way this round walks its pages (§3.9): down the business chain, or
+  /// across one interface's surface.
+  final BtestTraversal traversal;
+
   /// The expect file, absolute — derived by the host (§3.4): `expectFile`
   /// is this run's name for the file, never an input.
   final String expectFile;
+
+  /// The QA root the run's files live under (§3.4): the weights table is
+  /// one per root (§3.9).
+  final String qaRoot;
 
   final String commitRange;
 
@@ -147,6 +158,12 @@ class BtestRun {
 
   /// Scripts refused for writing (§3.3, 4-②).
   int scriptsDenied = 0;
+
+  /// Requests a script made instead of the form (§3.3, 4-②): replay is
+  /// refused in btest, so the allowed count stays 0 — the pair is the
+  /// reading, and a non-zero refusal is named.
+  int replayAllowed = 0;
+  int replayDenied = 0;
 
   /// Targets aimed at, by how (§3.3, 4-③).
   int wordsTargets = 0;
@@ -168,18 +185,23 @@ class BtestRun {
       if (entry.detour == null) entry,
   ];
 
-  /// The report's head line (§3.8), read from the counters — the very one
-  /// `btest_run_end` hands back to be pasted.
-  String get truthLine => [
+  /// The report's head line (§3.8): the round's traversal first, then the
+  /// counters read from the run — the very line `btest_run_end` hands back
+  /// to be pasted, never self-reported. [noVisibleText] is the payload's
+  /// count, reconciled against the fallback count in check 4-③.
+  String truthLine({required int noVisibleText}) => [
+    'traversal=${traversal.name}',
     '操作真实性：入口=${declared.length}'
         '（navigate=${_count('browser_navigate')}',
     'open=${_count('browser_open')}',
-    if (_count('browser_act') > 0) 'act=${_count('browser_act')}）' else '）',
+    if (_count('browser_act') > 0) 'act=${_count('browser_act')}',
+    '被拒=$entriesDenied）',
     'evaluate 写值被拒=$scriptsDenied',
+    'replay 放行=$replayAllowed/被拒=$replayDenied',
     '文字定位=$wordsTargets',
     'ref/selector 兜底=$fallbackTargets',
+    '无可见文字=$noVisibleText',
     '绕道=${detours.length}',
-    if (entriesDenied > 0) '入口被拒=$entriesDenied',
   ].join(' · ');
 
   int _count(String tool) =>
@@ -207,7 +229,9 @@ class BtestState {
     required String startUrl,
     required BtestEnv env,
     required BtestFace face,
+    required BtestTraversal traversal,
     required String expectFile,
+    required String qaRoot,
     required String commitRange,
     required String? baseline,
     required List<BtestCase> cases,
@@ -219,7 +243,9 @@ class BtestState {
       startUrl: startUrl,
       env: env,
       face: face,
+      traversal: traversal,
       expectFile: expectFile,
+      qaRoot: qaRoot,
       commitRange: commitRange,
       baseline: baseline,
       cases: cases,
@@ -239,13 +265,19 @@ class BtestState {
     final run = this.run;
     if (run == null) return;
     if (decision.entry case final url?) {
+      // The first entry is the declared one: a detour there has no defect to
+      // record (§3.6.2), and counting it as one would read 入口=0.
+      final first = run.entries.isEmpty;
       run.entries.add(
         BtestEntry(
           tool: tool,
           url: url,
-          detour: BtestPolicy.detourOf(tool, input),
+          detour: first ? null : BtestPolicy.detourOf(tool, input),
         ),
       );
+    }
+    if (tool == 'browser_request' && input['replay'] == true) {
+      run.replayAllowed++;
     }
     if (tool == 'browser_act') {
       for (final target in BtestPolicy.actTargets(input)) {
@@ -263,6 +295,7 @@ class BtestState {
     run.denied++;
     if (decision.entryDenied) run.entriesDenied++;
     if (decision.evaluateWrite) run.scriptsDenied++;
+    if (decision.replayDenied) run.replayDenied++;
   }
 
   static void _count(BtestRun run, BtestTarget target) => switch (target) {
@@ -416,12 +449,15 @@ abstract final class BtestTools {
     name: 'btest_run_start',
     description:
         'Starts one btest run for a business line: the business repository, '
-        'the one entry URL, dev/test/prod, read-only or write. The expect '
+        'the one entry URL, dev/test/prod, read-only or write, and the way '
+        'the round walks (traversal: chain dives down the business chain, '
+        'surface walks one interface; surface is the default). The expect '
         'file is derived by the host from the line, the repository and the '
-        'QA root, and its absolute path is returned. Returns the run id, '
-        'that path, the case index and the SHA-256 (the write-back '
-        'baseline). btest refuses every browser action until a run is '
-        'started, and one run at a time.',
+        'QA root, and its absolute path is returned. Returns the run id and '
+        'traversal, that path, the case index, the SHA-256 (the write-back '
+        'baseline) and the weights table (path, source, effective order). '
+        'btest refuses every browser action until a run is started, and one '
+        'run at a time.',
     inputSchema: {
       'type': 'object',
       'properties': {
@@ -447,6 +483,15 @@ abstract final class BtestTools {
           'description': 'Optional: read-only unless the btest settings say '
               'otherwise. env: prod with write is refused (rule A).',
         },
+        'traversal': {
+          'type': 'string',
+          'enum': ['chain', 'surface'],
+          'description': 'Optional: chain walks down the business chain as '
+              'far as it goes (a step that cannot go on is a chainBreak, and '
+              'the run looks for another way); surface walks the whole '
+              'interface (tabs, buttons, forms, filters, the list). Default: '
+              'surface.',
+        },
         'commitRange': {
           'type': 'string',
           'description': 'The change range this run covers, as '
@@ -470,11 +515,13 @@ abstract final class BtestTools {
     name: 'btest_run_end',
     description:
         'Closes the run: takes the report as a structured payload '
-        '(coveredCases, issues, blockers, unconfirmedDiffs, uncovered) and '
-        'returns the four mechanical readings — the expect file written '
-        'back, the three tail keys there, the coverage reconciled, and the '
-        'operation authenticity line the report is headed with. Write the '
-        'expect file back BEFORE calling this.',
+        '(coveredCases, issues, blockers, unconfirmedDiffs, uncovered; a '
+        'chain run also sends chainBreaks, and noVisibleText backs the '
+        'fallback reading) and returns the five mechanical readings — the '
+        'expect file written back, the tail and break keys there, the '
+        'coverage reconciled, the operation authenticity line the report is '
+        'headed with, and the weights table. Write the expect file back '
+        'BEFORE calling this.',
     inputSchema: {
       'type': 'object',
       'properties': {
@@ -508,6 +555,31 @@ abstract final class BtestTools {
         'blockers': {'type': 'array', 'items': {'type': 'object'}},
         'unconfirmedDiffs': {'type': 'array', 'items': {'type': 'object'}},
         'uncovered': {'type': 'array', 'items': {'type': 'object'}},
+        'chainBreaks': {
+          'type': 'array',
+          'items': {
+            'type': 'object',
+            'properties': {
+              'path': {'type': 'string'},
+              'at': {'type': 'string'},
+              'reason': {
+                'type': 'string',
+                'enum': ['门控', '无权限', '数据不足', '没有下一步'],
+              },
+              'verified': {'type': 'string'},
+            },
+          },
+        },
+        'noVisibleText': {
+          'type': 'array',
+          'items': {
+            'type': 'object',
+            'properties': {
+              'step': {'type': 'string'},
+              'element': {'type': 'string'},
+            },
+          },
+        },
       },
       'required': ['runId', 'coveredCases', 'issues'],
     },
@@ -571,6 +643,18 @@ abstract final class BtestTools {
     if (env == BtestEnv.prod && face == BtestFace.write) {
       throw const BrowserError(BtestPolicy.ruleA);
     }
+    // The round's traversal (§3.9): absent means surface — the behavior a
+    // run had before the parameter existed; an illegal value is named.
+    final traversalText = _text(input['traversal']);
+    final BtestTraversal? traversal = traversalText == null
+        ? BtestTraversal.surface
+        : BtestTraversal.parse(traversalText);
+    if (traversal == null) {
+      throw BrowserError(
+        'btest_run_start refused: traversal must be chain or surface, not '
+        '"$traversalText"',
+      );
+    }
     final repoRoot = _text(input['repoRoot']);
     if (repoRoot == null || !p.isAbsolute(repoRoot)) {
       throw BrowserError(
@@ -625,6 +709,10 @@ abstract final class BtestTools {
         'cannot be created (${error.osError?.message ?? error.message})',
       );
     }
+    // The weights table (§3.9): one per QA root, built on first sight. The
+    // run goes on with the built-in eight when it cannot be read or written
+    // — a warning, never a refusal.
+    final weights = BtestWeights.ensure(qaRoot.root);
     final BtestExpect expect;
     try {
       expect = BtestExpect.read(expectFile);
@@ -640,7 +728,9 @@ abstract final class BtestTools {
       startUrl: startUrl!,
       env: env,
       face: face,
+      traversal: traversal,
       expectFile: expectFile,
+      qaRoot: qaRoot.root,
       commitRange: commitRange,
       baseline: expect.hash,
       cases: expect.cases,
@@ -649,7 +739,7 @@ abstract final class BtestTools {
     final reason = qaRoot.reason == null ? '' : ' · 降级原因=${qaRoot.reason}';
     return [
       '1. btest ${run.id} started · $line · ${env.name} · ${face.name} · '
-          '${run.repo}',
+          'traversal=${run.traversal.name} · ${run.repo}',
       '2. expectFile（解析后的绝对路径）: $expectFile',
       '   $source$reason',
       '3. Case index (${expect.cases.length}):',
@@ -665,9 +755,13 @@ abstract final class BtestTools {
           commitRange: commitRange,
         ),
       ],
-      '先读 $expectFile（case 与 expectFrom 都从文件来），再开始。',
-      'Never stop mid-run; close with blockers / unconfirmedDiffs / '
-          'uncovered, after writing the file back and before btest_run_end.',
+      '5. 纪律：先读 $expectFile（case 与 expectFrom 都从文件来），再开始；'
+          '不边走边停，收尾带 blockers / unconfirmedDiffs / uncovered，'
+          '写回之后再 btest_run_end。',
+      '6. weights（历史缺陷密度表）: ${weights.path} · '
+          '来源=${weights.source.label}',
+      '   生效序：${weights.orderLine}',
+      for (final warning in weights.warnings) 'warning: $warning',
     ].join('\n');
   }
 
@@ -721,14 +815,15 @@ abstract final class BtestTools {
       );
     }
 
-    // 2. The three tail sections' keys.
+    // 2. The three tail sections' keys; a chain round's breaks too.
     final missing = [
       for (final key in ['blockers', 'unconfirmedDiffs', 'uncovered'])
         if (input[key] is! List) key,
     ];
+    final chain = _chainBreaks(run, input['chainBreaks']);
     checks.add(
-      '2. 三尾注字段：${missing.isEmpty ? 'blockers / unconfirmedDiffs / '
-                'uncovered 都在' : '缺 ${missing.join(' / ')}'}',
+      '2. 尾注与断点键：${missing.isEmpty ? 'blockers / unconfirmedDiffs / '
+                'uncovered 都在' : '缺 ${missing.join(' / ')}'}${chain.text}',
     );
     if (missing.isNotEmpty) {
       warnings.add(
@@ -736,6 +831,7 @@ abstract final class BtestTools {
         'the key must be there',
       );
     }
+    warnings.addAll(chain.problems);
 
     // 3. The coverage, against the index run_start returned.
     final index = {for (final one in run.cases) one.id};
@@ -748,9 +844,16 @@ abstract final class BtestTools {
       for (final id in covered)
         if (!index.contains(id)) id,
     ];
+    final issuesInput = input['issues'];
+    if (input.containsKey('issues') && issuesInput is! List) {
+      warnings.add(
+        'issues is not a list — an empty array is fine, the field must be one',
+      );
+    }
     final issues = [
-      for (final issue in input['issues'] as List? ?? const [])
-        if (issue is Map) issue.cast<String, Object?>(),
+      if (issuesInput is List)
+        for (final issue in issuesInput)
+          if (issue is Map) issue.cast<String, Object?>(),
     ];
     final unpointed = <String>[];
     for (final (i, issue) in issues.indexed) {
@@ -764,10 +867,33 @@ abstract final class BtestTools {
         unpointed.add('issues[${i + 1}].expectRef is empty');
       }
     }
+    // The pending items (§3.10): the run never judges them, but each must
+    // point at a case and say whether it is a diff or a pending rule.
+    final diffsInput = input['unconfirmedDiffs'];
+    final diffs = [
+      if (diffsInput is List)
+        for (final diff in diffsInput)
+          if (diff is Map) diff.cast<String, Object?>(),
+    ];
+    final unconfirmed = <String>[];
+    for (final (i, diff) in diffs.indexed) {
+      if (_text(diff['caseId']) == null) {
+        unconfirmed.add('unconfirmedDiffs[${i + 1}].caseId is empty');
+      }
+      final kind = _text(diff['kind']);
+      if (kind == null || !_diffKinds.contains(kind)) {
+        unconfirmed.add(
+          'unconfirmedDiffs[${i + 1}].kind must be diff or pending, not '
+          '"${kind ?? ''}"',
+        );
+      }
+    }
     checks.add(
       '3. 覆盖对账：coveredCases ${covered.length - outside.length}/'
       '${covered.length} 在索引；issues ${issues.length} 条，'
-      '${unpointed.isEmpty ? 'caseId 与 expectRef 都在' : '${unpointed.length} 处不合格'}',
+      '${unpointed.isEmpty ? 'caseId 与 expectRef 都在' : '${unpointed.length} 处不合格'}；'
+      'unconfirmedDiffs ${diffs.length} 条，'
+      '${unconfirmed.isEmpty ? 'caseId 与 kind 都在' : '${unconfirmed.length} 处不合格'}',
     );
     if (coveredInput is! List) {
       warnings.add(
@@ -781,6 +907,7 @@ abstract final class BtestTools {
       );
     }
     warnings.addAll(unpointed);
+    warnings.addAll(unconfirmed);
 
     // 4. What the run itself counted. 入口 is the declared entry alone; a
     // detour is a legal entry and is read apart (§3.8).
@@ -800,6 +927,12 @@ abstract final class BtestTools {
         'a script trying to write, not a pass',
       );
     }
+    if (run.replayDenied > 0) {
+      warnings.add(
+        'replay 被拒 ${run.replayDenied} 次 — that is the reading of a script '
+        'bypassing the form, not a pass',
+      );
+    }
     final detoured = [
       for (final issue in issues)
         if (_text(issue['detour']) != null) issue,
@@ -810,20 +943,102 @@ abstract final class BtestTools {
         '${detoured.length} 条（差 ${(run.detours.length - detoured.length).abs()}）',
       );
     }
-    checks.add('4. ${run.truthLine}');
+    // 4-③'s reconcile: the run's fallback count is what the payload's
+    // noVisibleText[] and the report's 无可见文字 rows must both read.
+    final noVisibleInput = input['noVisibleText'];
+    final noVisible = [
+      if (noVisibleInput is List) for (final one in noVisibleInput) one,
+    ];
+    if (run.fallbackTargets != noVisible.length) {
+      warnings.add(
+        '无可见文字对账：ref/selector 兜底 ${run.fallbackTargets} 次，'
+        'noVisibleText 记了 ${noVisible.length} 条'
+        '（差 ${(run.fallbackTargets - noVisible.length).abs()}）',
+      );
+    }
+    checks.add('4. ${run.truthLine(noVisibleText: noVisible.length)}');
+
+    // 5. The weights table (§3.9): on disk with its eight classes, and every
+    // `已修` marker naming a class the table holds.
+    final weights = BtestWeights.check(run.qaRoot);
+    final String weightText;
+    if (weights.problem case final problem?) {
+      weightText = problem;
+    } else if (weights.missing.isNotEmpty) {
+      weightText = '缺类目 ${weights.missing.join(' / ')}（类目不得删）';
+    } else {
+      weightText = '${BtestWeights.pathOf(run.qaRoot)} 在盘，八类齐';
+    }
+    checks.add('5. 权重表：$weightText');
+    if (weights.problem case final problem?) {
+      warnings.add('权重表：$problem');
+    }
+    if (weights.missing.isNotEmpty) {
+      warnings.add(
+        '权重表缺类目 ${weights.missing.join(' / ')} — 类目不得删（§3.9）',
+      );
+    }
+    warnings.addAll(weights.warnings);
 
     state.end();
     return [
       'btest ${run.id} closed.',
-      '收尾检查表（四项机械读数；第 4 项即报告头一行）：',
+      '收尾检查表（五项机械读数；第 4 项即报告头一行）：',
       ...checks,
       if (warnings.isNotEmpty) ...[
         '',
         for (final warning in warnings) 'warning: $warning',
       ],
       '',
-      '报告头：${run.truthLine}',
+      '报告头：${run.truthLine(noVisibleText: noVisible.length)}',
     ].join('\n');
+  }
+
+  /// The kinds an `unconfirmedDiffs` entry may take (§3.3, check 3): a diff
+  /// between runs, or a rule the user still has to rule on.
+  static const _diffKinds = {'diff', 'pending'};
+
+  /// Check 2's chain half (§3.3): a chain run sends `chainBreaks` (an empty
+  /// array is fine), and every break's four fields are filled, its reason one
+  /// of the four named ones. A surface run needs none.
+  static ({String text, List<String> problems}) _chainBreaks(
+    BtestRun run,
+    Object? value,
+  ) {
+    if (run.traversal != BtestTraversal.chain) {
+      return (text: '', problems: const []);
+    }
+    if (value is! List) {
+      return (
+        text: '；chainBreaks 缺键（chain 轮必带，可为空数组）',
+        problems: const [
+          'chainBreaks is missing — a chain run sends the key, even as []',
+        ],
+      );
+    }
+    final problems = <String>[];
+    for (final (i, one) in value.indexed) {
+      final item = one is Map
+          ? one.cast<String, Object?>()
+          : const <String, Object?>{};
+      for (final field in const ['path', 'at', 'reason', 'verified']) {
+        if (_text(item[field]) == null) {
+          problems.add('chainBreaks[${i + 1}].$field is empty');
+        }
+      }
+      final reason = _text(item['reason']);
+      if (reason != null && !BtestPolicy.chainBreakReasons.contains(reason)) {
+        problems.add(
+          'chainBreaks[${i + 1}].reason "$reason" is not one of '
+          '门控 / 无权限 / 数据不足 / 没有下一步',
+        );
+      }
+    }
+    return (
+      text: '；chainBreaks ${value.length} 条'
+          '${problems.isEmpty ? '，四字段齐' : '，${problems.length} 处不合格'}',
+      problems: problems,
+    );
   }
 
   static String? _text(Object? value) => switch (value) {

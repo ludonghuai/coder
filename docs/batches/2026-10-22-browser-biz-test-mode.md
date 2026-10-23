@@ -158,6 +158,14 @@
 
 **记录在案的一点（不再提）**：btest 的生产禁写规则目前只包在浏览器工具上（`lib/browser/browser_tools.dart:175` 的闸门只拦 `BtestTools.all`），内核侧 `bash` / `write` / `edit` 不受该闸约束；该边界按上述决定保持现状，不另立条目。
 
+## QA 落点：保留「按仓名分子目录」（2026-10-23 03:14）
+
+**已定决定**：QA 落点维持 `<qaRoot>/<仓名>/<业务线>.md`，不提供"完整路径"覆盖参数，也不去掉仓名那一层 · 用户原话：「A吧就这样吧」（A = 保持现状，用设置里的 `qaRoot` 控制根）· 时间：2026-10-23 03:14
+
+**背景（用户实测反馈）**：用户曾用 `expectFile = C:/Users/xinbo/repos/qa/航次.md` 试过，无效果——因为 F3.2 已把该参数删除（入参改成 `line` 业务线名），且落点由宿主派生。控制根的唯一入口 = 设置项 `btest.qaRoot`（现为空，故按工作区派生）。
+
+**为什么保留仓名一层**：`v2-booking` 与 `v2-fixturenote` 都可能有「订舱 / 航次」类业务线，去掉这一层会撞名并互相覆盖。
+
 ## §2 批次任务与设计（eng-designer）
 **状态行**：✅ 设计完成（2026-10-23 · 修正轮 #17：QA 根改为会话工作区根锚定（四分支）；设计档 601 行、§7 用例 27 条；门禁 PASS）
 <§2 模板占位：本批条目（覆盖） / 设计档落点 / 机制设计 / 受影响文件与测试覆盖 / 验收对照 / 关键决策 / 上抛项>
@@ -822,6 +830,59 @@ VERDICT: pass
 **上抛（[上抛·待裁]）**
 
 - 分支 2 在「业务仓恰好叫 `qa` 且位于工作区根下一层」时算出 `qaRoot == repoRoot`，预期文件会落进业务仓且无降级原因；需求 F3.2「不写进业务仓」无条件，设计 §6 ④ 加了条件。实现按设计走、未自创例外；建议设计位裁定（碰撞时复用 `QA 根在业务仓内`，或改用父目录兜底）。
+
+## 实施记录（eng-coder · 2026-10-23 · F7 / F7.1 / F8）
+
+**范围**：设计档 `docs/design/browser-biz-test.md`（755 行，评审 #30 通过 + #31 修正）的 F7 遍历策略 / F7.1 权重表 / F8 待确认研判增量。未改 `docs/**`；未动 `lib/chat/**` 与 `lib/ide/**` 的既有 `skipTraversal` / `traversalDescendants`；F3.2 四分支与 `qaRoot` 行为未改；生产双闸判据未动。
+
+**改动与实测行数（增量 vs 设计 §4 估计）**
+
+| 文件 | 实测行数 | 增量 | 内容 |
+|---|---|---|---|
+| `lib/browser/btest/btest_mode.dart` | 1051 | +215（设计估 ≤ +35） | `traversal` 解析与拒绝、schema、返回项 1 / 6、`truthLine` 加 `traversal=` / replay / 无可见文字、检查 2 的 `chainBreaks` 四字段、检查 3 的 `unconfirmedDiffs.kind`、检查 4 的 replay / 兜底对账、检查 5 权重表 |
+| `lib/browser/btest/btest_weights.dart` | 293（新） | +293（估 ≤ +130） | 内置八类、`<qaRoot>/weights.md` 首建 / 解析 / 生效序 / 检查 5 |
+| `lib/browser/btest/btest_policy.dart` | 417 | +24（估 ≤ +15） | `BtestTraversal` + `parse`、`chainBreakReasons`、`replayDenied` 计数位 |
+| `lib/browser/btest/btest_card.dart` | 127 | +3 行（估 ≤ +14）；正文 4624 → 5984 字符 | `[D8]` / `[P20]`、报告 13 列、判定 / 建议、研判与 `待研判 · <原因>` |
+| `test/browser/btest_policy_test.dart` | 648 | +184（估 ≤ +10） | #29–#32、#30 断点、replay / 无可见文字对账、#34 pending、载荷类型 |
+| `test/browser/btest_weights_test.dart` | 183（新） | +183（估 ≤ +60） | #33 首建 / 缺失 / 删类目 / 标记漂名 / 排序 |
+| `test/browser/btest_card_test.dart` | 136 | +26（估 ≤ +4） | 38 标签、`[D8]` / `[P20]`、13 列 |
+| `test/browser/btest_expect_file_test.dart` | 617（行数未变） | 2 行断言随检查 2 文案更新（设计标“本轮不动”，清单外、已披露） | 「五项读数」与 `尾注与断点键：` |
+
+**行数超预算（如实记）**：`btest_mode.dart` 实测 1051 行 = +215，超设计 §4 的 ≤ +35 估计；`btest_weights.dart` 293 / `btest_policy_test.dart` 648 / `btest_weights_test.dart` 183 同样超估计。行为面无裁剪，超量来自检查表五项的校验与说明文字、schema、以及逐条断言密度。设计 §4 的 828 / 863 与各档“现行数 + 增量”需文档主在解冻后重新基线（本轮文档冻结，未改档）。
+
+**验收实测（本机，命令 + 结果行）**
+
+| # | 验收点 | 实测 |
+|---|---|---|
+| ① | `dart analyze` 零 issue | `dart analyze` → `No issues found!` |
+| ② | 测试全绿、可增不可减 | `flutter test --no-pub test/browser test/settings/browser_page_test.dart` → `00:05 +120 ~7: All tests passed!`（基线 94 通过 / 7 跳过） |
+| ③ | §7 #29–#34 各有断言 | policy：缺省=surface、chain 回显、非法值点名、chain 空断点、断点四字段 + 四值、surface 不需键、两个 pending、非法 kind；weights：首建 / 重建 / 删类目 / 标记漂名；card：38 标签与 `[D8]` / `[P20]` |
+| ④ | `traversal` 只在 btest 面 | `grep traversal lib/**`：新增仅在 `lib/browser/btest/*` 与卡正文；`lib/ide` 的 `traversalDescendants` / `skipTraversal` 未动 |
+| ⑤ | 权重表八类 / 已修末尾 / 漂名 warning / >8 类排序 | `btest_weights_test`：八类 58/52/40/35/31/24/22/20 + 检查点、`file` 首建无 warning、`已修` 末尾、`已复现` 原位、`传参 / 跨页 60` 排第一、`已修：刷新/数据丢失` warning |
+| ⑥ | 检查表 4 与首行含 replay 与兜底对账 | `replay 放行=0/被拒=N`、`无可见文字=N`、兜底 vs `noVisibleText[]` 差额点名（用例 4-③ / 4-②） |
+| ⑦ | 报告 13 列 + 判定 / 建议 | 卡正文逐字 13 列；`预期不符` 建议 `—`、`待确认` 严重度 `—`、研判回填 / `待研判 · <原因>` |
+| ⑧ | `[D8]` / `[P20]`、标签 36 → 38 | 38 个标签行（D1–D8 / J1–J7 / P01–P20 / H1–H3）；卡正文 5984 字符 |
+| ⑨ | `doc_check` 门禁 | `doc_check(mode:"gate", docs:["docs/design/browser-biz-test.md"])` → 首行 `DOC-CHECK GATE: PASS`（1 档 0 条命中） |
+
+**设计未规定、我自行决定（每条一句理由）**
+
+1. `traversal` 显式传空串按“缺省”处理（视为 surface）：与 `_text()` 的既有空值语义一致，避免把空串当非法值误拒。
+2. 权重表首建日期用当天（`_date(at)`），设计模板里的 `2026-10-23` 是示例日期：写盘日期就是首建日期，可注入 `at` 供测试。
+3. 模板占位行 `- 已修：<类> — …` 不参与逐字匹配（跳过）：否则首建文件每轮都会报一条假 warning，与 §7 #33“首次无 warning”冲突。
+4. 权重表行尾竖线可缺（4 格也解析）、条数读不出给一行 warning：文件是人可编辑的，合法 Markdown 不得静默丢类目。
+5. 检查 5 在 run_end 只点名“不在盘上”，不重建：首建只在 `btest_run_start`，run 内被删属异常读数，静默补回会掩盖它（设计 §3.3 检查 5 的“文件不存在 ⇒ 首建”按 run_start 读）。
+6. 首条入口若带 `detour`，不计为绕道：第一条入口就是声明入口（§3.6.2），否则报告头会假报 `入口=0`。
+7. 报告头在 `browser_act` 导航入口时追加 `act=N`：不在读数里区分 `act` 会出现 `入口=1（navigate=0 · open=0）` 的自相矛盾。
+8. `replay 放行` 也计数（browser_request 带 replay 且被放行才 +1），当前策略恒拒 ⇒ 恒 0，但读数是实测而非硬编码。
+9. 条数读不出 / 行尾竖线缺失两处解析行为属实现层细化，设计未写死；理由见第 4 条。
+
+**内部审计与代码评审**
+
+- explore 偏差审计（对照设计 §3.3 / §3.8 / §3.9 / §3.10 / §4 / §6 / §7 #29–#34）：`VERDICT: changes-required`，1 条真实缺口——卡内漏了 `plan` 作为 `explore` 不在时的只读替代（设计 §3.10）。已修（`btest_card.dart` 现写 `explore, or plan where explore is not assembled`）；其余为行数基线与清单外断言更新，已在上面披露。
+- advisor 代码评审（type=code，第 1 轮）：`VERDICT: pass`（0 🔴 / 4 🟡 / 2 🔵）。已修 5 条：载荷 `issues` / `unconfirmedDiffs` 非 list 时的裸 TypeError（改为点名 warning + 空表）、权重表行尾竖线缺失静默丢行、chain 轮按权重选下一步无载体（`[P20]` 补一句）、首入口 detour 的假 `入口=0`、模板 905/924 行缺引用。未修 1 条 = 检查 5 缺文件只点名不重建（见自行决定 5），保留并披露。
+- 修复轮次：2 轮（审计后 1 轮、评审后 1 轮，均在 5 轮上限内）；收敛后 `dart analyze` 与四档定向测试复跑 = `+94: All tests passed!`，全量面 = `+120 ~7: All tests passed!`。**terminal state = `clean`**（无未修 must-fix；1 条设计基线与 1 条检查 5 读法作为披露项留下）。
+
+**如实记的设计漂移**：设计 §3.8:449 首行示例中 `）· evaluate` 无空格，实现按统一 ` · ` 联接输出 `） · evaluate`（字段与顺序一致，仅分隔空格不同）；设计 §4 的行数/增量基数需重新基线（见上）。
 
 ## §6 验证与收口（父代理）
 

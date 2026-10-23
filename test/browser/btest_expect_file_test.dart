@@ -498,7 +498,7 @@ void main() {
       ...over,
     };
 
-    test('all four readings are green once the file is written back (#2)', () async {
+    test('all five readings are green once the file is written back (#2)', () async {
       final file = File(expectPath(sandbox));
       await begin();
       file.writeAsStringSync(
@@ -524,7 +524,7 @@ void main() {
             ],
           ), call)}';
       expect(answer, contains('expectFile: written'));
-      expect(answer, contains('三尾注字段：blockers / unconfirmedDiffs / uncovered 都在'));
+      expect(answer, contains('尾注与断点键：blockers / unconfirmedDiffs / uncovered 都在'));
       expect(answer, contains('coveredCases 1/1 在索引'));
       expect(answer, contains('入口=1'));
       expect(answer, contains('操作真实性：'));

@@ -52,6 +52,7 @@ void main() {
   BtestRun start({
     BtestFace face = BtestFace.write,
     BtestEnv env = BtestEnv.test,
+    BtestTraversal traversal = BtestTraversal.surface,
     List<BtestCase> cases = const [],
   }) => state.start(
     line: line,
@@ -59,7 +60,9 @@ void main() {
     startUrl: startUrl,
     env: env,
     face: face,
+    traversal: traversal,
     expectFile: p.join(sandbox.path, 'qa', 'repo', '订舱.md'),
+    qaRoot: p.join(sandbox.path, 'qa'),
     commitRange: 'abc1234',
     baseline: null,
     cases: cases,
@@ -265,6 +268,22 @@ void main() {
       expect(state.run!.entries.single.tool, 'browser_navigate');
     });
 
+    test('a detour on the first entry is not read as one (入口=1)', () {
+      start();
+      expect(
+        refusal('browser_navigate', {
+          'tabId': 1,
+          'url': startUrl,
+          'detour': 'no defect on the first entry',
+        }),
+        isNull,
+      );
+      expect(state.run!.declared.length, 1);
+      expect(state.run!.detours, isEmpty);
+      expect(state.run!.truthLine(noVisibleText: 0), contains('入口=1'));
+      expect(state.run!.truthLine(noVisibleText: 0), contains('绕道=0'));
+    });
+
     test('a second one without detour is refused (#17)', () {
       start();
       refusal('browser_navigate', {'tabId': 1, 'url': startUrl});
@@ -293,8 +312,8 @@ void main() {
       expect(state.run!.entries.length, 2);
       // §3.8's line: one declared entry, the detour read apart (入口=1 …
       // 绕道=1), so a legal detour is not reported as a second entry.
-      expect(state.run!.truthLine, contains('入口=1（navigate=1'));
-      expect(state.run!.truthLine, contains('绕道=1'));
+      expect(state.run!.truthLine(noVisibleText: 0), contains('入口=1（navigate=1'));
+      expect(state.run!.truthLine(noVisibleText: 0), contains('绕道=1'));
     });
 
     test('browser_act navigate steps and browser_open count too (KD-17)', () {
@@ -458,6 +477,172 @@ void main() {
     test('a second run while one is open is refused', () async {
       await BtestTools.all.first.run(startInput(), call);
       expect(await startRefusal(startInput()), contains('still open'));
+    });
+  });
+
+  group('traversal (§3.9)', () {
+    test('absent means surface, and the run says so (#31)', () async {
+      final answer = '${await BtestTools.all.first.run(startInput(), call)}';
+      expect(state.run!.traversal, BtestTraversal.surface);
+      expect(answer, contains('traversal=surface'));
+    });
+
+    test('chain is taken and returned (#29)', () async {
+      final answer = '${await BtestTools.all.first.run(
+        startInput({'traversal': 'chain'}),
+        call,
+      )}';
+      expect(state.run!.traversal, BtestTraversal.chain);
+      expect(answer, contains('traversal=chain'));
+    });
+
+    test('an illegal value is refused, naming it and both values (#32)', () async {
+      final said = await startRefusal(startInput({'traversal': 'depth'}));
+      expect(said, contains('traversal'));
+      expect(said, contains('chain'));
+      expect(said, contains('surface'));
+      expect(state.run, isNull, reason: 'no run is made');
+    });
+
+    test('the weights table is built and returned (§3.3, item 6, #33)', () async {
+      final answer = '${await BtestTools.all.first.run(startInput(), call)}';
+      final table = File(p.join(sandbox.path, 'qa', 'weights.md'));
+      expect(table.existsSync(), isTrue);
+      expect(answer, contains('6. weights（历史缺陷密度表）: ${table.path}'));
+      expect(answer, contains('来源=file'));
+      expect(answer, contains('生效序：刷新 / 数据丢失 → 报错 / 异常'));
+      expect(answer, isNot(contains('warning:')), reason: 'first build is file');
+    });
+  });
+
+  group('btest_run_end payload checks (§3.3)', () {
+    Map<String, Object?> report([Map<String, Object?> over = const {}]) => {
+      'runId': state.run!.id,
+      'coveredCases': const <String>[],
+      'issues': const <Object?>[],
+      'blockers': const <Object?>[],
+      'unconfirmedDiffs': const <Object?>[],
+      'uncovered': const <Object?>[],
+      'noVisibleText': const <Object?>[],
+      ...over,
+    };
+
+    Future<Object> end([Map<String, Object?> over = const {}]) =>
+        BtestTools.all.last.run(report(over), call);
+
+    test('a chain round sends chainBreaks; empty is fine (#30)', () async {
+      await BtestTools.all.first.run(
+        startInput({'traversal': 'chain'}),
+        call,
+      );
+      final answer = '${await end({'chainBreaks': const <Object?>[]})}';
+      expect(answer, contains('chainBreaks 0 条，四字段齐'));
+      expect(answer, isNot(contains('chainBreaks is missing')));
+    });
+
+    test('a break missing a field, or with a bad reason, is named (#30)', () async {
+      await BtestTools.all.first.run(
+        startInput({'traversal': 'chain'}),
+        call,
+      );
+      final answer = '${await end({
+        'chainBreaks': [
+          {
+            'path': '首页 → 详情',
+            'at': '审核',
+            'reason': '门控',
+            'verified': '打开了详情',
+          },
+          {'path': '首页', 'at': '提交', 'reason': '想不出', 'verified': ''},
+        ],
+      })}';
+      expect(answer, contains('chainBreaks[2].verified is empty'));
+      expect(answer, contains('chainBreaks[2].reason "想不出"'));
+      expect(answer, isNot(contains('chainBreaks[1].')), reason: 'the first is whole');
+    });
+
+    test('a surface round needs no chainBreaks key', () async {
+      await BtestTools.all.first.run(startInput(), call);
+      final answer = '${await end()}';
+      expect(answer, isNot(contains('chainBreaks')));
+    });
+
+    test('the head line carries traversal and both reconciled readings (§3.8, 4-②③)', () async {
+      await BtestTools.all.first.run(startInput(), call);
+      final answer = '${await end()}';
+      expect(
+        answer,
+        contains('traversal=surface · 操作真实性：入口=0'
+            '（navigate=0 · open=0 · 被拒=0）'),
+      );
+      expect(answer, contains('replay 放行=0/被拒=0'));
+      expect(answer, contains('无可见文字=0'));
+    });
+
+    test('a fallback aim without its noVisibleText line is named (4-③)', () async {
+      await BtestTools.all.first.run(startInput(), call);
+      BtestGate.check(
+        'browser_click',
+        {'tabId': 1, 'ref': 3},
+        call,
+        hosts: const [host],
+        targeted: true,
+      );
+      final answer = '${await end()}';
+      expect(answer, contains('无可见文字对账'));
+      expect(answer, contains('兜底 1 次'));
+    });
+
+    test('replay refusals are counted apart (4-②)', () async {
+      await BtestTools.all.first.run(startInput(), call);
+      expect(
+        refusal('browser_request', {'tabId': 1, 'id': '7', 'replay': true}),
+        contains('replay'),
+      );
+      expect(state.run!.replayDenied, 1);
+      final answer = '${await end()}';
+      expect(answer, contains('replay 放行=0/被拒=1'));
+      expect(answer, contains('replay 被拒 1 次'));
+    });
+
+    test('two pending items keep their case and kind (#34)', () async {
+      await BtestTools.all.first.run(startInput(), call);
+      final answer = '${await end({
+        'unconfirmedDiffs': [
+          {
+            'kind': 'pending',
+            'caseId': 'CASE-BKG-001',
+            'step': '点审核',
+            'symptom': '状态未变',
+            'expectRef': '弱 · docs/x.md §1',
+          },
+          {
+            'kind': 'pending',
+            'caseId': 'CASE-BKG-002',
+            'step': '点保存',
+            'symptom': '列表未刷新',
+            'expectRef': '无权威来源',
+          },
+        ],
+      })}';
+      expect(answer, contains('unconfirmedDiffs 2 条，caseId 与 kind 都在'));
+      expect(answer, isNot(contains('kind must be')));
+    });
+
+    test('a diff with an unknown kind is named', () async {
+      await BtestTools.all.first.run(startInput(), call);
+      final answer = '${await end({
+        'unconfirmedDiffs': [
+          {'kind': 'maybe', 'caseId': 'CASE-BKG-001'},
+        ],
+      })}';
+      expect(answer, contains('kind must be diff or pending'));
+    });
+
+    test('a payload field of the wrong type is named, not thrown', () async {
+      await BtestTools.all.first.run(startInput(), call);
+      final answer = '${await end({'issues': 'nope'})}';
+      expect(answer, contains('issues is not a list'));
     });
   });
 }

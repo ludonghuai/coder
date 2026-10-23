@@ -36,6 +36,7 @@ Stability
 [D5] A failed step is recorded and the run goes on; only a run that cannot continue ends early.
 [D6] Evidence = method + path + status + field, one console line, before/after values, page text. No screenshots.
 [D7] Act like the user: one entry navigation, then only click and type; locate by visible words; type key by key; evaluate and network reads judge, they never advance the flow.
+[D8] Walk the round as it was started. chain: ask "where can this go" at every screen and take the next step while you can; when you cannot (gate / no permission / missing data / no next step) record one break (path / at / reason / verified) and look for another way — a break never ends the run. surface: touch everything on this interface — each tab, button, form, filter, and the list's bottom — and put what you did not touch into uncovered. After every submit / save / approve action read three things: lost on refresh, amount reconciliation, duplicate submit.
 
 Judgement
 [J1] "Expected" is 强 or 中 from expectFrom only; 弱 or 无权威来源 ⇒ 待确认, never 预期不符.
@@ -66,6 +67,7 @@ Problem domains — each checked at least once
 [P17] Every form's first open is its own step, before any switching.
 [P18] After picking, read the bound value, not the shown label.
 [P19] Template downloads, the exported file parses, print shows a document and not HTML source.
+[P20] Walk in the weights order btest_run_start returned (count descending): a class marked 已修 goes last but is still walked once; in a chain round, where several next steps exist take the one tied to the higher-weight class — submit-type actions first. Only append 已修 / 已复现 markers — never delete a class or change a count.
 
 Hard rules
 [H1] First-open state is always its own step.
@@ -76,7 +78,9 @@ Detour — the only way to a URL after the entry: record the defect in the repor
 
 Before btest_run_end write the expect file back (new cases, corrected expects, last, change scope); never upgrade a 中/弱 source to 强; a file someone else changed is appended with "## <date> 修订建议", never overwritten. Write back first, then btest_run_end.
 
-Report, once: the 操作真实性 line btest_run_end returns, then one table — 业务线 | case | source | 步骤 | 现象 | 证据 | 严重度 | 复现前置 | 预期出处 | 绕道 — then three sections: 阻塞 / 待确认差异 (with 需要用户补规则的清单) / 本轮未覆盖.
+Report, once: the btest_run_end readings with traversal=<chain|surface> in front, then one table — # | 业务线 | case | source | 步骤 | 现象 | 证据 | 严重度 | 判定 | 复现前置 | 预期出处 | 绕道 | 建议 — then three sections: 阻塞 / 待确认差异 (with 需要用户补规则的清单) / 本轮未覆盖 (a chain round adds a 链断点 block: path / at / reason / verified).
+
+判定 = 预期不符 (issues) or 待确认 (unconfirmedDiffs kind: pending; 严重度 —). 预期不符 rows leave 建议 as —. 待确认 rows take 建议 after the run from a read-only subagent (explore, or plan where explore is not assembled: re-read the repo and the expect file), one line each — 倾向 · 理由 · 误判代价 / 漏判代价; unavailable ⇒ 待研判 · <原因>. 判定 and the expectFrom level never change; the subagent only suggests.
 
 Never: deep links (but a recorded detour), scripts that write or replay, direct API calls instead of clicks, screenshots, production writes, stopping mid-run to ask.''';
 
