@@ -176,6 +176,19 @@ ACP schema v1 的 image 块形 = `{type:"image", mimeType, data}`（已查实）
 验收（可机检）：① 全新配置下打开 thincoder 会话 ⇒ 模型 pill 不出现，设置页显示空态与原因串；② 在设置页填入一个供应商（baseURL + apiKey + model）⇒ 配置文件出现该 provider 条目与顶层 `defaultModel`，**其它既有键逐字不变**；③ 会话内模型 pill 出现该模型并可选中；④ 配置写失败 ⇒ 明确报错且**不留半截文件**：只读目录 / 非法 JSON / 字段不合法三路为零写（原文件字节不变、可读），并发冲突路零写且留 `config.json.bak-<ts>` 现场；⑤ 用 `THINCODER_CONFIG_DIR` 指向临时目录时，写的是临时目录那份，`~/.thincoder` 的 mtime 不变；⑥ debug 与发行构建行为一致（无开关）。
 依赖：CLI 配置格式（外仓只读，不改）；`thincoder_choices.dart` 的投影面；设置页基础设施（`lib/settings/pages/`）；若与 F23 同批实施，写入目标由 F23 的 `THINCODER_CONFIG_DIR` 决定。
 
+**F25 改名同步（thincoder 会话改名后，列表与标题立刻一致）**（用户 2026-10-22 19:37「我们主要用的是thincoder，所以新功能要适配一下」+ 2026-10-23 06:48「上游新功能在thincoder的适配开工」；批 22）：
+模块目标：上游 1.6.0 带来的「改名同步到列表」在 thincoder 下同样成立——改完名，会话列表那一行就是新标题，不需要切走再回来。
+功能点：① thincoder 会话改名**成功**后发出 `SessionRenamed`（事件面与 Claude 内核同形：`lib/kernel/kernel_event.dart` 的定义，消费方 `chat_session.dart` / `transcript.dart`）；② 发射点在内核（只有内核知道"确认成功"这件事），不在 `ThincoderCatalog`（它没有发射通道）；③ 失败路径**零事件**：`session/set_title` 抛错 ⇒ 不发事件、列表保持旧值，对话里给既有提示；不做"失败回滚事件"；④ 没有活动会话时（catalog 路径）沿用既有 `_retitle`，不再多发一条事件（避免同一标题两个写入者）。
+边界：不改外仓 `thincoder/`；不把改名做成乐观更新（确认前不改列表）。
+验收（可机检）：① thincoder 会话改名 ⇒ 列表项与标题都变新，且不需要切换会话；② `session/set_title` 抛错 ⇒ 事件数 0、列表标题仍是旧值；③ Claude 内核路径行为不变（回归）。
+
+**F26 `/` 命令面对 thincoder 隐藏（不造点了不生效的菜单）**（同上，批 22）：
+模块目标：上游 1.6.0 的 `/` 命令面板（完整说明 + 打开命令文件）在 thincoder 会话里**不出现**，而不是出现一个点了没反应的空壳。
+功能点：① thincoder 不实现 `ProvidesCommands`，`ChatSession.commands` 对它是空集；② 命令面板对该内核不显示入口；③ 若将来外仓 ACP 面提供命令清单与执行通道，再从「隐藏」改为「对齐」——**当前无此通道**（`thincoder_events.dart` 里的 `command` 是终端命令，不是 `/` 命令）。
+边界：不为 thincoder 造命令源；不把 Claude Code 的定制文件（`customizations.dart`）当 thincoder 的命令表。
+验收（可机检）：① thincoder 会话里 `/` 不弹命令面板；② Claude 内核会话里该面板行为不变（回归）。
+
+
 
 
 
