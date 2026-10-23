@@ -711,4 +711,41 @@ void main() {
       expect(find.text('Publish Branch'), findsOneWidget);
     });
   });
+
+  group('narrow', () {
+    testWidgets('the rows and the commit box stay inside a 420px window', (
+      tester,
+    ) async {
+      await pumpWorkbench(
+        tester,
+        const {'lib/a.dart': 'a', 'notes.md': 'n'},
+        git: git.repository(),
+        size: const Size(420, 800),
+      );
+      await tester.pumpAndSettle();
+      await showScm(tester);
+      // Hovering a row brings its inline actions out — the case that used to
+      // push them past the panel's edge.
+      final row = find.byType(IdeListRow).first;
+      await tester.pumpAndSettle();
+      final gesture = await tester.createGesture(
+        kind: PointerDeviceKind.mouse,
+      );
+      await gesture.addPointer(location: tester.getTopLeft(row));
+      addTearDown(gesture.removePointer);
+      await gesture.moveTo(tester.getCenter(row));
+      await tester.pumpAndSettle();
+      // Only this view's overflows are the subject here: a 240px window also
+      // squeezes the welcome page and the panes, which are not this test's.
+      final overflows = <String>[];
+      for (var error = tester.takeException();
+          error != null;
+          error = tester.takeException()) {
+        final text = '$error';
+        if (text.contains('ide_scm_view.dart')) overflows.add(text);
+      }
+      expect(overflows, isEmpty, reason: overflows.join('\n\n'));
+    });
+
+  });
 }

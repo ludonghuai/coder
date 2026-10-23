@@ -345,7 +345,13 @@ class StashStore extends ChangeNotifier {
   /// move into its folder.
   Future<StashNote?> merge(List<int> ids) async {
     final merging = [for (final id in ids.toSet()) ?byId(id)]
-      ..sort((a, b) => a.created.compareTo(b.created));
+      // Two stashes made in the same millisecond tie on `created`; the id
+      // breaks the tie so the parts always assemble in one order, whatever
+      // order the caller listed them in.
+      ..sort((a, b) {
+        final byTime = a.created.compareTo(b.created);
+        return byTime != 0 ? byTime : a.id.compareTo(b.id);
+      });
     if (merging.length < 2) return merging.firstOrNull;
     final kept = merging.reduce((a, b) => a.id < b.id ? a : b);
     final parts = <String>[];

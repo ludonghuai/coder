@@ -1656,55 +1656,60 @@ class IdeScmViewState extends State<IdeScmView>
           ),
         );
       },
-      builder: (context, hovered) => Padding(
-        padding: EdgeInsets.only(
-          left: indent + 8.0 + (depth - 1) * 8,
-          right: 12,
-        ),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 22,
-              child: Transform.translate(
-                offset: const Offset(3, 0),
-                child: Icon(
-                  collapsed ? Codicons.chevronRight : Codicons.chevronDown,
-                  size: 16,
-                  color: themeColors['sideBar.foreground'],
-                ),
-              ),
+      builder: (context, hovered) => LayoutBuilder(
+        builder: (context, constraints) => Padding(
+          padding: EdgeInsets.only(
+            left: _rowInset(
+              constraints.maxWidth,
+              indent + 8.0 + (depth - 1) * 8,
             ),
-            FolderIcon(folder.path, size: 16, expanded: !collapsed),
-            const SizedBox(width: 6),
-            Expanded(
-              child: IdeResourceLabel(
-                name: folder.label,
-                actions: [
-                  if (hovered ||
-                      ((_selected == key || _isSelected(key)) &&
-                          _listFocus.hasFocus))
-                    for (final action in actions)
-                      _InlineAction(
-                        icon: action.icon,
-                        tooltip: action.label,
-                        onPressed: action.run,
-                      ),
-                ],
-              ),
-            ),
-            if (bubble != null)
-              Padding(
-                padding: const EdgeInsets.only(left: 5),
-                child: SizedBox(
-                  width: 14,
+            right: 12,
+          ),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 22,
+                child: Transform.translate(
+                  offset: const Offset(3, 0),
                   child: Icon(
-                    Codicons.circleFilled,
-                    size: 14,
-                    color: bubble.withValues(alpha: .4),
+                    collapsed ? Codicons.chevronRight : Codicons.chevronDown,
+                    size: 16,
+                    color: themeColors['sideBar.foreground'],
                   ),
                 ),
               ),
-          ],
+              FolderIcon(folder.path, size: 16, expanded: !collapsed),
+              const SizedBox(width: 6),
+              Expanded(
+                child: IdeResourceLabel(
+                  name: folder.label,
+                  actions: [
+                    if (hovered ||
+                        ((_selected == key || _isSelected(key)) &&
+                            _listFocus.hasFocus))
+                      for (final action in actions)
+                        _InlineAction(
+                          icon: action.icon,
+                          tooltip: action.label,
+                          onPressed: action.run,
+                        ),
+                  ],
+                ),
+              ),
+              if (bubble != null)
+                Padding(
+                  padding: const EdgeInsets.only(left: 5),
+                  child: SizedBox(
+                    width: 14,
+                    child: Icon(
+                      Codicons.circleFilled,
+                      size: 14,
+                      color: bubble.withValues(alpha: .4),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -2434,7 +2439,10 @@ class IdeScmViewState extends State<IdeScmView>
           // Narrow: the hover actions would overflow the group row.
           final roomy = constraints.maxWidth >= 220;
           return Padding(
-            padding: EdgeInsets.only(left: indent + 8, right: 12),
+            padding: EdgeInsets.only(
+              left: _rowInset(constraints.maxWidth, indent + 8),
+              right: 12,
+            ),
             child: Row(
               children: [
                 SizedBox(
@@ -2729,9 +2737,13 @@ class IdeScmViewState extends State<IdeScmView>
           final roomy = constraints.maxWidth >= 220;
           return Padding(
             padding: EdgeInsets.only(
-              left:
-                  indent +
-                  (treeDepth == null ? 16 : 8.0 + (treeDepth - 1) * 8 + 22),
+              left: _rowInset(
+                constraints.maxWidth,
+                indent +
+                    (treeDepth == null
+                        ? 16
+                        : 8.0 + (treeDepth - 1) * 8 + 22),
+              ),
               right: 12,
             ),
             child: Row(
@@ -3649,10 +3661,12 @@ class _SplitButtonState extends State<_SplitButton> {
           radius: widget.onDropdown == null
               ? BorderRadius.circular(4)
               : const BorderRadius.horizontal(left: Radius.circular(4)),
-          child: Center(
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Center(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
                 if (widget.spinning) ...[
                   IdeSpinning(Icon(Codicons.sync, size: 16, color: foreground)),
                   const SizedBox(width: 4),
@@ -3692,6 +3706,7 @@ class _SplitButtonState extends State<_SplitButton> {
           ),
         ),
       ),
+    ),
     );
     final onDropdown = widget.onDropdown;
     return Opacity(
@@ -4070,6 +4085,18 @@ String _subject(IdeGitCommit commit, AppLocalizations l10n) {
   if (commit.id == ideIncomingChangesId) return l10n.scmIncomingChanges;
   if (commit.id == ideOutgoingChangesId) return l10n.scmOutgoingChanges;
   return commit.subject;
+}
+
+/// A row's left inset, cut short so a narrow panel keeps room for the name:
+/// past that the padding alone would overflow the row, whose twistie, icon
+/// and letter cannot shrink.
+double _rowInset(double room, double wanted) {
+  // The twistie (22), the icon (16), its gap (6), the status letter (19) and
+  // the right inset (12) add up to more than this; below it nothing sane fits
+  // and the row would overflow by the difference.
+  final limit = room - 80;
+  if (wanted <= limit) return wanted;
+  return limit < 0 ? 0 : limit;
 }
 
 /// A row's `...` menu drops from the row's right end.

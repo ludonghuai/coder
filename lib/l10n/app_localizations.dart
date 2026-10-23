@@ -11466,7 +11466,7 @@ abstract class AppLocalizations {
   /// No description provided for @updatesSettingsDescription.
   ///
   /// In en, this message translates to:
-  /// **'BaoCode looks for new versions on baocode.dev.'**
+  /// **'BaoCode looks for new versions on its GitHub releases page.'**
   String get updatesSettingsDescription;
 
   /// No description provided for @updateCurrentVersion.

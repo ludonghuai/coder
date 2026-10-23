@@ -528,8 +528,8 @@ Future<void> main(List<String> arguments) async {
 }
 
 /// The app's updates (lib/update/): looked for as settings.json's
-/// `update.mode` says, from baocode.dev, installed as the app quits. None
-/// where the build does not update itself.
+/// `update.mode` says, in the GitHub releases this build publishes to,
+/// installed as the app quits. None where the build does not update itself.
 UpdateController? _startUpdates(SettingsFiles files) {
   final platform = platformUpdates(
     updatesDirectory: DataDirectory.current.updatesDir,
