@@ -30,6 +30,148 @@
   <h1>更新日志</h1>
   <p class="subtitle">BaoCode 每个版本的变化。</p>
 
+  <section class="release" id="v1.7.1">
+    <h2 class="plain"><a href="#v1.7.1">1.7.1</a></h2>
+    <h2>1.7.1 — 内核跟上上游（0.12.77）</h2>
+    <p>这一版<strong>只换内核，界面没动</strong>。装完之后 AI 的行为会有些变化，因为包内 thincoder 从 0.12.76 升到 <strong>0.12.77</strong>。</p>
+    <h3>你可能会感觉到的</h3>
+    <table>
+    <thead>
+    <tr>
+    <th>变化</th>
+    <th>说明</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td><strong>思考块默认展开</strong></td>
+    <td>不用再手点，推理过程直接铺开</td>
+    </tr>
+    <tr>
+    <td><strong>嵌套子代理每行标身份</strong></td>
+    <td>多层子代理时能看出&quot;这行是谁在干活&quot;，状态词也带上了</td>
+    </tr>
+    <tr>
+    <td><strong>子代理思考时标签不再被冲掉</strong></td>
+    <td>之前思考态会覆盖子代理名字，已修</td>
+    </tr>
+    <tr>
+    <td><strong>队列消息显示为待处理带</strong></td>
+    <td>排队的消息在输入框上方可见（VSC 端）</td>
+    </tr>
+    <tr>
+    <td><strong>子代理可以读项目声明（只读）</strong></td>
+    <td>能读 <code>PROJECT-MANIFEST.json</code>，但<strong>不能写</strong>（写面仍归主 agent）</td>
+    </tr>
+    </tbody>
+    </table>
+    <h3>AI 的行为规则变了几条（提示词面）</h3>
+    <table>
+    <thead>
+    <tr>
+    <th>规则</th>
+    <th>一句话</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>FR38</td>
+    <td>需求必须先问，再进设计</td>
+    </tr>
+    <tr>
+    <td>FR39</td>
+    <td>动手前先回答三个问题</td>
+    </tr>
+    <tr>
+    <td>FR40</td>
+    <td><strong>业务门禁失败就失败，不许自己造降级路径</strong></td>
+    </tr>
+    <tr>
+    <td>FR41</td>
+    <td>搜文档用声明的域，不拿 <code>grep</code> 硬扫</td>
+    </tr>
+    <tr>
+    <td>FR42</td>
+    <td>项目声明&quot;自己&quot;，不是声明&quot;产品&quot;</td>
+    </tr>
+    <tr>
+    <td>FR46</td>
+    <td><strong>一条规则一行</strong>（16 档提示词里 290 行超长行被重写）</td>
+    </tr>
+    </tbody>
+    </table>
+    <h3>一个判据修正</h3>
+    <p>零写看门狗改成按<strong>真实写入动作</strong>计数，不再数&quot;去重后的文件数&quot;——以前反复改同一个文件会被误判成&quot;没在写&quot;。</p>
+    <hr />
+    <h2>怎么升</h2>
+    <p><strong>自动</strong>：已装 1.7.0 的，设置里点「检查更新」→ 提示 1.7.1 → 下载约 43 MB → 安装。</p>
+    <p><strong>手动</strong>：下载下面的 <code>BaoCode-1.7.1-setup.exe</code>，覆盖安装即可（设置和项目都保留）。</p>
+    <h2>不变的部分</h2>
+    <ul>
+    <li>安装包体积（还是约 43 MB —— 内置运行时的 Node 那 85 MB 是大头）</li>
+    <li>模型配置页、自动更新、内置隔离的规则</li>
+    <li>配置与数据位置（覆盖安装不动它们）</li>
+    </ul>
+    <h2>已知限制（与 1.7.0 相同）</h2>
+    <ul>
+    <li>Windows 安装包<strong>未签名</strong> ⇒ SmartScreen 点「更多信息 → 仍要运行」</li>
+    <li>macOS 版<strong>未验证</strong></li>
+    <li>配置里 API Key 为<strong>明文</strong>（与 thincoder CLI 自身一致）</li>
+    </ul>
+  </section>
+
+  <section class="release" id="v1.7.0">
+    <h2 class="plain"><a href="#v1.7.0">1.7.0</a></h2>
+    <h2>这一版最重要的变化：<strong>装完就能用</strong></h2>
+    <p>以前的安装包里没有 thincoder，你得先装 Node.js、再 <code>npm i -g thincoder</code>，会话才能跑起来。1.7.0 起，<strong>安装包自带一份 thincoder 运行时</strong>（Node + CLI），装完打开、配一个 API Key 就能对话。</p>
+    <p>代价是安装包变大：<strong>21 MB → 43 MB</strong>。换来的是一步都不用做。</p>
+    <hr />
+    <h2>怎么装</h2>
+    <ol>
+    <li>下载下面的 <code>BaoCode-1.7.0-setup.exe</code>（43 MB）</li>
+    <li>双击 → SmartScreen 弹窗点 <strong>更多信息 → 仍要运行</strong>（安装包没买签名证书，是正常的）</li>
+    <li>装完打开，点「打开文件夹」选一个代码目录</li>
+    <li><strong>设置 → 模型（thincoder）→ 添加 provider</strong>，填 名字 / Base URL / API Key / 模型名，保存</li>
+    </ol>
+    <p>详细图文（含常见问题）：<a href="https://github.com/ludonghuai/coder/blob/main/docs/install-zh.md">中文安装指南</a></p>
+    <hr />
+    <h2>这一版都改了什么</h2>
+    <p><strong>模型配置面（新）</strong></p>
+    <ul>
+    <li>设置里新增「模型（thincoder）」页：列出当前 provider、当前模型、会话报告的候选模型</li>
+    <li>可以直接加 / 改 provider，不用再去终端敲命令</li>
+    <li>写入只动 <code>providers</code> 与 <code>defaultModel</code>，配置文件里其它键<strong>一个都不碰</strong></li>
+    <li>密钥只显示末四位；保存遇到并发改动会<strong>零写入</strong>并留一份 <code>config.json.bak-&lt;时间戳&gt;</code></li>
+    <li>保存后不会偷偷重启你的会话，只提示 + 给一个「重新打开会话」按钮</li>
+    </ul>
+    <p><strong>自动更新（新）</strong></p>
+    <ul>
+    <li>应用从本仓的 GitHub Release 读清单、用自有公钥验签</li>
+    <li>上游（baocode.dev）发的版本<strong>不再接管</strong>你的用户</li>
+    <li>检查更新失败不会影响使用，可以手动下载覆盖安装</li>
+    </ul>
+    <p><strong>内置运行时（新）</strong></p>
+    <ul>
+    <li>发行版自带 thincoder，只给 BaoCode 自己用，<strong>不往系统 PATH 里塞东西</strong></li>
+    <li>内置副本的数据（会话 / 配置 / 日志）关在应用自己的目录里，不碰你的 <code>~/.thincoder</code></li>
+    <li><strong>开发/调试环境完全不受影响</strong>：<code>flutter run</code> 仍然走 PATH、仍然和终端共用 <code>~/.thincoder</code></li>
+    </ul>
+    <hr />
+    <h2>已知限制</h2>
+    <ul>
+    <li><strong>Windows 安装包未签名</strong> ⇒ SmartScreen 会拦一次，点「更多信息 → 仍要运行」</li>
+    <li><strong>macOS 版未验证</strong>：打包脚本已按设计写好，但没在 Mac 上跑过（签名 / 通用二进制 / 包结构）</li>
+    <li><strong>没装 Claude Code 也能用</strong>：切 Claude Code 内核仍需要它自己的 CLI；thincoder 内核不需要</li>
+    <li>配置里的 API Key 是<strong>明文</strong>存在配置文件里（与 thincoder CLI 自身一致），没有接系统凭据库</li>
+    </ul>
+    <hr />
+    <h2>需要的系统环境</h2>
+    <ul>
+    <li>Windows 10 / 11 x64</li>
+    <li>Microsoft Visual C++ 运行库（x64）——绝大多数机器已有；缺的话装一次 <a href="https://aka.ms/vs/17/release/vc_redist.x64.exe">vc_redist.x64.exe</a></li>
+    </ul>
+  </section>
+
   <section class="release" id="v1.6.0">
     <h2 class="plain"><a href="#v1.6.0">1.6.0</a></h2>
     <p>新功能</p>
@@ -39,6 +181,20 @@
     <li>输入框打 <code>@</code> 列项目文件（含子目录与项目外路径），打 <code>/</code> 在任意位置都能唤起命令菜单</li>
     <li>后台子代理跑在别的上游模型上（经代理）；到达用量上限的代理会在重置后自己继续</li>
     <li>队列消息在代理工作时发送，不再打断后台任务</li>
+    <li>Stash 与 issue 双向同步：项目是 GitHub / GitLab 仓库时，打开的 issue 会自动成为 Stash，一条一行，状态、标题、关联的对话和 issue 一目了然。两边的修改保持一致：那边改的直接拿过来，这边改的确认后才推上去，两边都改了由你来选；issue 关闭，Stash 也随之完成。默认同步全部打开的 issue，可以在设置 → Stash 的「Issue 同步为 Stash」里改成只同步我的，或者关闭。</li>
+    <li>Stash 动态：issue 有新评论、被关闭或重新打开，关联的 PR 检查失败、被要求修改、已合并，都会在行上标出来，和你有关的计入侧栏 Stash 旁的数字。检查失败或要求修改的 PR 可以一键回到它的对话里去修，已合并的会问你这条 Stash 是否完成。</li>
+    <li>Stash 可以发布成 issue：发布前列出要发出去的内容，并提醒其中的本地路径和密钥，本地图片会一起上传。合并 Stash 时，被合并的那条 issue 可以作为重复关闭。</li>
+    <li>新的 Markdown 编辑器：Stash、侧边栏里的 Markdown 预览和对话输入框，都改成所见即所得地编辑，标记只在光标所在的地方显示。表格直接在单元格里编辑，能增删行列，像电子表格一样框选、复制、粘贴；链接上会弹出气泡，可以打开、复制、编辑或移除。</li>
+    <li>自定义：技能、规则、命令和子代理的 .md 文件用 Markdown 编辑器打开，可以直接编辑，也可以切到源码；文件开头的 front matter 显示成属性，像填表一样修改。</li>
+    <li>SSH 断线不丢工作：网络闪断后会自动重连到原来的会话，远程的终端、Claude Code 和语言服务器都继续运行（断开期间最长保留 3 小时），中间的输出不丢也不重复；网络断了 30 秒内就能发现。</li>
+    <li>达到用量限额后自动继续：用 Claude 自己的账号时，模型选择器里有「限额重置后自动继续」开关。打开后，因限额停下的对话会在重置后自动接着做，电脑睡过了重置时间也一样；应用关着时到点的，下次打开时继续。</li>
+    <li>Claude Code CLI 成为默认内核：没装的话，第一次开对话时自动下载。还在用内置内核的对话，输入框上方会建议切换。</li>
+    <li>模型：子代理和 Opus / Sonnet / Haiku 三档可以选用别的上游的模型；每个模型可以单独指定接口（Anthropic、Chat Completions、Responses）；上游和模型都能一键复制；上游已经下架的模型可以一次移除。</li>
+    <li>对话缩略图：你发的每条消息在缩略图上都是一个醒目的标记。鼠标靠近会自动吸附，立刻弹出这条消息和前后回复的预览，点一下就跳过去。</li>
+    <li>输入框：任何一个词的开头输入 / 都能打开命令菜单；悬停在命令标签上能看到完整说明，「查看详情」会在侧边栏打开它的文件。@ 也能搜到文件夹。输入框里的文件、文件夹和代码片段标签都能点开。</li>
+    <li>智能体工作时，在空输入框里按回车会立即发送排队的第一条消息；后台任务（比如子代理）正在跑的话，不会被打断。</li>
+    <li>右键改动过的文件：可以在浏览器（HTML 文件）、默认应用或别的编辑器里打开，在文件管理器里显示，或者复制路径。</li>
+    <li>侧边栏的 Markdown 预览里可以拖入或粘贴图片和文件，会复制到文档旁边并插入链接；右键可以在文件管理器里显示链接指向的文件。</li>
     </ul>
     <p>改进</p>
     <ul>
@@ -54,6 +210,14 @@
     <li>缩放后的预览里拖选，选中在指针下方</li>
     <li>侧栏操作按钮的宽度算上全部三个按钮</li>
     <li>远程项目里的定义在它的主机上打开，路径按那台机器的写法读</li>
+    <li>切到别的对话再切回来，会回到原来看到的位置，展开的步骤也还展开着。</li>
+    <li>在 Claude Code 里用 /rename 改的对话名会同步到列表。</li>
+    <li>Claude 设置里开了 &quot;viewMode&quot;: &quot;verbose&quot; 时，Stash 的润色、输入框的润色和生成提交信息不再失败。</li>
+    <li>单个 <del>（比如 10-12</del>10-16 这样的范围）不再被当成删除线。</li>
+    <li>Markdown 预览铺满整个视图，宽表格不再被截断；界面缩放后，在预览里拖选文字会选在鼠标所在的位置。</li>
+    <li>侧边栏放在左边且隐藏侧栏时，标签页会避开 macOS 左上角的红绿灯，显示侧栏的按钮也挪到了这里；拖动侧边栏边缘时从当前宽度开始跟手。</li>
+    <li>远程项目里跳转到定义，会在远程主机上打开正确的文件。</li>
+    <li>Windows：升级或卸载时会先关掉浏览器扩展的后台程序，不再报「DeleteFile failed; code 5」。</li>
     </ul>
   </section>
 
