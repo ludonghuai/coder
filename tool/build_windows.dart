@@ -34,6 +34,12 @@
 // Both versions are checked against this script's constants: a source tree,
 // or a copy, that is not the expected one stops the build.
 //
+// The Dart code's symbols are saved as it is built, to build\symbols\
+// app.windows-x64.symbols: the hang reports name its frames by their
+// offsets in app.so (windows/runner/hang_watchdog.cpp), which
+// `llvm-symbolizer --obj=` that file turns into functions and lines. Only
+// saved: the app's own stack traces stay as they were, named.
+//
 // The installer lands in build/installers/; beside it, remote\<VERSION>\,
 // the remote server's gzipped builds, which the app downloads instead of
 // carrying them (tool/build_remote_server.dart), to upload with the
@@ -48,6 +54,7 @@ import 'package:crypto/crypto.dart';
 /// clean already removes.
 const _bundleRelative = r'build\windows\x64\runner\Release';
 const _installersRelative = r'build\installers';
+const _symbolsRelative = r'build\symbols';
 
 /// What has to be in the bundle for the app to start. A Release build that
 /// fails at the link step (a running baocode.exe holding the output file) still
@@ -164,11 +171,17 @@ Future<void> main(List<String> arguments) async {
     _step(
       'Building the Release bundle${channel ? ' (the channel build)' : ''}',
     );
+    final symbols = Directory('${root.path}\\$_symbolsRelative')
+      ..createSync(recursive: true);
     await _run('flutter', [
       'build',
       'windows',
       '--release',
       if (channel) '--dart-define=BAOCODE_CHANNEL=true',
+      // Not --split-debug-info, which would also leave the app's stack
+      // traces (errors.log) unnamed, as offsets.
+      '--extra-gen-snapshot-options=--save-debugging-info='
+          '${symbols.path}\\app.windows-x64.symbols',
     ], root.path);
   } else {
     _step('Using the bundle already built');

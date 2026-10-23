@@ -67,7 +67,11 @@ when others were not.
     held past the top as the list scrolls, double and triple clicks, Cmd+A,
     a selection kept while an answer streams below it) and in the editor
     (`editor`: the same, and Shift+Down held; `huge_file`: Cmd+A and
-    Cmd+C on 90,000 lines, Shift+Page Down).
+    Cmd+C on 90,000 lines, Shift+Page Down), and in a stash (`stash`: the
+    same, and a drag held past the bottom; `stash_huge`: 50,000 characters
+    dragged over, its frames' build checked against a short stash's), and
+    in a markdown file's preview (`markdown_huge`: 50,000 characters
+    dragged over, against 2,000, then the wheel and flings).
   - `caret.*`: the editor's caret moved by the arrows, pages, to the ends
     (`editor`); the chat's input typed into, also while the agent answers
     (`composer`); both then left alone, to see the app at rest.
@@ -77,6 +81,24 @@ when others were not.
     (`stash`).
   - `memory.soak`: six rounds of a session's work (an agent answering, the
     IDE, the stashes), the footprint after each: whether memory comes back.
+- `a11y.*`: long conversations (`long_history`, `huge_history`) with the
+  semantics tree on, as Windows has it whenever something reads the window
+  (an input method, a screen reader); the tree's size logged.
+  `BAOCODE_PERF_SEMANTICS=1` turns it on for any scenario.
+- `real.history` ([perf_transcript.dart](perf_transcript.dart)): a real
+  session, a Claude Code transcript (`BAOCODE_PERF_TRANSCRIPT=<.jsonl>`;
+  `BAOCODE_PERF_TRANSCRIPT_TURNS=n`, its first turns only) loaded turn by
+  turn, spun through, and a reply streamed below it. Run it on the whole
+  transcript and on one turn of it: the difference is what the history
+  costs each frame.
+- `hang.ui`: the UI thread held 7 s, past the Windows hang watchdog's 6:
+  its report (the data folder's `logs\hangs`), read with the symbols
+  (`--extra-gen-snapshot-options=--save-debugging-info=<file>` as the app
+  is built, then `--no-build`), should name `_holdUiThread`; and the event
+  log a 7 s frame. `BAOCODE_PERF_EVENTS=<folder>` keeps the event log
+  there; `BAOCODE_PERF_SLOW_MS` sets what it counts as a slow frame.
+- `bench.text_layout`: what a paragraph costs to lay out, font by font
+  (no cache): to compare machines and renderers.
 
 ## How it works
 

@@ -29,6 +29,9 @@ class _MemoryStore implements CustomizationStore {
   String? get configDir => '/c';
 
   @override
+  Future<String?> commandFile(String name, {String? project}) async => null;
+
+  @override
   String? get homeDir => null;
 
   @override

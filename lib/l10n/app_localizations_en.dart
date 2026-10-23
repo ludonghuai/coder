@@ -1665,6 +1665,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sidePanelEdit => 'Edit';
 
   @override
+  String get commandOpenDetails => 'Open details';
+
+  @override
   String get sidePanelNoOriginal =>
       'The file before the agent\'s changes is not known: showing it as it is.';
 
@@ -3533,7 +3536,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get generalSettingsClaudeCoreDescription =>
-      'Claude Code CLI: Anthropic\'s own program, with this machine\'s sign-in and setup; pick it to use a Claude subscription. Built-in: comes with BaoCode, and uses only the models added in Settings → Models. The CLI is the default when Claude Code is installed here, the built-in core otherwise. Changes apply to new sessions.';
+      'Claude Code CLI: Anthropic\'s own program, with this machine\'s sign-in and setup; pick it to use a Claude subscription. Built-in: comes with BaoCode, and uses only the models added in Settings → Models. The CLI is the default, downloaded for you if this machine has none. Changes apply to new sessions.';
 
   @override
   String get generalSettingsClaudeCoreBuiltin => 'Built-in';
@@ -3714,6 +3717,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get placeholderOpenAnyway => 'Open Anyway';
+
+  @override
+  String get changeOpenWith => 'Open With';
 
   @override
   String get openInDefaultApp => 'Open in Default App';
@@ -6696,6 +6702,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get modelsEdit => 'Edit…';
 
   @override
+  String get modelsDuplicate => 'Duplicate…';
+
+  @override
   String get modelsRemove => 'Remove';
 
   @override
@@ -6835,6 +6844,18 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get modelsHeadersPlaceholder => 'x-session-id: my-session';
+
+  @override
+  String get modelsDuplicateProvider => 'Duplicate Upstream';
+
+  @override
+  String get modelsDuplicateProviderDescription =>
+      'A copy of this upstream, with its models, settings and key.';
+
+  @override
+  String modelsDuplicateName(String name) {
+    return '$name Copy';
+  }
 
   @override
   String get modelsDelete => 'Delete Upstream';
@@ -7748,6 +7769,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String remoteStatusTooltipResuming(String host) {
+    return 'The connection to $host is lost, and being made again: its terminals and Claude Code keep running there meanwhile. Click to reconnect now';
+  }
+
+  @override
   String get remoteReconnect => 'Reconnect';
 
   @override
@@ -8652,6 +8678,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get stashLinkEdit => 'Edit link';
 
   @override
+  String get stashLinkCopy => 'Copy link address';
+
+  @override
+  String get stashLinkRemove => 'Remove link';
+
+  @override
+  String get stashFormatMenu => 'Format';
+
+  @override
   String get stashDraft => 'Draft';
 
   @override
@@ -8727,6 +8762,60 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get stashFormatCodeBlock => 'Code block';
+
+  @override
+  String get markdownTableInsertRowAbove => 'Insert row above';
+
+  @override
+  String get markdownTableInsertRowBelow => 'Insert row below';
+
+  @override
+  String get markdownTableDeleteRow => 'Delete row';
+
+  @override
+  String get markdownTableInsertColumnLeft => 'Insert column left';
+
+  @override
+  String get markdownTableInsertColumnRight => 'Insert column right';
+
+  @override
+  String get markdownTableDeleteColumn => 'Delete column';
+
+  @override
+  String get markdownTableAlignLeft => 'Align left';
+
+  @override
+  String get markdownTableAlignCenter => 'Align center';
+
+  @override
+  String get markdownTableAlignRight => 'Align right';
+
+  @override
+  String get markdownTableDuplicateRow => 'Duplicate row';
+
+  @override
+  String get markdownTableMoveRowUp => 'Move row up';
+
+  @override
+  String get markdownTableMoveRowDown => 'Move row down';
+
+  @override
+  String get markdownTableClearRow => 'Clear row';
+
+  @override
+  String get markdownTableDuplicateColumn => 'Duplicate column';
+
+  @override
+  String get markdownTableMoveColumnLeft => 'Move column left';
+
+  @override
+  String get markdownTableMoveColumnRight => 'Move column right';
+
+  @override
+  String get markdownTableClearColumn => 'Clear column';
+
+  @override
+  String get markdownTableDeleteTable => 'Delete table';
 
   @override
   String get stashFormatClear => 'Clear formatting';
@@ -9855,6 +9944,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get modelSetUp => 'Set Up a Model';
+
+  @override
+  String get claudeCoreHint =>
+      'This chat runs on BaoCode\'s built-in core. We recommend the Claude Code core for the fullest experience; it\'s downloaded for you if needed.';
+
+  @override
+  String get claudeCoreHintSwitch => 'Switch to Claude Code';
+
+  @override
+  String get claudeCoreHintLater => 'Not Now';
 
   @override
   String get remoteAddServer => 'Add SSH Server...';

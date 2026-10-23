@@ -5,7 +5,6 @@ import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show ServicesBinding;
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:flutter_quill/flutter_quill.dart';
 import 'package:path/path.dart' as p;
 import 'package:bao_editor/textmate/textmate_syntax.dart';
 
@@ -26,6 +25,7 @@ import 'chat/resume_after_reset.dart';
 import 'chat/widgets/turn_footer.dart' show LiveTurnStatsSetting;
 import 'customize/customization_store.dart';
 import 'diagnostics/app_event_watch.dart';
+import 'diagnostics/frame_watch.dart';
 import 'diagnostics/diagnostics_upload.dart';
 import 'extensions/theme_extensions.dart';
 import 'ide/git/git_repository.dart';
@@ -152,7 +152,10 @@ Future<void> main(List<String> arguments) async {
   unawaited(reapThincoderProcesses());
   WidgetsFlutterBinding.ensureInitialized();
   MemoryBudget.apply();
-  if (!kIsWeb) AppEventWatch.start();
+  if (!kIsWeb) {
+    AppEventWatch.start();
+    FrameWatch.start();
+  }
   // The Windows app's own logs go beside it.
   if (errors != null) unawaited(errors.shareWithHost());
   // The editor's language packs are the language servers' (README.md in
@@ -225,12 +228,12 @@ Future<void> main(List<String> arguments) async {
     ClaudePathSetting.current = () =>
         ClaudePathSetting.parse(files.settings[ClaudePathSetting.settingKey]);
     // Settings → General → Claude Code: the core sessions run on (BaoCode's
-    // own, or the CLI), read as each agent starts. Unset, the CLI where it
-    // is installed: looked for on the app's PATH, then the shell's.
-    ClaudeCore.cliInstalled = localClaudeInstalled;
-    unawaited(lookForLocalClaude());
+    // own, or the CLI), read as each agent starts. Unset, the CLI.
     ClaudeCore.current = () =>
         ClaudeCore.parse(files.settings[ClaudeCore.settingKey]);
+    ClaudeCore.changes = files.settings;
+    ClaudeCore.pick = (core) =>
+        files.settings.update(ClaudeCore.settingKey, core.name);
     // Settings → General → thincoder: the build to run, read as each agent
     // starts.
     ThincoderPathSetting.current = () => ThincoderPathSetting.parse(
@@ -885,7 +888,6 @@ class _BaoCodeAppState extends State<BaoCodeApp> {
       GlobalMaterialLocalizations.delegate,
       GlobalCupertinoLocalizations.delegate,
       GlobalWidgetsLocalizations.delegate,
-      FlutterQuillLocalizations.delegate,
     ],
     home: window.isStash
         ? Material(

@@ -1625,6 +1625,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get sidePanelEdit => '编辑';
 
   @override
+  String get commandOpenDetails => '查看详情';
+
+  @override
   String get sidePanelNoOriginal => '不知道智能体修改前的文件内容，显示当前内容。';
 
   @override
@@ -3395,7 +3398,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get generalSettingsClaudeCoreDescription =>
-      'Claude Code CLI：Anthropic 官方程序，沿用本机的登录和配置，用 Claude 订阅请选它。内置：BaoCode 自带，只用 设置 → 模型 里添加的模型。本机装了 Claude Code 时默认用 CLI，否则用内置。改动对新开的会话生效。';
+      'Claude Code CLI：Anthropic 官方程序，沿用本机的登录和配置，用 Claude 订阅请选它。内置：BaoCode 自带，只用 设置 → 模型 里添加的模型。默认用 CLI，本机没有时会自动下载。改动对新开的会话生效。';
 
   @override
   String get generalSettingsClaudeCoreBuiltin => '内置';
@@ -3570,6 +3573,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get placeholderOpenAnyway => '仍然打开';
+
+  @override
+  String get changeOpenWith => '打开方式';
 
   @override
   String get openInDefaultApp => '使用默认应用打开';
@@ -6280,6 +6286,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get modelsEdit => '编辑…';
 
   @override
+  String get modelsDuplicate => '复制…';
+
+  @override
   String get modelsRemove => '移除';
 
   @override
@@ -6414,6 +6423,17 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get modelsHeadersPlaceholder => 'x-session-id: my-session';
+
+  @override
+  String get modelsDuplicateProvider => '复制上游';
+
+  @override
+  String get modelsDuplicateProviderDescription => '复制一份此上游，连同模型、设置和 Key。';
+
+  @override
+  String modelsDuplicateName(String name) {
+    return '$name 副本';
+  }
 
   @override
   String get modelsDelete => '删除上游';
@@ -7293,6 +7313,11 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String remoteStatusTooltipResuming(String host) {
+    return '与 $host 的连接已断开，正在重连；远端的终端和 Claude Code 仍在运行。点击立即重连';
+  }
+
+  @override
   String get remoteReconnect => '重新连接';
 
   @override
@@ -8162,6 +8187,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get stashLinkEdit => '编辑链接';
 
   @override
+  String get stashLinkCopy => '复制链接地址';
+
+  @override
+  String get stashLinkRemove => '移除链接';
+
+  @override
+  String get stashFormatMenu => '格式';
+
+  @override
   String get stashDraft => '草稿';
 
   @override
@@ -8237,6 +8271,60 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get stashFormatCodeBlock => '代码块';
+
+  @override
+  String get markdownTableInsertRowAbove => '在上方插入行';
+
+  @override
+  String get markdownTableInsertRowBelow => '在下方插入行';
+
+  @override
+  String get markdownTableDeleteRow => '删除行';
+
+  @override
+  String get markdownTableInsertColumnLeft => '在左侧插入列';
+
+  @override
+  String get markdownTableInsertColumnRight => '在右侧插入列';
+
+  @override
+  String get markdownTableDeleteColumn => '删除列';
+
+  @override
+  String get markdownTableAlignLeft => '左对齐';
+
+  @override
+  String get markdownTableAlignCenter => '居中对齐';
+
+  @override
+  String get markdownTableAlignRight => '右对齐';
+
+  @override
+  String get markdownTableDuplicateRow => '复制行';
+
+  @override
+  String get markdownTableMoveRowUp => '上移行';
+
+  @override
+  String get markdownTableMoveRowDown => '下移行';
+
+  @override
+  String get markdownTableClearRow => '清空行';
+
+  @override
+  String get markdownTableDuplicateColumn => '复制列';
+
+  @override
+  String get markdownTableMoveColumnLeft => '左移列';
+
+  @override
+  String get markdownTableMoveColumnRight => '右移列';
+
+  @override
+  String get markdownTableClearColumn => '清空列';
+
+  @override
+  String get markdownTableDeleteTable => '删除表格';
 
   @override
   String get stashFormatClear => '清除格式';
@@ -9321,6 +9409,16 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get modelSetUp => '设置模型';
+
+  @override
+  String get claudeCoreHint =>
+      '当前用的是 BaoCode 内置内核。推荐换成 Claude Code 内核，体验更完整；没安装的话会自动帮你下载。';
+
+  @override
+  String get claudeCoreHintSwitch => '切换到 Claude Code';
+
+  @override
+  String get claudeCoreHintLater => '暂不';
 
   @override
   String get remoteAddServer => '新增 SSH 服务器…';
