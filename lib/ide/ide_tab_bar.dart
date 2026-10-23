@@ -293,55 +293,66 @@ class _IdeTabBarState extends State<IdeTabBar> {
       names: [for (final doc in docs) doc.title],
     );
     return IdeTabStrip(
-      child: Row(
-        children: [
-          Expanded(
-            child: TabStripScroll(
-              controller: _scroll,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  for (final (i, doc) in docs.indexed)
-                    _draggable(
-                      doc,
-                      _Tab(
-                        key: _keys.putIfAbsent(doc, GlobalKey.new),
-                        doc: doc,
-                        description: descriptions[i],
-                        active: identical(doc, widget.active),
-                        onSelect: () => widget.onSelect(doc),
-                        onClose: () => widget.onClose(doc),
-                        onMenu: (position) =>
-                            _showMenu(doc, position: position),
-                      ),
-                    ),
-                  if (widget.page case final page?)
-                    KeyedSubtree(key: _pageKey, child: page),
-                ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // Under this the row's words are what overflows: the tab strip gives
+          // up its own width first, and the tail cannot shrink below its text.
+          final tight = constraints.maxWidth < 620;
+          return Row(
+            children: [
+              Expanded(
+                child: TabStripScroll(
+                  controller: _scroll,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (final (i, doc) in docs.indexed)
+                        _draggable(
+                          doc,
+                          _Tab(
+                            key: _keys.putIfAbsent(doc, GlobalKey.new),
+                            doc: doc,
+                            description: descriptions[i],
+                            active: identical(doc, widget.active),
+                            onSelect: () => widget.onSelect(doc),
+                            onClose: () => widget.onClose(doc),
+                            onMenu: (position) =>
+                                _showMenu(doc, position: position),
+                          ),
+                        ),
+                      if (widget.page case final page?)
+                        KeyedSubtree(key: _pageKey, child: page),
+                    ],
+                  ),
+                ),
               ),
-            ),
-          ),
-          ?widget.actions,
-          if ((widget.markdownPreview, widget.onMarkdownPreview) case (
-            final preview?,
-            final onChanged?,
-          ))
-            MarkdownSwitch(preview: preview, onChanged: onChanged),
-          if (widget.active case final active?)
-            Builder(
-              builder: (context) => _TabBarAction(
-                icon: Codicons.ellipsis,
-                tooltip: context.l10n.tabMoreActions,
-                onTap: () {
-                  final box = context.findRenderObject()! as RenderBox;
-                  _showMenu(
-                    active,
-                    anchor: box.localToGlobal(Offset.zero) & box.size,
-                  );
-                },
-              ),
-            ),
-        ],
+              if (widget.actions case final actions?) Flexible(child: actions),
+              if ((widget.markdownPreview, widget.onMarkdownPreview) case (
+                final preview?,
+                final onChanged?,
+              ))
+                MarkdownSwitch(
+                  preview: preview,
+                  onChanged: onChanged,
+                  compact: tight,
+                ),
+              if (widget.active case final active?)
+                Builder(
+                  builder: (context) => _TabBarAction(
+                    icon: Codicons.ellipsis,
+                    tooltip: context.l10n.tabMoreActions,
+                    onTap: () {
+                      final box = context.findRenderObject()! as RenderBox;
+                      _showMenu(
+                        active,
+                        anchor: box.localToGlobal(Offset.zero) & box.size,
+                      );
+                    },
+                  ),
+                ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -354,11 +365,26 @@ class MarkdownSwitch extends StatelessWidget {
     required this.preview,
     required this.onChanged,
     this.padding = const EdgeInsets.only(left: 6, right: 2),
+    this.compact = false,
   });
 
   final bool preview;
   final ValueChanged<bool> onChanged;
   final EdgeInsets padding;
+
+  /// One button that toggles, for a tab bar with no room for both words.
+  final bool compact;
+
+  /// One button showing what a click switches to (a narrow tab bar).
+  Widget _compactSwitch(
+    BuildContext context,
+    Widget Function(String, bool) option,
+  ) {
+    final l10n = context.l10n;
+    return preview
+        ? option(l10n.sidePanelSource, false)
+        : option(l10n.sidePanelPreview, true);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -398,14 +424,16 @@ class MarkdownSwitch extends StatelessWidget {
 
     return Padding(
       padding: padding,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          option(l10n.markdownShowPreview, true),
-          const SizedBox(width: 2),
-          option(l10n.markdownShowSource, false),
-        ],
-      ),
+      child: compact
+          ? _compactSwitch(context, option)
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                option(l10n.markdownShowPreview, true),
+                const SizedBox(width: 2),
+                option(l10n.markdownShowSource, false),
+              ],
+            ),
     );
   }
 }
@@ -713,8 +741,7 @@ class _IdeEditorTabState extends State<IdeEditorTab> {
                               text: label,
                               style: widget.labelStyle,
                               children: [
-                                if (widget.description
-                                    case final description?)
+                                if (widget.description case final description?)
                                   TextSpan(
                                     text: '  $description',
                                     // `.label-description`: 70% opaque.

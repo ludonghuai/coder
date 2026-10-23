@@ -780,10 +780,15 @@ class IdeAgentEditActions extends StatelessWidget {
     super.key,
     required this.edit,
     required this.hunks,
+    this.compact = false,
   });
 
   final IdeAgentEdit edit;
   final IdeAgentHunks hunks;
+
+  /// Whether a narrow tab bar gets icons instead of the words — the row's
+  /// fixed parts cannot shrink, so past a point the words are what overflow.
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -823,6 +828,8 @@ class IdeAgentEditActions extends StatelessWidget {
               const SizedBox(width: 4),
               _TitleAction(
                 label: l10n.agentUndoFile,
+                icon: Codicons.discard,
+                compact: compact,
                 onTap: () {
                   edit.undoFile();
                   hunks.openNext(edit);
@@ -832,6 +839,8 @@ class IdeAgentEditActions extends StatelessWidget {
               const SizedBox(width: 4),
               _TitleAction(
                 label: l10n.agentKeepFile,
+                icon: Codicons.check,
+                compact: compact,
                 onTap: () {
                   edit.keepFile();
                   hunks.openNext(edit);
@@ -888,7 +897,13 @@ class _TitleAction extends StatefulWidget {
     required this.label,
     required this.onTap,
     required this.primary,
+    this.icon,
+    this.compact = false,
   });
+
+  /// Shown in place of the label when [compact] leaves no room for words.
+  final IconData? icon;
+  final bool compact;
 
   final String label;
   final VoidCallback? onTap;
@@ -929,10 +944,12 @@ class _TitleActionState extends State<_TitleAction> {
               color: background,
               borderRadius: BorderRadius.circular(4),
             ),
-            child: Text(
-              widget.label,
-              style: TextStyle(fontSize: 12, color: foreground),
-            ),
+            child: widget.compact && widget.icon != null
+                ? Icon(widget.icon, size: 14, color: foreground)
+                : Text(
+                    widget.label,
+                    style: TextStyle(fontSize: 12, color: foreground),
+                  ),
           ),
         ),
       ),
