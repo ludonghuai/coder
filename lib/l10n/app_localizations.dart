@@ -9456,7 +9456,7 @@ abstract class AppLocalizations {
   /// No description provided for @claudePathMissing.
   ///
   /// In en, this message translates to:
-  /// **'None found yet: Claude Code is downloaded as the first conversation starts.'**
+  /// **'None found yet: it is downloaded only when you press install (never on its own).'**
   String get claudePathMissing;
 
   /// No description provided for @generalSettingsIdeWindows.
@@ -17598,7 +17598,7 @@ abstract class AppLocalizations {
   /// No description provided for @btestSettingsDescription.
   ///
   /// In en, this message translates to:
-  /// **'A run enters once, works a business line like a user, and judges against docs/qa/<line>.md in the business repository. These lists decide what it may reach.'**
+  /// **'A run enters once, works a business line like a user, and judges against <QA root>/<repository>/<business line>.md (the QA root is set below; empty derives it from the workspace). These lists decide what it may reach.'**
   String get btestSettingsDescription;
 
   /// Settings → Browser, btest: the hosts a browser action may reach; comma separated.
@@ -17636,6 +17636,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'A run that does not say its mode is read-only unless this is off. env: prod with write is always refused.'**
   String get btestDefaultReadonlyDescription;
+
+  /// Settings → Browser, btest: the folder expect files are kept in; empty derives it from the workspace.
+  ///
+  /// In en, this message translates to:
+  /// **'QA Root Folder'**
+  String get btestQaRoot;
+
+  /// No description provided for @btestQaRootDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Expect files go in <QA root>/<repository>/<business line>.md. Empty derives the root from the session\'s workspace folder (or the repository\'s parent folder when the workspace is the repository itself); a non-absolute path refuses a run.'**
+  String get btestQaRootDescription;
 
   /// Shows a markdown file's text in the side panel, to edit.
   ///

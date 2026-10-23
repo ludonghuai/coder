@@ -4313,7 +4313,7 @@
       }
     }
   },
-  "claudePathMissing": "None found yet: Claude Code is downloaded as the first conversation starts.",
+  "claudePathMissing": "None found yet: it is downloaded only when you press install (never on its own).",
   "generalSettingsIdeWindows": "Fast Ide Windows",
   "generalSettingsIdeWindowsDescription": "Where the Fast Ide opens: in the main window in place of the chat, one folder at a time, or in windows of its own, one per folder (New Window, ⇧⌘N / Ctrl+Shift+N, opens an empty one). Applies at once. (window.ideWindows)",
   "generalSettingsIdeWindowsSeparate": "Separate windows",
@@ -7715,7 +7715,7 @@
   "@btestSettingsTitle": {
     "description": "Settings → Browser's section for the browser business test mode."
   },
-  "btestSettingsDescription": "A run enters once, works a business line like a user, and judges against docs/qa/<line>.md in the business repository. These lists decide what it may reach.",
+  "btestSettingsDescription": "A run enters once, works a business line like a user, and judges against <QA root>/<repository>/<business line>.md (the QA root is set below; empty derives it from the workspace). These lists decide what it may reach.",
   "btestAllowHosts": "Allowed Hosts",
   "@btestAllowHosts": {
     "description": "Settings → Browser, btest: the hosts a browser action may reach; comma separated."
@@ -7731,6 +7731,11 @@
     "description": "Settings → Browser, btest: whether a run that does not say its mode starts read-only."
   },
   "btestDefaultReadonlyDescription": "A run that does not say its mode is read-only unless this is off. env: prod with write is always refused.",
+  "btestQaRoot": "QA Root Folder",
+  "@btestQaRoot": {
+    "description": "Settings → Browser, btest: the folder expect files are kept in; empty derives it from the workspace."
+  },
+  "btestQaRootDescription": "Expect files go in <QA root>/<repository>/<business line>.md. Empty derives the root from the session's workspace folder (or the repository's parent folder when the workspace is the repository itself); a non-absolute path refuses a run.",
   "sidePanelEdit": "Edit",
   "@sidePanelEdit": {
     "description": "Shows a markdown file's text in the side panel, to edit."

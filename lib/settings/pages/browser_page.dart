@@ -110,6 +110,24 @@ class BrowserSettingsPage extends StatelessWidget {
     );
   }
 
+  /// The QA root as the text field shows it.
+  String _qaRoot() => switch (settings?[BtestSettings.qaRootKey]) {
+    final String text => text,
+    _ => '',
+  };
+
+  void _setQaRoot(String text) {
+    final settings = this.settings;
+    if (settings == null) return;
+    final value = text.trim();
+    unawaited(
+      settings.update(BtestSettings.qaRootKey, value.isEmpty ? null : value)
+          .catchError((Object error) {
+        debugPrint('${BtestSettings.qaRootKey} not kept: $error');
+      }),
+    );
+  }
+
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: Listenable.merge([
@@ -226,6 +244,16 @@ class BrowserSettingsPage extends StatelessWidget {
                 description: l10n.btestDefaultReadonlyDescription,
                 value: settings?[BtestSettings.readonlyKey] != false,
                 onChanged: _setReadonly,
+              ),
+              SettingsRow(
+                label: l10n.btestQaRoot,
+                description: l10n.btestQaRootDescription,
+                trailing: SettingsTextField(
+                  value: _qaRoot(),
+                  semanticLabel: l10n.btestQaRoot,
+                  width: 320,
+                  onSubmitted: _setQaRoot,
+                ),
               ),
             ],
           ),

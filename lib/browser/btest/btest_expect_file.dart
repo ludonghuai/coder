@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 
+import '../../remote/remote_location.dart';
+
 /// A case of an expect file (design §3.4): its ID and its title, as
 /// `## CASE-BKG-001 新建订舱单并提交` gives them.
 class BtestCase {
@@ -29,9 +31,108 @@ enum BtestWrite {
   };
 }
 
-/// The expect file of a run `docs/qa/<line>.md` (design §3.4): its cases,
-/// its text and its SHA-256 — the write-back baseline `btest_run_start`
-/// hands back, and what `btest_run_end` compares the file against.
+/// Which of §3.4's four branches gave a run's QA root; the return names it.
+enum BtestQaSource {
+  setting('设置值'),
+  workspace('工作区根'),
+  parentFallback('父目录兜底');
+
+  const BtestQaSource(this.label);
+
+  /// How `btest_run_start`'s return marks it.
+  final String label;
+}
+
+/// Where a run's expect file goes (§3.4): the QA root — one per session
+/// workspace, outside every business repository — and the branch that gave
+/// it, so `btest_run_start` can show both.
+class BtestQaRoot {
+  const BtestQaRoot(this.root, this.source, {this.reason});
+
+  /// The resolved root, absolute.
+  final String root;
+
+  /// The branch that gave it (§3.4, in order, first hit wins).
+  final BtestQaSource source;
+
+  /// Why it fell back (branch 3 / 4's named reason), or why a configured
+  /// root still lies inside the business repository; null otherwise.
+  final String? reason;
+
+  /// The expect file of business line [line] of the repository at
+  /// [repoRoot]: `<root>/<repository name>/<line>.md` (§3.4).
+  String fileOf(String repoRoot, String line) =>
+      p.join(root, p.basename(repoRoot), '$line.md');
+
+  /// §3.4's four branches, in order, first hit wins; `problem` is what
+  /// stops a run — a configured root that is not absolute — else null.
+  ///
+  /// [cwd] is the call's working folder as the host tool layer has it
+  /// (`HostToolCall.cwd`), i.e. the session's workspace root. It is the
+  /// whole anchor: `'.'` or any other non-absolute value means the
+  /// workspace root is not known, and the run falls back to the
+  /// repository's parent folder rather than resolving a relative place
+  /// (§3.4, "链尾是 `'.'`").
+  static ({BtestQaRoot? root, String? problem}) resolve({
+    required String repoRoot,
+    required String cwd,
+    String? configured,
+    required String setting,
+  }) {
+    final repo = p.normalize(repoRoot);
+    final parent = BtestQaRoot(
+      p.join(p.dirname(repo), 'qa'),
+      BtestQaSource.parentFallback,
+    );
+    BtestQaRoot fallBack(String reason) =>
+        BtestQaRoot(parent.root, parent.source, reason: reason);
+
+    final value = configured?.trim() ?? '';
+    if (value.isNotEmpty) {
+      if (!p.isAbsolute(value)) {
+        return (
+          root: null,
+          problem: '$setting must be an absolute path, not "$value"',
+        );
+      }
+      final root = p.normalize(value);
+      return (
+        root: BtestQaRoot(
+          root,
+          BtestQaSource.setting,
+          reason: p.equals(repo, root) || p.isWithin(repo, root)
+              ? 'QA 根在业务仓内'
+              : null,
+        ),
+        problem: null,
+      );
+    }
+
+    final workspace = cwd.trim();
+    if (RemoteLocation.isRemote(workspace)) {
+      return (root: fallBack('工作区根是远端位置'), problem: null);
+    }
+    if (!p.isAbsolute(workspace)) {
+      return (root: fallBack('工作区根不可得'), problem: null);
+    }
+    final here = p.normalize(workspace);
+    if (p.equals(here, repo)) {
+      return (root: fallBack('工作区根即业务仓'), problem: null);
+    }
+    if (p.isWithin(here, repo)) {
+      return (
+        root: BtestQaRoot(p.join(here, 'qa'), BtestQaSource.workspace),
+        problem: null,
+      );
+    }
+    return (root: fallBack('仓在工作区根之外'), problem: null);
+  }
+}
+
+/// The expect file of a run, `<qaRoot>/<repository>/<line>.md` (design
+/// §3.4): its cases, its text and its SHA-256 — the write-back baseline
+/// `btest_run_start` hands back, and what `btest_run_end` compares the file
+/// against.
 class BtestExpect {
   const BtestExpect({
     required this.path,
@@ -109,48 +210,16 @@ class BtestExpect {
     return now.hash == baseline ? BtestWrite.notWritten : BtestWrite.written;
   }
 
-  /// Why [path] cannot be a run's `expectFile`, or null: it is relative to
-  /// the repository, under `docs/qa/`, and a Markdown file (§3.3).
-  static String? relativeProblem(String path) {
-    final ref = path.trim();
-    if (ref.isEmpty) return 'expectFile is required';
-    if (p.isAbsolute(ref) || RegExp(r'^[A-Za-z]:[\\/]').hasMatch(ref)) {
-      return 'expectFile must be relative to repoRoot, not "$ref"';
-    }
-    final parts = p.posix.split(ref.replaceAll('\\', '/'));
-    if (parts.any((part) => part == '..' || part == '.')) {
-      return 'expectFile must not step out of repoRoot: "$ref"';
-    }
-    final normalized = parts.where((part) => part.isNotEmpty).join('/');
-    if (!normalized.startsWith('docs/qa/')) {
-      return 'expectFile must be under docs/qa/ (the fixed form '
-          'docs/qa/<line>.md), not "$ref"';
-    }
-    if (!normalized.endsWith('.md')) {
-      return 'expectFile must be a .md file, not "$ref"';
+  /// Why [line] cannot name a run's expect file, or null: the file is
+  /// `<line>.md`, so the business line is a name — non-empty and without a
+  /// path separator (§3.3: the file is derived, never a path input).
+  static String? lineProblem(String? line) {
+    final name = line?.trim() ?? '';
+    if (name.isEmpty) return 'line is required';
+    if (name.contains('/') || name.contains('\\')) {
+      return 'line must be a business-line name, not a path: "$name"';
     }
     return null;
-  }
-
-  /// [expectFile] (relative to [repoRoot]) as an absolute path.
-  static String resolve(String repoRoot, String expectFile) => p.normalize(
-    p.join(repoRoot, expectFile.trim().replaceAll('/', p.separator)),
-  );
-
-  /// Why [file] (absolute) may not be written, or null: its nearest
-  /// existing folder must be a directory (§3.3, `expectFile`'s check).
-  static String? writableProblem(String file) {
-    var folder = p.dirname(file);
-    while (true) {
-      final type = FileSystemEntity.typeSync(folder);
-      if (type == FileSystemEntityType.directory) return null;
-      if (type != FileSystemEntityType.notFound) {
-        return '${p.dirname(file)} cannot be written: $folder is not a folder';
-      }
-      final up = p.dirname(folder);
-      if (up == folder) return null;
-      folder = up;
-    }
   }
 
   /// The file's first form (§3.4, first generation): its header alone —
@@ -174,7 +243,10 @@ class BtestExpect {
 
   /// Appends a `## <date> 修订建议` section to [path], keeping every line
   /// already there (§3.4: a file someone else changed is never overwritten
-  /// by a write-back). Completes with what was appended.
+  /// by a write-back). The write-back is the agent's own file write; the
+  /// host only validates it ([statusOf]) and never calls this — the rule is
+  /// carried by the mode card, and this is its reference implementation.
+  /// Completes with what was appended.
   static String appendRevision(String path, {String? body, DateTime? at}) {
     final file = File(path);
     final text = file.existsSync() ? file.readAsStringSync() : '';

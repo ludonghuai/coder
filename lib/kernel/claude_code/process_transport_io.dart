@@ -86,7 +86,11 @@ class ProcessTransport implements ClaudeCodeTransport {
     // Left over from a run that ended without stopping them: gone first, so
     // two processes never go on with one session.
     await registry.reaped;
-    final cli = await LocalClaude.locate();
+    // No download on a session's start: this fork's default kernel is
+    // thincoder, so fetching Claude Code's CLI unasked is a network and disk
+    // act nobody requested. Installing stays explicit — 设置 → 通用 has the
+    // button, and it is the only path that downloads.
+    final cli = await LocalClaude.locate(install: false);
     if (!Directory(launch.cwd).existsSync()) {
       throw ClaudeFolderGone(launch.cwd);
     }

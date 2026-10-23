@@ -5498,7 +5498,7 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get claudePathMissing => '尚未找到：开始第一个对话时会自动下载 Claude Code。';
+  String get claudePathMissing => '尚未找到：点旁边的安装按钮才会下载（不会自动下载）。';
 
   @override
   String get generalSettingsIdeWindows => 'Fast Ide 窗口';
@@ -10210,7 +10210,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get btestSettingsDescription =>
-      '一轮只从起点进一次，像用户一样跑完整条业务线，判断依据来自业务仓的 docs/qa/<业务线>.md。下面两个列表决定它能到哪里。';
+      '一轮只从起点进一次，像用户一样跑完整条业务线，判断依据来自 <QA 根>/<仓库名>/<业务线>.md（QA 根在下方设置，留空按工作区派生）。下面两个列表决定它能到哪里。';
 
   @override
   String get btestAllowHosts => '允许域名';
@@ -10231,6 +10231,13 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String get btestDefaultReadonlyDescription =>
       '未声明模式的一轮默认只读，关掉则默认写。env: prod 与 write 的组合始终拒绝。';
+
+  @override
+  String get btestQaRoot => 'QA 根目录';
+
+  @override
+  String get btestQaRootDescription =>
+      '预期文件落在 <QA 根>/<仓库名>/<业务线>.md。留空时按会话工作区目录派生（工作区就是业务仓时退到业务仓的父目录）；填非绝对路径时起 run 会被拒绝。';
 
   @override
   String get sidePanelEdit => '编辑';

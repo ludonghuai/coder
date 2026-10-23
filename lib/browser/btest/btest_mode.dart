@@ -23,6 +23,10 @@ abstract final class BtestSettings {
   /// Whether a run that does not say its mode starts read-only (§9).
   static const readonlyKey = 'btest.readonly';
 
+  /// The folder expect files go in; empty derives it from the session's
+  /// workspace root (§3.4).
+  static const qaRootKey = 'btest.qaRoot';
+
   /// A test's values, in place of settings.json's.
   @visibleForTesting
   static Map<String, Object?>? values;
@@ -32,6 +36,13 @@ abstract final class BtestSettings {
 
   /// Read-only unless the user turned it off.
   static bool get readonlyByDefault => _read(readonlyKey) != false;
+
+  /// The configured QA root, trimmed; null when the setting is empty (the
+  /// path is then derived, §3.4).
+  static String? get qaRoot => switch (_read(qaRootKey)) {
+    final String text when text.trim().isNotEmpty => text.trim(),
+    _ => null,
+  };
 
   /// The setting [key]'s value, as settings.json keeps it now.
   static Object? _read(String key) {
@@ -48,19 +59,30 @@ abstract final class BtestSettings {
   /// A settings.json list of hosts, normalized lower case; anything else is
   /// none.
   static Set<String> hostsOf(Object? value) => {
-    if (value is List)
-      for (final host in value)
-        if ('$host'.trim().isNotEmpty) '$host'.trim().toLowerCase(),
+    if (value is List) for (final host in value) ?_hostOf('$host'),
   };
 
   /// A text field's line as the list it sets: hosts by comma or space; none
   /// for blank.
   static List<String>? listOf(String text) {
     final hosts = [
-      for (final host in text.split(RegExp(r'[,\s]+')))
-        if (host.trim().isNotEmpty) host.trim().toLowerCase(),
+      for (final host in text.split(RegExp(r'[,\s]+'))) ?_hostOf(host),
     ];
     return hosts.isEmpty ? null : hosts;
+  }
+
+  /// [text] as a host alone: what someone types as a URL
+  /// (`https://v2-dev.example.com/`) becomes `v2-dev.example.com`, which is
+  /// what the gate compares against (`Uri.host`). Without this a list can look
+  /// filled and never match — a prod host would go unprotected, and an allow
+  /// list would refuse everything.
+  static String? _hostOf(String text) {
+    final value = text.trim();
+    if (value.isEmpty) return null;
+    final asUrl = Uri.tryParse(value.contains('://') ? value : '//$value');
+    final host = asUrl?.host.trim().toLowerCase() ?? '';
+    if (host.isNotEmpty) return host;
+    return value.toLowerCase();
   }
 }
 
@@ -85,7 +107,6 @@ class BtestRun {
     required this.env,
     required this.face,
     required this.expectFile,
-    required this.expectFileRef,
     required this.commitRange,
     required this.baseline,
     required this.cases,
@@ -105,9 +126,9 @@ class BtestRun {
   final BtestEnv env;
   final BtestFace face;
 
-  /// The expect file, absolute; and as the run declared it.
+  /// The expect file, absolute — derived by the host (§3.4): `expectFile`
+  /// is this run's name for the file, never an input.
   final String expectFile;
-  final String expectFileRef;
 
   final String commitRange;
 
@@ -187,7 +208,6 @@ class BtestState {
     required BtestEnv env,
     required BtestFace face,
     required String expectFile,
-    required String expectFileRef,
     required String commitRange,
     required String? baseline,
     required List<BtestCase> cases,
@@ -200,7 +220,6 @@ class BtestState {
       env: env,
       face: face,
       expectFile: expectFile,
-      expectFileRef: expectFileRef,
       commitRange: commitRange,
       baseline: baseline,
       cases: cases,
@@ -397,17 +416,19 @@ abstract final class BtestTools {
     name: 'btest_run_start',
     description:
         'Starts one btest run for a business line: the business repository, '
-        'its expect file (docs/qa/<line>.md), the one entry URL, dev/test/'
-        'prod, read-only or write. Returns the run id, the expect file\'s '
-        'case index and its SHA-256 (the write-back baseline). btest refuses '
-        'every browser action until a run is started, and one run at a '
-        'time.',
+        'the one entry URL, dev/test/prod, read-only or write. The expect '
+        'file is derived by the host from the line, the repository and the '
+        'QA root, and its absolute path is returned. Returns the run id, '
+        'that path, the case index and the SHA-256 (the write-back '
+        'baseline). btest refuses every browser action until a run is '
+        'started, and one run at a time.',
     inputSchema: {
       'type': 'object',
       'properties': {
         'line': {
           'type': 'string',
-          'description': 'The business line, e.g. "订舱".',
+          'description': 'The business line, e.g. "订舱". The expect file is '
+              'named after it (<line>.md): a name, not a path.',
         },
         'repoRoot': {
           'type': 'string',
@@ -426,10 +447,6 @@ abstract final class BtestTools {
           'description': 'Optional: read-only unless the btest settings say '
               'otherwise. env: prod with write is refused (rule A).',
         },
-        'expectFile': {
-          'type': 'string',
-          'description': 'Relative to repoRoot: docs/qa/<line>.md.',
-        },
         'commitRange': {
           'type': 'string',
           'description': 'The change range this run covers, as '
@@ -441,7 +458,6 @@ abstract final class BtestTools {
         'repoRoot',
         'startUrl',
         'env',
-        'expectFile',
         'commitRange',
       ],
     },
@@ -517,9 +533,9 @@ abstract final class BtestTools {
         'with btest_run_end first (one run at a time)',
       );
     }
-    final line = _text(input['line']);
-    if (line == null) {
-      throw const BrowserError('btest_run_start refused: line is required');
+    final line = _text(input['line']) ?? '';
+    if (BtestExpect.lineProblem(line) case final problem?) {
+      throw BrowserError('btest_run_start refused: $problem');
     }
     final startUrl = _text(input['startUrl']);
     final uri = startUrl == null ? null : Uri.tryParse(startUrl);
@@ -531,7 +547,7 @@ abstract final class BtestTools {
         'not "${input['startUrl']}"',
       );
     }
-    final env = BtestEnv.parse(input['env'] as String?);
+    final env = BtestEnv.parse(_text(input['env']));
     if (env == null) {
       throw BrowserError(
         'btest_run_start refused: env must be dev, test or prod, not '
@@ -575,35 +591,38 @@ abstract final class BtestTools {
         "must be the business repository's root",
       );
     }
-    final expectFileRef = _text(input['expectFile']);
-    if (expectFileRef == null) {
-      throw const BrowserError(
-        'btest_run_start refused: expectFile is required',
-      );
-    }
-    if (BtestExpect.relativeProblem(expectFileRef) case final problem?) {
-      throw BrowserError('btest_run_start refused: $problem');
-    }
-    final expectFile = BtestExpect.resolve(repoRoot, expectFileRef);
-    if (BtestExpect.writableProblem(expectFile) case final problem?) {
-      throw BrowserError('btest_run_start refused: $problem');
-    }
-    // The folder the file goes in may not exist yet (a business repo's
-    // docs/qa on its first run). Made here, once, so the run's write-back —
-    // and the agent's own file tools — meet a folder rather than a path that
-    // cannot be resolved. A folder that cannot be made is a readable refusal.
-    try {
-      Directory(p.dirname(expectFile)).createSync(recursive: true);
-    } on FileSystemException catch (error) {
-      throw BrowserError(
-        'btest_run_start refused: ${p.dirname(expectFile)} cannot be made '
-        '(${error.osError?.message ?? error.message})',
-      );
-    }
     final commitRange = _text(input['commitRange']);
     if (commitRange == null) {
       throw const BrowserError(
         'btest_run_start refused: commitRange is required',
+      );
+    }
+    // Where the expect file goes (§3.4): the QA root's four branches, then
+    // the repository's own folder under it — one workspace, one QA root.
+    final qa = BtestQaRoot.resolve(
+      repoRoot: repoRoot,
+      cwd: call.cwd,
+      configured: BtestSettings.qaRoot,
+      setting: BtestSettings.qaRootKey,
+    );
+    if (qa.problem case final problem?) {
+      throw BrowserError('btest_run_start refused: $problem');
+    }
+    final qaRoot = qa.root!;
+    final expectFile = qaRoot.fileOf(repoRoot, line);
+    // The folder may not exist yet (the QA root's first run). Made here,
+    // once, so the run's write-back — and the agent's own file tools — meet
+    // a folder rather than a path that cannot be resolved. A folder that
+    // cannot be made is a readable refusal naming the root and the error
+    // (§3.4 · §7 #28). No repository is initialized: the QA root is a plain
+    // folder, never a git one.
+    final folder = p.dirname(expectFile);
+    try {
+      Directory(folder).createSync(recursive: true);
+    } on FileSystemException catch (error) {
+      throw BrowserError(
+        'btest_run_start refused: qaRoot "${qaRoot.root}" — "$folder" '
+        'cannot be created (${error.osError?.message ?? error.message})',
       );
     }
     final BtestExpect expect;
@@ -611,7 +630,7 @@ abstract final class BtestTools {
       expect = BtestExpect.read(expectFile);
     } on FileSystemException catch (error) {
       throw BrowserError(
-        'btest_run_start refused: expectFile "$expectFileRef" cannot be '
+        'btest_run_start refused: expectFile "$expectFile" cannot be '
         'read: ${error.message.isEmpty ? error.osError : error.message}',
       );
     }
@@ -622,17 +641,20 @@ abstract final class BtestTools {
       env: env,
       face: face,
       expectFile: expectFile,
-      expectFileRef: expectFileRef,
       commitRange: commitRange,
       baseline: expect.hash,
       cases: expect.cases,
     );
+    final source = '来源=${qaRoot.source.label}';
+    final reason = qaRoot.reason == null ? '' : ' · 降级原因=${qaRoot.reason}';
     return [
-      'btest ${run.id} started · $line · ${env.name} · ${face.name} · '
+      '1. btest ${run.id} started · $line · ${env.name} · ${face.name} · '
           '${run.repo}',
-      'expectFile: $expectFileRef (${expect.hash ?? 'absent'})',
-      'Case index (${expect.cases.length}):',
+      '2. expectFile（解析后的绝对路径）: $expectFile',
+      '   $source$reason',
+      '3. Case index (${expect.cases.length}):',
       '  ${expect.indexText.replaceAll('\n', '\n  ')}',
+      '4. 内容 hash: ${expect.hash ?? 'absent'}（写回基线）',
       if (expect.absent) ...[
         'The file is absent: create it from this skeleton first, then act.',
         BtestExpect.skeleton(
@@ -643,7 +665,7 @@ abstract final class BtestTools {
           commitRange: commitRange,
         ),
       ],
-      '先读 $expectFileRef（case 与 expectFrom 都从文件来），再开始。',
+      '先读 $expectFile（case 与 expectFrom 都从文件来），再开始。',
       'Never stop mid-run; close with blockers / unconfirmedDiffs / '
           'uncovered, after writing the file back and before btest_run_end.',
     ].join('\n');
@@ -689,7 +711,7 @@ abstract final class BtestTools {
       );
     }
     checks.add(
-      '1. 预期文件写回：expectFile: ${write.label}（${run.expectFileRef}；'
+      '1. 预期文件写回：expectFile: ${write.label}（${run.expectFile}；'
       '基线 ${run.baseline == null ? 'absent' : _short(run.baseline!)}）',
     );
     if (!unreadable && write == BtestWrite.notWritten) {
@@ -717,8 +739,10 @@ abstract final class BtestTools {
 
     // 3. The coverage, against the index run_start returned.
     final index = {for (final one in run.cases) one.id};
+    final coveredInput = input['coveredCases'];
     final covered = [
-      for (final id in input['coveredCases'] as List? ?? const []) '$id',
+      if (coveredInput is List)
+        for (final id in coveredInput) '$id',
     ];
     final outside = [
       for (final id in covered)
@@ -745,6 +769,12 @@ abstract final class BtestTools {
       '${covered.length} 在索引；issues ${issues.length} 条，'
       '${unpointed.isEmpty ? 'caseId 与 expectRef 都在' : '${unpointed.length} 处不合格'}',
     );
+    if (coveredInput is! List) {
+      warnings.add(
+        'coveredCases is not a list — the field is required (an empty array '
+        'is fine)',
+      );
+    }
     if (outside.isNotEmpty) {
       warnings.add(
         'coveredCases: ${outside.join(', ')} not in the run\'s case index',

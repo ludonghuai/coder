@@ -1,8 +1,10 @@
 import 'dart:io';
 
+import 'package:baocode/browser/btest/btest_mode.dart';
 import 'package:baocode/browser/browser_bridge.dart';
 import 'package:baocode/browser/browser_tools.dart' show BrowserHistory;
 import 'package:baocode/settings/pages/browser_page.dart';
+import 'package:baocode/settings/pages/settings_widgets.dart';
 import 'package:baocode/settings/user_settings.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -91,6 +93,49 @@ void main() {
       expect(BrowserHistory.instance.detailed, isFalse);
     },
   );
+
+  testWidgets('the QA root is a field, kept in settings.json and shown back', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(900, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.runAsync(
+      () => settings.update(BtestSettings.qaRootKey, r'D:\qa'),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: BrowserSettingsPage(settings: settings)),
+      ),
+    );
+    await tester.pump();
+    expect(find.text('QA Root Folder'), findsOneWidget);
+    expect(
+      find.textContaining('<QA root>/<repository>/<business line>.md'),
+      findsWidgets,
+    );
+    // The btest section's fields: the two host lists, then the QA root —
+    // which shows the value the setting holds.
+    final field = tester.widget<TextField>(
+      find.descendant(
+        of: find.byType(SettingsTextField).last,
+        matching: find.byType(TextField),
+      ),
+    );
+    expect(field.controller!.text, r'D:\qa');
+    // The write path: what the field submits is what the setting keeps.
+    await tester.runAsync(() async {
+      tester
+          .widget<SettingsTextField>(find.byType(SettingsTextField).last)
+          .onSubmitted(r'D:\qa2');
+      for (var attempt = 0;
+          attempt < 50 && settings[BtestSettings.qaRootKey] != r'D:\qa2';
+          attempt++) {
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      }
+    });
+    expect(settings[BtestSettings.qaRootKey], r'D:\qa2');
+  });
 
   testWidgets('a history grown large is said over the pages, and cleared', (
     tester,

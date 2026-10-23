@@ -5873,7 +5873,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get claudePathMissing =>
-      'None found yet: Claude Code is downloaded as the first conversation starts.';
+      'None found yet: it is downloaded only when you press install (never on its own).';
 
   @override
   String get generalSettingsIdeWindows => 'Fast Ide Windows';
@@ -10795,7 +10795,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get btestSettingsDescription =>
-      'A run enters once, works a business line like a user, and judges against docs/qa/<line>.md in the business repository. These lists decide what it may reach.';
+      'A run enters once, works a business line like a user, and judges against <QA root>/<repository>/<business line>.md (the QA root is set below; empty derives it from the workspace). These lists decide what it may reach.';
 
   @override
   String get btestAllowHosts => 'Allowed Hosts';
@@ -10817,6 +10817,13 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get btestDefaultReadonlyDescription =>
       'A run that does not say its mode is read-only unless this is off. env: prod with write is always refused.';
+
+  @override
+  String get btestQaRoot => 'QA Root Folder';
+
+  @override
+  String get btestQaRootDescription =>
+      'Expect files go in <QA root>/<repository>/<business line>.md. Empty derives the root from the session\'s workspace folder (or the repository\'s parent folder when the workspace is the repository itself); a non-absolute path refuses a run.';
 
   @override
   String get sidePanelEdit => 'Edit';

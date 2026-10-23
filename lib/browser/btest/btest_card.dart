@@ -30,7 +30,7 @@ btest — browser business testing. These rules hold while btest is on; switchin
 
 Stability
 [D1] One run = one line of the business, from start to report; report once at the end.
-[D2] Read the expect file (docs/qa/<line>.md) before acting: its cases, steps and expectFrom are the expectations — never memory, never the code's current behavior.
+[D2] Read the expect file btest_run_start returned (its absolute path) before acting: its cases, steps and expectFrom are the expectations — never memory, never the code's current behavior.
 [D3] Every case carries source: new|old and origin; an old case's expectation comes from that file alone.
 [D4] Two different results ⇒ compare both preconditions (data, role, entry, draft/cache, time), build a fresh one, run the same steps once more (2 tries at most) ⇒ still different = an unconfirmed diff.
 [D5] A failed step is recorded and the run goes on; only a run that cannot continue ends early.

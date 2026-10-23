@@ -12,10 +12,10 @@ import 'package:path/path.dart' as p;
 // run, what a run may start with, and what its end reads back.
 void main() {
   const line = '订舱';
-  const expectRef = 'docs/qa/订舱.md';
   const host = 'booking.dev.example.com';
   const startUrl = 'https://booking.dev.example.com/booking';
 
+  late Directory sandbox;
   late Directory repo;
   late BtestState state;
   late HostToolCall call;
@@ -27,23 +27,26 @@ void main() {
       BtestSettings.prodHostsKey: ['prod.example.com'],
       BtestSettings.readonlyKey: true,
     };
-    repo = Directory.systemTemp.createTempSync('btest_policy');
+    // A workspace holding one business repository: the QA root is derived
+    // under the workspace (§3.4 branch 2), never inside the repository.
+    sandbox = Directory.systemTemp.createTempSync('btest_policy');
+    repo = Directory(p.join(sandbox.path, 'repo'))..createSync();
     Directory(p.join(repo.path, '.git')).createSync();
-    Directory(p.join(repo.path, 'docs', 'qa')).createSync(recursive: true);
-    File(p.join(repo.path, 'docs', 'qa', '订舱.md')).writeAsStringSync(
+    Directory(p.join(sandbox.path, 'qa', 'repo')).createSync(recursive: true);
+    File(p.join(sandbox.path, 'qa', 'repo', '订舱.md')).writeAsStringSync(
       '# 订舱\n\n'
       '## CASE-BKG-001 新建订舱单并提交\n'
       '- expectFrom: 强 · docs/vibe-coding.md §3.1\n\n'
       '## CASE-BKG-002 改单\n',
     );
-    state = BtestMode.of(repo.path, '1')..on = true;
-    call = HostToolCall(cwd: repo.path, sessionId: '1');
+    state = BtestMode.of(sandbox.path, '1')..on = true;
+    call = HostToolCall(cwd: sandbox.path, sessionId: '1');
   });
 
   tearDown(() {
     BtestMode.reset();
     BtestSettings.values = null;
-    repo.deleteSync(recursive: true);
+    sandbox.deleteSync(recursive: true);
   });
 
   BtestRun start({
@@ -56,8 +59,7 @@ void main() {
     startUrl: startUrl,
     env: env,
     face: face,
-    expectFile: p.join(repo.path, 'docs', 'qa', '订舱.md'),
-    expectFileRef: expectRef,
+    expectFile: p.join(sandbox.path, 'qa', 'repo', '订舱.md'),
     commitRange: 'abc1234',
     baseline: null,
     cases: cases,
@@ -100,7 +102,6 @@ void main() {
     'startUrl': startUrl,
     'env': 'test',
     'mode': 'write',
-    'expectFile': expectRef,
     'commitRange': 'abc1234',
     ...over,
   };
@@ -408,12 +409,12 @@ void main() {
         contains('repoRoot'),
       );
       expect(
-        await startRefusal(startInput({'expectFile': ''})),
-        contains('expectFile'),
+        await startRefusal(startInput({'line': ''})),
+        contains('line is required'),
       );
       expect(
-        await startRefusal(startInput({'expectFile': 'notes/x.md'})),
-        contains('docs/qa/'),
+        await startRefusal(startInput({'line': '订舱/x'})),
+        contains('business-line name'),
       );
       expect(
         await startRefusal(startInput({'startUrl': 'not a url'})),
@@ -425,15 +426,33 @@ void main() {
       );
     });
 
-    test('returns the run, the case index and the hash', () async {
+    test('returns the run, the derived path, the case index and the hash', () async {
       final answer = '${await BtestTools.all.first.run(startInput(), call)}';
+      final file = File(p.join(sandbox.path, 'qa', 'repo', '订舱.md'));
       expect(answer, contains('Case index (2)'));
       expect(answer, contains('CASE-BKG-001'));
       expect(answer, contains('新建订舱单并提交'));
-      final file = File(p.join(repo.path, 'docs', 'qa', '订舱.md'));
       expect(answer, contains(BtestExpect.hashOf(file.readAsStringSync())!));
-      expect(answer, contains('先读 $expectRef'));
+      expect(answer, contains('2. expectFile（解析后的绝对路径）: ${file.path}'));
+      expect(answer, contains('来源=工作区根'));
+      expect(answer, contains('先读 ${file.path}'));
       expect(state.run, isNotNull);
+    });
+
+    test('a host typed as a URL is read as its host', () {
+      // What someone pastes into the field: the gate compares bare hosts, so a
+      // URL kept as typed would look configured and never match.
+      expect(BtestSettings.listOf('https://v2-dev.navnova.com/'), [
+        'v2-dev.navnova.com',
+      ]);
+      expect(BtestSettings.listOf('v2-dev.navnova.com, https://x.example/a'), [
+        'v2-dev.navnova.com',
+        'x.example',
+      ]);
+      expect(BtestSettings.hostsOf(['https://navnova.51marine.com/']), {
+        'navnova.51marine.com',
+      });
+      expect(BtestSettings.listOf('   '), isNull);
     });
 
     test('a second run while one is open is refused', () async {
