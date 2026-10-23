@@ -1,5 +1,7 @@
 import 'chat_models.dart';
 
+part 'step_folds_boundaries.dart';
+
 /// What a fold holds.
 enum StepFoldKind {
   /// A run of quick steps: thoughts, reads, searches, commands.
@@ -29,10 +31,6 @@ class StepFold {
 /// What one row of the history shows: the line of each fold it begins,
 /// and its own item unless a closed fold hides it.
 typedef StepRow = ({StepFold? work, StepFold? steps, bool item});
-
-/// A window the folds scan: where a turn starts, the message that began it
-/// (none when the agent took it up on its own), and how long it worked.
-typedef _TurnBoundary = ({int start, int? prompt, Duration? worked});
 
 /// How a history folds: each run of at least two quick steps into one line
 /// ("Read 3 files, ran 2 commands"), and each finished turn's work into
@@ -278,47 +276,9 @@ class StepFolds {
     _liveStart = live && windows.isNotEmpty ? windows.last.start : null;
   }
 
-  /// The windows the folds scan in `[from, count]`, ascending: those the
-  /// messages sent make, and those the turns make, merged where they meet
-  /// (a turn wins over a message there, a later turn over an earlier).
-  List<_TurnBoundary> _boundaries(int from, int count, List<TurnMark> turns) {
-    final marks = <TurnMark>[];
-    var after = count;
-    for (var i = turns.length - 1; i >= 0; i--) {
-      final mark = turns[i];
-      if (mark.start < from) break;
-      // A mark out of the history, or out of order, is no boundary. One at
-      // its end is: the turn under way has no items yet.
-      if (mark.start < 0 || mark.start > count || mark.start > after) continue;
-      // The same place as the one after it: the later turn is the one.
-      if (marks.isNotEmpty && marks.last.start == mark.start) continue;
-      marks.add(mark);
-      after = mark.start;
-    }
-    final boundaries = <_TurnBoundary>[];
-    var i = from;
-    for (final mark in marks.reversed) {
-      while (i < mark.start) {
-        if (_items[i] case UserMessageItem(queued: false, :final worked)) {
-          boundaries.add((start: i, prompt: i, worked: worked));
-        }
-        i++;
-      }
-      // The message at the same place, if any, is the turn's own.
-      if (i == mark.start && i < count && _items[i] is UserMessageItem) i++;
-      boundaries.add((
-        start: mark.start,
-        prompt: mark.prompt,
-        worked: mark.worked,
-      ));
-    }
-    for (; i < count; i++) {
-      if (_items[i] case UserMessageItem(queued: false, :final worked)) {
-        boundaries.add((start: i, prompt: i, worked: worked));
-      }
-    }
-    return boundaries;
-  }
+  // The windows: see step_folds_boundaries.dart.
+  List<_TurnBoundary> _boundaries(int from, int count, List<TurnMark> turns) =>
+      _boundariesOf(this, from, count, turns);
 
   /// The runs of thoughts as one, as asked for.
   final Map<int, ThinkingItem> _merged = {};
