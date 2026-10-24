@@ -840,6 +840,27 @@ cwd 来源链的结论不变（btest 路径会填 cwd，分支 2 / 3 可达）�
 
 **门禁**：`doc_check(mode:"gate", docs:["docs/design/browser-biz-test.md"])` → 首行 `DOC-CHECK GATE: PASS`（1 档 0 条命中）。
 
+## 修正轮（§4 表读数回基线 · 2026-10-23）
+
+**来源**：§5 最后一轮「设计漂移」第 1 条（设计 §4 的 `test/browser/btest_card_test.dart` 仍记 169 / `—`），父侧裁定按实测改，并注明其已随 `[D8]` 换句同步修改。
+
+**改动（`docs/design/browser-biz-test.md` §4，5 处；只改读数与语气，判据 / 验收 / 行结构未动）**
+
+| 位置 | 旧 | 新 |
+|---|---|---|
+| `:615` 表头 | 增量 = 三件（提交 `662a94d4`） | 三件（`662a94d4`）+ `[D8]` 换句同步（`29500e19`），均已完成 |
+| `:617` 列头 | 增量（已完成，见提交 `662a94d4`） | 增量（已完成；拆分 + F11 见 `662a94d4`，`[D8]` 见 `29500e19`） |
+| `:625` `btest_card.dart` | `129` / `—` /「（本批不动）」 | `129` / `+0 行 · 正文 6946 字符（已随 `[D8]` 换句同步修改，提交 `29500e19`）」 |
+| `:639` `btest_card_test.dart` | `169` / `—` | `194` / `+25（已随 `[D8]` 换句同步修改，提交 `29500e19`）」 |
+| `:667-668` F10 增量段 | 「其余档不动」 | 补 `test/browser/btest_card_test.dart` 随句同步 +25 行（`29500e19`，随批删）；为过行宽拆两行 |
+
+**实测（2026-10-23，本机）**：`test/browser/btest_card_test.dart` = 194 行；`lib/browser/btest/btest_card.dart` = 129 行；
+`BtestCard.text.length` = 6946（Dart 运行时口径；按 CRLF→LF 归一复算一致）；标签 38 个（D1–D8 / J1–J7 / P01–P20 / H1–H3），与 `:625` 清单一致。
+
+**未动**：需求档、代码、设计档其它节均未改。
+
+**门禁**：`doc_check(mode:"gate", docs:["docs/design/browser-biz-test.md"])` → 首行 `DOC-CHECK GATE: PASS`（1 档 0 条命中）。
+
 ## §3 设计评审（评审子代理）
 
 ### 轮次 1（评审子代理）

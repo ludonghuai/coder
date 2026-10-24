@@ -612,9 +612,9 @@ A chain break may be sent to a read-only subagent (explore, else plan): the mome
 输入不同（F8 = `unconfirmedDiffs[]` 的 `kind: pending`；F10 = `chainBreaks[]` 的断点现场）、产出不同（F8 回填报告「建议」列；F10 写 `cause`）、时点不同（run 后 / run 中）。
 **已带 `cause` 的断点不再进 F8 的待确认清单**——同一件事不重复派单；断点本身仍不进 `issues[]`（KD-23）。
 
-## 4. 受影响文件清单（现行数 = 拆分后实测（2026-10-23）：按行尾换行符计行、末行计入；增量 = 「SPLIT-5 拆 run 生命周期 + SPLIT-6 抽状态行开关 + F11 持久化」的改动，三件均已完成（提交 `662a94d4`，`git show --stat 662a94d4` 可复核），`—` = 本批不动）
+## 4. 受影响文件清单（现行数 = 2026-10-23 实测：按行尾换行符计行、末行计入；增量 = 「SPLIT-5 拆 run 生命周期 + SPLIT-6 抽状态行开关 + F11 持久化」（提交 `662a94d4`，`git show --stat 662a94d4` 可复核）+ `[D8]` 换句同步（提交 `29500e19`），均已完成；`—` = 本批不动）
 
-| 文件 | 现行数 | 增量（已完成，见提交 `662a94d4`） | 说明 |
+| 文件 | 现行数 | 增量（已完成；拆分 + F11 见提交 `662a94d4`，`[D8]` 见提交 `29500e19`） | 说明 |
 |---|---|---|---|
 | `lib/browser/btest/btest_mode.dart` | 556 | 拆 −≈655 · 加 ≤ +40 | 模式状态、`BtestSettings` 读写、注册与转发、闸；按 SPLIT-5 拆出 run 生命周期（已完成，两档，拆法见本节末「run 生命周期的拆法」）；F11：`BtestSettings` 加三个键（`onKey` / `traversalKey` / `modeKey`）与读写助手（缺省回落、非法值当缺失）；三键的**初值构造**落 `BtestState.fromSettings`（读三键、缺省回落、非法值当缺失、读不写），**写回**落 `BtestState` 的三个 setter（`set on` / `set traversal` / `set write`，显式闭包、失败不阻断，§9.1）；F9 的两开关字段与 `chainBreaks[].cause` 形状校验已落 |
 | `lib/browser/btest/btest_run_state.dart` | 394 | ≤ +380 | run 状态（`BtestEntry` / `BtestRun` / 动作计数 / `truthLine`）+ `recordAllowed` / `recordDenied`（以 extension 落本档，调用点不变）+ `btest_run_start` 的返回项组装（§3.3）；**只搬不改行为** |
@@ -622,7 +622,7 @@ A chain break may be sent to a read-only subagent (explore, else plan): the mome
 | `lib/browser/btest/btest_status_switches.dart` | 154 | ≤ +140 | 状态行的行文本 + 两个开关（从 `composer.dart` 抽出 `_buildBtestStatus` 与 `_btestSwitch`），对外一个 `BtestStatusLine`；F9 已实现的行为原样搬，显示口径按 §9.1 |
 | `lib/browser/btest/btest_weights.dart` | 293 | — | 默认八类（条数 + 检查点）、`<qaRoot>/weights.md` 的路径 / 首建 / 解析 / 类目齐全读数、`已修` 排末尾、标记行逐字匹配（F7.1 已落，本批不动） |
 | `lib/browser/btest/btest_policy.dart` | 417 | — | `BtestTraversal` / `BtestFace` 与 `parse`；入口 / evaluate / 只读面 / 生产闸的判据纯函数（本批不动，开关只改取值来源） |
-| `lib/browser/btest/btest_card.dart` | 129 | — | `[D1]`–`[D8]` / `[J1]`–`[J7]` / `[P01]`–`[P20]` / `[H1]`–`[H3]`；报告口径与两列（本批不动） |
+| `lib/browser/btest/btest_card.dart` | 129 | +0 行 · 正文 6946 字符（已随 `[D8]` 换句同步修改，提交 `29500e19`） | `[D1]`–`[D8]` / `[J1]`–`[J7]` / `[P01]`–`[P20]` / `[H1]`–`[H3]`；报告口径与两列 |
 | `lib/browser/btest/btest_expect_file.dart` | 271 | — | 预期文件：路径派生（§3.4 四分支）、case 索引 + hash 基线、写回校验、人改检测（本批不动） |
 | `lib/browser/browser_tools.dart` | 786 | — | 工具 `run` 包装的 btest 闸；`btest_run_start` / `btest_run_end` 注册；`browser_navigate.detour`、`browser_evaluate.readOnly` |
 | `lib/kernel/thincoder/thincoder_kernel.dart` | 480 | — | 权限应答处接 btest 放行判据；回合上下文里挂模式卡 |
@@ -636,7 +636,7 @@ A chain break may be sent to a read-only subagent (explore, else plan): the mome
 | `lib/l10n/app_localizations_en.dart` | 11085 | 派生 | 生成物，不手改 |
 | `lib/l10n/app_localizations_zh.dart` | 10490 | 派生 | 生成物，不手改 |
 | `test/browser/btest_policy_test.dart` | 947 | ≤ +45 | F9 用例 #35 / #36 / #39 已落；**本批（F11）**加 #43（三键写回 → 重开会话读回）、#44（键缺失 / 非法值 ⇒ 缺省，读不写）、#45（切回 normal ⇒ `btest.on` 删键 ⇒ 重开 = 关）（随批删） |
-| `test/browser/btest_card_test.dart` | 169 | — | 卡内标签计数与报告列（随批删） |
+| `test/browser/btest_card_test.dart` | 194 | +25（已随 `[D8]` 换句同步修改，提交 `29500e19`） | 卡内标签计数与报告列（随批删） |
 | `test/browser/btest_weights_test.dart` | 183 | — | 权重表首建 / 缺失 / 删类目 / 标记漂名（随批删） |
 | `test/chat/composer_btest_status_test.dart` | 217 | ≤ +15 | #37（期望改为「重启读回三键」）/ #38 / #40；本批加一条「`btest.mode` 缺键 ⇒ 状态行显示解析后的 `btest.readonly` 值」（随批删） |
 | `test/browser/btest_expect_file_test.dart` | 617 | — | 预期文件用例（F3.2 已落，本批不动；随批删） |
@@ -664,7 +664,8 @@ A chain break may be sent to a read-only subagent (explore, else plan): the mome
 
 **新增实现只落 `lib/browser/btest/*`**（mode / run_state / run_end / status_switches / policy / card / expect-file / weights 八个文件）；四个大档里只出现"调用点 + 一个钩子"，不搬已有逻辑（本批唯一的搬运是本表列出的两处拆分）、不改已有签名。
 
-**F10 增量（断点查明）**：`btest_mode.dart` 的检查 2 对 `chainBreaks[].cause` 只加「可缺省 + 出现须非空」的形状校验（≤ +10）；`btest_card.dart` 的 `[D8]` 一句断点可派只读子代理（≤ +3 行；替换后的句子实测 497 字符，比上一版多 288 字符）；`test/browser/btest_policy_test.dart` 加 #41 / #42（≤ +40，随批删）；其余档不动。
+**F10 增量（断点查明）**：`btest_mode.dart` 的检查 2 对 `chainBreaks[].cause` 只加「可缺省 + 出现须非空」的形状校验（≤ +10）；`btest_card.dart` 的 `[D8]` 一句断点可派只读子代理（≤ +3 行；替换后的句子实测 497 字符，比上一版多 288 字符）；`test/browser/btest_policy_test.dart` 加 #41 / #42（≤ +40，随批删）；
+`test/browser/btest_card_test.dart` 随 `[D8]` 换句同步（+25 行，提交 `29500e19`，随批删）。
 
 **登记**：SPLIT-1…6 = 拆分登记项；SPLIT-5 / SPLIT-6 本批落地，SPLIT-1…4 不在本批落地。台账写权不在设计位，所以本批只在档内登记并在回执点名，由主编排方落台账行（挂本批 #149 的后续批）。
 
