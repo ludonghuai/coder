@@ -102,13 +102,15 @@
 - **判定的时刻**：以上对账都发生在**回合的上下文装配时**，以那一刻的宿主状态为准；切换发生在回合进行中 ⇒ 本回合按装配时的状态跑完，下一回合生效。两次回合之间宿主可以先关再开，那个窗口里模型不做决策，下一次装配必然把它对齐。
 - **中和行与状态读数（退出判据）**：两个标记互不包含 ⇒ 读数干净：**`D ≥ 1` ⇒ 模型侧在模式内；`D = 0` ⇒ 模型侧已退出**；健康态只有 0 / 1 两个读数（≥ 2 = 重复投卡，读数当场点出来），任意次开→关→再开之后仍成立。
 - **长会话漂移兜底（判据，不靠记忆）**：没有活动 run 的浏览器动作一律拒绝（§3.3）；`btest_run_start` 的返回尾部带一行"先读返回项 2 的绝对路径，再开始"。这一行是**每次 run 一行**，不是模式卡重复；若用户要求连这一行也不要，见 §10 上抛项 1。
-- **卡的内容边界**：角色、八条稳定性纪律（`[D1]`–`[D8]`；`[D7]` = 操作真实：入口一次、文字定位、逐字键入、读不推进流程）、七条判定口径（`[J1]`–`[J7]`）、需求 §7 的 19 类问题域各一条检查动作（`[P01]`–`[P19]`）+ 一条权重顺序（`[P20]`）、三条硬纪律（`[H1]`–`[H3]`）、两个开关的选项名 ↔ run 取值映射（`深度` = `chain` / `广度` = `surface` / `只读` = `readonly` / `允许写` = `write`）、差异处置四步、报告口径、禁止项、跑前必读。
-- 卡正文 4624 字符（2026-10-23 实测；其中 36 个标签行共 3477 字符），落 `lib/browser/btest/btest_card.dart`（版本化、可 diff），不写进用户家目录。标签是 F2 第二条判据的机械锚点（§6）。
+- **卡的内容边界**：角色、九条稳定性纪律（`[D1]`–`[D9]`；`[D7]` = 操作真实：入口一次、文字定位、逐字键入、读不推进流程；`[D9]` = 人工接管，逐字句见 §3.11）、七条判定口径（`[J1]`–`[J7]`）、需求 §7 的 19 类问题域各一条检查动作（`[P01]`–`[P19]`）+ 一条权重顺序（`[P20]`）、三条硬纪律（`[H1]`–`[H3]`）、两个开关的选项名 ↔ run 取值映射（`深度` = `chain` / `广度` = `surface` / `只读` = `readonly` / `允许写` = `write`）、
+  差异处置四步、报告口径、禁止项、跑前必读。
+- 卡正文 6946 字符（2026-10-23 `[D8]` 换句后实测；`[D9]` 再加入一行，字符数按 `BtestCard.text.length` 复测），落 `lib/browser/btest/btest_card.dart`（版本化、可 diff），不写进用户家目录。标签是 F2 第二条判据的机械锚点（§6）。
 - **`[D8]` / `[P20]` 与报告口径要落的内容（清单；正文在 `btest_card.dart`）**：
   - `[D8]` 遍历纪律：`chain` =「只要有下一步就走下一步，先问这里还能往哪走，能走就走，走不动记一条断点（门控 / 无权限 / 数据不足 / 没有下一步）再回头找别的路」；`surface` =「把一个界面的每个东西摸完——每个页签、每个按钮、每个表单、每个筛选、列表滚到底——然后走到下一个界面继续，按界面逐个覆盖，直到本轮声明的范围走完；范围内没摸到的界面 / 分支记进 `uncovered`」；提交类动作之后必查刷新丢失 / 金额勾稽 / 重复提交。
   - `[P20]` 权重顺序：读 run 返回的权重表；`surface` 按条数降序摸，`已修` 的类排末尾仍摸一次；只追加「已修 / 已复现」标记，不删类目、不改条数。
   - 报告首行：操作真实性读数前加 `traversal=<chain|surface>`。
   - 报告表格：加「判定」（`预期不符` / `待确认`）与「建议」两列；run 只写判定，建议由 run 之后的研判回填（§3.10）。
+  - `[D9]` 人工接管：正文逐字见 §3.11；卡片写死两级——**默认「流程中遇到就记进 `uncovered` 并继续」，只有用户点名单独测才「停手 → 一句话 → 等『好了』 → 读附件列表与单据快照」**；共同禁令三条 = ① 不碰文件输入与附件提交（不点 file input、不调 `browser_upload`、不带 `file` 参数）② 不写临时文件 ③ 不调接口绕过——与 §3.11 同三条、与 §6 F12 的读数一一对应。
 - **漂移的第二个兜底**：`btest_run_end` 的返回带收尾检查表（五项机械读数：写回 hash、尾注与断点键存在性、覆盖对账、操作真实性读数、权重表类目齐，§3.3），缺项直接点名字段——把"忘了"变成一次显式点名。
 
 ### 3.3 一轮测试的边界：run
@@ -158,7 +160,7 @@
 | `blockers` | object[] | 每条：`step` / `reason`（被 btest 拒绝的动作与规则原文进 `reason`） |
 | `unconfirmedDiffs` | object[] | 每条：`kind`（`diff` = 两次结果不一致；`pending` = `expectFrom` 弱 / 无来源、待用户判定）/ `caseId` / `step` / `symptom` / `evidence{kind,readout}`（`pending`）/ `runs`（`diff`）/ `expectRef` |
 | `uncovered` | object[] | 每条：`branch` / `why`（`surface` 轮 = **本轮范围内没摸到的界面 / 分支**，不是单个控件；一个界面摸完走到下一个，直到范围走完） |
-| `chainBreaks` | object[] | 每条：`path`（一路怎么走过来的）/ `at`（走到哪一步走不动）/ `reason`（`门控` / `无权限` / `数据不足` / `没有下一步`）/ `verified`（断点前已验什么）/ `cause`（**可空**：一句结论 + 一处 `file:line` 或文档节，由 run 内派出的只读子代理给出，§3.9；缺省 = 没派 / 未查明）；`traversal: chain` 时必带（可为空数组） |
+| `chainBreaks` | object[] | 每条：`path`（一路怎么走过来的）/ `at`（走到哪一步走不动）/ `reason`（`门控` / `无权限` / `数据不足` / `没有下一步`）/ `verified`（断点前已验什么）/ `cause`（**可空**：一句结论 + 一处 `file:line` 或文档节，由 run 内派出的只读子代理给出，§3.9；缺省 = 没派 / 未查明 / **答案迟到**（run 已结束、结论进收尾消息，§3.9））；`traversal: chain` 时必带（可为空数组） |
 | `noVisibleText` | object[] | 每条：`step` / `element`（按可见文字 / label / 角色找不到可点目标、只能靠 `ref`·`selector` 兜底的那一步）；检查表 4-③ 数的就是它 |
 
 返回收尾检查表（**五项，全是机械读数**，不看模型措辞）：
@@ -389,7 +391,7 @@ btest 下 `browser_evaluate` 只有一种合法用途：**读**。三条判据�
 
 #### 3.6.5 写轮（`mode: write`）
 
-全部动作开放，但仍受两处约束：§3.7 的域名与生产闸；§3.6.2 / §3.6.3 的操作真实性判据（写轮不放宽「怎么点、怎么输入」）。
+全部动作开放，但仍受三处约束：§3.7 的域名与生产闸；§3.6.2 / §3.6.3 的操作真实性判据（写轮不放宽「怎么点、怎么输入」）；§3.11 的人工接管禁令——`browser_upload` 在写轮**不被策略闸拒**，可用它把人工上传步「做过」正是那条禁令禁的（读数是 §6 F12 的共同读数，走查，不是宿主计数）。
 
 #### 3.6.6 业务仓文档与代码的读取（F5 后半段）
 
@@ -498,7 +500,10 @@ traversal=surface · mode=write · 操作真实性：入口=1（navigate=1 · op
 
 - **触发**：只在**断点发生的那一刻**派，不是每步派。断点是唯一需要「为什么走不动」这个答案的地方；每步都派会在一轮里堆出几十个子代理，稀释研判、白花成本。
 - **谁去**：只读子代理 `explore`（既有件：`thincoder-core/agent-tools/subagent.mjs:144` 的 `role` 枚举含 `explore`；只读子集 `thincoder-core/agent-tools/subagent-spawn.mjs:248-250`）。派发入口是模型侧的 `subagent` 工具调用（`action:"spawn"` + `role:"explore"`），**不是宿主 API**——宿主不派子代理、不改判定。
-- **派发方式 = 异步派、发现即派、不等待**：按上一条的模型侧 `subagent` 调用**异步**派出——depth 0 默认异步（`thincoder-core/agent-tools/subagent.mjs:235` 取值 `args.async ?? ((ctx.depth ?? 0) === 0)`）：调用立刻返回，主代理继续往下走，报告稍后自己到达。
+- **派发方式 = 异步派、发现即派、不等待**：按上一条的模型侧 `subagent` 调用**异步**派出——depth 0 默认异步（`thincoder-core/agent-tools/subagent.mjs:235` 取值 `args.async ?? ((ctx.depth ?? 0) === 0)`）：调用立刻返回，主代理继续往下走。
+  - **结果怎么回到主代理（实读 2026-10-23）**：条目在子代理收尾后由 `injectAsyncResult`（`thincoder-core/agent-tools/subagent-async.mjs:374`）注入父会话历史，形态是一条 user 角色提醒；
+    同档 `:367-372` 注明这是 auto channel、唯一消费路径，注入时机 = **回合末收拢**（`collectSettledAsync`，`agent.mjs`）或**下一回合起跑前**（`_pendingAsyncResults`）。
+  - **⇒ 答案是「在回合边界」到达的**，不会插进发出它的那一回合中途：run 跨回合时，下一回合拿到答案再补 `cause`；run 已在本回合收尾 ⇒ 结论进收尾消息（与下一条的落点一致）。
   - **发现即派**：走到一个断点就派一个，**不等它的答案**，当场继续走下一步；派出去就继续走，等待才会把一轮拖成串行（用户 2026-10-23 19:07 原话：「主代理发现一个，就派一个先出去，否则等主代理都走完慢死了」）。
   - **主 agent 不因断点停下**：派完继续走；异步派发不等于结束回合，回合只在主代理手上没活时才收尾。
   - **答案落地时机**：报告回来时 **run 未结束 ⇒ 补进该断点的 `cause`**；**run 已结束 ⇒ 结论进收尾消息**，不重开 run、不阻塞。`cause` 保持可空（§3.3 原样）：没等到就是没有这条键，迟到的报告不破坏字段形。
@@ -612,6 +617,58 @@ A chain break may be sent to a read-only subagent (explore, else plan): the mome
 输入不同（F8 = `unconfirmedDiffs[]` 的 `kind: pending`；F10 = `chainBreaks[]` 的断点现场）、产出不同（F8 回填报告「建议」列；F10 写 `cause`）、时点不同（run 后 / run 中）。
 **已带 `cause` 的断点不再进 F8 的待确认清单**——同一件事不重复派单；断点本身仍不进 `issues[]`（KD-23）。
 
+### 3.11 人工接管点：只能人做的动作（F12）
+
+**触发**：浏览器内的**文件选择框（上传 / 附件）**——需求 F12 的唯一情形；系统文件对话框只是同一个框被系统接管时的形态，仍是这一条。判据一句话：agent 能把界面带到那一步，但不能替人完成。验证码这类同样只能由人完成的动作**不在本次判定的覆盖面内**（F12 未含，本档只给文件选择框这一条）。
+
+**两种情形，默认不停（写死）**：
+
+| 情形 | 现场 | 行为 | 报告 |
+|---|---|---|---|
+| A 点名单独测 | 用户明确说「单独测试这个上传功能」 | 带到那一步就**停手**，说一句要传什么，等用户回「好了」；再读附件列表 + 单据快照（`[P07]`）判定，继续接手后面的步骤 | 该步骤行带用户提供的文件说明 |
+| B 流程中遇到 | 整条业务线跑到上传这一步，用户没点名 | **不停**：记下「该步骤需人工上传，本轮未执行」→ 继续走后面的步骤 | 进 `uncovered[]`：`branch` = 该上传步骤，`why` = `需人工上传，本轮未执行`；不是断点、不算失败、不占研判上限 |
+
+**默认 = B**：只有用户点名才算 A。读不出「用户点了这个功能」⇒ 按 B 走——写成「遇到上传就停」会把整条流程卡死在第一个上传框。
+
+**共同禁令（三条，两种情形一样；`[D9]` 与 §6 F12 的验收读数逐条对应）**：
+
+1. **不碰文件输入与附件提交**：不点 `input[type=file]`（点了也只有空对话框）；**不调 `browser_upload`、不以任何带 `file` 参数的调用提交附件**——禁的是「拿文件顶替人工」，不是只禁「造文件」：仓库里现成的文件同样不许。写轮**不例外**（§3.6.5 的「全部动作开放」只说动作类别不再按只读轮拒，不放宽本禁令）。
+2. **不写临时文件充数**（`.thincoder/tmp`、`%TEMP%` 一律不碰）。
+3. **不调接口绕过界面**（`browser_request` 的 `replay` 既有判据照旧拒绝，§3.6.3）。
+
+**情形 A 的机制：停手 = 结束本回合 + 一句话**（写死：不开新工具、不加新状态）：
+
+1. 用一句话说清要传什么：`请你在这里选文件上传（<业务线> · <本步在做什么>），传完回我「好了」。`——这是**模板**：两个槽位 `<业务线>` 与 `<本步在做什么>` 由当步现场填，句子骨架（「请你在这里选文件上传」+「传完回我『好了』」）逐字不变；§6 F12 判据 A 就以这两截为锚。
+2. 结束本回合，等用户回话。回合结束**不动 run**（下一段给实读依据）。
+3. 用户在同一会话回「好了」⇒ 用**同一个 `runId`** 继续：先读附件列表与单据快照（`[P07]`），再走后面的步骤。不重开 run、不重新 `btest_run_start`。
+
+**情形 A 的 run 如何跨回合存活（实读 2026-10-23，不是假设）**：
+
+- run 挂在会话状态上：`BtestState.run`（`lib/browser/btest/btest_mode.dart:87`），由 `start()` 建（同档 `:104-120`，id = `run-<n>`）；各会话的状态存在**进程级静态表**里（同档 `:141` `static final Map<String, BtestState> _states = {};`）。
+- 一个会话一份状态：`lib/chat/chat_session.dart:124` `late final BtestState _btest = _openBtest();`——`late final`，会话内只建一次。
+- 只有两处清掉 run：切出 btest（`chat_session.dart:144` `if (!on) _btest.end();`）与会话销毁（同档 `:784` `BtestMode.release(_btest)`）。**回合结束不清 run**：全仓没有 turn-end 调用 `end()` / `release()`。
+- 会话键在会话打开时定一次、跨回合不变：`lib/kernel/thincoder/thincoder_lifecycle.dart:110-113` 把 `_sessionId` 设为 `combine(_cwd, slot)`；`lib/host_tools/host_mcp_server.dart:105-112` 按会话签发 grant。
+  `:186` 每次调用都带同一个 `grant.sessionId`；`BtestMode.keyOf`（`btest_mode.dart:133-139`）取 `cwd|slot` ⇒ 下一回合的工具调用找到**同一个** `BtestState` 与**同一个** `run`。
+- 结论：只要会话不关、模式不切出，用户回「好了」后 `runId` 仍有效；闸门（`btest_mode.dart:223-256`）按同一 run 的 `env` / `face` / `startUrl` 继续判。
+
+**情形 A 的等待不是断点**：不进 `chainBreaks`、不进 `issues[]`、不计入 F10 的 3 次研判上限（§3.9）。一个 run 里可以有多个人工接管点，逐个进行：停手 → 一句话 → 等「好了」 → 读结果 → 继续。
+报告里该步骤照常出一行：证据 = 用户提供的文件说明 + 上传后读到的附件列表 / 单据快照读数；**不写「预期不符」**——人做的动作不是被测行为，被测的是上传后的绑定与快照。
+
+**情形 B 不需要跨回合**：记一笔就继续，run 一直在同一回合里走；记录落既有的 `uncovered[]`（§3.3 的尾注键之一），不新增字段、不改 `btest_run_end` 检查表。
+
+**没有 A 的停手条件时**（用户不在场 / 页面没有上传入口）：按 B 走——记 `uncovered` 那一条，run 继续走别的路；**不许自己造文件充数**——造文件绕过去，报告里就是一条假读数。
+
+**设计边界**：本设计不改文件服务（不自动建目录、不改异常映射），也不依赖「写临时文件能成功」。接管点没有宿主机械读数（不新增工具 / 状态），判据是走查：那句停手话 + §6 F12 的「共同」三条读数（① 无附件提交动作 ② 无临时文件 ③ 无接口绕道）——三条与上面三条禁令逐条对齐。
+
+**既有件三问（实读 2026-10-23）**：`existing: lib/browser/btest/btest_card.dart:39`（`[D8]` 同级的整条逐字句，卡片纪律的既有形态）· name: `[D9]` · consumers: 模式卡注入后的模型。
+run 的「暂停位」`none found`：`BtestState` 只有 `run` 一个字段（`btest_mode.dart:87`），本设计不新增；文件选择框的宿主拦截 `none found`：不新增闸门，靠 `[D9]` + 走查。
+
+**卡 `[D9]` 的替换句（逐字，实施照抄；加在 `[D8]` 之后）**：
+
+```text
+[D9] Some steps only a person can finish — a file picker (upload, attachment) is the one case here. Two cases. (B) When a normal run reaches that step: do NOT stop — record it in uncovered (branch = the step, why = "needs a manual upload, not run this round") and go on with the next steps. (A) Only when the user asks to test this upload feature on its own: bring the page to that step, say "请你在这里选文件上传（<业务线> · <本步在做什么>），传完回我「好了」。" and end the turn; wait for the user's 「好了」 in the same conversation, then read the attachment list and the record's snapshot and carry on. In both cases, three bans: (1) never stand in for the person at the file input — do not click the file input, do not call browser_upload, do not submit an attachment through any call that carries a file parameter, and a file that already sits in the repository is no exception (a write run's wider action list does not lift this ban); (2) never write a temporary file to fill the gap; (3) never call an API to get around the page. The same runId continues — no new run; case A's wait is not a chain break.
+```
+
 ## 4. 受影响文件清单（现行数 = 2026-10-23 实测，`Get-Content` 口径 = 行尾换行符计数、末行计入；新档预算与 500 门处置见本节「新档行数预算」；增量 = 「SPLIT-5 拆 run 生命周期 + SPLIT-6 抽状态行开关 + F11 持久化」（提交 `662a94d4`，`git show --stat 662a94d4` 可复核）+ `[D8]` 换句同步（提交 `29500e19`）+ 500 门处置拆出 `BtestSettings`（提交 `e9da0798`），均已完成；`—` = 本批不动）
 
 | 文件 | 现行数 | 增量（已完成；拆分 + F11 见提交 `662a94d4`，`[D8]` 见提交 `29500e19`） | 说明 |
@@ -623,7 +680,7 @@ A chain break may be sent to a read-only subagent (explore, else plan): the mome
 | `lib/browser/btest/btest_status_switches.dart` | 154 | ≤ +140 | 状态行的行文本 + 两个开关（从 `composer.dart` 抽出 `_buildBtestStatus` 与 `_btestSwitch`），对外一个 `BtestStatusLine`；F9 已实现的行为原样搬，显示口径按 §9.1 |
 | `lib/browser/btest/btest_weights.dart` | 293 | — | 默认八类（条数 + 检查点）、`<qaRoot>/weights.md` 的路径 / 首建 / 解析 / 类目齐全读数、`已修` 排末尾、标记行逐字匹配（F7.1 已落，本批不动） |
 | `lib/browser/btest/btest_policy.dart` | 417 | — | `BtestTraversal` / `BtestFace` 与 `parse`；入口 / evaluate / 只读面 / 生产闸的判据纯函数（本批不动，开关只改取值来源） |
-| `lib/browser/btest/btest_card.dart` | 129 | +0 行 · 正文 6946 字符（已随 `[D8]` 换句同步修改，提交 `29500e19`） | `[D1]`–`[D8]` / `[J1]`–`[J7]` / `[P01]`–`[P20]` / `[H1]`–`[H3]`；报告口径与两列 |
+| `lib/browser/btest/btest_card.dart` | 129 | +2 行 · 正文 +≈900 字符（`[D9]` 一行，含三条禁令） | `[D1]`–`[D9]` / `[J1]`–`[J7]` / `[P01]`–`[P20]` / `[H1]`–`[H3]`；报告口径与两列 |
 | `lib/browser/btest/btest_expect_file.dart` | 270 | — | 预期文件：路径派生（§3.4 四分支）、case 索引 + hash 基线、写回校验、人改检测（本批不动） |
 | `lib/browser/browser_tools.dart` | 786 | — | 工具 `run` 包装的 btest 闸；`btest_run_start` / `btest_run_end` 注册；`browser_navigate.detour`、`browser_evaluate.readOnly` |
 | `lib/kernel/thincoder/thincoder_kernel.dart` | 480 | — | 权限应答处接 btest 放行判据；回合上下文里挂模式卡 |
@@ -636,11 +693,13 @@ A chain break may be sent to a read-only subagent (explore, else plan): the mome
 | `lib/l10n/app_localizations.dart` | 18045 | 派生 | 生成物，不手改 |
 | `lib/l10n/app_localizations_en.dart` | 11085 | 派生 | 生成物，不手改 |
 | `lib/l10n/app_localizations_zh.dart` | 10490 | 派生 | 生成物，不手改 |
-| `test/browser/btest_policy_test.dart` | 947 | ≤ +45 | F9 用例 #35 / #36 / #39 已落；**本批（F11）**加 #43（三键写回 → 重开会话读回）、#44（键缺失 / 非法值 ⇒ 缺省，读不写）、#45（切回 normal ⇒ `btest.on` 删键 ⇒ 重开 = 关）（随批删） |
-| `test/browser/btest_card_test.dart` | 194 | +25（已随 `[D8]` 换句同步修改，提交 `29500e19`） | 卡内标签计数与报告列（随批删） |
-| `test/browser/btest_weights_test.dart` | 183 | — | 权重表首建 / 缺失 / 删类目 / 标记漂名（随批删） |
-| `test/chat/composer_btest_status_test.dart` | 217 | ≤ +15 | #37（期望改为「重启读回三键」）/ #38 / #40；本批加一条「`btest.mode` 缺键 ⇒ 状态行显示解析后的 `btest.readonly` 值」（随批删） |
-| `test/browser/btest_expect_file_test.dart` | 617 | — | 预期文件用例（F3.2 已落，本批不动；随批删） |
+| `test/browser/btest_policy_test.dart` | 947 | 已落：#41 / #42 / #43 / #44 / #45（计入现值 947）；本轮待落：#47；合计上限 ≤ +45 | 已落 = F9 的 #35 / #36 / #39 + F10 的 #41（`cause` 形状）/ #42（第 4 个断点照常收尾）+ F11 的 #43（三键写回 → 重开会话读回）/ #44（键缺失 / 非法值 ⇒ 缺省，读不写）/ #45（切回 normal ⇒ `btest.on` 删键）；**本轮待落 = #47**（F12 情形 B 的 `uncovered[]` 载荷形状断言，§7 #47 的测试落点）；上限 ≤ +45 覆盖上述全部 |
+| `test/browser/btest_card_test.dart` | 194 | +8（`[D9]` 逐字锚点，含三条禁令；标签计数 38 → 39） | 卡内标签计数与报告列 |
+| `test/browser/btest_weights_test.dart` | 183 | — | 权重表首建 / 缺失 / 删类目 / 标记漂名 |
+| `test/chat/composer_btest_status_test.dart` | 217 | ≤ +15 | #37（期望改为「重启读回三键」）/ #38 / #40；本批加一条「`btest.mode` 缺键 ⇒ 状态行显示解析后的 `btest.readonly` 值」 |
+| `test/browser/btest_expect_file_test.dart` | 617 | — | 预期文件用例（F3.2 已落，本批不动） |
+
+**「随批删」只定义一次**：测试档在收口时**整档删除**——单测是变更时的反馈回路，随批删、只留 §5 一行读数（测试纪律）；表内不再逐行标注。
 
 业务仓零写入：预期文件在独立 QA 仓（§3.4），不在本仓、也不在业务仓的改动面内。
 
@@ -698,8 +757,8 @@ A chain break may be sent to a read-only subagent (explore, else plan): the mome
 
 **新增实现只落 `lib/browser/btest/*`**（mode / settings / run_state / run_end / status_switches / policy / card / expect-file / weights 九个文件）；四个大档里只出现"调用点 + 一个钩子"，不搬已有逻辑（本批唯一的搬运是本表列出的两处拆分）、不改已有签名。
 
-**F10 增量（断点查明）**：`btest_mode.dart` 的检查 2 对 `chainBreaks[].cause` 只加「可缺省 + 出现须非空」的形状校验（≤ +10）；`btest_card.dart` 的 `[D8]` 一句断点可派只读子代理（≤ +3 行；替换后的句子实测 497 字符，比上一版多 288 字符）；`test/browser/btest_policy_test.dart` 加 #41 / #42（≤ +40，随批删）；
-`test/browser/btest_card_test.dart` 随 `[D8]` 换句同步（+25 行，提交 `29500e19`，随批删）。
+**F10 增量（断点查明）**：`btest_mode.dart` 的检查 2 对 `chainBreaks[].cause` 只加「可缺省 + 出现须非空」的形状校验（≤ +10）；`btest_card.dart` 的 `[D8]` 一句断点可派只读子代理（≤ +3 行；替换后的句子实测 497 字符，比上一版多 288 字符）；`test/browser/btest_policy_test.dart` 加 #41 / #42（该档的总增量与拆分见 §4 文件表该行，不在此处另立上限）；
+`test/browser/btest_card_test.dart` 随 `[D8]` 换句同步（+25 行，提交 `29500e19`）。
 
 **登记**：SPLIT-1…6 = 拆分登记项；SPLIT-5 / SPLIT-6 本批落地，SPLIT-1…4 不在本批落地；`btest_mode.dart` 的 500 门处置缝（`BtestSettings` → `btest_settings.dart`）已落地（提交 `e9da0798`）。台账写权不在设计位，所以本批只在档内登记并在回执点名，由主编排方落台账行（挂本批 #149 的后续批）。
 
@@ -739,12 +798,12 @@ A chain break may be sent to a read-only subagent (explore, else plan): the mome
 | KD-29 | `chain` 断点查明：只在断点处派只读子代理（`explore`，退 `plan`）、**派出后不等回答**继续走，一次 run 最多 3 次；结论在 run 内回来 ⇒ 写 `chainBreaks[].cause`（可空），run 已结束 ⇒ 进收尾消息（不重开）；`reason` 四值枚举不变 | ① 每步派：一条业务线几十步，每步一个子代理会把一轮堆成几十个，稀释研判、白花成本；② 宿主 API 派：模型的 `subagent` 工具本来就是模型侧装配（§3.10 实读），宿主另开一条不经模型的派发路径 = 两套派发语义；③ 子代理改 `reason` / 判定：判定权在用户（F3.1 / F8 同一条线）；④ 不设上限：断点多的业务线同样会堆出几十个子代理，结论也收不完；⑤ 断点既派查明又进 F8：同一件事两次派单 |
 | KD-30 | 模式与两个开关跨重启：三个全局键 `btest.on`（bool）/ `btest.traversal`（`chain` / `surface`）/ `btest.mode`（`readonly` / `write`），与既有四个 `btest.*` 键同处 `BtestSettings`；会话打开时读成 `BtestState` 初值，每次改值写回自己的键；写失败只 `debugPrint`、不阻断 UI；键缺失 / 值非法 ⇒ 回落缺省 | ① 会话设置 map（`kernelContext.settings`）：只随会话走，新建会话仍是默认，写入要动工作区真相源（台账 #153 的结论）；② 单一个 `btest` 对象键：三个值塞进一个键，改一个要整组重写、缺省解析耦合，读不出「哪个值缺」；③ 写失败弹错 / 回滚界面：设置写失败（文件被占用 / 不解析）不该吞掉用户刚做的操作——界面保持已改值，下一会话读到旧值即可（与 `browser_page.dart` 既有写回同口径）；④ 非法值自动改写成缺省：悄悄改写没人能看出被改过，读时回落 + 不写回，让文件保持用户原样 |
 
-## 6. 验收对照（回指需求 F1–F11 · F2.1 · F3.1 · F3.2 · §5 验收 1–7）
+## 6. 验收对照（回指需求 F1–F12 · F2.1 · F3.1 · F3.2 · §5 验收 1–7）
 
 | 需求 | 设计落点 | 可跑判据 |
 |---|---|---|
 | F1 模式切换 | §3.1 · §3.2 | 走查：切到 btest → composer 出现状态行；切回 normal → **不残留**：状态行消失、下一回合起不再按 btest 纪律行事（不自动 start run、不套三尾注、不受只读面约束）；**计数差判据（任意次开→关→再开之后仍成立）**：`D = count("btest-mode-card v1") − count("btest-mode-card-off v1")` = 1（模式内）/ 0（已退出）；读数为**回合装配完成时**的值：宿主 `on` ⇔ `D = 1`、宿主 `off` ⇔ `D = 0`（§3.2「判定的时刻」）；`grep` 形态：`echo $(( $(grep -c "btest-mode-card v1" <会话记录>) - $(grep -c "btest-mode-card-off v1" <会话记录>) ))` |
-| F2 模式卡 | §3.2 | ① 计数差 `D = 1`，第二条消息后仍 = 1（同一会话内多投一张即失败；`grep` 形态同 F1 行）；② 内容清单：`btest_card_test` 断言 `[D1]`–`[D8]` 八个、`[J1]`–`[J7]` 七个、`[P01]`–`[P20]` 二十个、`[H1]`–`[H3]` 三个（共 38 个）标签齐全，缺一即失败 |
+| F2 模式卡 | §3.2 | ① 计数差 `D = 1`，第二条消息后仍 = 1（同一会话内多投一张即失败；`grep` 形态同 F1 行）；② 内容清单：`btest_card_test` 断言 `[D1]`–`[D9]` 九个、`[J1]`–`[J7]` 七个、`[P01]`–`[P20]` 二十个、`[H1]`–`[H3]` 三个（共 39 个）标签齐全，缺一即失败 |
 | F3 预期落盘 | §3.3 · §3.4 | ① `btest_run_start` 返回含绝对路径 + case 索引 + 内容 hash（缺一即实现不全）；② 跑完一条业务线后预期文件（§3.4 派生路径）存在，报告每条「预期不符」能指到其中一条 `## CASE-`；③ 检查表的 `written` / `not written` 与 hash 基线读数一致 |
 | F3.2 落点 = 独立 QA 仓 | §3.3（`expectFile` 不入参 · 返回项 2）· §3.4（四分支派生 + 建目录）· §9（`btest.qaRoot`） | ① 跑一次后预期文件出现在 `<qaRoot>/<仓名>/<业务线>.md`：未配 `qaRoot` ⇒ 会话工作区根下的 `qa`（`repoRoot` 是工作区根的严格后代 = 分支 2，按路径段比较；`cwd == repoRoot` ⇒ 父目录兜底 = 分支 3），已配 ⇒ 用之（§7 #24–#28）；② 返回项 2 是解析后的绝对路径 + 来源标记（`设置值` / `工作区根` / `父目录兜底`）+ 降级原因（`父目录兜底` 时必带，分支 3 / 4 在返回里可分辨）；③ **一个工作区一个 QA 根**：同一 `cwd` 下两个不同深度的仓（`repos\v2-booking` 与 `repos\clientA\v2-timecharter`）⇒ 返回的两个 `qaRoot` 逐字相等（§7 #26）；④ 业务仓零写入（`qaRoot` ∉ `repoRoot` 时成立）：跑完 `git -C <repoRoot> status --porcelain` 为空；`qaRoot` 被配进 `repoRoot` 内 ⇒ 返回项 2 点名（§3.4 分支 1）；⑤ 不建 git 仓：`qaRoot` 下无 `.git`（§7 #24） |
 | F3.1 预期带出处 | §3.4（三级来源 + 三条硬规则）· §3.8 | ① 预期文件每条 case 有 `expectFrom`，级别 ∈ {强, 中, 弱} 或 `无权威来源`，引用形合 §3.4 的表；② 对读写回前后的文件：级别只降不升（中 / 弱 不得被写成强）；③ `无权威来源` 的 case 在报告「需要用户补规则的清单」里逐条点名 |
@@ -756,8 +815,9 @@ A chain break may be sent to a read-only subagent (explore, else plan): the mome
 | F7.1 权重表 | §3.9（权重表）· §3.3 返回项 6 · 检查 5 | ① 首次 run 后 `<qaRoot>/weights.md` 在盘：八类 × 条数 × 检查点齐、来源 = `file`、无 warning（§7 #33）；② 删文件再起 run ⇒ 文件重建、来源 = `file`、无 warning（与首次同一读数，§3.9）；文件读不出 / 写不出 ⇒ `built-in` + warning（#33）；③ 删一个类目 ⇒ 检查 5 warning 点名该类（#33）；④ 顺序：surface 按条数降序、`已修` 的类排末尾仍摸一次；提交类动作之后三项必查（#29 · 走查） |
 | F8 待确认研判 | §3.10 · §3.8（判定 / 建议列）· §3.3（`kind: pending`） | ① 弱 / 无来源项在表内 `判定=待确认`、`严重度=—`（#34）；② run 后会话主代理派 `explore` 子代理（装配点见 §3.10 三问行），逐条回填「建议」= 倾向 + 理由 + 优劣势（#34）；③ 判定列与 `expectFrom` 级别不变（子代理不改判定）；④ 子代理不可用 ⇒ `待研判 · <原因>`，报告照发（走查） |
 | F9 两个开关（遍历 / 写） | §9.1 · §3.3（优先级） | ① 点「深度」→ 起 run（不带 `traversal`）⇒ 返回项 1 与报告首行都是 `traversal=chain`（§7 #35）；开关 = `广度` + 调用带 `traversal: chain` ⇒ 两处仍是 `traversal=chain`（显式压过开关，#36）；② 写开关：`只读` ⇒ `browser_click` 被拒并点名 `mode: readonly`，`允许写` ⇒ 放行；③ 跨重启保持（#37 / #43）：三个键在盘 ⇒ 重开会话读回同值（状态行与起 run 缺省一致）；键缺失 ⇒ 回落缺省（遍历 = `广度`；写 = 由 `btest.readonly` 初始化，默认 `只读`，设置关掉「默认只读」⇒ `允许写`；#44）；④ 点选写回会话状态（#38）：无 run 文案随开关变，运行中文案随 run 定值变；⑤ 中 run 点击只对下一次 run 生效，本 run 的 `traversal` / `mode` 不变（#40） |
-| F10 断点查明 | §3.9（断点派只读子代理 · 异步派发）· §3.3（`chainBreaks[].cause`）· §3.10（与 F8 的分工） | ① `chain` 轮每个断点都当场派一个只读子代理且**不等回答**；回答在 run 内到达 ⇒ 该条带 `cause`（一句结论 + `file:line` 或文档节），`reason` 仍是四值之一（§7 #41）；② 同一条 run 第 4 个及以后的断点不派，`cause = 未查明（达到本轮研判上限）`，run 正常收尾（§7 #42）；③ `explore` / `plan` 都不可用 ⇒ `cause = 未查明（<原因>）`，报告照发（走查）；④ 已带 `cause` 的断点不进 F8 待确认研判（§3.10）；⑤ 派发方式 = 异步：断点当下派出，同一步之后的动作不等待它（走查：会话记录里 `subagent` 调用当下返回、其后的动作先于回答发生）；回答在 run 结束后到达 ⇒ 结论进收尾消息、run 不重开（走查：收尾消息 + 报告「链断点」块）；`cause` 可缺省——迟到的回答不破坏 §3.3 字段形 |
+| F10 断点查明 | §3.9（断点派只读子代理 · 异步派发）· §3.3（`chainBreaks[].cause`）· §3.10（与 F8 的分工） | ① `chain` 轮**上限内（≤3 次）**的每个断点都当场派一个只读子代理且**不等回答**（① 管前三个，第 4 个起看 ②，两格不互斥）；回答在 run 内到达 ⇒ 该条带 `cause`（一句结论 + `file:line` 或文档节），`reason` 仍是四值之一（§7 #41）；② 同一条 run 第 4 个及以后的断点不派，`cause = 未查明（达到本轮研判上限）`，run 正常收尾（§7 #42）；③ `explore` / `plan` 都不可用 ⇒ `cause = 未查明（<原因>）`，报告照发（走查）；④ `chainBreaks[]` 的条目（含带 `cause` 的）不出现在 `unconfirmedDiffs[]` 与报告的「建议」列里（§3.10）——读数 = 两个键的条目逐条对照 + 报告表逐行核对，不是「看它带没带 `cause`」；⑤ 派发方式 = 异步：断点当下派出，同一步之后的动作不等待它（走查：会话记录里 `subagent` 调用当下返回、其后的动作先于回答发生）；回答在 run 结束后到达 ⇒ 结论进收尾消息、run 不重开（走查：收尾消息 + 报告「链断点」块）；`cause` 可缺省——迟到的回答不破坏 §3.3 字段形 |
 | F11 模式与两个开关跨重启 | §9.1（持久化）· §3.1 · §3.3（初值） | ① 写回：点烧瓶 / 点「深度」/ 点「允许写」后 `settings.json` 的 `btest.on` = `true`、`btest.traversal` = `chain`、`btest.mode` = `write`（§7 #43）；② 重开会话读回：状态行 = `btest · 待开始 · 深度 · 允许写`，起 run 不带参数 ⇒ 返回项 1 与报告首行都是 `traversal=chain` / `mode=write`（#43）；③ 键缺失 / 值非法 ⇒ 回落 关 / `广度` / 写开关未点选（取值时解析 `btest.readonly`，§9.1「写初始」），不报错、不阻断、不改写键（#44）；④ 读取不写：只开一次会话不点任何开关 ⇒ 三个键不出现（#44）；⑤ 写失败不阻断 UI：`settings.update` 抛错 ⇒ 只一条 `debugPrint`，界面与本会话照常（走查；与 `browser_page.dart` 同口径，§9.1）；⑥ 退出删键：切回 normal ⇒ `btest.on` 键被删（写 `null`）⇒ 关掉会话重开 = 关，不读回旧的 `true`（#45） |
+| F12 人工接管点 | §3.11 · §3.2（`[D9]`） | **情形 A（点名单独测）**：界面停在上传那步 + 出现「请你在这里选文件上传…」一句，本回合结束（该句后无工具调用）；用户回「好了」⇒ 同一 `runId` 继续（后续调用不报「no active run」，`btest_run_end` 的 `runId` = run_start 返回的那个），读附件列表 + 单据快照，报告该步骤带用户提供的文件说明；`chainBreaks` 不含该步（§7 #46）。**情形 B（流程中遇到）**：不停，后续步骤照常走完（走查：该步后仍有工具调用）；报告 `uncovered[]` 一条点名该步骤（`why` = `需人工上传，本轮未执行`），不进 `chainBreaks`、不占 F10 的 3 次上限（§7 #47）。**共同（三条禁令各一条读数，与 §3.11 逐条对应）**：① 无附件提交动作——该步骤的调用记录里没有 `browser_upload`、没有带 `file` 参数的调用、也没有目标为 `input[type=file]` 的点击（走查工具调用参数；写轮 `browser_upload` 本就被策略闸放行，这一项只能看调用记录）；② 无临时文件——`.thincoder/tmp` 无新档、`%TEMP%` 无本批文件；③ 无接口绕道——`browser_request` 的 `replay` 放行 = 0（§3.3 检查表 4-② 的计数） |
 | 验收 2（证据可复核） | §3.8 | 任取一条问题，按「证据」列能在页面上重读出同一读数 |
 | 验收 3（预期来自盘上且带出处） | §3.4 · §3.8 | 每条「预期不符」的「预期出处」列非空、级别 ∈ {强, 中}、引用能落到档 + 节 / 冒烟清单行 / issue 号；`expectFrom` 指向代码现状或为 `无权威来源` 的 case 不出现在「预期不符」行里（§7 #16） |
 | 验收 4（来源可追溯） | §3.5 | 每条 case 的 `origin` 能在 `git -C <repoRoot> log` 里找到，或明确写 `无（存量）` |
@@ -816,6 +876,9 @@ A chain break may be sent to a read-only subagent (explore, else plan): the mome
 | 43 | 正常 | 点烧瓶切进 btest；点「遍历」选 `深度`；点「写」选 `允许写`；关掉会话重开 | `settings.json` 三键 = `true` / `chain` / `write`；重开后状态行 `btest · 待开始 · 深度 · 允许写`；起 run 不带 `traversal` / `mode`（dev）⇒ 返回项 1 = `traversal=chain` / `mode=write` | `btest_policy_test`（键读写 + 初值）· `composer_btest_status_test`（状态行读回） |
 | 44 | 边界 | 三键都不存在（全新用户）；另一现场 `btest.traversal` = `depth`、`btest.mode` = `maybe`（两个都是非法值）、`btest.on` = 字符串 `'yes'` | 读回 = 关 / `广度` / 写开关**未点选**（取值时解析 `btest.readonly`：true ⇒ 只读，§9.1）；非法值按「键不存在」处理，不报错、不阻断、不自动改写该键；只开一次会话、不点任何开关 ⇒ 三个键不出现（读取不写） | `btest_policy_test` |
 | 45 | 边界 | 切进 btest（`btest.on` 写成 `true`）→ 切回 normal → 关掉会话重开 | `settings.json` 里 `btest.on` 键被删（写 `null`）；重开会话状态行不出现、模式 = 关；不读回旧的 `true` | `btest_policy_test`（删键 + 读回） |
+| 46 | 正常 | 情形 A：用户说「单独测试上传功能」→ agent 把界面带到上传那步、停手说一句，结束本回合；用户在同一会话回「好了」→ 读附件列表 + 单据快照后继续 | 同一 `runId` 继续（`btest_run_end` 的 `runId` = run_start 返回的那个）；`chainBreaks` 不含该步；报告该步骤行带用户提供的文件说明；§6 F12 共同三条读数全过（无附件提交动作 / 无临时文件 / 无接口绕道） | 走查（对话记录 + 报告） |
+| 47 | 边界 | 情形 B：整条流程走到上传步骤，用户没点名 | **不停**：后续步骤照常走完；报告 `uncovered[]` 一条（`branch` = 该上传步骤，`why` = `需人工上传，本轮未执行`）；不进 `chainBreaks`、不占研判上限；三条禁令读数全过（不点 file input、不调 `browser_upload`、不带 `file` 参数 / 不造文件 / 不调接口） | `btest_policy_test`（`uncovered` 载荷形状）+ 走查 |
+| 48 | 错误 | 情形 A 停手后，用户切出 btest 再切回，然后回「好了」 | run 已随切出作废（`lib/chat/chat_session.dart:144`）：浏览器调用报「no active run」；agent 说明接管点不跨 run，重起 run 后重新走到该步骤；不静默续用旧 `runId` | 走查 |
 
 ## 8. 边界（本批不做）
 
