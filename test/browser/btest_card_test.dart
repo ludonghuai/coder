@@ -66,14 +66,39 @@ void main() {
       expect(BtestCard.text, contains('待研判 · <原因>'));
     });
 
-    test('a chain break sends its why to a read-only subagent, capped (§3.9, §7 #41/#42)', () {
+    test('a chain break is sent at once and never waited on (§3.9, §7 #41/#42)', () {
       // The rule's only carrier is the card: the host judges the cause's
       // shape alone (§3.3, check 2), so dropping these sentences would let
       // the behaviour go with nothing failing.
       expect(
         BtestCard.text,
-        contains("write it into that break's cause"),
-        reason: 'a break’s finding goes into cause',
+        contains('the moment a break is recorded, send one and keep walking'),
+        reason: 'a break is sent the moment it happens',
+      );
+      expect(
+        BtestCard.text,
+        contains('never wait for its answer'),
+        reason: 'an answer never blocks the walk',
+      );
+      expect(
+        BtestCard.text,
+        contains("goes into that break's cause"),
+        reason: 'an answer that arrives before the run ends lands in cause',
+      );
+      expect(
+        BtestCard.text,
+        contains('goes into your closing message'),
+        reason: 'an answer that arrives after the run ends lands in the report',
+      );
+      expect(
+        BtestCard.text,
+        contains('do not reopen the run or block on it'),
+        reason: 'a late answer never reopens the run',
+      );
+      expect(
+        BtestCard.text,
+        contains('a late answer simply leaves cause absent'),
+        reason: 'cause stays optional',
       );
       expect(
         BtestCard.text,
