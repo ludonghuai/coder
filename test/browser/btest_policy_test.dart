@@ -943,5 +943,29 @@ void main() {
       expect(answer, isNot(contains('cause is empty')));
       expect(state.run, isNull, reason: 'the run closes as usual');
     });
+
+    test('an uncovered step rides the payload; the checklist takes it (§7 #47)', () async {
+      // Case B (§3.11): the run walks past the upload step and records it in
+      // uncovered. The host's share is the payload's shape — the entry carries
+      // branch and the step's why, the key reads as present (no missing-key
+      // warning), it is not a chain break, and the run closes as usual.
+      await BtestTools.all.first.run(startInput(), call);
+      final answer = '${await end({
+        'uncovered': const <Object?>[
+          {
+            'branch': '订舱详情 → 附件上传',
+            'why': '需人工上传，本轮未执行',
+          },
+        ],
+      })}';
+      expect(answer, contains('blockers / unconfirmedDiffs / uncovered 都在'));
+      expect(answer, isNot(contains('the payload lacks')));
+      expect(
+        answer,
+        isNot(contains('chainBreaks')),
+        reason: 'case B is not a chain break (§3.11)',
+      );
+      expect(state.run, isNull, reason: 'the hand-off does not stop the run');
+    });
   });
 }

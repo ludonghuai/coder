@@ -54,9 +54,13 @@ void main() {
       // Case B is the default: the run goes on and the step is recorded.
       expect(BtestCard.text, contains('do NOT stop'));
       expect(BtestCard.text, contains('record it in uncovered'));
+      // The why is a datum of the report, not prose: §3.11 fixes it in
+      // Chinese (one string for the card, §6 F12 and §7 #47).
+      expect(BtestCard.text, contains('why = 需人工上传，本轮未执行'));
       expect(
         BtestCard.text,
-        contains('needs a manual upload, not run this round'),
+        isNot(contains('needs a manual upload, not run this round')),
+        reason: 'the old English value is gone (§3.11 取值语种)',
       );
       // Case A stops only when the user asks for it, and the same run carries
       // on after the wait — the wait is not a break.

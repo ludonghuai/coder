@@ -1875,6 +1875,53 @@ lib/ide/git/git_repository.dart
 2. `:697` 记 `test/browser/btest_card_test.dart`「194 / +8」，实测 194 → 281（+87）。
 3. 同一机制两个 `why` 取值（见上抛 1）：`:666` 的「实施照抄」与 `:629` / `:820` / `:880` 的验收读数互相打架。
 
+## 实施记录（eng-coder · 2026-10-23 · `[D9]` why 取值同步设计中文值 + #47 `uncovered` 载荷形状断言）
+
+**范围**：设计档 `docs/design/browser-biz-test.md:669`（fenced `[D9]` 块）与 `:672`（取值口径句）。只改三个档——`lib/browser/btest/btest_card.dart`、`test/browser/btest_card_test.dart`、`test/browser/btest_policy_test.dart`。
+未改 `docs/**`；未动 `btest_mode.dart` / 其他 `lib/**`；`lib/ide/git/git_repository.dart` 的未提交改动在本轮开始前就在，不是本轮的活。
+
+**改动与实测读数**
+
+| 文件 | 改动 | 读数 |
+|---|---|---|
+| `lib/browser/btest/btest_card.dart` | `[D9]` 内 `why = "needs a manual upload, not run this round"` → `why = 需人工上传，本轮未执行`（无引号） | `[D9]` 行 1077 → 1045 字符；与设计 `:669` 逐字符相等（1045/1045，`VERBATIM=true`）；除该取值外零字符变化（公共前缀 215 字符、公共后缀 819 字符逐字相等；1077 − 43 + 11 = 1045）；卡 131 行（改前改后同） |
+| `test/browser/btest_card_test.dart` | 旧英文值断言改为中文值断言（`contains('why = 需人工上传，本轮未执行')`）+ 旧英文值不在的负断言（带 reason） | 272 → 276 行（+4） |
+| `test/browser/btest_policy_test.dart` | 新增 #47：`uncovered[]` 一条（`branch` = 上传步骤、`why` = `需人工上传，本轮未执行`）经 `btest_run_end` 收尾 | 947 → 971 行（+24，设计 §4 `:698` 的上限 ≤ +45 内） |
+
+**#47 断言摘要**（`test/browser/btest_policy_test.dart:947-969`）：surface run 送 `uncovered: [{branch: '订舱详情 → 附件上传', why: '需人工上传，本轮未执行'}]`
+⇒ ① 检查 2 读作 `blockers / unconfirmedDiffs / uncovered 都在`；② 无 `the payload lacks` 告警；③ 答复不含 `chainBreaks`（情形 B 不是断点）；④ run 正常收尾（`state.run == null`）。
+宿主对 `uncovered` 只判「是 List」（`btest_run_end.dart:73`），条目形状按设计 §3.11 不进宿主检查表；本用例断言到宿主能判的上限。
+
+**验收实测（本机，命令 + 结果行）**
+
+| # | 验收点 | 实测 |
+|---|---|---|
+| ① | `[D9]` 取值改中文、其余逐字不动 | 1077 → 1045；与设计 `:669` `VERBATIM=true`；唯一差异 = 旧值（含引号 43 字符）→ 新值（11 字符） |
+| ② | 卡 `[D9]` 之外零字符变化 | `git diff -U0` 该档 = 1 hunk / 1 − 行 / 1 + 行，差异只在该行取值；卡 131 行不变 |
+| ③ | 卡测试同步 | 中文值断言 + 旧英文值负断言；全仓 `**/*.dart` 搜旧英文只剩该负断言一处 |
+| ④ | `dart analyze` 零 issue | `dart analyze` → `Analyzing baocode...` / `No issues found!` |
+| ⑤ | 测试门 | 改前 `00:02 +133 ~7: All tests passed!`；改后 `00:02 +134 ~7: All tests passed!`（+1 = 新 #47）；红项两次均空；7 条跳过同源（`BAO_BROWSER_LIVE` 未设 2 条 + 平台相关 5 条） |
+| ⑥ | 卡行数 | 131（改前改后同）；正文 8025 → 7993 字符（Dart `String.length` 口径，−32） |
+
+**自行决定项（每条一句理由）**
+
+1. 卡测试保留「旧英文值不在」的负断言而不是只断言中文：正向断言挡不住中英并存，负断言把旧写法钉死；全仓只有这一处仍出现旧串，是断言不是残留。
+2. #47 用例不断言条目字段被宿主读回：宿主对 `uncovered` 只判 List（`btest_run_end.dart:73`），按设计 §3.11「不改 `btest_run_end` 检查表」不新增字段校验；断言到「键在、非断点、run 收尾」即宿主能判的全部。
+3. 不为 `why` 字面量抽共享常量（`BtestCard.uncoveredWhy` 插值进卡正文）：卡档要求与设计 `:669` 逐字比对，纯字面量便于核对；三处拷贝的漂移风险已由卡测试正负两条断言钉住，可选改进记在评审 🔵。
+
+**内部审计与代码评审**
+
+- explore 偏差审计（对照设计 `:629` / `:669` / `:672` / `:822` / `:882` 与任务书验收 ①–⑥）：`VERDICT: clean`，0 偏离；四类偏差（部分实现 / 静默简化 / 文档漂移 / 清单外改动）均未发现，余下为文档侧读数提示。
+- advisor 代码评审（type=code，第 1 轮）：`VERDICT: pass`（0 🔴 · 1 🟡 非 must-fix · 2 🔵 可选）。🟡 = 设计 §4 `:685` / `:698` / `:699` 三处读数在本轮后过期（父层 / 设计位回填，`docs/**` 本轮不动）；🔵 = #47 用例的断言上限说明、`why` 字面量三处拷贝。
+- 修复轮次：0（无 must-fix；两条 🔵 未改，理由见自行决定 2 / 3 与下方设计漂移）。**terminal state = `clean`**。
+
+**设计漂移（本段不改文档，交父层 / 设计位）**
+
+1. `docs/design/browser-biz-test.md:685` 记卡正文 `+1079 字符（6946 → 8025）`；本轮取值改短 32 字符 ⇒ 现为 7993（增量为 +1047），该读数已过期。
+2. 设计 `:698` 仍写 policy 测试「现值 947 / 本轮待落：#47」；本轮已落、实测 971 行（+24，≤ +45 内）。
+3. 设计 `:699` 记卡测试 `194 → 281`；本轮实测改前 272 → 改后 276——281 在本轮之前即与盘面不符（本段只报读数，未改文档）。
+4. 设计 `:672` 的取值口径句与卡已一致，无需改动。
+
 ## §6 验证与收口（父代理）
 
 ## 交付验证（主 agent，2026-10-23 01:10）
