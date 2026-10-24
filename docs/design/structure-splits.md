@@ -82,6 +82,9 @@
 - **新档落点与命名**：与 owner 同级的用 `<owner>_<face>.dart`（kernel · composer）；owner 有专属子目录的用 `<face>.dart` 落在该子目录（chat_session ⇒ `lib/chat/session/`）。
 - **首行** `part of '<相对路径>';`：同级写 `part of '<owner>.dart';`；子目录写 `part of '../<owner>.dart';`（例：`lib/chat/session/mode_state.dart` 首行 `part of '../chat_session.dart';`）。
 - 内容 = 顶层私有函数 `<name>Of(Owner owner, …)`；owner 类里留**一行委托**，签名与可见性逐字不变；`static` 方法写成 `static X _x(…) => _xOf(…)`。
+- **原名已以 `Of` 结尾时**：委托函数写成 `<name>OfOf`，原名与签名一律不动。实例：`_dropModelOf` ⇒ `_dropModelOfOf`（`lib/kernel/thincoder/thincoder_kernel.dart:323` / `lib/kernel/thincoder/thincoder_turns.dart:178`）。
+  另一实例：`_dropTitleOf` ⇒ `_dropTitleOfOf`（`lib/kernel/thincoder/thincoder_kernel.dart:350` / `lib/kernel/thincoder/thincoder_title.dart:33`）。
+  理由：原名是行为名，削成 `_dropModel` 会改签名（违反 §1 功能点 6）；双 `Of` 只是委托函数的机械后缀，可逐条核对。
 - 搬动只做三件事：① 函数体移到新档；② 对 owner 成员的引用加 `owner.` 前缀；③ 原位置换成一行委托。
 - **字段与后备存储留 owner**：类字段（含 `static const`、`late final`、后备集合）不能跨档；缝表点名的字段只搬读它的投影方法，字段本身不动。
 - **注解随委托逐字保留**：`@override` / `@protected` / `@visibleForTesting` 等注解跟着委托行，一个不改。
@@ -102,7 +105,11 @@
 
 ### 4.1 kernel（1461 → 目标 ≤500）
 
-现状：import 26（`:1-28`：26 条 import + 分组空行 `:5` / `:9`）· `part` 指令 1（`:30`）· `class ThincoderKernel` `:42-1386`（1345）· 顶层函数 `:1388-1461`（74）。
+**实测（2026-10-23，第 2 步已落，`part` ×9）**：主档 **480**（≤500）· 九档 170 / 111 / 187 / **279** / 84 / 131 / 117 / 48 / 98（最大 279 ≤500）· 53 个成员出档、53 条委托共 **113** 行 · 逐块比对 `diffs: 0` · 反推校验 233 / 233 非空行一致。
+
+委托实测 ≈2.13 行/成员（113 ÷ 53；`owner.` 前缀与折行所致）。原估「≈45 行委托」按一成员一行计，低估一倍有余；§4.4 的 chat_session 预算按同一实测口径重算。
+
+拆分前现状（下列坐标均为拆分前口径）：import 26（`:1-28`：26 条 import + 分组空行 `:5` / `:9`）· `part` 指令 1（`:30`）· `class ThincoderKernel` `:42-1386`（1345）· 顶层函数 `:1388-1461`（74）。
 
 | # | 段 | 搬什么符号（点名） | 现坐标 | 搬出 | 新档（估） |
 |---|---|---|---|---|---|
@@ -116,8 +123,8 @@
 | 8 | 事件接收 | `_receive` `_noteFirstFrame` `_notification` `_content` `_turnKey` | `:1163-1170` `:1219-1234` `:1235-1259` | ≈49 | `thincoder_inbound.dart` ≈60 |
 | 9 | 图像与上下文工具 | `_contexts` `_imageExtension` `_runId` `_letters` `_random`（`imageMaxBytes` / `turnMaxBytes` 为 `static const` 字段，留 owner） | `:1288-1387` | ≈100 | `thincoder_images.dart` ≈115 |
 
-- **留在主档**：import（26）· `part` 指令（10，含既有 `thincoder_choices`）· 类头/构造/字段/getter（`:42-238`，197）· 选择面接线（`:1260-1287`，28）· 约 45 行委托 ⇒ **估 310–360 行 ≤500**。
-- 九个 part 档每个 ≤500（最大 `thincoder_turns.dart` ≈320）。
+- **实测留档（主档 480 ≤500）**：import 26 · `part` 指令 10（含既有 `thincoder_choices`）· 类头/构造/字段/getter · 选择面接线 · 53 条委托 113 行；另含段间空行与指路注释。
+- 九个 part 档每个 ≤500（实测最大 `thincoder_turns.dart` **279**）。
 - **对外暴露**（part 档不是 import 目标，下列每一项仍从原路径 `lib/kernel/thincoder/thincoder_kernel.dart` 可见）：
 
 | 组 | 公开成员 |
@@ -181,13 +188,21 @@
 | 1 | 模式与设置投影（SPLIT-3） | `KernelChoice` `ModelSettingChoice` + `kernelLocked` `_kernelOptions` `kernelChoice` `setKernel` `_readSwitch` `models` `switchRestarts` `pendingModel` `_btestId` `_btestOption` `modes` `permissions` `modelSettings` `_modelSettings`（字段，留 owner） `selected` `_choice` | `:52-105` `:497-658` | ≈210 | `lib/chat/session/mode_state.dart` ≈220 |
 | 2 | 内核能力投影 | `health` `loadingHistory` `hasEarlierHistory` `loadingEarlier` `loadEarlier` `sessionId` `stopped` `restart` + `commands` `suggestFiles` `context` `stats` `refreshUsage` `usageLimitResetsAt` `usageLimitApplies` `continuesAfterLimit` `acceptsImages` `acceptsEditorContext` `promptSuggestion` `mcpServers` `refreshMcpServers` `setMcpServerEnabled` `reconnectMcpServer` `authenticateMcpServer` `canEditMessages` `canQueue` `canRename` `renameConfirmed` `ownsTitle` `pendingTitle` `canFork` `fork` | `:433-472` `:659-811` | ≈230 | `lib/chat/session/kernel_proxy.dart` ≈240 |
 | 3 | 转写投影 | `isStreaming` `isUnprompted` `canSend` `pendingInteraction` `awaitingPlan` `canStartPlan` `startPlan` `lastTurnEndSeq` `lastReply` `lastTurnInterrupted` `lastTurnUnprompted` `itemCount` `itemAt` `_statusVisible` `tasks` `terminalTasks` `stopTask` `canStopTasks` `moveToBackgroundAt` `moveToBackgroundOf` `commandOf` `stopAt` `stopOf` `_runningTask`（字段，留 owner） `todos` `goal` `_dismissedGoal`（字段，留 owner） `dismissGoal` `setGoal` `clearGoal` | `:812-1079` | ≈240 | `lib/chat/session/transcript_proxy.dart` ≈250 |
-| 4 | 文件改动与回退投影 | `root` `fileChanges` `filesSeen` `_filesSeen`（字段，留 owner） `paths` `_absolute` `_pendingEdits`（字段，留 owner） `keepAllChanges` `keepChanges` `undoAllChanges` `revertTurn` `canPlanRevert` `plansReverts` `revertPlan` `applyRevert` `undoChanges` `originalOf` | `:1080-1244` | ≈150 | `lib/chat/session/file_edits.dart` ≈160 |
+| 4 | 文件改动与回退投影 | `root` `fileChanges` `filesSeen` `_filesSeen`（字段，留 owner） `_pendingEdits`（私有 getter，留 owner） `keepAllChanges` `keepChanges` `undoAllChanges` `revertTurn` `canPlanRevert` `plansReverts` `revertPlan` `applyRevert` `undoChanges` `originalOf` | `:1080-1244` | ≈133 | `lib/chat/session/file_edits.dart` ≈143 |
+| 5 | 路径助手 | `paths` `_absolute` | `:1132-1148` | ≈17 | `lib/chat/session/file_paths.dart` ≈25 |
+| 6 | 发送上下文助手 | `lastImageNumber` `_editorNotes` `_contexts` | `:1250-1269` `:1286-1295` `:1297-1307` | ≈41 | `lib/chat/session/send_contexts.dart` ≈50 |
+| 7 | 会话命令 | `stop` `answer` `rename` `discardChanges` | `:1452-1475` | ≈21 | `lib/chat/session/session_commands.dart` ≈30 |
+| 8 | 内核连接与视图挂载 | `_connect` `_dropWarm` `attach` `detach` | `:232-241` `:250-255` `:476-493` | ≈33 | `lib/chat/session/lifecycle.dart` ≈42 |
 
-- 四个新档首行 `part of '../chat_session.dart';`（§3.3）；`lib/chat/session/` 为 chat_session 的专属子目录。
+- 八个新档首行 `part of '../chat_session.dart';`（§3.3）；`lib/chat/session/` 为 chat_session 的专属子目录。
 - 「搬出」为指示值（按点名方法与坐标区间估）；坐标只用于定位，不参与加总；判据以行数门为准（主档 ≤800、新档 ≤500）。
-- **委托行数假设**（一成员一行委托，字段不计）：第 1 段 15 · 第 2 段 31 · 第 3 段 29 · 第 4 段 15 ⇒ 合计 ≈90，按 **≈100** 保守计。
-- 搬出 ≈830，加回 ≈100 行委托 ⇒ **主档 ≈762 ≤800，余量 ≈38**。
-- **越界应对**：若实际搬出偏低、主档 >800，按 §7 边界行把第 4 段自身再切一段（候选第 5 段 = `paths` / `_absolute` 路径助手 → `session/file_paths.dart`），并在 owner 档补一条 `part` 指令；主档再少 ≈40。
+- **委托行数口径（按 kernel 实测）**：kernel 53 个成员 ⇒ 113 行委托（≈2.13 行/成员）；chat_session 点名 **101** 个成员（第 1–8 段：15 / 31 / 29 / 13 / 2 / 3 / 4 / 4；字段与留 owner 的私有 getter 不计）⇒ **≈215 行委托**。
+- **搬出合计**：210 + 230 + 240 + 133 + 17 + 41 + 21 + 33 = **925**。
+- **算式**：1492 − 925 + 215 = **≈782 ≤ 800，余量 ≈18**。
+- **旧四段口径为什么不达标**：90 成员按旧假设 ≈190 行 ⇒ 1492 − 830 + 190 = **852 > 800**（超 ≈52）——kernel 实测 53 成员 → 113 行，一成员一行的假设被推翻。
+- **段 5 不产生新余量，段 6–8 才产生**：`paths` / `_absolute` 的 17 行本在第 4 段的 ≈150 内（切出后第 4 段 ≈133 + 段 5 ≈17），进计划只是固定落点；净减来自段 6 / 7 / 8：(41 − 6) + (21 − 9) + (33 − 9) = **71 行**。
+- **段 5–8 的取舍**：都落在下方「不在本批」清单之外，职责各自单一（路径拼法 · 发送上下文 · 会话命令 · 连接与挂载）；字段 `_toldEditor` / `_toldOfEditor` / `_views` / `_warm` / `_subscription` 一并留 owner（§3.3 字段规则）。
+- **余量管理**：余量 ≈18；若实测仍越界，按 §7 边界行继续切（owner 档补一条 `part` 指令），不改目标、不换机制。
 - **不在本批**：btest 状态面（`:156-216`，归 #55）· 事件应用与回合标记（`_apply` `_cutsAtMessage` `_markTurn` `:257-353`，事件顺序敏感，合并批 #145 已记录 `_apply` 顺序风险，不搬）· 审查面（`:354-412`）· `send`/队列/编辑（`:1319-1452`）· `dispose`。
 - **对外暴露**（沿用 `lib/chat/chat_session.dart` 原路径，调用方零改动）：
 
@@ -237,29 +252,31 @@
 
 | 档 | 现行 | 搬出 | 搬入（委托） | 预期 | 界 | 新档（个数 · 最大估行） |
 |---|---|---|---|---|---|---|
-| `lib/kernel/thincoder/thincoder_kernel.dart` | 1461 | 1195 | 45 | ≈311 | ≤500 | 9 档 · 最大 `thincoder_turns.dart` ≈320 |
+| `lib/kernel/thincoder/thincoder_kernel.dart` | 1461 | 1114 | 113 | **480**（实测） | ≤500 | 9 档 · 最大 `thincoder_turns.dart` 279（实测） |
 | `lib/chat/step_folds.dart` | 500 | 42 | 2 | ≈460 | ≤500 | 1 档 · ≈45 |
 | `lib/chat/composer/composer.dart` | 2466 | 2110 | 65 | ≈421 | ≤800 | 6 档 · 最大 `composer_editing.dart` ≈460 |
-| `lib/chat/chat_session.dart` | 1492 | 830 | 100 | ≈762 | ≤800（余量 ≈38） | 4 档 · 最大 `transcript_proxy.dart` ≈250 |
+| `lib/chat/chat_session.dart` | 1492 | 925 | 215 | **≈782** | ≤800（余量 ≈18） | 8 档 · 最大 `transcript_proxy.dart` ≈250 |
 | `lib/chat/chat_models.dart` | 839 | 108 | 2 | ≈733 | ≤800 | 1 档 · ≈110 |
 
-- 「搬出」为指示值（按点名方法与坐标区间估）；预期 = 现行 − 搬出 + 搬入。
+- 「搬出」为指示值（按点名方法与坐标区间估）；预期 = 现行 − 搬出 + 搬入。kernel 行是实测值（第 2 步已落）；其余按指示值，判据以行数门为准。
 - 新档判据：每个新档 ≤500（>500 需复核并写明单一职责）；本批所有新档的估值都 ≤460。
 
 ## 5 排程与验证（一次一批只动一档）
 
-**步序理由**（按验证价值，不按风险升序）：第 1 步用最小档（step_folds，42 行、1 个 part）证明 `part` 形态成立；第 2 步尽早做最硬的 kernel（1195 行、9 个 part），把最大的返工余量留在前面；第 3 步 chat_models 是唯一的 `export` 形态，单独一步验证第二条机制；第 4 步 chat_session 余量最窄（≈38），此时形态经验已齐；第 5 步 composer 改动面最大（≈2110 行）且要等 #55 落地，排末。
+**步序理由**（按验证价值，不按风险升序）：第 1 步用最小档（step_folds，42 行、1 个 part）证明 `part` 形态成立；第 2 步尽早做最硬的 kernel（搬出 1114 行、9 个 part），把最大的返工余量留在前面；第 3 步 chat_models 是唯一的 `export` 形态，单独一步验证第二条机制；第 4 步 chat_session 余量 ≈18，此时形态经验已齐；第 5 步 composer 改动面最大（≈2110 行）且要等 #55 落地，排末。
 
 | 步 | 档 | 机制 | 验证读数（命令 + 判据） | 回滚（已提交 ∥ 未提交） |
 |---|---|---|---|---|
-| 0 | 前置 | — | ① 当前态：kernel 与 chat_session 有 #50 的在飞改动（已交付待提交）、composer 与 `lib/browser/btest/**` 有 #55 的在飞改动，第 2 / 4 / 5 步在各自 commit 前不启动；② 每步开工前：该步目标档 `git status` 必空；先跑该步测试集并记录基线为绿 | — |
-| 1 | step_folds | part ×1 | `flutter analyze` = 0 issue；`flutter test --no-pub test/chat/step_folds_test.dart test/chat/fold_view_test.dart` 全绿；主档 ≤500（`node -e` 计数） | `git revert` ∥ `git restore` + 删新档 |
-| 2 | kernel | part ×9 | `flutter analyze` = 0 issue；`flutter test --no-pub test/kernel/thincoder_kernel_test.dart test/kernel/rename_confirmed_test.dart test/kernel/thincoder_fixtures_test.dart test/chat/thincoder_commands_test.dart test/composer_test.dart` 全绿（= `grep -l thincoder_kernel.dart test/` 反推的 5 档全集）；主档 ≤500 | `git revert` ∥ `git restore` + 删新档 |
-| 3 | chat_models | export | `flutter analyze` = 0 issue；`flutter test --no-pub test/chat test/kernel` 全绿；主档 ≤800 | `git revert` ∥ `git restore` + 删新档 |
-| 4 | chat_session | part ×4 | `flutter analyze` = 0 issue；`flutter test --no-pub test/chat test/kernel_ui_test.dart` 全绿；主档 ≤800 | `git revert` ∥ `git restore` + 删新档 |
-| 5 | composer | part ×6 | `flutter analyze` = 0 issue；`flutter test --no-pub test/chat test/composer_test.dart test/kernel_ui_test.dart` 全绿；主档 ≤800 | `git revert` ∥ `git restore` + 删新档 |
+| 0 | 前置 | — | ① 当前态：kernel 与 chat_session 有 #50 的在飞改动（已交付待提交）、composer 与 `lib/browser/btest/**` 有 #55 的在飞改动，第 2 / 4 / 5 步在各自 commit 前不启动；② 每步开工前：该步目标档 `git status` 必空；先跑该步测试集并记录基线（红项逐条记入本步记录，判据见下方测试门） | — |
+| 1 | step_folds | part ×1 | `flutter analyze` = 0 issue；`flutter test --no-pub test/chat/step_folds_test.dart test/chat/fold_view_test.dart` 过测试门；主档 ≤500（`node -e` 计数） | `git revert` ∥ `git restore` + 删新档 |
+| 2 | kernel | part ×9 | `flutter analyze` = 0 issue；`flutter test --no-pub test/kernel/thincoder_kernel_test.dart test/kernel/rename_confirmed_test.dart test/kernel/thincoder_fixtures_test.dart test/chat/thincoder_commands_test.dart test/composer_test.dart` 过测试门（= `grep -l thincoder_kernel.dart test/` 反推的 5 档全集）；主档 ≤500 | `git revert` ∥ `git restore` + 删新档 |
+| 3 | chat_models | export | `flutter analyze` = 0 issue；`flutter test --no-pub test/chat test/kernel` 过测试门；主档 ≤800 | `git revert` ∥ `git restore` + 删新档 |
+| 4 | chat_session | part ×8 | `flutter analyze` = 0 issue；`flutter test --no-pub test/chat test/kernel_ui_test.dart` 过测试门；主档 ≤800 | `git revert` ∥ `git restore` + 删新档 |
+| 5 | composer | part ×6 | `flutter analyze` = 0 issue；`flutter test --no-pub test/chat test/composer_test.dart test/kernel_ui_test.dart` 过测试门；主档 ≤800 | `git revert` ∥ `git restore` + 删新档 |
 
 - **行数读数命令**（Windows / POSIX 通用）：`node -e "console.log(require('fs').readFileSync('<档>','utf8').match(/\n/g).length)"`。
+- **测试门（基线本红时）**：基线与本步后**各跑一次同一条命令**；判据 = **红项集合逐条一致（同名、同数量）且无新增失败**；基线为绿时判据即全绿。先例读数：本批第 3 步同命令两次 `+872 -4`，红项逐条一致。
+  现行红基线（2026-10-23）：`test/composer_test` 2 项（mode picker / Shift+Tab）· `test/chat` 4 项（Windows 分隔符与 preview 保存）· `test/ide` 53 项（Windows 路径族；父侧读数，本设计未复跑）。字面「全绿」在这三条测试面上不可达。
 - **每一步的提交只含**：目标档 + 本步新档。`git diff --name-only <sha>^ <sha>` 里出现 `test/` 或其他 `lib/` 文件 ⇒ 该步不成立，停。
 - **中途放弃（未提交）**：`git restore <目标档>` + 删除本步新档，工作树回到本步开工前；不留半成品提交。
 - **步骤之间无代码依赖**：五档互不引用对方的 part 档，任何一步都可单独回滚；顺序只决定风险暴露的先后。
@@ -268,18 +285,20 @@
 
 | # | 功能点 | 判据（机检） |
 |---|---|---|
-| 1 | kernel ≤500 | 换行符计数 ≤500；analyze 0 issue；kernel 调用方 5 档全绿（§5 第 2 步，import 反推） |
-| 2 | step_folds ≤500 | 计数 ≤500；`step_folds_test` + `fold_view_test` 全绿 |
-| 3 | composer ≤800 | 计数 ≤800；`test/chat` + `composer_test` + `kernel_ui_test` 全绿 |
-| 4 | chat_session ≤800 | 计数 ≤800；`test/chat` + `kernel_ui_test` 全绿 |
-| 5 | chat_models ≤800 | 计数 ≤800；`test/chat` + `test/kernel` 全绿 |
+| 1 | kernel ≤500 | 换行符计数 ≤500；analyze 0 issue；kernel 调用方 5 档过测试门（§5 第 2 步，import 反推） |
+| 2 | step_folds ≤500 | 计数 ≤500；`step_folds_test` + `fold_view_test` 过测试门 |
+| 3 | composer ≤800 | 计数 ≤800；`test/chat` + `composer_test` + `kernel_ui_test` 过测试门 |
+| 4 | chat_session ≤800 | 计数 ≤800；`test/chat` + `kernel_ui_test` 过测试门 |
+| 5 | chat_models ≤800 | 计数 ≤800；`test/chat` + `test/kernel` 过测试门 |
 | 6 | 签名/可见性不变、调用方零改动 | 提交的文件集 ⊆ {目标档, 本步新档}；`git diff --name-only` 无 `test/`；analyze 0 issue |
+
+- **测试门定义**见 §5「测试门（基线本红时）」：基线与本步后同命令各一次，红项集合逐条一致、无新增失败；基线为绿时即全绿。
 
 ## 7 案例表
 
 | 类型 | 场景 | 输入 | 期望 |
 |---|---|---|---|
-| 正常 | 按缝表搬一段 | 目标档 + 新 part 档 | analyze 0 issue；该面测试全绿；主档行数下降量 ≈ 段跨度 − 委托行数 |
+| 正常 | 按缝表搬一段 | 目标档 + 新 part 档 | analyze 0 issue；该面过测试门（§5）；主档行数下降量 ≈ 段跨度 − 委托行数 |
 | 正常 | 五档全部落完 | 五个提交 | 五档各自 ≤500 / ≤500 / ≤800 / ≤800 / ≤800 |
 | 边界 | 某段搬完主档仍超界 | — | 由 owner 档再补一条 `part` 指令、把该段的一部分再切出去；不改目标、不换机制 |
 | 边界 | btest 状态行段已由 #55 搬走 | composer 原 `:1932-2050` | 本批跳过该段（已不在本档）；主档再少 ≈119 行，仍达标 |

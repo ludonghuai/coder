@@ -50,9 +50,70 @@
 
 **未覆盖（诚实说明）**：240px 窗口（侧栏约 60px）下文件夹行仍会溢出——那不是可排版的宽度；本轮不追。
 
+## 笔 B：编辑器标签栏右侧动作区溢出（用户截图 07:40）
+
+**披露（轻通道 · 缺陷修）**：本笔 = 轻通道（缺陷修 · 用户截图点名）| 改动：`lib/ide/ide_tab_bar.dart` + `lib/ide/ide_agent_edits.dart` | 触达：两个档 | 回退 = revert 单提交。
+
+**症状**：Markdown 预览标签栏右端（「撤销当前 / 保留当前」+ Markdown 切换 + 更多）在窄编辑器面板下出现黄黑条纹并截断文字。
+
+**根因（实测）**：标签栏 `Row` 的结构是 `Expanded(标签条)` + 一串**固定宽度**尾部（动作区、MarkdownSwitch 两段文字、更多按钮）；面板一窄，`Expanded` 先被压到 0，尾部仍有最小宽度 ⇒ 行按差额溢出。`IdeAgentEditActions` 的两个按钮是**带文字的药丸**，是最宽的一段。
+
+**改法**：
+- `lib/ide/ide_agent_edits.dart`：`IdeAgentEditActions` 增 `compact`；`_TitleAction` 增 `icon` + `compact`（紧凑时只画图标，tooltip 保留原文）。
+- `lib/ide/ide_tab_bar.dart`：标签栏 `Row` 包进 `LayoutBuilder`，`tight = maxWidth < 620`；动作区改 `if (widget.actions case final actions?) Flexible(child: actions)`（给有界宽度）；`MarkdownSwitch` 增 `compact`（紧凑时只画一个「切换到的那个」按钮）。
+
+**验证（实测）**：
+- `dart analyze lib/ide/ide_tab_bar.dart lib/ide/ide_agent_edits.dart` ⇒ **No issues found!**
+- `flutter test --no-pub test/ide/workbench/global_keys_test.dart` ⇒ **113 全绿**（标签栏键盘面未被破坏）
+- `flutter test --no-pub test/ide` ⇒ 3755 过 / **53 红**；逐条核对红因：`ide_workspace_model_test.dart` 单跑 `Expected '\\virtual-project\\first.txt'` / `Actual 'D:\\virtual-project\\first.txt'` ⇒ **已知 Windows 路径夹具族（#130）**，与本笔无关（本笔只碰标签栏与动作区两个档）
+- 重建后（pit 待填）用户复看条纹
+
+**未覆盖**：本笔没有新增窄宽度 widget 用例（标签栏需要整套 workbench 夹具，成本高于本笔改动）；如需回归，建议在结构批给 workbench 补一条窄宽度用例。
+
+**笔 B 复看（用户 2026-10-23 07:44）**：新构建 pid 8960，`overflow=0`；用户未再报条纹（同一时段确认 F11 持久化正常：「再打开确实是保留了 btest；没问题」）。笔 B 视为验证通过，未新增窄宽度用例的缺口保留在本段「未覆盖」。
+
 ## §2 批次任务与设计（eng-designer）
-**状态行**：（eng-designer 写入时更新）
+**状态行**：设计完成
 <§2 模板占位：本批条目（覆盖） / 设计档落点 / 机制设计 / 受影响文件与测试覆盖 / 验收对照 / 关键决策 / 上抛项>
+
+### 覆盖条目
+
+| # | 条目 | 设计落点 |
+|---|---|---|
+| 1 | 台账 #163：btest 设计档里 SPLIT-1 / SPLIT-4 两条旧缝登记改指结构拆分设计 | `docs/design/browser-biz-test.md` §4「超 800 行档：本轮先拆后加」表的 composer 行（SPLIT-1）与 chat_models 行（SPLIT-4） |
+
+**不在本批**：`docs/design/structure-splits.md`（权威源，只引用不改）· btest 档的判据 / 计数 / 验收 / 节结构 · 其余任何档。
+
+### 设计（纯指针修正）
+
+权威源 = `docs/design/structure-splits.md` §4.3（composer 的六段切法，取代旧缝「内核模式选择区整段抽 `composer/mode_selector.dart`」）与 §4.5（chat_models 抽 `EditorContext` / `TextContext`，取代旧缝 `chat/btest_models.dart`——该缝前提不成立，本档没有任何 btest 类型）。
+
+改法：「余下抽取缝」两格改为指向上述两节；「登记」列各写一句旧缝已被取代及理由。旧缝名只保留在这句说明里，不再以活登记形式出现——读者记得旧名时仍有一条改指路径，删掉旧名则它变成档内无法解析的悬空指针。
+
+### 验收对照
+
+| # | 判据 | 读数 |
+|---|---|---|
+| ① | 两处登记行指向 §4.3 / §4.5，各带一句「旧缝已被取代，理由见该节」 | `docs/design/browser-biz-test.md:643` · `:646` |
+| ② | 全档检索旧缝名，只出现在「已取代」句里 | `grep "mode_selector\|btest_models"` ⇒ 2 行命中，均在 `:643` / `:646` 的已取代说明内 |
+| ③ | 判据 / 计数 / 节结构未动 | `git diff` 只 2 行替换、无增删行、无新增标题 |
+| ④ | `doc_check(mode:"gate", docs:["docs/design/browser-biz-test.md"])` 首行 PASS | `DOC-CHECK GATE: PASS`（0 条命中） |
+| ⑤ | 只改这一档 | 改动档只有 `docs/design/browser-biz-test.md` |
+
+### 发现（不在本笔边界内，交父侧裁定）
+
+§4 表「现行」列的行数读数已旧于当前树。实测：2026-10-23 本笔，按换行符计行、末行计入。
+
+| 档 | 档内登记（§4） | 当前实测 |
+|---|---|---|
+| `chat_models.dart` | 839 | 732（⇒ §4.5 已落地，`lib/chat/editor_context.dart` 在盘） |
+| `composer.dart` | 2466 | 2346（第 5 步未开，仍 >800） |
+| `thincoder_kernel.dart` | 1435 | 480 |
+| `chat_session.dart` | 1492 | 793 |
+| `btest_mode.dart` | 1131 | 556 |
+
+本笔按边界不改计数；是否刷新、或把该列标注为 as-of 读数，由父侧决定。
+
 ## §3 设计评审（评审子代理）
 ## §4 用户批准（主 agent）
 ## §5 实施记录（eng-coder）
