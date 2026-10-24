@@ -1604,6 +1604,70 @@ VERDICT: pass
 2. 需求 F10 仍以「每次 spawn 至少 30 秒、串行拖成小时级」解释 3 次上限，该理由已被设计侧替换为子代理数量与研判成本（批档 `:809` 同述）；需求层也未写「发现即派 / 不等答案 / 迟到答案落哪」。
 3. 卡正文读数口径：上一轮记录的 6705 字符与本轮按 `BtestCard.text.length` 实测的改前 6658 不同源；本段统一用 Dart 运行时口径，建议后续以同一口径复测。
 
+## 实施记录（eng-coder · 2026-10-23 · btest_mode 的 500 门处置：BtestSettings 整类抽 btest_settings.dart）
+
+**范围**：设计档 `docs/design/browser-biz-test.md` §4「新档行数预算」表（`:648-665`）与「`btest_mode.dart` 的 500 门处置（缝表）」（`:667-678`，提交 `206ab727`）。按缝表逐字搬类，形态沿用结构批四次的 `part`（`2025afe1` / `f45183fd` / `2b40b58b` / `59f07ed0`）。未改任何逻辑、未动 `test/**`、未动 `docs/**`、未动其他 `lib/**`；工作树里既有的 `lib/ide/git/git_repository.dart` 未提交改动不是本轮的活，未碰。
+
+**改动与实测行数（`Get-Content` 口径 = 行尾换行符计数）**
+
+| 文件 | 拆前 | 拆后 | 内容 |
+|---|---|---|---|
+| `lib/browser/btest/btest_mode.dart` | 556 | 425 | 加 `part 'btest_settings.dart';`（`:14`）一处；整类移出（−132 行） |
+| `lib/browser/btest/btest_settings.dart`（新） | — | 134 | 首行 `part of 'btest_mode.dart';` + 空行 + 132 行原类（类注释与全部成员逐字） |
+
+两档均在新档硬门 500 内（余量 75 / 366，与设计 `:654` 预告的 ≈425 / ≈134 一致）。
+
+**搬动核验（机械比对，非自述）**
+
+- 逐块比对：`git show HEAD:lib/browser/btest/btest_mode.dart` 的 `:14-145`（132 行）与新档 `:3-134`（132 行）逐行比对（去 `\r` 归一）⇒ `diffs 0`。
+- 反推校验：`HEAD` 全文去掉 `:14-145`、插回 1 条 `part 'btest_settings.dart';` ⇒ 与当前主档逐行比对 `diffs 0`（两者均 425 行）；算术 `556 − 132 + 1 = 425`。
+- 成员清单：7 个键常量（`allowHostsKey` / `prodHostsKey` / `readonlyKey` / `qaRootKey` / `onKey` / `traversalKey` / `modeKey`）、`values`（带 `@visibleForTesting`）、7 个 getter（`allowHosts` / `prodHosts` / `readonlyByDefault` / `qaRoot` / `on` / `traversal` / `write`）、`_read` / `put` / `hostsOf` / `listOf` / `_hostOf` 全在；**无委托行**（整类搬，不是类成员搬）。
+- 可见性：`part` = 同库，主档既有 9 条 import 全部仍被用到（被搬类用 `dart:async` 的 `unawaited`、`foundation` 的 `visibleForTesting` / `debugPrint`、`user_settings` 的 `SettingsFiles`、`btest_policy` 的 `BtestTraversal` / `BtestFace`）；全仓无任何档 import 新档（part 档不可 import）。
+
+**验收实测（本机，命令 + 结果行）**
+
+| # | 验收点 | 实测 |
+|---|---|---|
+| ① | 新档建好、首行 `part of`、整类齐 | `btest_settings.dart` 134 行；`:1` = `part of 'btest_mode.dart';`；成员逐项核对见上 |
+| ② | 主档加 part、不再含类、≤500 | `btest_mode.dart:14` = `part 'btest_settings.dart';`（全档唯一 `^part ` 命中）；`class BtestSettings` 在主档零命中；425 行（556 → 425） |
+| ③ | 逐块比对 + 反推 | 见「搬动核验」：`diffs 0` / `diffs 0` / `556 − 132 + 1 = 425` |
+| ④ | 其他同库档零改动 | `git diff --name-only -- lib/browser lib/chat lib/settings test` → 只有 `lib/browser/btest/btest_mode.dart`；`git status --porcelain` 同范围 → ` M lib/browser/btest/btest_mode.dart` + `?? lib/browser/btest/btest_settings.dart`；四个测试档与 `btest_run_state` / `browser_page` 无 diff |
+| ⑤ | `dart analyze` 零 issue | `C:\Users\xinbo\repos\flutter\bin\dart.bat analyze` → `Analyzing baocode...` / `No issues found!` |
+| ⑥ | 测试门 | `C:\Users\xinbo\repos\flutter\bin\flutter.bat test --no-pub test/browser` → `00:02 +132 ~7: All tests passed!`（改前基线 `+132 ~7`；红项两次均空，7 条跳过同源） |
+
+**`git diff --name-only` 原文**
+
+```
+lib/browser/btest/btest_mode.dart
+lib/ide/git/git_repository.dart
+```
+
+第二行是**本轮开始前就存在的**未提交改动（本会话第一条命令在任何编辑之前即读到 `M lib/ide/git/git_repository.dart`），不是本轮改动；本轮改动面 = 那一行主档 + 新增的 `?? lib/browser/btest/btest_settings.dart`。
+
+**自行决定项（每条一句理由）**
+
+1. 新档按 LF 落盘（主档仍 CRLF）：同目录既有的 `btest_run_state.dart` 就是 LF，仓内 `core.autocrlf = true`（索引 LF，EOL 不入 diff）；不为这一档改写主档其余 410 行的行尾。
+2. 新档不加文件级拆分说明头（同目录 SPLIT-5/6 三档有）：设计 `:676` 给的组成是「1 行 `part of` + 空行 + 132 行」，加头即偏离该组成；评审列为 🔵 可选，留下一批决定。
+3. 类内注释原样保留（含 `user_settings.dart:26-27`、`§9.1「写初始」` 等引用）：缝表要求被搬块逐字搬，注释属块内内容。
+
+**内部审计与代码评审**
+
+- explore 偏差审计（对照设计 §4 缝表与六条验收）：`VERDICT: clean`；0 🔴 / 0 🟡 / 1 🔵（设计档 §4 的状态句与定位坐标未随落地更新，属文档侧、本段笔域外）。
+- advisor 代码评审（type=code，第 1 轮）：`VERDICT: pass`（0 🔴 / 1 🟡 报告项 / 2 🔵）。处置：
+  - 🟡（设计档 §4 的 556 与「500 门处置（未落地）」及七处旧定位坐标）**不改**：`docs/**` 在任务书禁止面内，交父层 / 设计位。
+  - 🔵「两档 EOF 多一个空行」**核为假读数后不改**：字节级实测两档均以单个换行结尾（主档 425 个 CRLF、新档 134 个 LF，末字节均为 LF、无二次换行）；评审判据里的「多一行」是读工具对结尾换行的显示元素。
+  - 🔵「新档缺拆分说明头」**不改**：理由见自行决定 2。
+- 修复轮次：0（无 must-fix）。**terminal state = `clean`**。
+
+**设计漂移（本段不改文档，交父层 / 设计位）**
+
+1. 设计 §4：`btest_mode.dart` 行仍写 556（`:654` / `:684`），文件表无 `btest_settings.dart` 行；`:684` 的登记仍写「500 门处置（未落地）」；`:646`（`btest_mode.dart:14-145`）与 `:86` / `:880` / `:884` / `:885` / `:897` / `:901` 的 `BtestSettings` / `BtestState` 定位坐标已指向旧档旧行（现 `BtestSettings` 在 `btest_settings.dart:5`，`BtestState` 在 `btest_mode.dart:18`、`_write` 在 `:42`）。
+2. 设计 §4 的落地判据「被搬块与搬前逐行比对 `diffs: 0`」由本段机械比对照做（audit 的只读工具面无 git，由本段脚本读数补上）。
+
+**门禁**：`doc_check(mode:"gate", docs:["docs/batches/2026-10-22-browser-biz-test-mode.md"])` → `DOC-CHECK GATE: REFUSED（命中 1 条）`：`:866` 行宽 439 字符，该行在 §2（设计位笔域），§5 不改写他段；本段自身新增行均在 300 字符内。
+
+**门禁读数补充（两条并存，范围不同）**：本段 append 的工具回执 = `[doc-check gate] DOC-CHECK GATE: PASS（0 档） · 范围 0 档`；上一条 `REFUSED（命中 1 条）` 是对整档显式跑 `docs:["docs/batches/2026-10-22-browser-biz-test-mode.md"]` 的读数。前者判 0 档（工具侧范围为空），后者判整档全文；唯一命中在 §2（`:866` 行宽 439），非本段笔域，按纪律交父层路由。
+
 ## §6 验证与收口（父代理）
 
 ## 交付验证（主 agent，2026-10-23 01:10）
