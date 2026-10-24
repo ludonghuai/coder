@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import '../../platform/event_log.dart';
 import 'thincoder_files.dart';
@@ -9,8 +9,8 @@ import 'thincoder_transport.dart';
 
 /// What a held process is keyed by (§25.2, D100): where it runs, and whether
 /// its handshake says it reads and writes the editor's files — the very bit
-/// the kernel sends as `clientCapabilities` (`thincoder_kernel.dart:249-251`).
-/// One key's process serves no other: `session/new` takes only its own
+/// the kernel sends as `clientCapabilities` (`thincoder_lifecycle.dart`, the
+/// handshake).
 /// folder, and the capabilities it answered with are fixed.
 typedef ThincoderWarmKey = (String cwd, bool files);
 
