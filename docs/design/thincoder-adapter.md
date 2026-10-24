@@ -1,4 +1,4 @@
-# thincoder 内核适配 设计档
+﻿# thincoder 内核适配 设计档
 
 > 板块：内核适配（thincoder 桌面接入）· 范围仓：baocode。
 > 配对需求档：`docs/requirements/thincoder-adapter.md`（用户已确认，2026-10-16）。
@@ -3834,7 +3834,9 @@ $a = @(Get-ChildItem -Recurse -Force $p -ErrorAction SilentlyContinue)
 - 对齐 ②：**供应商表单控件**（`models_page.dart:2084-2173` 的 `_Field`，含 `obscure` 遮显参数）——本页四个输入框用同一控件形，密钥框 `obscure: true`。
 - 对齐 ③：**原子写语义**（外仓 `thincoder-core/config-io.mjs:59-89` `writeConfigAtomic`：stat→read 序、mtime 冲突放弃、`.bak` 留现场、0600）——Dart 侧逐条照搬判据，不新造。
 - 偏离 ①：**不加新协议**。现有 ACP 方法面（`handlers-session.mjs:2-5`）没有「重读配置」入口，`config_option_update` 只是现值通知；可见性靠重开会话（§27.6）。
-- 偏离 ②：**原因串不由 CLI 传输**。实读：`defaultModelReason` 只出现在 core（`model-ref.mjs:69-77`，被 `config.mjs:303` 消费），宿主侧零命中（`grep defaultModelReason lib/**` 无结果）。故页面按**同一判据复述**两条串（§27.5 ④），并把「CLI 是否另有投影面」列入未验证项 U13。
+- 偏离 ②：**原因串不随 `configOptions` 传输**——`sessionConfigOptions` 只 push model / thinking / thinkingLevel / mode / autoApprove 五类项，`model` 项在模型不可解析时直接缺席，条目上没有原因字段（`thincoder/thincoder-cli/src/acp/handlers-session.mjs:47-68`）；
+  原因串只在 `session/new` 凭据门的 `AUTH_REQUIRED` 错误串里出现（`keyPresent && !ok` 一路，`st.reason` 逐字进 message，`:186-187`）。宿主侧也读不到它：`defaultModelReason` 只出现在 core（`model-ref.mjs:69-77`，被 `config.mjs:303` 消费），本仓 `lib/**` 零命中。
+  故页面按**同一判据复述**两条串（§27.5 ④）；「CLI 是否另有投影面」= U13，已按本条实读闭合（§27.12）。
 - 对齐 ④：**外仓 desktop / VSC 的 provider 编辑面**（坐标均在 `thincoder/` 仓内）——写面纪律 = 配置读写只经核 `config-io.mjs`、端侧零自写盘零形状构造、`provider:*` 四通道
   （`thincoder/thincoder-desktop/src/main/providers.mjs:1-31`；`thincoder/docs/desktop/design/SETTINGS.md:15` KD-10；`thincoder/docs/desktop/design/IPC.md:297-300` 的 `provider:list` / `save` / `remove` / `verify` 家族）。
   字段构造与遮罩口径对齐它：遮罩单点 `maskKey`、行面只回遮罩后值、明文 key 零下发；本页同形（末四位）。
@@ -4055,7 +4057,7 @@ node -e "const r=JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));
 
 | # | 项 | 现状 | 处置 |
 |---|---|---|---|
-| U13 | CLI 是否在别处把 `defaultModelReason` 投影给客户端（`session/new` 回包 / 通知） | 实读无：该符号只在 core（`model-ref.mjs:69`、`config.mjs:303`），CLI 的 acp 面未见；宿主侧零命中 | 本批按同判据复述两条串；实施轮在 `session/new` 首包与 `events.log` 里核一次，有投影就改读它 |
+| U13 | CLI 是否在别处把 `defaultModelReason` 投影给客户端（`session/new` 回包 / 通知） | **已闭合**（实读）：原因串**不**投影进 `configOptions`——`sessionConfigOptions` 只出 model / thinking / thinkingLevel / mode / autoApprove 五类项，`model` 项在模型不可解析时直接缺席，条目上没有原因字段（`thincoder/thincoder-cli/src/acp/handlers-session.mjs:47-68`）；原因串只出现在 `session/new` 凭据门的 `AUTH_REQUIRED` 错误串里（`keyPresent && !ok` 一路，`st.reason` 逐字进 message，`:186-187`；串的源头 = `thincoder-core/config.mjs:303` 的 `plan.reason ?? defaultModelReason(...)`） | 无宿主改动：页面继续按同判据复述两条串（§27.5 ④）。机检判据：`grep -n "reason" thincoder/thincoder-cli/src/acp/handlers-session.mjs` ⇒ `:47-68` 内零命中（其余命中 = `:163` / `:165` / `:166` / `:168` 的注释、`:187` 的 `AUTH_REQUIRED` 分支、`reasoningEffort` 族） |
 | U14 | 「CLI 读得进我们写的配置」真机 | 未验证（本机无 CLI 会话在本批内跑） | T125 离线固件先挡；发行版走查再验一次（开新会话看 `configOptions.model`） |
 | U15 | `app_settings` 取「活的 thincoder 会话」的现有访问器名 | 未逐行核（`workspace` 侧） | 实施首轮核定；本档只定缝形（`probe()` 返回 `KernelChoiceSource?`），不改语义 |
 | U16 | Windows 上 Dart `File.rename` 覆盖已存在文件的语义 | 文档未核 | 实施首轮一条单测钉住；失败即走 §27.3 第 7 步的直写回退 |

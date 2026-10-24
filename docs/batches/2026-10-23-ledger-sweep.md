@@ -114,6 +114,75 @@
 
 本笔按边界不改计数；是否刷新、或把该列标注为 as-of 读数，由父侧决定。
 
+### 追加笔：thincoder 设计档 §26 / §27 实交回填（台账 #139 + #142 合并）
+
+**覆盖条目**
+
+| # | 条目 | 设计落点 |
+|---|---|---|
+| 1 | #139 批 18（模型配置面）四处漂移 | `docs/design/thincoder-adapter.md` §27.4 · §27.7 · §27.9（含两档清单外文件） |
+| 2 | #142 批 17（内置运行时）六处漂移 | 同档 §26.4 · §26.5 · §26.7 · §26.8 · §26.9 |
+
+**不在本笔**：§28（今天刚改）、判据条目本身（只改描述与 delta）、需求档、代码、其余任何档。
+
+**改法（每处删旧留新，不并列）**：§27.4 补 `model` 校验行；§27.7 T126 记 `test`（`settle()` 在 `testWidgets` 下死锁）；§27.9 delta 换实交读数并补 ⑨⑩ 两档；§26.4 `locate()` 仍返回 `String`、新增 `locateBuild()`，机检判据从 `locate()` 改判 `locateBuild().display`；§26.5 / §27.2 的写入面环境源 = `ThincoderLocator.environment`；§26.7 启动行改 `launch: builtin|path <display>`、落点 locator；§26.8 常量改 `_nodeVersion`、macOS 记两架构 lipo + `signing.sign`；§26.9 各行 delta 换实交、§26.11 T113 / T113a 期望同步。
+
+**验收对照**
+
+| # | 判据 | 读数 |
+|---|---|---|
+| ① | 十处回填落地，旧说法已删 | 每处均以「删旧句 + 写新句」替换；`grep` §26–§27 无 `_nodeRelease` / `launch <display>` / `locate()` 作解析结果 的残留 |
+| ② | 各节自洽 | §26.3 判据 / §26.11 用例 / §26.4 描述三处对 `locate` 与 `locateBuild` 的期望同口径；§26.7 落点与 §26.9③ 改动描述一致（启动行不在 process_io） |
+| ③ | 判据条目除数字外未动 | 只改 delta 列、T113/T113a 期望与两档清单行；§26.10 / §26.12 / §27.8 的决策与验收表未动 |
+| ④ | `doc_check(mode:"gate", docs:["docs/design/thincoder-adapter.md"])` 首行 PASS | `DOC-CHECK GATE: PASS`（0 条命中） |
+| ⑤ | 只改这一档 | 改动文件只有 `docs/design/thincoder-adapter.md` |
+
+### 追加笔二：#139 第四处漂移（§27.12 U13 实读口径）
+
+**覆盖条目**：台账 #139（批 18「模型配置面」漂移的第四处）。
+
+**设计落点**：`docs/design/thincoder-adapter.md` §27.12 的 U13 行——现状列换成实读结论，处置列换成「无宿主改动 + 机检判据」；「acp 面未见」已删，不并列。
+
+**实读依据**：`thincoder/thincoder-cli/src/acp/handlers-session.mjs:47-68`（`sessionConfigOptions` 只出五项，无原因字段）· `:186-187`（`keyPresent && !ok` 一路把 `st.reason` 写进 `AUTH_REQUIRED` 的 message）· `thincoder/thincoder-core/config.mjs:303`（串的源头 `plan.reason ?? defaultModelReason(...)`）。
+
+**新验收条件（可机检）**：`grep -n "reason" thincoder/thincoder-cli/src/acp/handlers-session.mjs` ⇒ `:47-68` 内零命中；`st.reason` 只在 `:187` 的 `AUTH_REQUIRED` 分支（其余命中 = 注释与 `reasoningEffort` 族）。
+
+**验收对照**
+
+| # | 判据 | 读数 |
+|---|---|---|
+| ① | U13 行写实读口径，「acp 面未见」已删、无并列 | `docs/design/thincoder-adapter.md:4058` 单行替换 |
+| ② | 新机检判据写在处置列 | 见上「新验收条件」 |
+| ③ | 只改这一行 | `git diff` 该档 = +1 / −1 行 |
+| ④ | `doc_check(mode:"gate", docs:["docs/design/thincoder-adapter.md"])` 首行 PASS | `DOC-CHECK GATE: PASS`（0 条命中） |
+
+**不在本笔**：§27 其他行 · §26 · §28 · 需求档 · 代码。
+
+**留待父侧裁定（未改）**：`docs/design/thincoder-adapter.md:3837` 的「原因串不由 CLI 传输」与本笔口径并读有张力——按成功路径读仍成立（页面空态拿不到串），按字面读作「CLI 完全不带原因串」则过宽。改不改、怎么改由父侧定。
+
+### 追加笔三：§27 偏离 ② 原因串口径改精确（父侧裁定落地）
+
+**覆盖条目**：台账 #139 的语义口径笔——父侧 2026-10-23 裁定：§27「最近先例」偏离 ② 的「原因串不由 CLI 传输」按字面读作「CLI 完全不带原因串」，**过宽**，与已闭合的 U13 并读会让人以为是两件事。
+
+**设计落点**：`docs/design/thincoder-adapter.md` §27「最近先例」偏离 ②——旧句删除（不并列），换三段式：原因串不随 `configOptions` 传输（只 push 五项、`model` 在模型不可解析时直接缺席、条目上没有原因字段）· 原因串只在 `session/new` 凭据门的 `AUTH_REQUIRED` 错误串里出现 · 宿主侧读不到 `defaultModelReason`，故页面按同一判据复述两条串。同一条的尾句「列入未验证项 U13」改为「U13 已按本条实读闭合（§27.12）」——U13 同日已闭合，旧尾句读作仍未闭合。
+
+**实读依据**（本轮亲读）：`thincoder/thincoder-cli/src/acp/handlers-session.mjs:47-68`（`sessionConfigOptions` 只 push 五项、条目上无原因字段；`model` 不可解析 ⇒ 不 push，`:51`）· `:184-189`（`keyPresent && !ok` 一路把 `st.reason` 逐字写进 `AUTH_REQUIRED` 的 message，`:187`）· `grep defaultModelReason lib/**` 零命中（宿主侧无该符号）。
+
+**验收对照**
+
+| # | 判据 | 读数 |
+|---|---|---|
+| ① | 过宽句删除、不并列，改为三段式精确口径（依据 `handlers-session.mjs:47-68` 与 `:186-187`） | `docs/design/thincoder-adapter.md:3837-3839`（一支三条硬换行，各 <300 字符） |
+| ② | §27 内无同义过宽表述 | `grep "不由 CLI\|完全不传\|不传给\|零传输\|不向客户端传" docs/design/thincoder-adapter.md` ⇒ 零命中 |
+| ③ | 只改这一处与其同义句；不动 U13 行、§26、§28 | 本笔 = 旧 1 行 → 新 3 行；同档 diff 里 U13 行的差异属 §2 追加笔二的既存未提交改动，非本笔 |
+| ④ | `doc_check(mode:"gate", docs:["docs/design/thincoder-adapter.md"])` 首行 PASS | `DOC-CHECK GATE: PASS`（1 档、0 条命中） |
+
+**口径同源**：本笔与 U13 行（追加笔二）用同一份实读——`configOptions` 面不带原因串，`AUTH_REQUIRED` 面带；两处措辞不同，判据一致。
+
+**不在本笔**：U13 行 · §26 · §28 · 需求档 · 代码。
+
+**逐条对回父侧验收（编号以防误判漏项）**：① 三段式精确口径 → 本笔表格行 ①；② 旧句删除、不并列 → 表格行 ①（diff 为单行替换）；③ 同义过宽表述一并改 → 表格行 ②；④ `doc_check` 首行 PASS → 表格行 ④；⑤ 只改这一处与其同义句 → 表格行 ③。
+
 ## §3 设计评审（评审子代理）
 ## §4 用户批准（主 agent）
 ## §5 实施记录（eng-coder）
