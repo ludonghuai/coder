@@ -516,7 +516,11 @@ class IdeGitRepository extends ChangeNotifier {
     final state = _state;
     if (state == null || state.head.unborn) {
       _graph = const [];
-      _notify();
+      // An empty repository (or an unborn branch) reaches here without any
+      // await, and the getter that started this load may be running inside a
+      // build. Notifying from there is `setState during build`; the microtask
+      // puts it after the frame's build, where listeners may rebuild.
+      scheduleMicrotask(_notify);
       return;
     }
     try {
