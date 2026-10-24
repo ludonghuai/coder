@@ -52,7 +52,10 @@ class _FakeIdeFileService with ReadWriteOnlyFiles implements IdeFileService {
 }
 
 void main() {
-  final root = p.join(p.separator, 'virtual-project');
+  // The model resolves a rooted path to a real one, so the fixture starts from
+  // this host's drive root rather than a bare separator: '\virtual-project' is
+  // a root with no drive, and every path the model hands back carries one.
+  final root = p.join(p.absolute(p.separator), 'virtual-project');
   final first = p.join(root, 'first.txt');
   final second = p.join(root, 'second.txt');
 

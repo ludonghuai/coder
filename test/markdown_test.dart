@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:markdown/markdown.dart' as md;
+import 'package:path/path.dart' as p;
 import 'package:baocode/chat/chat_find.dart';
 import 'package:baocode/chat/side_panel/file_link_menu.dart';
 import 'package:baocode/chat/side_panel/file_open.dart';
@@ -27,6 +28,11 @@ List<TextSpan> leaves(WidgetTester tester) {
 }
 
 void main() {
+  // The fixture root, spelled as this host spells paths: a literal '/p' is a
+  // POSIX shape, and on Windows it reads as a root with no drive.
+  final root = p.join(p.separator, 'p');
+  String at(String relative) => p.joinAll([root, ...relative.split('/')]);
+
   group('links', () {
     testWidgets('every word of a web link is tappable', (tester) async {
       await pumpMarkdown(
@@ -60,14 +66,14 @@ void main() {
 
     testWidgets('a link to a file, and code naming one, have its icon and '
         'no underline; the icon opens it too', (tester) async {
-      final existence = FileExistence((path) async => path == '/p/lib/b.dart');
+      final existence = FileExistence((path) async => path == at('lib/b.dart'));
       addTearDown(existence.dispose);
       final opened = <String>[];
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
             body: FileOpenScope(
-              root: '/p',
+              root: root,
               onOpen: (request) => opened.add(request.path),
               existence: existence,
               child: const MarkdownView(
@@ -84,27 +90,27 @@ void main() {
           for (final icon in tester.widgetList<FileIcon>(find.byType(FileIcon)))
             icon.path,
         ],
-        ['/p/lib/a.dart', '/p/lib/b.dart'],
+        [at('lib/a.dart'), at('lib/b.dart')],
       );
       for (final span in leaves(tester)) {
         expect(span.style?.decoration, isNot(TextDecoration.underline));
       }
       await tester.tap(find.byType(FileIcon).first);
       await tester.tap(find.byType(FileIcon).last);
-      expect(opened, ['/p/lib/a.dart', '/p/lib/b.dart']);
+      expect(opened, [at('lib/a.dart'), at('lib/b.dart')]);
     });
 
     testWidgets('a link to a folder has a folder\'s icon; a file without an '
         'extension, once found, a file\'s', (tester) async {
       final existence = FileExistence(
-        (path) async => const {'/p/LICENSE', '/p/.gitignore'}.contains(path),
+        (path) async => {at('LICENSE'), at('.gitignore')}.contains(path),
       );
       addTearDown(existence.dispose);
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
             body: FileOpenScope(
-              root: '/p',
+              root: root,
               onOpen: (_) {},
               existence: existence,
               child: const MarkdownView(
@@ -124,14 +130,14 @@ void main() {
           ))
             icon.path,
         ],
-        ['/p/lib/ide', '/p/lib/chat/side_panel', '/p/.github'],
+        [at('lib/ide'), at('lib/chat/side_panel'), at('.github')],
       );
       expect(
         [
           for (final icon in tester.widgetList<FileIcon>(find.byType(FileIcon)))
             icon.path,
         ],
-        ['/p/LICENSE', '/p/.gitignore'],
+        [at('LICENSE'), at('.gitignore')],
       );
     });
   });
@@ -143,7 +149,7 @@ void main() {
       MaterialApp(
         home: Scaffold(
           body: FileOpenScope(
-            root: '/p',
+            root: root,
             onOpen: (_) {},
             existence: existence,
             child: const MarkdownView('See [the report](out/report.html).'),
@@ -156,13 +162,13 @@ void main() {
     final icon = tester.getCenter(find.byType(FileIcon));
     expect(
       (fileLinkMenuAt(view, icon) as FileLinkMenu?)?.path,
-      '/p/out/report.html',
+      at('out/report.html'),
     );
     // The link's text, after the icon.
     final text = icon + const Offset(40, 0);
     expect(
       (fileLinkMenuAt(view, text) as FileLinkMenu?)?.path,
-      '/p/out/report.html',
+      at('out/report.html'),
     );
     expect(
       fileLinkMenuAt(
