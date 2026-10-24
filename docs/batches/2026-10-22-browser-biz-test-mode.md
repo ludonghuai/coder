@@ -1792,6 +1792,66 @@ lib/ide/git/git_repository.dart
 
 **门禁读数补充（两条并存，范围不同）**：本段 append 的工具回执 = `[doc-check gate] DOC-CHECK GATE: PASS（0 档） · 范围 0 档`；上一条 `REFUSED（命中 1 条）` 是对整档显式跑 `docs:["docs/batches/2026-10-22-browser-biz-test-mode.md"]` 的读数。前者判 0 档（工具侧范围为空），后者判整档全文；唯一命中在 §2（`:866` 行宽 439），非本段笔域，按纪律交父层路由。
 
+## 实施记录（eng-coder · 2026-10-23 · F12 人工接管点 `[D9]` 落卡 + 卡测试断言）
+
+**范围**：设计档 `docs/design/browser-biz-test.md` §3.11 的 `[D9]` fenced 块（`:669`，1077 字符）与 §4 两行（`:683` / `:697`）。只改 `lib/browser/btest/btest_card.dart` 与 `test/browser/btest_card_test.dart`；未改 `docs/**`，未动 `btest_mode.dart` / 字段形 / 其他 `lib/**`；工作树里 `lib/ide/git/git_repository.dart` 的未提交改动不是本轮的活，未碰。
+
+**改动与实测读数**
+
+| 文件 | 改动 | 读数 |
+|---|---|---|
+| `lib/browser/btest/btest_card.dart` | `[D9]` 一段（独立成段）插在 `[D8]` 之后、状态行开关句之前 | 正文 6946 → **8025** 字符（Dart `String.length` 口径，+1079）；标签 38 → **39**；`[D9]` 行 1077 字符，与设计 `:669` 逐字符相等；129 → 131 行（+2，与 §4 `:683` 一致） |
+| `test/browser/btest_card_test.dart` | 标签循环 `1..8` → `1..9`；新增「39 个标签各一次」计数断言；新增 `[D9]` 用例（两情形 + 三条禁令 + 同 runId） | 194 → **281** 行；该档 12 条全绿（原 11 + 1） |
+
+**逐字核对读数（机械）**：脚本取 `BtestCard.text` 中以 `[D9] ` 开头的行与设计 `docs/design/browser-biz-test.md:669` 比对 ⇒ `DESIGN_D9_LEN=1077 CARD_D9_LEN=1077 VERBATIM=true`；设计档中 `[D9] ` 行唯一（`DESIGN_D9_COUNT=1`）。
+
+标记读数：卡正文 `[btest-mode-card v1]` = **1**、`[btest-mode-card-off v1]` = **0**；新句不含任一标记。标签读数：`LABELS=39 UNIQUE=39 DUPS=[] MISSING=[]`。
+
+**验收实测（本机，命令 + 结果行）**
+
+| # | 验收点 | 实测 |
+|---|---|---|
+| ① | `[D9]` 逐字取设计 §3.11 fenced 块 | 1077/1077、`VERBATIM=true` |
+| ② | `[D8]` 与其余 37 标签一字不动 | `[D8]` 行未触碰；39 标签 `UNIQUE=39` + `MISSING=[]` 收口（D1–D9 / J1–J7 / P01–P20 / H1–H3） |
+| ③ | 标签 38 → 39 | `LABELS=39 UNIQUE=39 DUPS=[]` |
+| ④ | 卡测试补 `[D9]` 断言 | 两情形（`do NOT stop` / `Only when the user asks…`）、三条禁令 7 个片段、同 `runId` / 等待不是断点、模板句逐字、`bring the page to that step` / `and end the turn` / `then read the attachment list and the record's snapshot`，全部有断言 |
+| ⑤ | 标记唯一 | 1 次；`countIn(text, marker) == 1` 断言通过 |
+| ⑥ | `dart analyze` | `Analyzing baocode...` / `No issues found!` |
+| ⑦ | 测试门 | 改前 `00:02 +132 ~7: All tests passed!`；改后 `00:02 +133 ~7: All tests passed!`；红项两次均空，7 条跳过同源（`BAO_BROWSER_LIVE` 未设 2 条 + 平台相关 5 条）；+1 = 新增的 `[D9]` 用例 |
+| ⑧ | 卡正文字符数 | 6946 → 8025 |
+
+**自行决定项（每条一句理由）**
+
+1. `[D9]` 独立成段（前后各一空行），不紧随 `[D8]` 同一段：设计 `:683` 记「+2 行」，独立成段正好 +2 行（正文行 + 空行）；语义上它是两情形与三条禁令的整体，不与 `[D8]` 的遍历纪律混读。
+2. 卡测试新增一个独立用例而不是塞进现有测试：`[D9]` 的失败面（两情形 / 三条禁令 / 同 runId）与标签计数、遍历纪律互不相关，独立用例失败时能直接指出丢了哪条规则。
+3. 断言用片段而非整行 1077 字符字面量：整句复写会在测试里落第二份同文，且该测试档随批删除；逐字一致性由本轮脚本给读数，片段断言负责行为层（与 `[D8]` 那条同一做法）。
+4. 加「39 个标签各一次」的计数断言：设计 §6 F2 ② 要求「共 39 个」，只断言「每个存在」挡不住重复或被悄悄加出第 40 个。
+5. 测试标题由 `§7 #46/#47` 改为 `§3.11, F12`：卡测试只能钉住文字，`#46/#47` 是走查读数（#47 的 `btest_policy_test` 落点尚未落地），标题不宣称没做的覆盖。
+
+**内部审计与代码评审**
+
+- explore 偏差审计（对照设计 §3.11 / §6 F12 / §6 F2 ② / §4 两行与任务书边界）：`VERDICT: clean`；0 偏离 / 0 must-fix；13 个检查点全 match，1 条观察（设计 `:697` 估 +8 行，实际测试增量远大于 8）。
+- advisor 代码评审（type=code，第 1 轮）：`VERDICT: changes-required`（1 🔴 / 3 🟡 / 1 🔵）。处置：
+  - 🟡#2（情形 A 三条机制句未被锚住）⇒ **已修**：补 `bring the page to that step` / `and end the turn` / `then read the attachment list and the record's snapshot` 三条断言，标题同步改 `§3.11, F12`；修后卡测试 12 条全绿、全量门 `+133 ~7`、`analyze` 零 issue。
+  - 🔴#1（`uncovered[].why` 字面量两处不同）⇒ **不改代码，上抛父层**：任务书明定「唯一权威源 = §3.11 fenced 块、逐字照抄」，卡照此落地；同一机制两个取值属设计档内部冲突，改动方向只能由设计 owner 定（见「上抛」1）。
+  - 🟡#3（`[D8]` 四个 `reason` 值用英文、宿主枚举是中文；既有件、不在本轮目标）⇒ **不改**：任务书要求 `[D8]` 一字不动；作为 #1 的同源约定问题交父层并案定。
+  - 🟡#4（#47 尚未落地）⇒ **不改**：落点 `btest_policy_test` 不在本轮文件清单，父层协调。
+  - 🔵#5（设计清单增量数旧）⇒ **不改**：`docs/**` 冻结，见「设计漂移」。
+- 修复轮次：1 轮（评审后），在 5 轮上限内。**terminal state = `clean`**（无未修 must-fix；🔴 为设计层裁定项，已上抛）。
+
+**上抛（[上抛·待裁]）**
+
+1. **`uncovered[].why` 的权威字面量**：卡 `lib/browser/btest/btest_card.dart:41`（逐字取自设计 `:669`）为 `why = "needs a manual upload, not run this round"`；
+  设计 `docs/design/browser-biz-test.md:629` / `:820` / `:880` 与 §7 #47 都读 `需人工上传，本轮未执行`。宿主只验 `uncovered` 是 List（`lib/browser/btest/btest_run_end.dart:73`），不拦值 ⇒ 不报错，只会让 §6 F12 / §7 #47 的走查读数对不上。
+  **我的倾向**：卡里改中文（与 `[D8]` 的 `未查明（…）`、报告 `待研判 · <原因>` 等载荷字面量同语，也与宿主枚举同语），但需设计位先改 `:669` 那行，再同步卡与测试。
+2. **#47 排期**：设计 `:696` 记「本轮待落：#47」，实读 `test/` 无 `需人工上传` / manual-upload 相关断言；`[D9]` 的 `uncovered` 形状目前只由卡文字承载，无机检。
+
+**设计漂移（本段不改文档，交父层 / 设计位）**
+
+1. `:683` 记卡正文「+≈900 字符」，实测 +1079（1077 字符行 + 2 换行）。
+2. `:697` 记 `test/browser/btest_card_test.dart`「194 / +8」，实测 194 → 281（+87）。
+3. 同一机制两个 `why` 取值（见上抛 1）：`:666` 的「实施照抄」与 `:629` / `:820` / `:880` 的验收读数互相打架。
+
 ## §6 验证与收口（父代理）
 
 ## 交付验证（主 agent，2026-10-23 01:10）

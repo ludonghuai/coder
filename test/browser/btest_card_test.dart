@@ -21,7 +21,7 @@ void main() {
     });
 
     test('holds every label the content check lists', () {
-      for (var i = 1; i <= 8; i++) {
+      for (var i = 1; i <= 9; i++) {
         expect(BtestCard.text, contains('[D$i]'));
       }
       for (var i = 1; i <= 7; i++) {
@@ -37,9 +37,87 @@ void main() {
       for (var i = 1; i <= 3; i++) {
         expect(BtestCard.text, contains('[H$i]'));
       }
-      // The label form above is what the card reads: D1 … D8, J1 … J7.
+      // The label form above is what the card reads: D1 … D9, J1 … J7.
       expect(BtestCard.text, contains('[D8]'));
+      expect(BtestCard.text, contains('[D9]'));
       expect(BtestCard.text, contains('[P20]'));
+      // 39 labels in all, each exactly once (§6 F2 ②).
+      final labels = RegExp(r'\[(?:D\d|J\d|P\d\d|H\d)\]')
+          .allMatches(BtestCard.text)
+          .map((m) => m[0])
+          .toList();
+      expect(labels, hasLength(39));
+      expect(labels.toSet(), hasLength(39));
+    });
+
+    test('the manual hand-off keeps both cases and three bans (§3.11, F12)', () {
+      // Case B is the default: the run goes on and the step is recorded.
+      expect(BtestCard.text, contains('do NOT stop'));
+      expect(BtestCard.text, contains('record it in uncovered'));
+      expect(
+        BtestCard.text,
+        contains('needs a manual upload, not run this round'),
+      );
+      // Case A stops only when the user asks for it, and the same run carries
+      // on after the wait — the wait is not a break.
+      expect(
+        BtestCard.text,
+        contains('Only when the user asks to test this upload feature on its own'),
+      );
+      expect(
+        BtestCard.text,
+        contains('请你在这里选文件上传（<业务线> · <本步在做什么>），传完回我「好了」。'),
+      );
+      expect(
+        BtestCard.text,
+        contains('bring the page to that step'),
+        reason: 'case A brings the page to the upload step (§6 F12 A)',
+      );
+      expect(
+        BtestCard.text,
+        contains('and end the turn'),
+        reason: 'the stop ends the turn; no tool call follows the sentence',
+      );
+      expect(
+        BtestCard.text,
+        contains("then read the attachment list and the record's snapshot"),
+        reason: 'after 「好了」 the bound file is read again (§6 F12 A, [P07])',
+      );
+      expect(
+        BtestCard.text,
+        contains("wait for the user's 「好了」 in the same conversation"),
+      );
+      expect(
+        BtestCard.text,
+        contains('The same runId continues — no new run'),
+      );
+      expect(
+        BtestCard.text,
+        contains("case A's wait is not a chain break"),
+        reason: 'the hand-off wait never enters chainBreaks (§3.11)',
+      );
+      // Ban 1 names the browser_upload / file-parameter route (review #91):
+      // a file already on disk is no way to stand in for the person.
+      expect(BtestCard.text, contains('do not click the file input'));
+      expect(BtestCard.text, contains('do not call browser_upload'));
+      expect(BtestCard.text, contains('carries a file parameter'));
+      expect(
+        BtestCard.text,
+        contains('a file that already sits in the repository is no exception'),
+      );
+      expect(
+        BtestCard.text,
+        contains("a write run's wider action list does not lift this ban"),
+      );
+      // Bans 2 and 3: no temporary file, no API detour.
+      expect(
+        BtestCard.text,
+        contains('never write a temporary file to fill the gap'),
+      );
+      expect(
+        BtestCard.text,
+        contains('never call an API to get around the page'),
+      );
     });
 
     test('carries the traversal discipline, the weight order and the report face (§3.8, §3.9)', () {
