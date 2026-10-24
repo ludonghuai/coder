@@ -56,7 +56,7 @@
 - 实现坐标：模式选项源 `lib/kernel/thincoder/thincoder_choices.dart:7-11`；composer 选项渲染 `lib/chat/composer/composer.dart:1953-2079`（`_buildToolbar`），选项控件 `lib/chat/composer/composer_picker.dart:33`（`ComposerPicker`）。
   浏览器设置段 `lib/settings/pages/browser_page.dart`；宿主工具注册与分组 `lib/browser/browser_tools.dart:92-134`。
 - 对应设计档章节：`docs/design/thincoder-adapter.md` 的 mode / configOptions 章节（模式选项与 `session/set_mode`）；`docs/design/host-tool-channel.md` 的 §4.5（审批语义）与 §4.7（宿主注册面）。
-- 先例批次：`docs/batches/2026-10-20-thincoder-mentions-and-mode-notice.md`（模式选项与提示注入同形）；`docs/batches/2026-10-18-host-tool-channel.md`（宿主工具组）。
+- 先例：模式选项与提示注入同形（提交 `5f9df260`）；宿主工具组（提交 `c651f6c2`）——两处均可用 `git show --stat` 复核。
 
 **对齐**：模式选择沿用同一套 `KernelChoice`（同一个选择器控件、同一种可切可退的形态）；`btest` 的宿主工具沿用 `HostTool` + `group` 注册（`lib/browser/browser_tools.dart:110-112`）。
 
