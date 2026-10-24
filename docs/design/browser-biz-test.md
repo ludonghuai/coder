@@ -83,7 +83,7 @@
 | 存储 | 当前值 = 会话状态 `BtestState.on`（`lib/chat/chat_session.dart:156-162`）；跨重启落全局设置 `btest.on`（`settings.json`）：会话打开时读入、切换时写回（§9.1「持久化」，F11） |
 | 不发内核 | `_applyStartMode` 只认 `plan` / `normal`（`lib/kernel/thincoder/thincoder_kernel.dart:463-467`），多余键不会被误发 |
 | 显示 | composer 的 kernel 选项区（`lib/chat/composer/composer.dart:1953-2079` 的 `_buildToolbar`，选项由 `ComposerPicker` 渲染，`lib/chat/composer/composer_picker.dart:33`）追加一项 `btest`，与 plan 同形 |
-| 两个 run 参数开关 | 遍历（`深度` / `广度`）与写（`只读` / `允许写`）的**当前值**存会话状态——字段落 `BtestState`（`lib/browser/btest/btest_mode.dart:221`，`_traversal` / `_write` 在 `:232-236`；写字段可空 = 未点选，规则见 §9.1「写初始」），`lib/chat/chat_session.dart` 只加访问器（`setBtest` 旁，`:190-214`）；**改值时写回全局设置，读取不写任何键**（`btest.on` / `btest.traversal` / `btest.mode`，§9.1「持久化」，F11）；控件的形态 / 位置 / 文案见 §9.1，取值优先级见 §3.3 字段表后一段 |
+| 两个 run 参数开关 | 遍历（`深度` / `广度`）与写（`只读` / `允许写`）的**当前值**存会话状态——字段落 `BtestState`（`lib/browser/btest/btest_mode.dart:18`，`_traversal` / `_write` 在 `:38-42`；写字段可空 = 未点选，规则见 §9.1「写初始」），`lib/chat/chat_session.dart` 只加访问器（`setBtest` 旁，`:190-214`）；**改值时写回全局设置，读取不写任何键**（`btest.on` / `btest.traversal` / `btest.mode`，§9.1「持久化」，F11）；控件的形态 / 位置 / 文案见 §9.1，取值优先级见 §3.3 字段表后一段 |
 | 退出 | 选中 normal / plan 即关闭；已投递的模式卡留在 transcript，`D = 1` 时由**下一个回合**投出一行中和语 `[btest-mode-card-off v1]` 使卡失效；**再次切进时按 §3.2 的重进判据**（中和行已投出 ⇒ 重投一张卡；中和行未及投出 ⇒ 随重进丢弃、不重投；卡不删除，中和行只标记失效） |
 
 ### 3.2 模式卡：注入的确切时机与唯一性判据
@@ -612,11 +612,12 @@ A chain break may be sent to a read-only subagent (explore, else plan): the mome
 输入不同（F8 = `unconfirmedDiffs[]` 的 `kind: pending`；F10 = `chainBreaks[]` 的断点现场）、产出不同（F8 回填报告「建议」列；F10 写 `cause`）、时点不同（run 后 / run 中）。
 **已带 `cause` 的断点不再进 F8 的待确认清单**——同一件事不重复派单；断点本身仍不进 `issues[]`（KD-23）。
 
-## 4. 受影响文件清单（现行数 = 2026-10-23 实测，`Get-Content` 口径 = 行尾换行符计数、末行计入；新档预算与 500 门处置见本节「新档行数预算」；增量 = 「SPLIT-5 拆 run 生命周期 + SPLIT-6 抽状态行开关 + F11 持久化」（提交 `662a94d4`，`git show --stat 662a94d4` 可复核）+ `[D8]` 换句同步（提交 `29500e19`），均已完成；`—` = 本批不动）
+## 4. 受影响文件清单（现行数 = 2026-10-23 实测，`Get-Content` 口径 = 行尾换行符计数、末行计入；新档预算与 500 门处置见本节「新档行数预算」；增量 = 「SPLIT-5 拆 run 生命周期 + SPLIT-6 抽状态行开关 + F11 持久化」（提交 `662a94d4`，`git show --stat 662a94d4` 可复核）+ `[D8]` 换句同步（提交 `29500e19`）+ 500 门处置拆出 `BtestSettings`（提交 `e9da0798`），均已完成；`—` = 本批不动）
 
 | 文件 | 现行数 | 增量（已完成；拆分 + F11 见提交 `662a94d4`，`[D8]` 见提交 `29500e19`） | 说明 |
 |---|---|---|---|
-| `lib/browser/btest/btest_mode.dart` | 556 | 拆 + F11（已完成） | 实测 556 越新档硬门 500 ⇒ 处置见本节「新档行数预算」；模式状态、`BtestSettings` 读写、注册与转发、闸；按 SPLIT-5 拆出 run 生命周期（已完成，两档，拆法见本节末「run 生命周期的拆法」）；F11：`BtestSettings` 加三个键（`onKey` / `traversalKey` / `modeKey`）与读写助手（缺省回落、非法值当缺失）；三键的**初值构造**落 `BtestState.fromSettings`（读三键、缺省回落、非法值当缺失、读不写），**写回**落 `BtestState` 的三个 setter（`set on` / `set traversal` / `set write`，显式闭包、失败不阻断，§9.1）；F9 的两开关字段与 `chainBreaks[].cause` 形状校验已落 |
+| `lib/browser/btest/btest_mode.dart` | 425 | 拆 + F11（已完成） | 实测 425 ≤ 500（500 门处置已落地，提交 `e9da0798`，缝表见本节「新档行数预算」）；模式状态（`BtestState`，`:18`）、注册与转发、闸；设置键的读写与 `BtestSettings` 在 `btest_settings.dart`（主档 `:14` 的 `part` 指令引入）；按 SPLIT-5 拆出 run 生命周期（已完成，两档，拆法见本节末「run 生命周期的拆法」）；F11：`BtestSettings` 加三个键（`onKey` / `traversalKey` / `modeKey`）与读写助手（缺省回落、非法值当缺失）；三键的**初值构造**落 `BtestState.fromSettings`（读三键、缺省回落、非法值当缺失、读不写），**写回**落 `BtestState` 的三个 setter（`set on` / `set traversal` / `set write`，显式闭包、失败不阻断，§9.1）；F9 的两开关字段与 `chainBreaks[].cause` 形状校验已落 |
+| `lib/browser/btest/btest_settings.dart` | 134 | 拆 + F11（已完成） | `BtestSettings` 整类（七个键常量、测试注入 `values`（`:32`）、七个 getter、`_read` / `put` / `hostsOf` / `listOf` / `_hostOf`）；首行 `part of 'btest_mode.dart';`，同一库；500 门处置落地（提交 `e9da0798`） |
 | `lib/browser/btest/btest_run_state.dart` | 393 | ≤ +380 | run 状态（`BtestEntry` / `BtestRun` / 动作计数 / `truthLine`）+ `recordAllowed` / `recordDenied`（以 extension 落本档，调用点不变）+ `btest_run_start` 的返回项组装（§3.3）；**只搬不改行为** |
 | `lib/browser/btest/btest_run_end.dart` | 309 | ≤ +315 | `btest_run_end` 的收尾检查表五项（§3.3）+ 载荷助手（`_diffKinds` / `_chainBreaks` / `_text` / `_short`）；**只搬不改行为** |
 | `lib/browser/btest/btest_status_switches.dart` | 154 | ≤ +140 | 状态行的行文本 + 两个开关（从 `composer.dart` 抽出 `_buildBtestStatus` 与 `_btestSwitch`），对外一个 `BtestStatusLine`；F9 已实现的行为原样搬，显示口径按 §9.1 |
@@ -643,7 +644,7 @@ A chain break may be sent to a read-only subagent (explore, else plan): the mome
 
 业务仓零写入：预期文件在独立 QA 仓（§3.4），不在本仓、也不在业务仓的改动面内。
 
-**设置键的落点**：btest 的设置键都在 `BtestSettings`（`lib/browser/btest/btest_mode.dart:14-145`）；`app_settings.dart` 本批不改——它被设置页依赖，把 btest 键放进去会与 `browser_page.dart` 成环。
+**设置键的落点**：btest 的设置键都在 `BtestSettings`（`lib/browser/btest/btest_settings.dart:5-134`）；`app_settings.dart` 本批不改——它被设置页依赖，把 btest 键放进去会与 `browser_page.dart` 成环。
 
 **新档行数预算（按实测重定；硬门 = 每档 ≤500）**
 
@@ -651,7 +652,8 @@ A chain break may be sent to a read-only subagent (explore, else plan): the mome
 
 | 档 | 实测 | 硬门 | 余量 | 处置 |
 |---|---|---|---|---|
-| `lib/browser/btest/btest_mode.dart` | 556 | 500 | **−56（越线）** | 按下缝表拆出 `BtestSettings` ⇒ 拆后 ≈425 / 新档 ≈134（两档余量 75 / 366） |
+| `lib/browser/btest/btest_mode.dart` | 425 | 500 | 75 | —（500 门处置已落地，提交 `e9da0798`；缝表见本节） |
+| `lib/browser/btest/btest_settings.dart` | 134 | 500 | 366 | —（`BtestSettings` 整类所在档，首行 `part of 'btest_mode.dart';`） |
 | `lib/browser/btest/btest_policy.dart` | 417 | 500 | 83 | — |
 | `lib/browser/btest/btest_card.dart` | 129 | 500 | 371 | — |
 | `lib/browser/btest/btest_expect_file.dart` | 270 | 500 | 230 | — |
@@ -662,44 +664,44 @@ A chain break may be sent to a read-only subagent (explore, else plan): the mome
 
 **判据（硬门，不重定）**：本批新建的档每档 **≤500**；越线只有两条路——拆，或书面说明为何这一档按 ≤800 判、它与新档不同在哪。**不得只改数字**。存量档 >800 无例外通道。
 
-`btest_mode.dart` 的处置 = **拆**，不按 800 判：它与其余七档同类（同一批新建、同一个宿主面、同样没有独占的硬约束）；按 800 判等于给一个新建档开存量档的口子。
+`btest_mode.dart` 的处置 = **拆**，不按 800 判：它与其余八档同类（同一批新建、同一个宿主面、同样没有独占的硬约束）；按 800 判等于给一个新建档开存量档的口子。
 
-**`btest_mode.dart` 的 500 门处置（缝表；本轮只写缝，不落代码）**
+**`btest_mode.dart` 的 500 门处置（缝表；已落地，提交 `e9da0798`）**
 
 | 项 | 内容 |
 |---|---|
 | 段名 | `BtestSettings`（btest 的设置键与读写） |
-| 搬什么 | `lib/browser/btest/btest_mode.dart:14-145` 的整类（132 行，逐字搬）：七个键常量、测试注入 `values`、七个 getter、`_read` / `put` / `hostsOf` / `listOf` / `_hostOf` |
+| 搬什么 | `lib/browser/btest/btest_settings.dart:5-134` 的整类（132 行，逐字）：七个键常量、测试注入 `values`（`:32`）、七个 getter、`_read` / `put` / `hostsOf` / `listOf` / `_hostOf` |
 | 新档名 | `lib/browser/btest/btest_settings.dart`，首行 `part of 'btest_mode.dart';` |
 | 形态 | 结构批的 `part` 搬运形态（提交 `2025afe1` / `f45183fd` / `2b40b58b` / `59f07ed0`）：owner 加一行 `part 'btest_settings.dart';`，被搬块不动。本段是**顶层类整类搬**（不是类成员）⇒ 不产生委托行——委托只用于必须留在类体里的成员，整类搬没有这样的成员；类名与全部成员签名逐字不变 |
 | 可见性 | `part` = 同库 ⇒ `BtestSettings` 仍从 `btest_mode.dart` 可见，`btest_run_state.dart` / `browser_page.dart` / 测试零改动 |
-| 拆后尺寸 | `btest_mode.dart` ≈425（556 − 132 + 1 行 `part` 指令）· `btest_settings.dart` ≈134（1 行 `part of` + 空行 + 132 行）——两档 ≤500 |
+| 拆后尺寸 | `btest_mode.dart` 425（实测）· `btest_settings.dart` 134（实测）——两档 ≤500 |
 | 落地判据 | `dart analyze` = 0 issue；`flutter test --no-pub test/browser` 绿；被搬块与搬前逐行比对 `diffs: 0`；行数按 `Get-Content` 口径 |
-| 落地前约束 | 该档不得再增行；下一批触碰 `btest_mode.dart` 时先拆后加 |
+| 落地后 | 两档 425 / 134，余量 75 / 366；任一档越 500 仍按本节硬门判据处置 |
 
 **超 800 行档：本批先拆后加（>800 无例外通道）；本批的 SPLIT-5 / SPLIT-6 已完成（提交 `662a94d4`；三个新档的实读见本表「现行数」列）**
 
 | 档 | 现行 | 本批（已完成） | 余下抽取缝（谁动它时从这里切） | 登记 |
 |---|---|---|---|---|
-| `btest_mode.dart` | 556 | 已拆出 run 生命周期（SPLIT-5，提交 `662a94d4`）；F11 三键已落 | `BtestSettings` 整类抽 `btest_settings.dart`（= 上方「新档行数预算」给 556 的 500 门处置，缝表在该节）⇒ ≈425 | SPLIT-5（已落地）；500 门处置（未落地） |
+| `btest_mode.dart` | 425 | 已拆出 run 生命周期（SPLIT-5，提交 `662a94d4`）；F11 三键已落；`BtestSettings` 整类已抽到 `btest_settings.dart`（提交 `e9da0798`） | 无（425 ≤ 500；缝表见上方「新档行数预算」） | SPLIT-5（已落地）；500 门处置（已落地，提交 `e9da0798`） |
 | `composer.dart` | 556 | 已抽状态行与两个开关（−≈112）⇒ ≈2354；只留 ≤5 行调用点 | 按 `docs/design/structure-splits.md` §4.3 的六段切法切（段表与符号点名见该节） | SPLIT-6（本批落地）/ SPLIT-1（余下；旧缝 `composer/mode_selector.dart` 已被取代，按它到不了 ≤800，理由见该节） |
 | `thincoder_kernel.dart` | 480 | — | 审批面（`_serverRequest` / `answer` / `_resolveApprovals`）抽 `approvals.dart` | SPLIT-2 |
 | `chat_session.dart` | 794 | 三键读写零净增（≤ +3） | 模式与设置投影抽 `session/mode_state.dart` | SPLIT-3（触发条件：下一次向该档追加 >10 行即先拆；本批 +3 以内，不触发） |
 | `chat_models.dart` | 732 | — | 按 `docs/design/structure-splits.md` §4.5：`EditorContext` / `TextContext` 抽到 `lib/chat/editor_context.dart` | SPLIT-4（旧缝 `chat/btest_models.dart` 已被取代，本档没有任何 btest 类型，缝上无料可搬，理由见该节） |
 
-**run 生命周期的拆法（本批第一步，已完成；随后落 F11。提交 `662a94d4`，拆后实读见本表「现行数」列与本批 §5）**：1131 行放进两个各 ≤500 的档在算术上做不到（要搬走 ≥631 行，而搬走的那侧自带文件头 ⇒ 新档必然 >631 行），所以 run 生命周期按「一轮的开」与「一轮的收」各成一档；拆后实测 393 / 309 / 556（`btest_mode` 越新档硬门 500，处置见「新档行数预算」）：
+**run 生命周期的拆法（本批第一步，已完成；随后落 F11。提交 `662a94d4`，拆后实读见本表「现行数」列与本批 §5）**：1131 行放进两个各 ≤500 的档在算术上做不到（要搬走 ≥631 行，而搬走的那侧自带文件头 ⇒ 新档必然 >631 行），所以 run 生命周期按「一轮的开」与「一轮的收」各成一档；拆后实测 393 / 309 / 425（`btest_mode` 再经 500 门处置拆出设置类，提交 `e9da0798`）：
 
 - `btest_run_state.dart` ← `BtestEntry`（`:90-98`）+ `BtestRun`（`:100-217`，含 `truthLine` 与动作计数）。
   同档再放 `BtestState.recordAllowed` / `recordDenied` / `_count`（`:299-344`，以 **extension** 落，`state.recordAllowed(...)` 的调用点不变）+ `_startRun` 的返回项组装（`:650-835`）；`_start` 的 `run` 闭包改调本档顶层函数（参数与返回不变）⇒ 实测 393。
 - `btest_run_end.dart` ← `_endRun` 的收尾检查表五项（`:836-1066`）+ 载荷助手（`:1067-1131`，`_diffKinds` / `_chainBreaks` / `_text` / `_short`）；`_end` 的 `run` 闭包同上 ⇒ 实测 309。
-- `btest_mode.dart` 留下：`BtestSettings`、`BtestState`（`on` + 两个开关 + `run` 字段 + `start`）、注册与转发、`BtestGate`、两个工具的 schema ⇒ 拆后与 F11 之后实测 556（>500 新档硬门；处置见「新档行数预算」）。`start` 不搬：它写私有 `_runs`，搬走就得连计数器一起搬，收益为零。
+- `btest_mode.dart` 留下：`BtestState`（`on` + 两个开关 + `run` 字段 + `start`）、注册与转发、`BtestGate`、两个工具的 schema ⇒ 实测 425（`BtestSettings` 整类在 `btest_settings.dart`，500 门处置，提交 `e9da0798`）。`start` 不搬：它写私有 `_runs`，搬走就得连计数器一起搬，收益为零。
 
-**新增实现只落 `lib/browser/btest/*`**（mode / run_state / run_end / status_switches / policy / card / expect-file / weights 八个文件）；四个大档里只出现"调用点 + 一个钩子"，不搬已有逻辑（本批唯一的搬运是本表列出的两处拆分）、不改已有签名。
+**新增实现只落 `lib/browser/btest/*`**（mode / settings / run_state / run_end / status_switches / policy / card / expect-file / weights 九个文件）；四个大档里只出现"调用点 + 一个钩子"，不搬已有逻辑（本批唯一的搬运是本表列出的两处拆分）、不改已有签名。
 
 **F10 增量（断点查明）**：`btest_mode.dart` 的检查 2 对 `chainBreaks[].cause` 只加「可缺省 + 出现须非空」的形状校验（≤ +10）；`btest_card.dart` 的 `[D8]` 一句断点可派只读子代理（≤ +3 行；替换后的句子实测 497 字符，比上一版多 288 字符）；`test/browser/btest_policy_test.dart` 加 #41 / #42（≤ +40，随批删）；
 `test/browser/btest_card_test.dart` 随 `[D8]` 换句同步（+25 行，提交 `29500e19`，随批删）。
 
-**登记**：SPLIT-1…6 = 拆分登记项；SPLIT-5 / SPLIT-6 本批落地，SPLIT-1…4 不在本批落地；`btest_mode.dart` 的 500 门处置缝（`BtestSettings` → `btest_settings.dart`）未落地。台账写权不在设计位，所以本批只在档内登记并在回执点名，由主编排方落台账行（挂本批 #149 的后续批）。
+**登记**：SPLIT-1…6 = 拆分登记项；SPLIT-5 / SPLIT-6 本批落地，SPLIT-1…4 不在本批落地；`btest_mode.dart` 的 500 门处置缝（`BtestSettings` → `btest_settings.dart`）已落地（提交 `e9da0798`）。台账写权不在设计位，所以本批只在档内登记并在回执点名，由主编排方落台账行（挂本批 #149 的后续批）。
 
 ## 5. 关键决策记录（含被否）
 
@@ -732,7 +734,7 @@ A chain break may be sent to a read-only subagent (explore, else plan): the mome
 | KD-24 | 权重表落 `<qaRoot>/weights.md`，宿主首建、AI 只追加标记、`已修` 的类排末尾 | ① 提示词常量：缺陷修完后顺序不变，永远先查已修好的地方（用户给的理由）；② 每仓一份：同一工作区多个仓各写一份，而密度的实测来源只有一份语料；③ AI 改条数：历史密度是读数，改了不可复核 |
 | KD-25 | F8 研判放在 run 之外，由会话主代理派只读子代理逐条给建议，判定列不动 | ① run 内自查：同一代理、同一份证据，不构成第二双眼睛；② 子代理改判定：违反 F3.1（弱来源不得判预期不符），判定权被让渡；③ 建议并进尾注：逐条对齐要靠 caseId 手找，表内一列才能一眼对照 |
 | KD-26 | 报告加「判定」「建议」两列；报告在研判之后一次贴出 | ① 先贴一份再补一版：同一轮两份报告，用户要对照两版才能读；② 只加「建议」不加「判定」：建议列没有「不许改」的锚点，判定与建议混在一格 |
-| KD-27 | 两个 run 参数做成状态行上的二选一开关（遍历：`深度` / `广度`；写：`只读` / `允许写`），值存会话状态（字段落 `BtestState`，`lib/browser/btest/btest_mode.dart:221`；`chat_session.dart` 只加访问器），改值时写回全局设置、读取不写（KD-30，§9.1）；业务线不做下拉；优先级 = 显式参数 > 会话开关 > 设置缺省；运行中点击只改开关、只对下一次 run 生效 | ① 继续让用户背参数名（`traversal: chain` / `mode: write`）：用户 2026-10-23 03:34 的话是「不能做成按键选择吗」「我没看懂」——参数名对用户是认知负担，而两个值各只有两档、没有中间态，正是开关的形态；② 按钮组：状态行很矮，两个按钮组把它撑高；③ 业务线下拉：要先知道 `repoRoot` 才能列 `<qaRoot>/<仓名>/*.md`，会逼用户先说仓、再选线，多一步；`line` 从用户句子里来更直接；④ 只存会话内存：重启即回默认，用户每天要重选两次——本项立项理由（用户 2026-10-23 06:46 选「A 全局记住」），落点与失败口径见 KD-30 |
+| KD-27 | 两个 run 参数做成状态行上的二选一开关（遍历：`深度` / `广度`；写：`只读` / `允许写`），值存会话状态（字段落 `BtestState`，`lib/browser/btest/btest_mode.dart:18`；`chat_session.dart` 只加访问器），改值时写回全局设置、读取不写（KD-30，§9.1）；业务线不做下拉；优先级 = 显式参数 > 会话开关 > 设置缺省；运行中点击只改开关、只对下一次 run 生效 | ① 继续让用户背参数名（`traversal: chain` / `mode: write`）：用户 2026-10-23 03:34 的话是「不能做成按键选择吗」「我没看懂」——参数名对用户是认知负担，而两个值各只有两档、没有中间态，正是开关的形态；② 按钮组：状态行很矮，两个按钮组把它撑高；③ 业务线下拉：要先知道 `repoRoot` 才能列 `<qaRoot>/<仓名>/*.md`，会逼用户先说仓、再选线，多一步；`line` 从用户句子里来更直接；④ 只存会话内存：重启即回默认，用户每天要重选两次——本项立项理由（用户 2026-10-23 06:46 选「A 全局记住」），落点与失败口径见 KD-30 |
 | KD-28 | 规则 A 判优先级**定值后**的 `mode`（缺省解析完成再判）：`env: prod` ∧ 定值 = `write` ⇒ 拒绝起 run，不论 write 来自参数还是开关 | 只判字面参数：`env: prod` + 省掉 `mode` + 写开关 = `允许写` 能起一个 `mode=write` 的 run，与「起 run 即拒」的不变量相反（评审 #36 🔴）；数据面虽由规则 B 兜住，判据本身仍可被省参数绕过 |
 | KD-29 | `chain` 断点查明：只在断点处派只读子代理（`explore`，退 `plan`）、**派出后不等回答**继续走，一次 run 最多 3 次；结论在 run 内回来 ⇒ 写 `chainBreaks[].cause`（可空），run 已结束 ⇒ 进收尾消息（不重开）；`reason` 四值枚举不变 | ① 每步派：一条业务线几十步，每步一个子代理会把一轮堆成几十个，稀释研判、白花成本；② 宿主 API 派：模型的 `subagent` 工具本来就是模型侧装配（§3.10 实读），宿主另开一条不经模型的派发路径 = 两套派发语义；③ 子代理改 `reason` / 判定：判定权在用户（F3.1 / F8 同一条线）；④ 不设上限：断点多的业务线同样会堆出几十个子代理，结论也收不完；⑤ 断点既派查明又进 F8：同一件事两次派单 |
 | KD-30 | 模式与两个开关跨重启：三个全局键 `btest.on`（bool）/ `btest.traversal`（`chain` / `surface`）/ `btest.mode`（`readonly` / `write`），与既有四个 `btest.*` 键同处 `BtestSettings`；会话打开时读成 `BtestState` 初值，每次改值写回自己的键；写失败只 `debugPrint`、不阻断 UI；键缺失 / 值非法 ⇒ 回落缺省 | ① 会话设置 map（`kernelContext.settings`）：只随会话走，新建会话仍是默认，写入要动工作区真相源（台账 #153 的结论）；② 单一个 `btest` 对象键：三个值塞进一个键，改一个要整组重写、缺省解析耦合，读不出「哪个值缺」；③ 写失败弹错 / 回滚界面：设置写失败（文件被占用 / 不解析）不该吞掉用户刚做的操作——界面保持已改值，下一会话读到旧值即可（与 `browser_page.dart` 既有写回同口径）；④ 非法值自动改写成缺省：悄悄改写没人能看出被改过，读时回落 + 不写回，让文件保持用户原样 |
@@ -877,12 +879,12 @@ consumers: 状态行的两个 `ComposerPicker`（今日在 `lib/chat/composer/co
 **默认值与状态归属**：
 
 - 遍历初始 = `btest.traversal`（键不存在 ⇒ `广度` = 内置 `surface`，与既有行为一致）。
-- **写初始（唯一权威表述；§3.3 的优先级段与 ③ 档只引用本句）**：写开关在 `BtestState` 里的字段**可空**（`bool? _write`，`lib/browser/btest/btest_mode.dart:236`）；`btest.mode` 键不存在 ⇒ **开关保持未点选**（`writePicked` = false）。
+- **写初始（唯一权威表述；§3.3 的优先级段与 ③ 档只引用本句）**：写开关在 `BtestState` 里的字段**可空**（`bool? _write`，`lib/browser/btest/btest_mode.dart:42`）；`btest.mode` 键不存在 ⇒ **开关保持未点选**（`writePicked` = false）。
   取值与状态行显示时解析 `btest.readonly`：true ⇒ `只读` / false ⇒ `允许写`（`btest.readonly` 缺省 = true，fail-closed）。点过一次以后 `_write` 有值，`btest.readonly` 不再参与。
 - **与设置页「默认只读」的关系**：它是**未点选时的兜底**，不是覆盖开关的设置——`btest.mode` 一旦被第一次点选写入并持久化，此后任何会话都读它，设置页「默认只读」对取值与显示都不再有影响。
 - **复位路径（唯一一条）**：删 `settings.json` 里的 `btest.mode` 键（明文 JSON，`User/settings.json`，`lib/settings/user_settings.dart:10`；`update(key, null)` 即删键，`:26-27`），重开会话 ⇒ 写开关回到未点选，「默认只读」重新生效。设置页不为它新增控件（§8）。
-- 两个开关的当前值是会话状态：字段落 `BtestState`（`lib/browser/btest/btest_mode.dart:221`），`lib/chat/chat_session.dart` 只留访问器转发（`setBtest` 旁，`:190-214`）；跨重启靠下面三个键，不靠内存。
-- **测试如何控制设置档**：两条既有夹具，不新造。① 读路径（缺省解析 / 未点选）用 `BtestSettings.values` 静态注入（`lib/browser/btest/btest_mode.dart:33`；`test/browser/btest_policy_test.dart:25` setUp 赋值、`:48` 置 `null` 还原，`test/chat/composer_btest_status_test.dart:16` / `:24` 同形）。
+- 两个开关的当前值是会话状态：字段落 `BtestState`（`lib/browser/btest/btest_mode.dart:18`），`lib/chat/chat_session.dart` 只留访问器转发（`setBtest` 旁，`:190-214`）；跨重启靠下面三个键，不靠内存。
+- **测试如何控制设置档**：两条既有夹具，不新造。① 读路径（缺省解析 / 未点选）用 `BtestSettings.values` 静态注入（`lib/browser/btest/btest_settings.dart:32`；`test/browser/btest_policy_test.dart:25` setUp 赋值、`:48` 置 `null` 还原，`test/chat/composer_btest_status_test.dart:16` / `:24` 同形）。
   ② 写路径（#43 要断言 `settings.json` 内容）用 `SettingsFiles.instance` 指向临时目录（可替换，`lib/settings/user_settings.dart:85-88`），真读写走 `settings.update`（`test/settings/browser_page_test.dart:104` 同形）。
 - 切回 normal 时状态行整体消失，两个开关不单独显示。
 
@@ -894,11 +896,12 @@ consumers: 状态行的两个 `ComposerPicker`（今日在 `lib/chat/composer/co
 | `btest.traversal` | string：`chain` / `surface` | `surface`（= `广度`） | 点「遍历」⇒ 取值的英文名（`chain` / `surface`） |
 | `btest.mode` | string：`readonly` / `write` | 键不存在 ⇒ 开关未点选（见上「写初始」一句） | 点「写」⇒ `write` / `readonly` |
 
-三个键与既有 `btest.allowHosts` / `btest.prodHosts` / `btest.readonly` / `btest.qaRoot` 同处（`BtestSettings`，`lib/browser/btest/btest_mode.dart:15-88`），读写都走它，不新增文件。
+三个键与既有 `btest.allowHosts` / `btest.prodHosts` / `btest.readonly` / `btest.qaRoot` 同处（`BtestSettings`，`lib/browser/btest/btest_settings.dart:5-134`），读写都走它；三个键与既有四键同一个类，不新设设置面。
 
 - **读（会话打开）**：落 `BtestState.fromSettings`（`lib/browser/btest/btest_mode.dart`）——取（或建）该会话的 `BtestState`，把三键直写进私有字段成为初值：`on` 与 `_traversal` 一定落实值；`_write` 只在 `btest.mode` 存在时落实值，不存在 ⇒ 保持未点选（见上「写初始」一句）。键缺失或值非法 ⇒ 回落缺省；非法值不报错、不阻断、不改写；读取本身不写任何键（不经 setter）。
 - **会话层只转发**：`_openBtest`（`lib/chat/chat_session.dart:158-162`）只剩一行 `BtestState.fromSettings(...)` 调用，不直接读设置；`setBtest` / `setBtestTraversal` / `setBtestWrite`（`:172-214`）只转发到 `BtestState` 的字段 / setter，不直接写设置。`BtestMode.settingKey`（`btest`）随之无引用，删掉。
-- **写（每次改值）**：落 `BtestState` 的三个 setter（`set on` / `set traversal` / `set write`，`lib/browser/btest/btest_mode.dart:227-252` 现址）——各写自己的键（`on` ⇒ `true` / 删键 `null`；遍历 ⇒ `chain` / `surface`；写 ⇒ `write` / `readonly`）；删键用 `null`（`SettingsFiles.update` 的 null 语义，`lib/settings/user_settings.dart:26-27`）。
+- **写（每次改值）**：落 `BtestState` 的三个 setter（`set on` / `set traversal` / `set write`，`lib/browser/btest/btest_mode.dart:31` / `:62` / `:73`）——
+  各写自己的键（`on` ⇒ `true` / 删键 `null`；遍历 ⇒ `chain` / `surface`；写 ⇒ `write` / `readonly`）；删键用 `null`（`SettingsFiles.update` 的 null 语义，`lib/settings/user_settings.dart:26-27`）。
 - **失败口径**：`unawaited(settings.update(key, value).catchError((Object error) { debugPrint('btest.<key> not kept: $error'); }))`——**显式闭包**，与 `ColorThemeSettings.storeColorTheme`（`lib/settings/user_settings.dart:160-166`）同一形态；写失败只留一条 `debugPrint`，界面与本次会话照常（内存值已改），下一会话读到旧值。
 - **缺省行为不变**：三个键都不存在（全新用户）= 关、`广度`、`btest.readonly` 缺省 → 只读，与今天的表现一致。
 
