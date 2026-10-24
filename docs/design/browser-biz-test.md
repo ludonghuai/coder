@@ -682,7 +682,7 @@ run 的「暂停位」`none found`：`BtestState` 只有 `run` 一个字段（`b
 | `lib/browser/btest/btest_status_switches.dart` | 154 | ≤ +140 | 状态行的行文本 + 两个开关（从 `composer.dart` 抽出 `_buildBtestStatus` 与 `_btestSwitch`），对外一个 `BtestStatusLine`；F9 已实现的行为原样搬，显示口径按 §9.1 |
 | `lib/browser/btest/btest_weights.dart` | 293 | — | 默认八类（条数 + 检查点）、`<qaRoot>/weights.md` 的路径 / 首建 / 解析 / 类目齐全读数、`已修` 排末尾、标记行逐字匹配（F7.1 已落，本批不动） |
 | `lib/browser/btest/btest_policy.dart` | 417 | — | `BtestTraversal` / `BtestFace` 与 `parse`；入口 / evaluate / 只读面 / 生产闸的判据纯函数（本批不动，开关只改取值来源） |
-| `lib/browser/btest/btest_card.dart` | 129 | +2 行 · 正文 +1079 字符（6946 → 8025；`[D9]` 一行，含三条禁令） | `[D1]`–`[D9]` / `[J1]`–`[J7]` / `[P01]`–`[P20]` / `[H1]`–`[H3]`；报告口径与两列 |
+| `lib/browser/btest/btest_card.dart` | 131 | +2 行 · 正文 +1047 字符（6946 → 7993；`[D9]` 一行，含三条禁令） | `[D1]`–`[D9]` / `[J1]`–`[J7]` / `[P01]`–`[P20]` / `[H1]`–`[H3]`；报告口径与两列 |
 | `lib/browser/btest/btest_expect_file.dart` | 270 | — | 预期文件：路径派生（§3.4 四分支）、case 索引 + hash 基线、写回校验、人改检测（本批不动） |
 | `lib/browser/browser_tools.dart` | 786 | — | 工具 `run` 包装的 btest 闸；`btest_run_start` / `btest_run_end` 注册；`browser_navigate.detour`、`browser_evaluate.readOnly` |
 | `lib/kernel/thincoder/thincoder_kernel.dart` | 480 | — | 权限应答处接 btest 放行判据；回合上下文里挂模式卡 |
@@ -695,8 +695,8 @@ run 的「暂停位」`none found`：`BtestState` 只有 `run` 一个字段（`b
 | `lib/l10n/app_localizations.dart` | 18045 | 派生 | 生成物，不手改 |
 | `lib/l10n/app_localizations_en.dart` | 11085 | 派生 | 生成物，不手改 |
 | `lib/l10n/app_localizations_zh.dart` | 10490 | 派生 | 生成物，不手改 |
-| `test/browser/btest_policy_test.dart` | 947 | 已落：#41 / #42 / #43 / #44 / #45（计入现值 947）；本轮待落：#47；合计上限 ≤ +45 | 已落 = F9 的 #35 / #36 / #39 + F10 的 #41（`cause` 形状）/ #42（第 4 个断点照常收尾）+ F11 的 #43（三键写回 → 重开会话读回）/ #44（键缺失 / 非法值 ⇒ 缺省，读不写）/ #45（切回 normal ⇒ `btest.on` 删键）；**本轮待落 = #47**（F12 情形 B 的 `uncovered[]` 载荷形状断言，§7 #47 的测试落点）；上限 ≤ +45 覆盖上述全部 |
-| `test/browser/btest_card_test.dart` | 194 | +87（194 → 281；`[D9]` 逐字锚点，含三条禁令；标签计数 38 → 39） | 卡内标签计数与报告列 |
+| `test/browser/btest_policy_test.dart` | 971 | 已落：#41 / #42 / #43 / #44 / #45 / #47（计入现值 971）；合计上限 ≤ +45 | 已落 = F9 的 #35 / #36 / #39 + F10 的 #41（`cause` 形状）/ #42（第 4 个断点照常收尾）+ F11 的 #43（三键写回 → 重开会话读回）/ #44（键缺失 / 非法值 ⇒ 缺省，读不写）/ #45（切回 normal ⇒ `btest.on` 删键）；**#47 已落**（`:947-969`；F12 情形 B 的 `uncovered[]` 载荷形状断言，§7 #47 的测试落点）；上限 ≤ +45 覆盖上述全部 |
+| `test/browser/btest_card_test.dart` | 276 | +82（194 → 276；`[D9]` 逐字锚点，含三条禁令；标签计数 38 → 39） | 卡内标签计数与报告列 |
 | `test/browser/btest_weights_test.dart` | 183 | — | 权重表首建 / 缺失 / 删类目 / 标记漂名 |
 | `test/chat/composer_btest_status_test.dart` | 217 | ≤ +15 | #37（期望改为「重启读回三键」）/ #38 / #40；本批加一条「`btest.mode` 缺键 ⇒ 状态行显示解析后的 `btest.readonly` 值」 |
 | `test/browser/btest_expect_file_test.dart` | 617 | — | 预期文件用例（F3.2 已落，本批不动） |
@@ -716,7 +716,7 @@ run 的「暂停位」`none found`：`BtestState` 只有 `run` 一个字段（`b
 | `lib/browser/btest/btest_mode.dart` | 425 | 500 | 75 | —（500 门处置已落地，提交 `e9da0798`；缝表见本节） |
 | `lib/browser/btest/btest_settings.dart` | 134 | 500 | 366 | —（`BtestSettings` 整类所在档，首行 `part of 'btest_mode.dart';`） |
 | `lib/browser/btest/btest_policy.dart` | 417 | 500 | 83 | — |
-| `lib/browser/btest/btest_card.dart` | 129 | 500 | 371 | — |
+| `lib/browser/btest/btest_card.dart` | 131 | 500 | 369 | — |
 | `lib/browser/btest/btest_expect_file.dart` | 270 | 500 | 230 | — |
 | `lib/browser/btest/btest_run_state.dart` | 393 | 500 | 107 | — |
 | `lib/browser/btest/btest_run_end.dart` | 309 | 500 | 191 | — |
