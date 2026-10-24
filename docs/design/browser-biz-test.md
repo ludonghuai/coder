@@ -666,8 +666,10 @@ run 的「暂停位」`none found`：`BtestState` 只有 `run` 一个字段（`b
 **卡 `[D9]` 的替换句（逐字，实施照抄；加在 `[D8]` 之后）**：
 
 ```text
-[D9] Some steps only a person can finish — a file picker (upload, attachment) is the one case here. Two cases. (B) When a normal run reaches that step: do NOT stop — record it in uncovered (branch = the step, why = "needs a manual upload, not run this round") and go on with the next steps. (A) Only when the user asks to test this upload feature on its own: bring the page to that step, say "请你在这里选文件上传（<业务线> · <本步在做什么>），传完回我「好了」。" and end the turn; wait for the user's 「好了」 in the same conversation, then read the attachment list and the record's snapshot and carry on. In both cases, three bans: (1) never stand in for the person at the file input — do not click the file input, do not call browser_upload, do not submit an attachment through any call that carries a file parameter, and a file that already sits in the repository is no exception (a write run's wider action list does not lift this ban); (2) never write a temporary file to fill the gap; (3) never call an API to get around the page. The same runId continues — no new run; case A's wait is not a chain break.
+[D9] Some steps only a person can finish — a file picker (upload, attachment) is the one case here. Two cases. (B) When a normal run reaches that step: do NOT stop — record it in uncovered (branch = the step, why = 需人工上传，本轮未执行) and go on with the next steps. (A) Only when the user asks to test this upload feature on its own: bring the page to that step, say "请你在这里选文件上传（<业务线> · <本步在做什么>），传完回我「好了」。" and end the turn; wait for the user's 「好了」 in the same conversation, then read the attachment list and the record's snapshot and carry on. In both cases, three bans: (1) never stand in for the person at the file input — do not click the file input, do not call browser_upload, do not submit an attachment through any call that carries a file parameter, and a file that already sits in the repository is no exception (a write run's wider action list does not lift this ban); (2) never write a temporary file to fill the gap; (3) never call an API to get around the page. The same runId continues — no new run; case A's wait is not a chain break.
 ```
+
+**取值语种（写死，勿按英文改回）**：本行是英文说明；`uncovered[].why` 的取值就是报告里的原字符串 `需人工上传，本轮未执行`，按项目既有中文口径——与 `[D8]` 的 `未查明（<原因>）` 同形（取值本身不加引号），并与 §6 F12 / §7 #47 的走查读数逐字同文；卡与测试按本行照抄。
 
 ## 4. 受影响文件清单（现行数 = 2026-10-23 实测，`Get-Content` 口径 = 行尾换行符计数、末行计入；新档预算与 500 门处置见本节「新档行数预算」；增量 = 「SPLIT-5 拆 run 生命周期 + SPLIT-6 抽状态行开关 + F11 持久化」（提交 `662a94d4`，`git show --stat 662a94d4` 可复核）+ `[D8]` 换句同步（提交 `29500e19`）+ 500 门处置拆出 `BtestSettings`（提交 `e9da0798`），均已完成；`—` = 本批不动）
 
@@ -680,7 +682,7 @@ run 的「暂停位」`none found`：`BtestState` 只有 `run` 一个字段（`b
 | `lib/browser/btest/btest_status_switches.dart` | 154 | ≤ +140 | 状态行的行文本 + 两个开关（从 `composer.dart` 抽出 `_buildBtestStatus` 与 `_btestSwitch`），对外一个 `BtestStatusLine`；F9 已实现的行为原样搬，显示口径按 §9.1 |
 | `lib/browser/btest/btest_weights.dart` | 293 | — | 默认八类（条数 + 检查点）、`<qaRoot>/weights.md` 的路径 / 首建 / 解析 / 类目齐全读数、`已修` 排末尾、标记行逐字匹配（F7.1 已落，本批不动） |
 | `lib/browser/btest/btest_policy.dart` | 417 | — | `BtestTraversal` / `BtestFace` 与 `parse`；入口 / evaluate / 只读面 / 生产闸的判据纯函数（本批不动，开关只改取值来源） |
-| `lib/browser/btest/btest_card.dart` | 129 | +2 行 · 正文 +≈900 字符（`[D9]` 一行，含三条禁令） | `[D1]`–`[D9]` / `[J1]`–`[J7]` / `[P01]`–`[P20]` / `[H1]`–`[H3]`；报告口径与两列 |
+| `lib/browser/btest/btest_card.dart` | 129 | +2 行 · 正文 +1079 字符（6946 → 8025；`[D9]` 一行，含三条禁令） | `[D1]`–`[D9]` / `[J1]`–`[J7]` / `[P01]`–`[P20]` / `[H1]`–`[H3]`；报告口径与两列 |
 | `lib/browser/btest/btest_expect_file.dart` | 270 | — | 预期文件：路径派生（§3.4 四分支）、case 索引 + hash 基线、写回校验、人改检测（本批不动） |
 | `lib/browser/browser_tools.dart` | 786 | — | 工具 `run` 包装的 btest 闸；`btest_run_start` / `btest_run_end` 注册；`browser_navigate.detour`、`browser_evaluate.readOnly` |
 | `lib/kernel/thincoder/thincoder_kernel.dart` | 480 | — | 权限应答处接 btest 放行判据；回合上下文里挂模式卡 |
@@ -694,7 +696,7 @@ run 的「暂停位」`none found`：`BtestState` 只有 `run` 一个字段（`b
 | `lib/l10n/app_localizations_en.dart` | 11085 | 派生 | 生成物，不手改 |
 | `lib/l10n/app_localizations_zh.dart` | 10490 | 派生 | 生成物，不手改 |
 | `test/browser/btest_policy_test.dart` | 947 | 已落：#41 / #42 / #43 / #44 / #45（计入现值 947）；本轮待落：#47；合计上限 ≤ +45 | 已落 = F9 的 #35 / #36 / #39 + F10 的 #41（`cause` 形状）/ #42（第 4 个断点照常收尾）+ F11 的 #43（三键写回 → 重开会话读回）/ #44（键缺失 / 非法值 ⇒ 缺省，读不写）/ #45（切回 normal ⇒ `btest.on` 删键）；**本轮待落 = #47**（F12 情形 B 的 `uncovered[]` 载荷形状断言，§7 #47 的测试落点）；上限 ≤ +45 覆盖上述全部 |
-| `test/browser/btest_card_test.dart` | 194 | +8（`[D9]` 逐字锚点，含三条禁令；标签计数 38 → 39） | 卡内标签计数与报告列 |
+| `test/browser/btest_card_test.dart` | 194 | +87（194 → 281；`[D9]` 逐字锚点，含三条禁令；标签计数 38 → 39） | 卡内标签计数与报告列 |
 | `test/browser/btest_weights_test.dart` | 183 | — | 权重表首建 / 缺失 / 删类目 / 标记漂名 |
 | `test/chat/composer_btest_status_test.dart` | 217 | ≤ +15 | #37（期望改为「重启读回三键」）/ #38 / #40；本批加一条「`btest.mode` 缺键 ⇒ 状态行显示解析后的 `btest.readonly` 值」 |
 | `test/browser/btest_expect_file_test.dart` | 617 | — | 预期文件用例（F3.2 已落，本批不动） |
