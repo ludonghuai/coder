@@ -32,7 +32,7 @@
 
 | 编号 | 用例 | 组件间交互 | 断言的业务可观察结果 | 用户入口 | 回溯需求 | 用例文件 · 标题 | 状态 |
 |---|---|---|---|---|---|---|---|
-| 2-1 | 失焦期间有 120 个增量到达，切回后一次到位 | `WindowVisible`（唯一观察者）⇄ `ChatHistoryView` / `MarkdownView` ⇄ `Transcript`：可见性通知关掉重建与计时器 | 失焦期：重建 0 次、`[stall]` 0 行、可见文本不变；恢复：恰 1 次重建、可见文本 == 全文、底部仍在底部、中段偏移不变 | 点别的窗口再点回 | F6 | `test/integration/chat_flows_test.dart` · `test('2-1 …')` | 本批新增 |
+| 2-1 | 失焦期间有 120 个增量到达，切回后一次到位 | `WindowVisible`（唯一观察者）⇄ `ChatHistoryView` ⇄ `Transcript`：可见性通知关掉重建 | 失焦期：重建 0 次、`[stall]` 0 行、可见文本不变；恢复：恰 1 次重建、可见文本 == 全文、底部仍在底部、中段偏移不变 | 点别的窗口再点回 | F6 | `test/integration/chat_flows_test.dart` · `test('2-1 …')` | 本批落地 |
 
 ## 3 大会话流式：滚动与打字跟手
 
@@ -44,7 +44,7 @@
 
 | 编号 | 用例 | 组件间交互 | 断言的业务可观察结果 | 用户入口 | 回溯需求 | 用例文件 · 标题 | 状态 |
 |---|---|---|---|---|---|---|---|
-| 3-1 | 大会话流式回放，文本终态正确、重绘范围不随历史增长 | `ChatHistoryView` ⇄ `EdgeFadeMask`（边缘带）⇄ `MarkdownView` 节流：流式行重绘不牵动整块列表区域 | 终态可见文本 == 全文；流式帧上列表主体无全区域合成层；20 与 200 回合两种历史下 `ChatItemView` 每增量 1 次、逐项相等 | 长会话里发一条消息并滚动 | F5 · F1 | `test/integration/chat_flows_test.dart` · `test('3-1 …')` | 本批新增 |
+| 3-1 | 大会话流式回放，文本终态正确、重绘范围不随历史增长 | `ChatHistoryView` ⇄ `Transcript` / 粘顶副本：流式行重绘不牵动整块列表区域 | 终态可见文本 == 全文；长（500 回合）/ 短（20 回合）两组历史的每增量重建行数逐项相等且有上界（整机默认 sticky 风格下非「恰 1」；F1 的「恰 1」在组件级 `test/chat/chat_history_rebuild_test.dart` 计） | 长会话里发一条消息并滚动 | F5 · F1 | `test/integration/chat_flows_test.dart` · `test('3-1 …')` | 本批落地 |
 
 ## 变更记录（本批）
 

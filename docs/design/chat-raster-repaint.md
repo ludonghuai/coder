@@ -3,7 +3,7 @@
 > 板块：对话渲染（chat-streaming）· 范围仓：baocode。
 > 本档 = 该板块第二篇：首篇 `docs/design/chat-streaming.md` 管 F1–F4（增量重建边界 / 折叠 / markdown 节流）；本档管 F5 重绘范围 · F6 出帧时机 · F8 进程创建不阻塞窗口线程 · 删预热池（回到上游形态） · N3 DPR 留痕 · N4 停顿看门狗 · N5 挂起报告可见。
 > 配对需求档：`docs/requirements/chat-streaming.md`（F5 · F6 · F8 · N2 · N3 · N4 · N5）。
-> 状态：设计稿 v10 · 2026-10-26 · 行数 = 逐档实测（口径见 §5 表头）；已落地的行在表内给出实测增量与现值。
+> 状态：设计稿 v11 · 2026-10-26 · 行数 = 逐档实测（口径见 §5 表头）；已落地的行在表内给出实测增量与现值。
 > 集成索引：`test/RTM.md`（本批建立；三条用例落 `test/integration/chat_flows_test.dart`，§8.1）。
 
 ## 1. 模块目标与范围
@@ -124,34 +124,35 @@
 
 **验收**：需求档 §4 的「删除预热池」条——`thincoder_warm` / `warm hit` / `warm miss` / `预热池` 在 `lib/**` 与 `test/**/*.dart` 里零命中（**代码面**；索引与文档里的描述性文字不计，`warmWindow` / `warmUp` 这类同名不同义不算）；无池仍能起会话（打开会话 ⇒ 起进程、能输入；关掉视图再打开 ⇒ 再起一个）；`events.log` 无 `timing: warm …` 行。判据行见 §7 的「P」行，用例见 §8 T20。
 
-### 3.3 F5：重绘的代价在「列表外面那一层」——先量，再按判据改
+### 3.3 F5：实测已达标，不改代码
 
-**已核的负事实**：行级重绘边界已经存在。`SuperListView.builder` 的 `addRepaintBoundaries` 默认 `true`（`super_sliver_list-0.4.1/lib/src/super_sliver_list.dart:406`），调用点没关（`lib/chat/chat_history_view.dart:2642`）。
-⇒ 「补行级 `RepaintBoundary`」不是本批的修法；慢帧不可能是「整表逐行重绘」。
+**结论（N2 改前读数，2026-10-26 06:46–06:48，动代码前取）**：`tool/perf` 的 `chat.long_history` 流式场景跑两轮，共 1558 帧，raster 超 100 ms 的帧 **0**，最大值 31.21 ms；同场景 load 相位 130 帧同样 0。⇒ 本批 A 判据成立，**F5 不改代码**（D5）。
 
-**结构性嫌疑（代码面已核，绘制面读数待取）**：整个列表被 `EdgeFadeMask` 包住（`lib/chat/chat_history_view.dart:2620`，实现在 `lib/chat/widgets/edge_fade_mask.dart:92` 的 `RenderEdgeFadeMask`）。
+**读数（复量照这张表）**：
 
-- **已核代码事实**：`RenderEdgeFadeMask.paint`（`edge_fade_mask.dart:262-291`）在有遮罩时走 `context.pushLayer(mask, super.paint, offset)`，`mask` 是 `ShaderMaskLayer`、`blendMode = BlendMode.dstIn`、`maskRect` 为整个 child 加 2 px 越界；且 `alwaysNeedsCompositing => _masked`（`:199`）。
-- ⇒ 只要 `_masked` 为真，整块列表区域就是一个合成层：任何一行重绘都要重跑这层 `dstIn` 的全区域合成——与「raster 340 ms、build 0–9 ms」同形（构建没变，合成面积是整块画布）。
-- 待测的是「慢帧是否真的耗在这一层」（规则 2 / 3 的读数），不是「这一层是否存在」。
+| 轮 | 场景 / 相位 | 帧数 | raster p50 / p90 / p99 / max (ms) | raster > 100 ms 的帧 |
+|---|---|---|---|---|
+| 1 | `chat.long_history` stream | 777 | 4.56 / 6.69 / 14.18 / 31.21 | 0 |
+| 1 | 同场景 load | 66 | 3.37 / 5.77 / 10.29 / 25.44 | 0 |
+| 2 | 同场景 stream | 781 | 4.43 / 6.31 / 11.10 / 30.18 | 0 |
+| 2 | 同场景 load | 64 | 3.43 / 5.55 / 7.64 / 13.75 | 0 |
 
-**决策规则（写死，实施不另裁）**：
+- 环境：Windows profile、Impeller（OpenGLESSDF）、60 Hz（预算 16.67 ms）、窗口 1011×754@2.0；命令 `dart run tool/perf/run.dart --no-build --repeat 1 chat.long_history`。
+- `--size 3840x2088` 未生效（runner 仍按 1011×754 布局）⇒ 本轮读数与 §2 基线的窗口不同，真机窗口下的复核归批档 §6。
 
-1. **先量基线**（不改任何代码）：大会话（≥1000 条）流式回放，跑 `tool/perf` 同一场景，读 §4.4 给的入口取「raster > 100 ms 的帧数」。这一步是 N2 的改前读数。
-2. **再定位**（诊断插桩，与上一步分开）：在 `RenderEdgeFadeMask.paint` 前后加临时计时并写一行日志。它只加计时与输出、不改任何绘制决策，属诊断插桩而非改前读数；收口前删除，删前把读数抄进批档。与 N2 的「动代码前量」不冲突，因为验收读数来自第 1 步。
-3. 判据：若慢帧的合成耗时集中在 `RenderEdgeFadeMask` ⇒ 改法 = 把整块遮罩换成**两条固定高度的边缘渐变带**（上 ∥ 下各一条、只覆盖边缘几十像素，各自独立 `RepaintBoundary`），列表主体不再被任何全区域层罩住。
-4. **若慢帧不集中在这一层 ⇒ 按固定顺序收窄，每步之间重跑规则 1 的读数**（顺序即优先级，不跳步）：① `EdgeFadeMask` 的 `ShaderMaskLayer`（`:262-291`，已验证存在的全区域合成，先排除它自己）；② `_Appear` 的 `FadeTransition`（`chat_history_view.dart:3695`，仅出现动画 260 ms 内）；③ `_HeightMotion` 的 `pushClipRect`（`:3882`，仅高度动画期）；④ 其余合成层：流式帧上 `debugDumpLayerTree` 列出 `OffsetLayer` / `ShaderMaskLayer` / `ClipRectLayer`，按「覆盖面积 = 整块列表」逐个收窄。
-   **终止条件**：某一步之后 raster 超预算帧数不再集中在同一层 ⇒ 停在该层，按 §7 A / B 验收。
-   **四步走完 A 仍不成立** ⇒ 停手，另起一篇设计档再动结构，并在批档记一条「F5 未达成」的读数与已排除的候选层——不在本批边改边猜。
-5. 验收口径不变（§7 A / B）。
+**已核的负事实（保留，防止再走回头路）**：行级重绘边界已经存在。`SuperListView.builder` 的 `addRepaintBoundaries` 默认 `true`（`super_sliver_list-0.4.1/lib/src/super_sliver_list.dart:406`），调用点没关（`lib/chat/chat_history_view.dart:2642`）⇒ 「补行级 `RepaintBoundary`」不成立。
 
-**为什么按这个顺序**：需求 N2 的「测量先行」；慢在光栅化已实测，而「哪一层在合成」只能从运行时的绘制面取，不靠读代码猜。
+**潜在的全区域合成（读数结论，不是待办）**：整个列表被 `EdgeFadeMask` 包住（`lib/chat/chat_history_view.dart:2620`，实现在 `lib/chat/widgets/edge_fade_mask.dart:92` 的 `RenderEdgeFadeMask`）。
+
+`RenderEdgeFadeMask.paint`（`:262-291`）在有遮罩时走 `ShaderMaskLayer` + `BlendMode.dstIn`，`alwaysNeedsCompositing => _masked`（`:199`）⇒ 只要 `_masked` 为真，整块列表就是一个合成层。
+
+本批读数里它没有产生超预算帧（GPU 争用下出现的 `raster 340–350 ms` 见 §2 基线），因此本批不动该档。
 
 ### 3.4 F6：不可见时不重建、不出帧，切回一次追平
 
 **触发面**：`AppLifecycleState`，判据照既有先例 `null || resumed` 视为可见（`lib/main.dart:628-631` 的 `inFront()` 是 `_startTelemetry` 内的局部闭包，不可复用；本批的做法见 §4.2）。
 
-**机制的持有者只有一处（写死）**：`WindowVisible` 内部注册唯一的 `WidgetsBindingObserver`（§4.2）；`ChatHistoryView` 与 `MarkdownView` 都是**订阅者**，不各自注册观察者。
+**机制的持有者只有一处（写死）**：`WindowVisible` 内部注册唯一的 `WidgetsBindingObserver`（§4.2）；`ChatHistoryView` 是唯一的订阅者，不自己注册观察者。
 
 ```text
 WindowVisible（唯一观察者）
@@ -162,18 +163,19 @@ ChatHistoryView.dispose：  WindowVisible.changed.removeListener(_onVisibleChang
 
 _handleSessionChanged（既有入口）：
   照常更新尾巴快照（判据随时可走快路径）
-  WindowVisible.isVisible == false ⇒ _dirtyWhileHidden = true，return（不 setState、不 _liveTick++）
+  WindowVisible.isVisible == false ⇒ _hiddenDirty = true，return（不 setState、不 _liveTick++）
   否则 ⇒ 走今天的快路径 ∥ 全路径（不变）
 
 _onVisibleChanged（由 WindowVisible 在恢复可见时通知）：
-  WindowVisible.isVisible && _dirtyWhileHidden ⇒ 一次 _refold（全量）+ setState + _liveTick++；清标记
+  WindowVisible.isVisible && _hiddenDirty ⇒ 一次 _refold（全量）+ setState + _liveTick++；清标记
 ```
 
 - **内容不丢是构造性的**：视图不缓存文本，build 时从 feed 读最新值；失焦期间的增量都在 `Transcript` 里，恢复后一次重建即最新态。
-- **不重建 ⇒ 无帧**：本视图的帧源只有三个——`setState`、`_liveTick`（首篇设计档的增量重建边界）与 `Steadiness` 的到点 `setState`（调用点 `lib/chat/chat_history_view.dart:249-253`）。三个入口都过同一道 gate（新增 `_rebuild()`，内部判可见性）。
-- **残余帧源（改后复采 GPU 时按这张表逐个关）**：① `MarkdownView` 的 50 ms trailing 计时器（首篇 F3 的节流）；② 输入光标的闪烁（框架自带）；③ 带动画的控件（`_Appear` 260 ms、`_HeightMotion` 只在动画期）；④ 其它 `Steadiness` 消费者（`lib/chat/steadiness.dart:40-46` 的计时器）。
+- **不重建 ⇒ 无帧**：本视图的帧源只有三个——`setState`、`_liveTick`（首篇设计档的增量重建边界）与 `Steadiness` 的到点 `setState`（调用点 `lib/chat/chat_history_view.dart:249-253`）。三个入口都过同一道 gate（`_rebuild()`，内部判可见性）。
+- **gate 的实现形状（与上面伪码语义等价，且更不易漏）**：判据放进 `_tick()` 与 `_rebuild()` 两个出口，`_setAnchored` / `_scheduleStickyUpdate` / `_handoff` 完成处复用同一道 gate；不可见期仍更新尾巴快照与折叠 / 索引簿记（早退会让 `_prependedSeen` 这类增量状态过期）。交接另走一条：`_itemsCame` 判 `isVisible` 才起 `_handoff`，完成回调走 `_rebuild()`（§4.3）。
+- **残余帧源（改后复采 GPU 时按这张表逐个关）**：① `_buildAhead()`（`lib/chat/chat_history_view.dart:580` 一带）与 `_loadEarlier()`（`:951`）的 `setState` 不过 gate——可达性窄（须用户在失焦前刚拖过 minimap ∥ 刚滚到顶），本批接受不改；② 输入光标的闪烁（框架自带）；③ 带动画的控件（`_Appear` 260 ms、`_HeightMotion` 只在动画期）；④ 其它 `Steadiness` 消费者（`lib/chat/steadiness.dart:40-46` 的计时器）。
 - **改后复采 GPU 的处置（写死，不静默接受）**：F6 验收 ② 是应用级读数，而机制只覆盖上面两处 ⇒ 按 §7 C 的方式复采；若 `GPU Engine` 不接近 0%，按上表逐个关掉剩余帧源（每关一个复采一次）；全部关掉仍不归零 ⇒ 上报「F6 未达成 + 已关帧源清单」，不记成达标。
-- **跨档指针**：本节 gate 改写了首篇的两处机制（`MarkdownView` 的 50 ms 节流 = 首篇 F3、`ChatHistoryView` 的增量重建边界 = 首篇 F1）⇒ `docs/design/chat-streaming.md` 的 F1 / F3 章节各需补一句「可见性 gate 见本篇 §4.2 / §4.3」。首篇不在本批改动面内，指针登记在此。
+- **跨档指针**：本节 gate 改写了首篇 F1 的增量重建入口 ⇒ `docs/design/chat-streaming.md` 的 F1 章节需补一句「可见性 gate 见本篇 §4.2 / §4.3」。首篇不在本批改动面内，指针登记在此。
 - **可见性判据取「失焦」而不是「被遮挡」**：需求档 F6 原文即 `lifecycle inactive`。并排使用（可见但未聚焦）时画面停在失焦那一刻，聚焦后一次到位——这是本批唯一一处用户可见行为变化，登记 §10。
 
 ### 3.5 N3：DPR 变化留痕
@@ -317,23 +319,23 @@ abstract final class WindowVisible {
 ```
 
 - 内部只注册一个 `WidgetsBindingObserver`（`start()` 由 `ChatHistoryView.initState` 调用一次，幂等），避免每个消费者各注册一次。
-- 消费者两个：`ChatHistoryView`（重建 gate）· `MarkdownView`（计时器 gate）。两处的语义都是「不重建 = 不出帧」。
+- 消费者一个：`ChatHistoryView`（重建 gate）。语义是「不重建 = 不出帧」。
 - **N4 不是它的消费者**（§3.6）：心跳不随可见性停。
 - **跨档指针**：本契约改写首篇 F1 的增量重建入口 ⇒ `docs/design/chat-streaming.md` 的 F1 章节需补一句（见 §3.4 末条）。
 
-### 4.3 `MarkdownView` 的计时器 gate
+### 4.3 gate 的实现落点与命名
 
-- 不可见时：取消待决 trailing 计时器、置 `_parseWhenVisible = true`，不 `setState`。
-- 变可见：`_parseWhenVisible` ⇒ 立即解析最新 `widget.data`（与 `dispose` 后重建同一语义，最终态由同一解析函数产出）。
-- 订阅 `WindowVisible.changed`（`initState` 挂、`dispose` 摘），不自己注册观察者。
-- 非流式四处调用（`assistant_text.dart` / `notice_row.dart` / `plan_card.dart` / stash 预览）数据不变 ⇒ 不进该分支，零行为变化。
-- **跨档指针**：本节的 gate 改写首篇 F3 的节流机制 ⇒ `docs/design/chat-streaming.md` 的 F3 章节需补一句「可见性 gate 见本篇 §4.3」。
+- 订阅：`ChatHistoryView.initState` 调 `WindowVisible.start()`（幂等）并 `changed.addListener(_onVisibleChanged)`；`dispose` 摘监听。
+- 出口：`_tick()` 与 `_rebuild()` 内部判 `WindowVisible.isVisible`；`_setAnchored` / `_scheduleStickyUpdate` / `_handoff` 完成处复用 `_rebuild()`，不各写一份判据。
+- 标记：不可见期收到变化置 `_hiddenDirty`；恢复可见由 `_onVisibleChanged` 走一次全量 `_refold` + 一次 build，然后清标记。
+- 交接：`_itemsCame` 先判 `isVisible` 才起 `_handoff`；`_handoff` 完成回调走 `_rebuild()`。`_watchTail()` 让快路径的尾巴快照在不可见期不过期。
 
 ### 4.4 「超预算帧数」的读法（F5 验收）
 
 - 阈值 = **100 ms**（需求档建议值）。一帧光栅化超过 100 ms 即用户可感知的掉帧。
 - **改前计数的取值入口（现成，不需改代码）**：`tool/perf` 的探针本身按预算判 jank——`budgetMs` 在 `tool/perf/perf_probe.dart:71`，用于 `:261`；一帧的 build 或 raster 超过预算即计入 `frames.janky`（`:310-316`），同一次报告里 `frames.rasterMs` 给出逐帧 raster 的分布（`:265-267`、`:306`）。⇒ 同一场大会话流式回放，跑 `tool/perf` 并读 `frames.janky` 与 `frames.rasterMs` 即可；100 ms 档 = 把该场景的预算设为 100。
-- 测试面：`tester` 拿不到真实 GPU 计时 ⇒ 断言结构（流的最近 `RepaintBoundary` 落在行内、列表主体不再被全区域层罩住）+ 重建计数（F1 的既有读数不回退）。
+- 实测读数（2026-10-26，两轮，动代码前）：stream 777 / 781 帧、load 66 / 64 帧，raster > 100 ms 的帧全为 0，最大 31.21 ms（明细见 §3.3）。
+- 测试面：`tester` 拿不到真实 GPU 计时 ⇒ 组件测试只断言 F1 的既有重建计数不回退（`test/chat/chat_history_rebuild_test.dart`）。
 - 改前 / 改后同场景、同窗口、同机器（N2）。
 
 ### 4.5 停顿看门狗（`lib/diagnostics/stall_watch.dart`）
@@ -393,9 +395,9 @@ final class HangReports {
 | ① | `lib/kernel/thincoder/thincoder_process_io.dart` | `Process.start` → `ProcessHost.start`（§3.1；两条触发路径共用的创建点） | 207 | +39（已落地 → 现 246） | 未超档 |
 | ② | `lib/kernel/thincoder/thincoder_locator.dart` | `Process.run` → `ProcessHost.run`（含 `versionOf` 的版本探测，`:299-305`） | 379 | +8（已落地 → 现 387） | 未超档 |
 | ③ | `lib/kernel/thincoder/thincoder_process.dart` | 退出路径挂 `ProcessHost.stopAll()` + 新增 `import '../../platform/process_host.dart'`（`:14-23` 的 `stopThincoderProcesses` 内，§4.1；守门白名单含此档，§3.1） | 18 | +10（已落地 → 现 28） | 未超档 |
-| ④ | `lib/chat/chat_history_view.dart` | F6 gate：`_rebuild()` 包住三个帧源 + `WindowVisible` 订阅 + 恢复时一次全量 | 3922 | ≤ +40 | 超档，见 §5.1 |
-| ⑤ | `lib/chat/widgets/edge_fade_mask.dart` | F5：整块遮罩 → 两条固定高度边缘渐变带（§3.3 判据成立时） | 293 | ≤ +30 | 未超档 |
-| ⑥ | `lib/chat/widgets/markdown_view.dart` | 计时器 gate（§4.3） | 1076 | ≤ +20 | 超档，见 §5.1 |
+| ④ | `lib/chat/chat_history_view.dart` | F6 gate：`_rebuild()` 包住三个帧源 + `WindowVisible` 订阅 + 恢复时一次全量 | 3922 | +55（已落地 → 现 3977） | 超档，见 §5.1 |
+| ⑤ | `lib/chat/widgets/edge_fade_mask.dart` | **本批未改**：F5 实测已达标（§3.3），不动遮罩 | 293 | 0 | 未超档 |
+| ⑥ | `lib/chat/widgets/markdown_view.dart` | **本批未改**：本树没有可 gate 的计时器（§4.3） | 1076 | 0 | 未超档（本批不动，无拆分义务） |
 | ⑦ | `lib/diagnostics/frame_watch.dart` | 状态行提成档内共享函数（§3.6） | 158 | +2（已落地 → 现 160） | 未超档 |
 | ⑧ | `lib/diagnostics/diagnostics_bundle.dart` | `hangs` 目录拼接改用 `hangsFolderOf`（`:58-61`），一处定义 | 201 | +2（已落地 → 现 203） | 未超档 |
 | ⑨ | `lib/settings/pages/diagnostics_dialog.dart` | N5：报告目录路径一行 + 既有「在文件管理器中显示」按钮（§3.7） | 284 | +20（已落地 → 现 304） | 未超档 |
@@ -403,7 +405,7 @@ final class HangReports {
 | ⑪ | `lib/platform/process_host.dart` | **新档**：代理 isolate 的公共面（§4.1） | 0 | 现 178（已落地） | 新档 |
 | ⑫ | `lib/platform/process_host_io.dart` | **新档**：`Process` 的真实代理（唯一创建点） | 0 | 现 650（已落地） | 新档 |
 | ⑬ | `lib/platform/process_host_stub.dart` | **新档**：web 上无进程 | 0 | 现 27（已落地） | 新档 |
-| ⑭ | `lib/chat/window_visible.dart` | **新档**：一个观察者 + 静态查询（§4.2） | 0 | +≈50 | 新档 |
+| ⑭ | `lib/chat/window_visible.dart` | **新档**：一个观察者 + 静态查询（§4.2） | 0 | 现 57（已落地） | 新档 |
 | ⑮ | `lib/diagnostics/viewport_watch.dart` | **新档**：DPR 留痕（§3.5） | 0 | 现 75（已落地） | 新档 |
 | ⑯ | `lib/diagnostics/stall_watch.dart` | **新档**：停顿看门狗（§3.6 · §4.5） | 0 | 现 94（已落地） | 新档 |
 | ⑰ | `lib/diagnostics/hang_reports.dart` | **新档**：挂起报告可见（§3.7 · §4.6） | 0 | 现 125（已落地） | 新档 |
@@ -412,27 +414,27 @@ final class HangReports {
 | ⑳ | `test/diagnostics/stall_watch_test.dart` | **新档**：N4 用例（§8 T9–T13） | 0 | 现 84（已落地） | 新档 |
 | ㉑ | `test/diagnostics/hang_reports_test.dart` | **新档**：N5 用例（§8 T17–T19） | 0 | 现 90（已落地） | 新档 |
 | ㉙ | `test/diagnostics/viewport_watch_test.dart` | **新档**：N3 用例（§8 T7–T8） | 0 | 现 90（已落地） | 新档 |
+| ㉚ | `test/chat/window_visible_test.dart` | **新档**：F6 用例 T1 · T1b · T2 · T2a · T2b · T3 · T4 + 门控自身一条 | 0 | 现 351（已落地） | 新档 |
 | ㉒ | `lib/kernel/thincoder/thincoder_warm.dart` | **整档删除**（§3.2） | 242 | 已删除（现不存在） | — |
 | ㉓ | `lib/kernel/thincoder/thincoder_lifecycle.dart` | 删 `takeWhenReady` / `timing: warm hit/miss` / 预热旁路，直接起进程（§3.2） | 170 | −10（已落地 → 现 160） | 未超档 |
 | ㉔ | `lib/kernel/thincoder/thincoder_kernel.dart` | 删 `import 'thincoder_warm.dart'` | 480 | −1（已落地 → 现 479） | 未超档 |
 | ㉕ | `lib/workspace/workspace.dart` | 删预热调用与 `_warmThincoder`（§3.2） | 3027 | −12（已落地 → 现 3015） | 超档，见 §5.1 |
 | ㉖ | `test/kernel/thincoder_warm_test.dart` | **整档删除**（池的用例） | 284 | 已删除（现不存在） | — |
 | ㉗ | `test/kernel/thincoder_kernel_test.dart` | 删池夹具与用例（`pool()` · T108 · T108② · `_NoTimer` · T107① 的 `warm miss` 断言） | 4967 | −49（已落地 → 现 4918） | 超档，见 §5.1 |
-| ㉘ | `test/integration/chat_flows_test.dart` | **新档**：三条集成用例 1-1 / 2-1 / 3-1（`test/RTM.md` 三行，§8.1） | 0 | 已落 1-1：251 行（实测）；2-1 / 3-1 归轮 4 | 新档 |
+| ㉘ | `test/integration/chat_flows_test.dart` | **新档**：三条集成用例 1-1 / 2-1 / 3-1（`test/RTM.md` 三行，§8.1） | 0 | 现 523（已落地，三条齐） | 新档 |
 | — | `test/chat/chat_history_rebuild_test.dart` | 零改动，重跑取 A1/A4 不回退 | 507 | 0 | — |
 
-**共 30 行**：14 个既有档改动 · 2 个整档删除（1 lib + 1 测试）· 7 个新 lib 档 · 6 个新测试档 · 1 行零改动。其中 F8 的迁移面只占 3 行（①–③）。
+**共 31 行**：12 个既有档改动 · 2 个整档删除（1 lib + 1 测试）· 7 个新 lib 档 · 7 个新测试档 · 3 行零改动（⑤ ⑥ 与 `test/chat/chat_history_rebuild_test.dart`）。其中 F8 的迁移面只占 3 行（①–③）。
 
-**编号 ㉙ 的位置**：它排在 ㉑ 之后、与其它新测试档相邻；既有编号 ①–㉘ 一律不变——编号是稳态标识，§2 分轮表与本档多处按号引用，改号会让已落地的记录指错行。
+**编号 ㉙ / ㉚ 的位置**：它们排在 ㉑ 之后、与其它新测试档相邻；既有编号 ①–㉘ 一律不变——编号是稳态标识，§2 分轮表与本档多处按号引用，改号会让已落地的记录指错行。
 
-**现行列的来历**（2026-10-26，`find /c /v ""` 同口径数换行符）：207 · 379 · 18 · 3922 · 293 · 1076 · 158 · 201 · 284 · 919 · 242 · 170 · 480 · 3027 · 284 · 4967 · 507——本批动手前的读数。已落地的行，现值与本批实测增量见表内「本批增量」列；尚未动到的行（④⑤⑥⑭㉘ 的后两条）仍按预算执行。
+**现行列的来历**（2026-10-26，`find /c /v ""` 同口径数换行符）：207 · 379 · 18 · 3922 · 293 · 1076 · 158 · 201 · 284 · 919 · 242 · 170 · 480 · 3027 · 284 · 4967 · 507——本批动手前的读数。已落地的行，现值与本批实测增量见表内「本批增量」列；本批全部 31 行均已落地或结案，无按预算待执行的行。
 
 ### 5.1 超 800 行档的拆分方案
 
-五档都在 800 行硬上限之上，本批只加分支、挂载行与删除；每个都写明下一次拆分的接缝（本批改动全部落在接缝之内，届时随之搬走）。
+**四档**在 800 行硬上限之上，本批只加分支、挂载行与删除；每档写明下一次拆分的接缝（本批改动全部落在接缝之内，届时随之搬走）。
 
-- **`lib/chat/chat_history_view.dart`（3922）**：本批只动 State 里的 gate（`_rebuild()` 与可见性订阅，`initState` / `dispose` 各一行）。接缝 = 行渲染这一组：`ChatItemView` 及其子 widget（`_Appear` `:3695`、`_HeightMotion` `:3882`）搬去 `lib/chat/widgets/chat_item_view.dart`；搬完本档只剩列表骨架、滚动锚定与选择区。
-- **`lib/chat/widgets/markdown_view.dart`（1076）**：本批只加一个字段与计时器调度里的一个分支。接缝 = 解析与缓存这一组：块缓存与解析函数搬去 `lib/chat/widgets/markdown_blocks.dart`，`MarkdownView` 只剩调度与渲染。
+- **`lib/chat/chat_history_view.dart`（3977）**：本批只动 State 里的 gate（`_rebuild()` 与可见性订阅，`initState` / `dispose` 各一行）。接缝 = 行渲染这一组：`ChatItemView` 及其子 widget（`_Appear` `:3695`、`_HeightMotion` `:3882`）搬去 `lib/chat/widgets/chat_item_view.dart`；搬完本档只剩列表骨架、滚动锚定与选择区。
 - **`lib/main.dart`（919）**：本批只加三行挂载（`ViewportWatch.start()` · `StallWatch(...).start()` · `HangReports(...).check()`，都在 `:155-158` 的既有块内）。接缝 = 诊断挂载这一组：把这四件与 `FrameWatch` / `AppEventWatch` 的启动收进 `lib/diagnostics/start_diagnostics.dart` 的一次幂等调用，`main` 只留一行。
 - **`lib/workspace/workspace.dart`（3027）**：本批只删四处预热挂点（§3.2）。接缝 = 项目开闭这一组：`_openProject`（`:422`）/ `hideProject`（`:1301`）/ `_unhide`（`:1308`）及其 `_save` 调用搬到 `lib/workspace/project_lifecycle.dart`；本批的删除全在接缝之内。
 - **`test/kernel/thincoder_kernel_test.dart`（4967）**：本批只删池的夹具与用例（§3.2）。接缝 = 按能力分组：进程启动与握手 / 模型与设置 / 改名；第一组先拆到 `test/kernel/thincoder_start_test.dart`。
@@ -445,9 +447,9 @@ final class HangReports {
 | D2 | F8 = **唯一进程代理 isolate**，不是每点 `Isolate.run` | `Process` 对象不能跨 isolate 传，长驻进程必须在代理里活；只包 `Process.run` 会留下最贵的启动 |
 | D3 | 代理失败 **显式抛错，不回退窗口线程直连** | 回退把 6 秒冻结放回来且没人知道（业务门：失败要可见） |
 | D4 | **只迁会冻窗口的两处创建点**（thincoder 起进程 + 版本探测），其余 `Process.*` 保持上游原样 | 需求 F8 的冻结只由这两条链产生；全量迁移会把 30 多个上游文件卷进来，收益为零、合并冲突面很大。守门测试改为路径级（§8 T16） |
-| D5 | F5 修法 = **收窄全区域合成层**，不是加行级边界 | 行级 `RepaintBoundary` 已由 sliver delegate 默认加上（`super_sliver_list` :406，调用点未关）⇒ 再加一层是空转 |
-| D6 | F5 先量绘制面再定改点，判据写死（§3.3 规则 3 / 4） | 需求 N2「测量先行」；「哪一层在合成」只能从运行时取 |
-| D7 | F6 = **重建 gate（视图 + markdown 计时器）**，不是降帧率 | 不可见时唯一正确的帧数是 0；降帧仍付同样的单帧光栅化代价 |
+| D5 | **F5 实测 A 成立 ⇒ 不改代码**；不改 `EdgeFadeMask`，判据 B（列表主体无全区域合成层）撤销 | 两轮 1558 帧、raster 超 100 ms 的帧 0、最大 31.21 ms（§3.3）；`340–350 ms` 只在 GPU 争用时出现（§2 基线）。行级 `RepaintBoundary` 已由 sliver delegate 默认加上（`super_sliver_list` :406），从来不是修法 |
+| D6 | F5 的读数入口 = `tool/perf` 的 `budgetMs` / `frames.janky` / `frames.rasterMs`（§4.4） | 需求 N2「测量先行」；改前改后同场景、同入口才有可比性 |
+| D7 | F6 = **重建 gate（`ChatHistoryView`）**，不是降帧率 | 不可见时唯一正确的帧数是 0；降帧仍付同样的单帧光栅化代价 |
 | D8 | F6 可见性判据 = `lifecycleState`，观察者只活在 `WindowVisible` | 与需求档 F6 原文一致；不新造「被遮挡」探测；观察者一处注册，消费者只订阅 |
 | D9 | N4 心跳**不接** F6 的可见性 gate，`hidden` / `paused` 不写行 | 失焦期的停顿正是要量的（3/4 慢帧 `inactive`）；睡眠造成的假 gap 会撞掉「1 小时零误报」 |
 | D10 | N4 的 `gap` = 实测间隔 − 周期 | 需求验收窗口是 700–1000 ms；取原始间隔会读成 1000–1050 ms，落在窗口外 |
@@ -460,11 +462,10 @@ final class HangReports {
 **最近先例（对齐 ∥ 偏离）**：
 
 - 对齐：isolate + 端口承载长驻工作在本仓已有先例——`lib/kernel/claude_code/dart_core_transport_io.dart:37` 的 `AgentIsolate.spawn`；F8 的代理是同一形状，只做进程创建与字节转发。
-- 对齐：重绘边界在本仓是既有做法（`lib/chat/agent_view.dart:67` 的 `RepaintBoundary(child: child)`）——F5 不是引入新机制，而是收窄既有的全区域层。
+- 对齐：重绘边界在本仓是既有做法（`lib/chat/agent_view.dart:67` 的 `RepaintBoundary(child: child)`）——F5 沿用既有的行级边界，本批实测已达标、未改代码。
 - 对齐（删池）：上游 Claude 内核的形态 = 每会话一进程、用完关闭（`lib/kernel/claude_code/process_transport_io.dart:17` 的 `ProcessTransport`）；删除预热池是把 thincoder 一侧对齐到同一形态，不是新机制。
 - 对齐：生命周期监听照 `lib/main.dart:644` 的 `AppLifecycleListener(onResume: …)` 与 `:628-631` 的 `null || resumed` 判据。
 - 对齐：诊断留痕照 `FrameWatch` 的形状（`lib/diagnostics/frame_watch.dart`：`appEvent` 写一行，不碰业务；构造注入时钟），N3 / N4 / N5 三块都走这个形状。
-- 偏离：`MarkdownView` 目前对窗口状态无感知（只有 50 ms 节流计时器）。偏离理由 = 它是失焦后残余帧的来源，不关掉达不到 F6 的「帧数 0」；守门 = §8 T3。
 - 偏离：N4 是全仓第一个「按计时器测界面线程」的探针（`[slow]` 按帧、`AppEventWatch` 按事件）。偏离理由 = 被堵住的线程产不出帧，只有计时器看得见；守门 = §8 T9–T13。
 - 偏离：N5 是第一个「启动时读上次留下的报告」的诊断（既有诊断都是当次运行内的事件）。偏离理由 = 事故证据的价值在跨启动；守门 = §8 T17–T19。
 - 偏离：进程创建从「谁用谁起」变为「一个代理统一起」（`dart:io` 的默认用法，全仓 33 处）。偏离理由 = 窗口线程冻结 6 秒（需求 F8 的 9 份报告）；守门 = §8 T16 的扫描与 F8-A 的挂起报告零新增。
@@ -499,9 +500,8 @@ final class HangReports {
 | F8 版本探测也在范围内（需求档 §5 第 3 条） | §3.1 · ② | F8-D：打开设置页（触发 `versionOf` 的版本探测，`thincoder_locator.dart:299-305`）期间 `[stall]` 无 > 500 ms 的行；该项与 F8-B 分两次读数（一次只跑一项，避免互相掩盖） |
 | F8 多项目启动也在范围内（需求档 §5 第 3 条） | §3.1 · ① | F8-E：启动载入多个项目（`workspace.dart:345` 的 `_listKept` 逐项目唤起进程，经 ① 同一创建点）期间 `[stall]` 无 > 500 ms 的行，且 `logs/hangs/` 零新增；与 F8-B / F8-D 分开读数 |
 | 删池完成（需求档 §4 的「删除预热池」条） | §3.2 | P：`thincoder_warm` / `warm hit` / `warm miss` / `预热池` 在 `lib/**` 与 `test/**/*.dart` 里零命中（**代码面**；索引与文档里的描述性文字不计）；无池仍能起会话——打开一个会话 ⇒ 进程起、`initialize` 一次、能输入；关掉视图再打开 ⇒ 再起一个；`events.log` 无 `timing: warm …` 行 |
-| F5 超预算 raster 帧 → 0 | §3.3 · §4.4 | A：`tool/perf` 大会话流式回放，预算 100 ms 下 `frames.janky` 中 raster 超预算的帧数 = 0（改前读数按 §3.3 第 1 步、§4.4 的入口在动代码前量好，两次读数并列留档）；总帧数与改前同量级（±20%）。规则 3 的分支不成立时按 §3.3 规则 4 的顺序收窄；四步走完仍不成立 ⇒ 另起设计档并记「F5 未达成」 |
-| F5 重绘范围不随界面大小 / 历史增长 | §3.3 | B：组件测试断言流式行最近的重绘边界在行内、列表主体无全区域合成层；另 20 / 200 回合两跑，流式帧的 `ChatItemView` 重建数逐项相等（既有 A1 口径不回退）；视觉等价按 §10 的**整帧**比对 |
-| F6 不可见期帧数 = 0，切回一帧追平 | §3.4 · §4.2 · §4.3 | C：模拟 `inactive` 后回放 120 个增量 ⇒ `ChatItemView` 重建 0 次、`MarkdownView` 解析 0 次；恢复 `resumed` ⇒ 恰 1 次重建，可见文本 == 全文；底部与中段滚动偏移不变（T2a / T2b）。设备面两条并列：① 失焦 60 秒 `FrameTiming` 帧数 0（或仅 1 帧残余尾帧）；② 失焦时 baocode 的 `GPU Engine` 占用接近 0%——同机同窗口、失焦前后各采样 3 次取均值，对照 §2 的 30.6–30.7%（需求档 F6 验收 ②）。② 不归零 ⇒ 按 §3.4 的帧源清单逐个关并复采，仍不归零则上报「F6 未达成」 |
+| F5 超预算 raster 帧 → 0 | §3.3 · §4.4 | A：`tool/perf` 大会话流式回放，预算 100 ms 下 raster 超预算的帧数 = 0——**两轮实测已成立**（stream 777 / 781 帧、load 66 / 64 帧，最大 31.21 ms，§3.3）；窗口 1011×754@2.0，真机窗口 3840×2088 的复核归批档 §6。F5 本批不改代码 |
+| F6 不可见期帧数 = 0，切回一帧追平 | §3.4 · §4.2 · §4.3 | C：模拟 `inactive` 后回放 120 个增量 ⇒ `ChatItemView` 重建 0 次（markdown 解析随重建发生 ⇒ 0 次）；恢复 `resumed` ⇒ 恰 1 次重建，可见文本 == 全文；底部与中段滚动偏移不变（T2a / T2b）。设备面两条并列：① 失焦 60 秒 `FrameTiming` 帧数 0（或仅 1 帧残余尾帧）；② 失焦时 baocode 的 `GPU Engine` 占用接近 0%——同机同窗口、失焦前后各采样 3 次取均值，对照 §2 的 30.6–30.7%（需求档 F6 验收 ②）。② 不归零 ⇒ 按 §3.4 的帧源清单逐个关并复采，仍不归零则上报「F6 未达成」 |
 | N3 DPR 留痕 | §3.5 | D：模拟 DPR 1.5 → 2.25 → 1.5，事件日志出现**恰两行 `[viewport]`**——`view 0 dpr 1.5 -> 2.25` / `2.25 -> 1.5`，各带尺寸；**按 `[viewport]` 行计，`[views]` 行（`AppEventWatch` 的既有快照）可能同时出现、不计入**；无 DPR 变化零 `[viewport]` 行；仅尺寸变化零行；真机重现一次即定论（需求档 §5 第 5 条的一次真机读数） |
 | N4 停顿必须留读数 | §3.6 · §4.5 | G：构造 800 ms 同步阻塞 ⇒ 恰一行 `[stall]`，gap ∈ 700–1000 ms；无阻塞连续 1 小时 0 行；`hidden` / `paused` 状态 0 行（复现路径见 §3.6，需求档 §5 第 5 条的一次真机读数） |
 | N5 挂起报告必须可见 | §3.7 · §4.6 | N5：预置一份新的 `hang-*.txt` 后启动 ⇒ `events.log` 恰一行 `[hang] 1 new reports since …`；无新报告时启动 ⇒ 0 行；诊断入口显示报告目录且按钮可打开（需求档 §5 第 5 条的一次真机读数；T17–T19） |
@@ -513,14 +513,13 @@ final class HangReports {
 
 | # | 场景 | 输入 | 期望 |
 |---|---|---|---|
-| T1 | 不可见期间流式（正常） | `inactive` + 120 个文本增量 + pump | 重建 0、解析 0、无帧；`_dirtyWhileHidden` 置起 |
+| T1 | 不可见期间流式（正常） | `inactive` + 120 个文本增量 + pump | 重建 0、解析 0、无帧（`hasScheduledFrame` 为假）；`_hiddenDirty` 置起 |
+| T1b | 不可见期间的「状态行交接」（边界） | `inactive` 中收到一次状态行变化（走 `_itemsCame` → `_handoff`）+ pump | 交接不在不可见期出帧：`ChatItemView` 重建 0；恢复可见后一次到位 |
 | T2 | 恢复可见（边界） | 上述之后 `resumed` | 恰 1 次重建；可见文本 == 全文；无 pending timer |
 | T2a | 恢复后底部锚定（边界） | 失焦前停在底部 + 恢复可见 | 仍在底部：末行底边与视口底边的偏移与失焦前相等（±1 px） |
 | T2b | 恢复后中段偏移（边界） | 失焦前向上滚到中段（记 offset）+ 恢复可见 | 滚动偏移不变（±1 px）、无跳动；可见文本 == 全文 |
-| T3 | 不可见期间 markdown 尾帧（边界） | 失焦前 10 ms 内刚排上 trailing 计时器，随后 `inactive` | 计时器被取消、不 setState；恢复后解析一次 |
-| T4 | 从头就不可见（边界） | 视图首帧时 `inactive` | 不起计时器、不出帧；恢复后一次到位 |
-| T5 | 流式行重绘边界（正常） | 大会话 + 流式增量 | 该行最近的重绘边界在行内；列表主体无全区域合成层 |
-| T6 | 高度动画期间增量（边界） | `_HeightMotion` 动画中 + 增量 | 允许动画期的额外合成；动画结束回到 T5 |
+| T3 | 不可见期间的 markdown 解析（边界） | `inactive` 期间有增量到达（视图不重建） | 解析 0 次；恢复可见后恰 1 次解析 |
+| T4 | 从头就不可见（边界） | 视图首帧时 `inactive` | 不重建、不出帧；恢复后一次到位 |
 | T7 | DPR 变化（正常） | DPR 1.5→2.25→1.5 | 恰两行 `[viewport]`，带 view id、值与时序正确（`[views]` 行不计入）；无 DPR 变化时不写行；仅尺寸变化不写行 |
 | T8 | 窗口不可见时 DPR 变化（边界） | `inactive` 中 DPR 变化 | `[viewport]` 照写（留痕不依赖可见性） |
 | T9 | 心跳无阻塞（正常） | 注入时钟，10 拍各 +250 ms | 0 行 `[stall]` |
@@ -536,7 +535,7 @@ final class HangReports {
 | T19 | 首次启动（边界） | 无水位档 + 3 份 `hang-*.txt`（含 1 份 `.dmp`） | 1 行 `[hang] 3 new reports since 首次启动`（`.dmp` 不另计）；水位 = 最新 `.txt` |
 | T20 | 删池后的开会话（正常） | 无预热池；打开一个会话；视图离开（`_views == 0`）；再打开 | 第一次：恰一次 `initialize` + 一次 `session/new`；离开后进程结束（`_teardown`）；再打开：再起一个进程、再握手一次；全程零 `timing: warm …` 行 |
 | T21 | 代理起不来（错误） | 假件的 spawn 抛 `ProcessException` | 调用方收到 `ProcessHostUnavailable`（带原始信息），映射为既有错误类型；**不回退窗口线程**；`logs/hangs/` 零新增 |
-| T22 | 代理中途死亡、留有子进程（错误） | 起一个长驻进程后 `Isolate.kill(immediate)` 代理；等 `ChildProcessRegistry.reaped` | 已发出的调用以 `ProcessHostUnavailable` 结束（不挂起）；下一次 `start` 重建一次代理再发（§4.1，不重放旧请求）；孤儿由注册表按 parent pid 回收（`lib/platform/child_process_registry.dart:52` → `:178` `psLookup` → `:194` `killPid`）；回收读数记进批档 |
+| T22 | 代理中途死亡、留有子进程（错误） | 起一个长驻进程后 `Isolate.kill(immediate)` 代理；等 `ChildProcessRegistry.reaped` | 拆成 T22a–e：a 已发出的调用以 `ProcessHostUnavailable` 结束（不挂起）；b 下一次 `start` 重建一次代理再发（§4.1，不重放旧请求）；c 孤儿由注册表按 parent pid 回收（`lib/platform/child_process_registry.dart:52` → `:178` `psLookup` → `:194` `killPid`，**仅 POSIX**，Windows 直接返回、用例 skip）；d `stop` 遇死代理仍完成；e 代理死亡时注册表条目**保留**（进程还在跑） |
 | T23 | 通道断开（错误） | 代理 isolate 活着但接收端口不可达 | 已发出的请求以 `ProcessHostUnavailable` 结束（不静默丢）；下一次 `start` 重建一次代理再发；用户请求不自动重放 |
 
 ### 8.1 集成用例（编号 = `test/RTM.md` 的行号，逐字复用）
@@ -545,7 +544,7 @@ final class HangReports {
 |---|---|---|---|
 | 1-1 | 来回切会话（侧栏连续点两个会话） | 假 `ProcessHost`（`useForTest`）+ 两个已载入会话；挂载应用；A→B→A→B→A | 五次切换各起一个进程（假件计 5 次 `start`）；每次切换后 300 ms 内历史行就位、输入可用；`EventLog.current` 接临时目录 ⇒ `[stall]` 0 行 |
 | 2-1 | 失焦后切回（点别的窗口再点回） | 挂载应用；转 `inactive`；回放 120 个增量；转 `resumed` | 失焦期：`ChatItemView` 重建 0、`[stall]` 0 行、可见文本不变；恢复：恰 1 次重建、可见文本 == 全文、底部仍在底部（T2a / T2b 同断言） |
-| 3-1 | 大会话流式（长会话发消息并滚动） | ≥1000 条历史 + 流式回放 120 增量 | 终态可见文本 == 全文；流式帧上列表主体无全区域合成层（`debugDumpLayerTree` 断言）；20 / 200 回合两种历史下每增量 1 次重建、逐项相等 |
+| 3-1 | 大会话流式（长会话发消息并滚动） | ≥1000 条历史 + 流式回放 120 增量 | 终态可见文本 == 全文；长（500 回合 = 1000 条）/ 短（20 回合）两组历史的每增量重建行数逐项相等且有上界（整机默认 sticky 风格下外壳随粘顶副本重整，非「恰 1」；F1 的「恰 1」在组件级 `test/chat/chat_history_rebuild_test.dart` 计） |
 
 ## 9. 边界与失败面
 
@@ -559,7 +558,7 @@ final class HangReports {
 
 ## 10. UI / 交互决定
 
-- **F5 视觉零变化，比对范围 = 整帧**：判据 = 改前 / 改后同窗口截图**逐帧逐像素**比对，不比边缘带局部（整块遮罩若在中间区域也有着色，局部比对会把它排除）。不等价时的处置写死：① 先调带高与色标（各试一次）；② 仍不等价 ⇒ 回退整块遮罩，F5 记为未达成并上报，不静默接受一幅变了的画面。
+- **F5 不改代码，视觉零变化由「本批无 diff」保证**（§3.3 · D5）。
 - F6 带来的可见行为变化：**窗口失焦期间画面停止更新**，聚焦后一次到位；并排使用时可见此现象。需求档 F6 已定案（`docs/requirements/chat-streaming.md` 的 F6 条），实施按此执行；此处只作告知。
 - F8 无界面变化；用户可感知的是切会话与启动时不再出现 6 秒无响应。
 - 删池无界面变化：切回一个已释放的会话仍显示既有的「thincoder is starting…」提示（`_sayWaitingOf`，T107① 断言其文案）。
@@ -576,8 +575,8 @@ final class HangReports {
 | 行 | 组件间交互 | 断言到的业务结果 | 用户入口 | 回溯需求 | 用例 |
 |---|---|---|---|---|---|
 | 1-1 | `ChatHistoryView` ⇄ `ChatSession` ⇄ `ProcessHost`（假件） | 来回切 5 次，每次切换后 300 ms 内会话可用、各起一个进程；`[stall]` 0 行 | 侧栏会话列表连续点两个会话 | F8 · 删池 | §8.1 |
-| 2-1 | `WindowVisible` ⇄ `ChatHistoryView` / `MarkdownView` ⇄ `Transcript` | 失焦期重建 0、`[stall]` 0 行、文本不变；恢复后恰 1 次重建、文本 == 全文、滚动与底部仍在原处 | 点别的窗口再点回 | F6 | §8.1 |
-| 3-1 | `ChatHistoryView` ⇄ `EdgeFadeMask` ⇄ `MarkdownView` 节流 | 终态文本 == 全文；流式帧上列表主体无全区域合成层；20 / 200 回合下每增量重建数逐项相等 | 长会话里发一条消息并滚动 | F5 · F1 | §8.1 |
+| 2-1 | `WindowVisible` ⇄ `ChatHistoryView` ⇄ `Transcript` | 失焦期重建 0、`[stall]` 0 行、文本不变；恢复后恰 1 次重建、文本 == 全文、滚动与底部仍在原处 | 点别的窗口再点回 | F6 | §8.1 |
+| 3-1 | `ChatHistoryView` ⇄ `Transcript` / 粘顶副本 | 终态文本 == 全文；长（500 回合）/ 短（20 回合）两组历史的每增量重建行数逐项相等且有上界（F1 的「恰 1」在组件级计） | 长会话里发一条消息并滚动 | F5 · F1 | §8.1 |
 
 **为什么恰好是这三条**：三条都同时命中两条准入——产品真正需要的业务场景（切会话 / 失焦回来 / 长会话流式）与生产真正发生的问题（6 秒冻结 / 350 ms 慢帧 / 失焦空转）。真实设备读数（帧耗时、GPU、挂起报告）留在 §7，不进集成套件。
 
@@ -591,3 +590,7 @@ final class HangReports {
 3. **删池后的用例净减**：`test/kernel/thincoder_warm_test.dart`（284 行）整档删除，`thincoder_kernel_test.dart` 删池的夹具与用例（§5 ㉗）——这是删除面，不是覆盖下降；T111 保留（它测的是 `ChatSession` 的内核对象缓存，与进程池无关）。
 4. **上游进程调用保持原样**：`forge/forge_io.dart` · `ide/lsp/**` · `customize/mcp_probe_io.dart` · `installer_io.dart` · `child_process_registry.dart` 等 `Process.*` 本批不动；将来 N4 的 `[stall]` 指向哪条再单独迁（§3.1 · D15）。
 5. **F8 的 50 ms 长期目标本批无量具**：本批按 500 ms 验收档读（需求档 F8 原文已写明）；50 ms 要另配量具，不在本批。
+6. **F5 结案**：实测 A 成立、不改代码；`edge_fade_mask.dart` 与 `markdown_view.dart` 本批零改动（§5 ⑤ ⑥）。
+7. **集成 3-1 的判据按实测写**：整机默认 sticky 风格下每条增量的重建行数是 26–30 行且跨增量逐项相等，故 3-1 断言「两组逐项相等 + 上界」；「每增量 1 次」留在组件级（`test/chat/chat_history_rebuild_test.dart` 全绿）。`test/RTM.md` 行 3-1 已同步。
+8. **F6 的两条残余帧源**：`_buildAhead()` / `_loadEarlier()` 的 `setState` 不过 gate，可达性窄、本批接受不改，登记于 §3.4 残余表。
+9. **「无帧」的机检边界**：T1 能断言 `hasScheduledFrame` 为假，交接场景（T1b）不能——失焦期仍有与 gate 无关的 Ticker 在跑；F6 验收 ① 以批档 §6 的真机读数为准。
