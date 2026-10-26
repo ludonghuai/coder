@@ -289,8 +289,29 @@ if (_connection != null || _transport != null) {
 5. 修轮结束跑 doc_check(gate)；不要动需求档（父侧笔域）。
 6. 修完由父侧发新一轮设计评审（用户「开工」已覆盖本轮评审与后续实施的启动）。
 
+### 追加决定：不保留预热池，改成删除（用户 03:16）
+
+**用户原话**：「可能还需要把之前的台账撤销之类的，因为前后冲突，**我们不要池子了**」。
+
+- **已定决定**：本批从「F7 移出、池不动」改为「**删除预热池**」（回上游形态）· 用户原话：「我们不要池子了」 · 时间：2026-10-26 03:16
+
+**为什么这是一次正确的一致化**：02:52 只把 F7 摘出而不删池，会留下一个 0 命中、净亏的机制继续随每次会话切换杀进程-起进程；既然上游形态（每会话一进程、用完关闭）已被证明长期可用，删掉它是把复杂度直接归零，而不是留给未来。
+
+**已做的台账清理（前后冲突的自清）**：
+- 撤回 **#126**（预热触发面偏窄）——池要删，该议题失去对象。
+- 改写 **#176** → 「删池（已定）」，`trigger=归批`、任务书指向本批。
+- 需求档同步：§4 边界由「不改预热池」改为「**删除预热池**」（含挂点清单与 `grep` 零残留验收）；§5 新增第 4 条「删池完成」验收；§7 走查口径改为「删池后每次切换仍会起进程，但窗口不得冻结」。
+
+**给设计修轮的指令（v5 → v6，round=fix）**：
+1. **新增删池一节**：删除 `lib/kernel/thincoder/thincoder_warm.dart` 整档 + 其挂点（`thincoder_lifecycle` 的领池分支、`thincoder_release` 的放回、`workspace` 的预热调用、`thincoder_kernel` 里的池字段/领池分支），并删掉 `timing: warm hit/miss` 打点；说明删后「开会话 = 直接起进程（走 §4.2 代理）+ 既有 `_releaseWhenIdle` 收尾」的完整链路。
+2. F8 的触发路径由三条改为两条（内核自起 + 启动逐项目列会话），§3.1 与 §7 F8-E 同步。
+3. §5 受影响文件表：删 `thincoder_warm.dart` / `thincoder_release.dart` / 池测试档，新增「删除」标记行；`workspace.dart` 由「零改动」改为「删预热调用」（行数与拆分方案同步）。
+4. 验收按需求档 §5 新增的第 4 条（`grep` 零命中）。
+5. N3/N4/N5、F5/F6 不动；doc_check(gate) 通过后交付；仍不要动需求档。
+6. 完事后父侧发新一轮评审（旧评审 #23 已取消）。
+
 ## §2 批次任务与设计（eng-designer）
-**状态行**：设计完成（v4：N5 补入 · 评审 18 条逐条处置 · F7 计数窗口与「take 后补预热」同轮更正 · 待裁项见 §2 末）
+**状态行**：设计完成（v6：删预热池 + F8 迁移面收窄（3 个文件）· §5 表 28 行 · doc_check(gate) PASS（0 命中）· 待父侧发新一轮评审）
 <§2 模板占位：本批条目（覆盖） / 设计档落点 / 机制设计 / 受影响文件与测试覆盖 / 验收对照 / 关键决策 / 上抛项>
 
 **范围**：F5 重绘边界 · F6 不可见时不出帧 · F7 切会话复用内核进程 · N3 DPR 留痕（N2 测量纪律贯穿四项）。来源与实测见 §1。
@@ -466,6 +487,96 @@ if (_connection != null || _transport != null) {
 3. **`stopAll()` 不得 kill detached 进程**（v4 自带的接口缺陷）：安装器的 `ProcessStartMode.detached`（`installer_io.dart:137`）必须活过应用退出，退出时 kill 掉它等于让原地更新失败。改为：`stopAll` 只结束 `mode: normal` 的托管进程，detached 只放手。落点：设计 §4.2 · §3.2 迁移面 · §5 ㉕。
 
 **设计 v4 读数与自检**：设计档 605 行；`doc_check(gate)` PASS（0 命中）；`§N` 引用与标题集合逐项核对无缺失；§5 表 45 行（32 既有 · 7 新 lib · 5 新测试 · 1 零改动）与摘要数字相符；用例 T1–T24 连续、决策 D1–D16 连续。
+
+### 修轮落地（v4 → v5：B 案摘 F7，2026-10-26）
+
+依据：§1「方向定案：B 案（摘掉 F7，只做 F8 + 诊断），用户 02:52『开工』」及其六条修轮指令。设计档升 **v5**（`docs/design/chat-raster-repaint.md`）。需求档未动（父侧笔域，v4 已改好）。
+
+**逐条（编号 = §1 修轮指令号）**
+
+| # | 处置 | 落点 |
+|---|---|---|
+| 1 | F7 全删：§3.1（多槽池）、§4.1（池契约）、§4.7（放回挂点）、§7 F7-A/B/C、§8 T14–T18、§6 D1–D3、§11 场景一的 F7 承载、§12 第 3 项、页首覆盖范围与配对清单、§2 基线 F7 行、§10 F7 行、§5 表五行（`thincoder_warm.dart` / `thincoder_release.dart` / `thincoder_lifecycle.dart`+`thincoder_kernel.dart` 两个只服务放回的字段行 / 只挂池的 workspace 行 / `thincoder_warm_test.dart`）。删后全档重编号：§4.2→§4.1 … §4.8→§4.6；用例 T19–T24→T14–T19；决策 D4–D16→D2–D14，新增 D1 = F7 移出本批（理由照 §1 B 案四条） | 设计 §1 · §2 · §3.1 · §4 · §5 · §6 · §7 · §8 · §9 · §10 · §11 · §12 |
+| 2 | F8 加强：三条触发路径写进 §3.1（预热 `_hold` `thincoder_warm.dart:195-198` · 内核自起 `thincoder_lifecycle.dart:26` · **启动逐项目列会话** `workspace.dart:345` `_listKept` → `thincoder_catalog.dart:39` `sessionsIn` → 同档 `:27-28` `_start`，三条路径同一创建点 `thincoder_process_io.dart:86` = §5 表 ①）；新验收 **F8-E 多项目启动**（`[stall]` 无 > 500 ms 行 + `logs/hangs/` 零新增，与 F8-B / F8-D 分开读数）；`workspace.dart` 本批零改动写明 | 设计 §3.1 · §7 F8-E · §5.1 附注 |
+| 3 | 三条 advisory：#20 = §5 表新增 ㉑ `thincoder_process.dart`（18 行，退出路径挂 `ProcessHost.stopAll()`，§4.1 生命周期条已带 `:13` 坐标）；#21 = 「放回被拒」分支**随 F7 整体删除**（§4.7 不存在了，无需收尾说明——此处注明即为处置）；#22 = §7 H 行改 `flutter test <file>` | 设计 §5 ㉑ · §7 H |
+| 4 | N3/N4/N5、F5/F6 保持 v4 内容（仅随章节重编号改引用）；§2 基线删 F7 行（其实测数据留在 §1 讨论） | 设计 §2 · §3.2–§3.6 |
+| 5 | `doc_check(gate)` 已跑：**PASS（0 命中，1 档）** | 本块 |
+| 6 | 本轮由父侧发新一轮设计评审（用户「开工」已覆盖授权） | — |
+
+**本批覆盖的需求条目（v5）**
+
+| 需求 | 条目 | 设计落点 |
+|---|---|---|
+| F8 | 任何子进程创建不阻塞窗口线程 > 50 ms | §3.1 · §4.1 |
+| F5 | 大会话流式时重绘范围不随界面大小与历史长度增长 | §3.2 · §4.4 |
+| F6 | 窗口不可见时不渲染，切回时一次追平 | §3.3 · §4.2 · §4.3 |
+| N3 | DPR 变化留痕（诊断） | §3.4 |
+| N4 | 停顿看门狗（诊断；F8 的验收依赖它） | §3.5 · §4.5 |
+| N5 | 已有的事故证据必须被看见（诊断） | §3.6 · §4.6 |
+| N2 | 改前读数在动代码前量、同法复量 | §2 · §3.2 · §4.4 |
+
+**受影响文件 · 验收 · 用例 · 决策**：一律以设计 v5 为准——受影响文件 40 行（28 个既有档改动 · 7 个新 lib 档 · 4 个新测试档 · 1 行零改动）→ 设计 §5 / §5.1；验收（F8-A/B/C/D/E · A / B / C / D / G / H / I / N5 / E）→ 设计 §7；用例 T1–T19 → 设计 §8；决策 D1–D14 → 设计 §6；集成测试增量 → 设计 §11。
+
+**明确不在本批（v5 新增表述）**：预热池的任何改动（`thincoder_warm.dart` 与其挂点不动，池的存废另批再议）——与需求档 §4「不改预热池」一致。
+
+**自检三处（读数均本轮实测）**
+
+1. 行数本轮复量（换行数口径）：`workspace.dart` 3027 · `thincoder_process.dart` 18 · `thincoder_process_io.dart` 207 · `chat_history_view.dart` 3922 · `main.dart` 919 · `diagnostics_bundle.dart` 201 · `diagnostics_dialog.dart` 284 · 其余各档见 §5 表。
+2. 新坐标实读：`workspace.dart:345` = `unawaited(_listKept(project, kernels: pending))`；`thincoder_catalog.dart:27-28` = `_start` → `startThincoderProcess(...)`；`thincoder_catalog.dart:39` = `sessionsIn`；`thincoder_process.dart:13` = `stopThincoderProcesses`。
+3. 全档 F7 残留扫描：仅 D1（移出决定本身）一处；§/T/D 编号经两轮 grep 互查连续无洞（修轮自检抓到并改正一处：§3.1 曾把创建点误标为 ⑳，实为 ①）。
+
+**上抛项（交主 agent 处置）**
+
+1. [上抛·知会] 评审 advisory #21 的处置 = 随 F7 删除，无遗留分支。
+2. [上抛·待办] 本轮由父侧代发新一轮 advisor 设计评审（§1 指令 6）。
+
+### 修轮落地（v5 → v6：删除预热池 + F8 迁移面收窄，2026-10-26）
+
+依据：§1「追加决定：不保留预热池，改成删除（用户 03:16）」六条指令，加用户 03:19「兼容的话会不会更好兼容上下游的更新了呢」后父侧的五条追加约束。设计档升 **v6**（`docs/design/chat-raster-repaint.md`）。需求档未动（父侧笔域）。
+
+**A · 删池（03:16 六条）**
+
+| # | 处置 | 落点 |
+|---|---|---|
+| 1 | 新增 §3.2「删除预热池」：整档删除 + 挂点表（`thincoder_warm.dart` 242 行 · `thincoder_lifecycle.dart:22-26/33/38-53` · `thincoder_kernel.dart:28` · `workspace.dart:22/443/448-454/1303` · `thincoder_warm_test.dart` 284 行 · `thincoder_kernel_test.dart` 的 `pool()` / T108 / T108② / `_NoTimer` / T107① 的 `warm miss` 断言）；删后链路写死（attach → prepare → `_ensureStarted` → 直接 `_start`（§4.1 代理）→ initialize → session/new；视图离开 `chat/session/lifecycle.dart:40` → release → `_releaseWhenIdle` → `_closeSession` + `_teardown` → idle；再开再起）；防误删清单（`ChatSession._warm` 内核对象缓存 / `warmWindow` / `warmUp` / l10n） | 设计 §3.2 · §5 ㉒–㉗ · §6 D1 · §7 P · §8 T20 · §9 · §10 · §12 |
+| 2 | F8 触发路径改写：会冻窗口的三条（内核自起 · 启动 / 刷新逐项目列会话 · 设置页版本探测），创建点两处（`thincoder_process_io.dart:86` 覆盖前两条 · `thincoder_locator.dart:131-134` 的 `versionOf`）；F8-E 同步 | 设计 §3.1 · §7 F8-E |
+| 3 | §5 表：2 行「整档删除」+ 4 行既有档改动；`workspace.dart` 由零改动改为删预热调用并补拆分方案；`thincoder_kernel_test.dart` 补拆分方案；表计数 46 → **28**（14 既有档 · 2 整档删除 · 7 新 lib · 4 新测试 · 1 零改动） | 设计 §5 · §5.1 |
+| 4 | 验收按需求档 §5 第 4 条：`grep` 四模式零命中 + 无池仍能起会话；用例 T20 | 设计 §7 P · §8 T20 |
+| 5 | N3/N4/N5、F5/F6 内容不动（仅随章节重编号改引用）；`doc_check(gate)` **PASS（0 命中，1 档）** | 本块 |
+| 6 | 本轮由父侧发新一轮设计评审 | — |
+
+**B · F8 迁移面收窄（03:19 五条）**
+
+| # | 处置 | 落点 |
+|---|---|---|
+| 1 | 只迁会导致冻结的创建：① thincoder 起进程（`thincoder_process_io.dart:86`，含 `thincoder_catalog.dart:27-28` 的列会话链路）② 启动逐项目列会话（同一创建点）③ 设置页版本探测（`thincoder_locator.dart:131-134`）⇒ 迁移面 = **3 个文件** | 设计 §3.1 |
+| 2 | 上游低频路径一律不迁，逐条点名：`forge/forge_io.dart` · `ide/lsp/**` · `customize/mcp_probe_io.dart` · `ide/git/**` · `ide/terminal/**` · `installer_io.dart` · `child_process_registry.dart` 等；并写明「将来 N4 的 `[stall]` 指向哪条再单独迁」 | 设计 §1 · §3.1 · §12 |
+| 3 | 守门 T16 由全 `lib/**` 扫描改为**路径级**：`import process_host` 的档集合恰为 {`thincoder_process_io.dart` · `thincoder_locator.dart` · 三个新档}，前两档内零 `\bProcess.start(` / `\bProcess.run(`；其余上游档不扫、允许照旧 | 设计 §3.1 · §8 T16 · §7 F8-C |
+| 4 | §5 表删掉上游迁移行（原 ②–⑱、⑳ 共 18 行）；F8 迁移面只占 3 行（①–③） | 设计 §5 |
+| 5 | §6 新增 D15「兼容上游优先」并引用户原话；D4 由「全量迁移 33 处」改写为「只迁会冻窗口的两处创建点」 | 设计 §6 D4 · D15 |
+
+**本轮读数（实测，2026-10-26）**：`thincoder_warm.dart` 242 · `thincoder_lifecycle.dart` 170 · `thincoder_kernel.dart` 480 · `thincoder_process.dart` 18 · `workspace.dart` 3027 · `test/kernel/thincoder_warm_test.dart` 284 · `test/kernel/thincoder_kernel_test.dart` 4967 · `chat_session.dart` 822；`lib/chat/session/lifecycle.dart:40` = `if (owner._views == 0 && !owner._disposed) owner._kernel.release();`（删后链路里视图离开那一跳的坐标）。
+
+**本批覆盖的需求条目（v6）**
+
+| 需求 | 条目 | 设计落点 |
+|---|---|---|
+| F8 | 任何子进程创建不阻塞窗口线程 > 50 ms（迁移面 = 会冻窗口的两处创建点、三个文件） | §3.1 · §4.1 |
+| 删池 | 删除预热池，回到上游形态（需求档 §4 · §5 第 4 条） | §3.2 · §7 P |
+| F5 | 大会话流式时重绘范围不随界面大小与历史长度增长 | §3.3 · §4.4 |
+| F6 | 窗口不可见时不渲染，切回时一次追平 | §3.4 · §4.2 · §4.3 |
+| N3 | DPR 变化留痕 | §3.5 |
+| N4 | 停顿看门狗 | §3.6 · §4.5 |
+| N5 | 已有的事故证据必须被看见 | §3.7 · §4.6 |
+| N2 | 改前读数在动代码前量、同法复量 | §2 · §3.3 · §4.4 |
+
+**明确不在本批（v6 追加）**：上游低频进程调用一律不动（`forge_io.dart` · `ide/lsp/**` · `mcp_probe_io.dart` · `ide/git/**` · `ide/terminal/**` · `installer_io.dart` 等）；其余同 v5（列表虚拟化 / 引擎 / 数据模型 / 视觉形态 / 新建集成索引与套件）。
+
+**上抛项（交主 agent 处置）**
+
+1. [上抛·待裁] **§5 表 28 行 vs 父侧预估 8–10 行**：F8 迁移面本身已收到 3 行（①–③）；整表仍 28 行，因为另有删池 6 行、F5/F6/N3/N4/N5 的 chat/diag/main 7 行、新档 11 行、零改动 1 行——它们不属 F8 迁移面，未删。若父侧要求整表也收到 8–10 行，需明说删哪些（那会动 F5/F6/诊断的范围）。
+2. [上抛·知会] 需求档 §4 边界提到「`thincoder_release` 的放回」：今天代码里 `thincoder_release.dart` 没有预热 / 放回代码（v3/v4 的 F7 设计从未落地），删池实际不动该档——设计 §3.2 已按实况写，需求档那一句若要精确可另改（父侧笔域）。
+3. [上抛·待办] 本轮由父侧发新一轮 advisor 设计评审（§1 指令 6 / 03:19 追加约束末句）。
 
 ## §3 设计评审（评审子代理）
 
