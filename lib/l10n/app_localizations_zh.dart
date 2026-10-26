@@ -5895,6 +5895,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsSectionModels => '模型';
 
   @override
+  String get settingsSectionThincoderModels => '模型（thincoder）';
+
+  @override
   String get modelsTitle => '模型';
 
   @override

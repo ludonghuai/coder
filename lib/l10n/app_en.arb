@@ -1,4 +1,4 @@
-{
+﻿{
   "@@locale": "en",
   "commonCancel": "Cancel",
   "commonClose": "Close",
@@ -4517,7 +4517,7 @@
     }
   },
   "customizeConnectorReadOnly": "Read only: a claude.ai connector, managed in claude.ai's settings, under Connectors.",
-  "settingsSectionModels": "Models",
+  "settingsSectionModels": "Models",  "settingsSectionThincoderModels": "Models (thincoder)",
   "modelsTitle": "Models",
   "modelsDefault": "Default Model for New Sessions",
   "modelsDefaultDescription": "Unset, a new session starts with the model last picked.",

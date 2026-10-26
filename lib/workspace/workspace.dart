@@ -336,7 +336,9 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
               kernel.catalog != null && !covered[kernel]!.contains(folder))
           .toList();
       if (pending.isEmpty) continue;
-      listedOneByOne = true;
+      // thincoder 的清单是按项目逐个补的（它的 projects() 恒为空），此刻可能还没回来；
+      // 不能把"还没列到"当成"已消失"——只对清单已确定的内核做消失清理。
+      listedOneByOne = listedOneByOne || pending.any((k) => k.id != 'thincoder');
       final project = _project(folder);
       // A remote project's sessions are its host's, and a thincoder
       // project's are its own process's: no catalog lists them with this
@@ -1778,7 +1780,8 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
   void _forgetGone(Set<String> listed) {
     final titles = {
       for (final thread in _threads)
-        if (thread.record case final record?) record.id: record.title,
+        if (thread._kernel.id != 'thincoder')
+          if (thread.record case final record?) record.id: record.title,
     };
     final count = _pinned.length + _archived.length + _folders.length;
     final names = _names.length;

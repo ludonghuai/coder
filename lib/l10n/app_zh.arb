@@ -1,4 +1,4 @@
-{
+﻿{
   "@@locale": "zh",
   "commonCancel": "取消",
   "commonClose": "关闭",
@@ -1679,7 +1679,7 @@
   "customizeEmptyMcpsProject": "暂无。和项目共享的服务器写在项目的 .mcp.json 里。",
   "customizeEmptyHooks": "暂无。钩子写在 {file} 的 \"hooks\" 里。",
   "customizeConnectorReadOnly": "只读：这是 claude.ai 连接器，请在 claude.ai 设置的「连接器」里管理。",
-  "settingsSectionModels": "模型",
+  "settingsSectionModels": "模型",  "settingsSectionThincoderModels": "模型（thincoder）",
   "modelsTitle": "模型",
   "modelsDefault": "新会话默认模型",
   "modelsDefaultDescription": "未设置时，新会话沿用上次选择的模型。",

@@ -4186,7 +4186,18 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
         session: thread.session,
         title: thread.localizedTitle(context.l10n),
         autofocus: thread.session.itemCount == 0,
-        onRename: (title) => _workspace.rename(thread, title),
+        onRename: (title) async {
+          // 先把 context 的东西取出来，避免 await 之后再回头用它。
+          final messenger = ScaffoldMessenger.of(context);
+          final l10n = context.l10n;
+          final ok = await _workspace.rename(thread, title);
+          // 超长曾被静默拒绝：现在让原因可见（与 inline_rename_field 同一文案）。
+          if (!ok && title.trim().length > 80 && mounted) {
+            messenger.showSnackBar(
+              SnackBar(content: Text(l10n.renameTitleTooLong)),
+            );
+          }
+        },
         // Beside the sidebar, the traffic lights are over it, not here.
         titleBarInset: titleBarInset,
         leading: leading,

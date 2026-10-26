@@ -6280,6 +6280,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsSectionModels => 'Models';
 
   @override
+  String get settingsSectionThincoderModels => 'Models (thincoder)';
+
+  @override
   String get modelsTitle => 'Models';
 
   @override

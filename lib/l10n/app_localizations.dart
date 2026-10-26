@@ -10185,6 +10185,12 @@ abstract class AppLocalizations {
   /// **'Models'**
   String get settingsSectionModels;
 
+  /// No description provided for @settingsSectionThincoderModels.
+  ///
+  /// In en, this message translates to:
+  /// **'Models (thincoder)'**
+  String get settingsSectionThincoderModels;
+
   /// No description provided for @modelsTitle.
   ///
   /// In en, this message translates to:

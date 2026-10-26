@@ -275,9 +275,7 @@ class SettingsDialogState extends State<SettingsDialog> {
         ChannelSetup.channelBuild
             ? l10n.channelAccountTitle
             : l10n.settingsSectionModels,
-      // A literal for this batch: the words of every page are #7's to
-      // translate (§27.5).
-      SettingsSection.thincoderModels => 'Models (thincoder)',
+      SettingsSection.thincoderModels => l10n.settingsSectionThincoderModels,
       SettingsSection.network => l10n.settingsSectionNetwork,
       SettingsSection.ssh => l10n.settingsSectionSsh,
       SettingsSection.mobile => l10n.settingsSectionMobile,
