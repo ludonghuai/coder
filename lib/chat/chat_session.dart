@@ -308,6 +308,9 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
   Future<ChangeReviews?>? _reviewOpening;
   ChangeReviews? _review;
 
+  /// Gives the edits reported a moment to settle before a look.
+  Timer? _lookTimer;
+
   /// The review, while it holds: null before it opened, or once it failed
   /// (the changes are then those the kernel reported).
   ChangeReviews? get _activeReview => switch (_review) {
@@ -316,7 +319,8 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
   };
 
   /// Opens the review of the project (each of its folders, in a
-  /// multi-folder workspace), the first time.
+  /// multi-folder workspace), the first time; and snapshots it, so that
+  /// the first message need not wait.
   void _startReview() {
     if (_reviewOpening != null) return;
     final open = _openReview;
@@ -335,8 +339,10 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
           }
           _review = review
             ..session = sessionId
+            // A message sent while it opened.
+            ..working = isStreaming
             ..addListener(_reviewChanged);
-          unawaited(review.refresh());
+          unawaited(review.begin());
           notifyListeners();
           return review;
         }, onError: (Object _) => null);
@@ -351,12 +357,22 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
     if (review == null) return;
     review.session = sessionId;
     switch (event) {
+      case TurnStarted():
+        review.working = true;
       case TurnEnded():
-        unawaited(review.refresh());
+        review.working = isStreaming;
+        _lookTimer?.cancel();
+        unawaited(review.observe());
       case FileEdited(:final change, :final original):
         review.report(change, original: original);
+        _lookTimer?.cancel();
+        _lookTimer = Timer(
+          const Duration(milliseconds: 400),
+          () => unawaited(review.observe(full: false)),
+        );
       case ChangesReverted():
-        unawaited(review.refresh());
+        _lookTimer?.cancel();
+        unawaited(review.observe());
       default:
     }
   }
@@ -653,10 +669,21 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
       now: now,
       notes: takesContext || editor == null ? const [] : _editorNotes(editor()),
     );
-    // A turn about to start: what was put back since the last is no
-    // longer pending.
+    // A turn about to start, not one queued behind another: the project
+    // is snapshotted, so that what the agent does is told apart. Not
+    // waited on: the agent takes a while before it edits anything, and
+    // the looks its edits bring on are queued behind this one. (A review
+    // still opening takes its own snapshot as it opens.)
     if (_review case final review? when !isStreaming) {
-      unawaited(review.refresh());
+      review.working = true;
+      // Taken late, it would count some of the agent's work as what was
+      // there: the review gives way to what the kernel reports.
+      unawaited(
+        review.begin().timeout(
+          const Duration(seconds: 30),
+          onTimeout: () => review.abandon('The snapshot took too long.'),
+        ),
+      );
     }
     _kernel.send(turn);
   }
@@ -783,6 +810,7 @@ class ChatSession extends ChangeNotifier implements ChatFeed, MarksTurns {
     _disposed = true;
     BtestMode.release(_btest);
     _quietTimer?.cancel();
+    _lookTimer?.cancel();
     _review
       ?..removeListener(_reviewChanged)
       ..dispose();
