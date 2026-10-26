@@ -86,7 +86,7 @@ const _nodeSha256 = {
   'arm64': 'b05aa3a66efe680023f930bd5af3fdbbd542794da5644ca2ad711d68cbd4dc35',
   'x64': '096081b6d6fcdd3f5ba0f5f1d44a47e83037ad2e78eada26671c252fe64dd111',
 };
-const _thincoderVersion = '0.12.77';
+const _thincoderVersion = '0.12.79';
 const _thincoderFiles = ['bin', 'src', 'package.json', 'LICENSE'];
 const _runtimeRequired = [
   'Contents/Resources/runtime/node/node',

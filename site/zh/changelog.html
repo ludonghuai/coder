@@ -30,6 +30,95 @@
   <h1>更新日志</h1>
   <p class="subtitle">BaoCode 每个版本的变化。</p>
 
+  <section class="release" id="v1.7.2">
+    <h2 class="plain"><a href="#v1.7.2">1.7.2</a></h2>
+    <h2>1.7.2 — 跟上上游，修几处 Windows 的毛病</h2>
+    <p>这一版把上游 1.6.0 线的四个修复并了进来，另修一处 git 面板在空仓库上会崩的问题。<strong>界面布局没动。</strong></p>
+    <h3>你可能会感觉到的</h3>
+    <table>
+    <thead>
+    <tr>
+    <th>变化</th>
+    <th>说明</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td><strong>Windows 重新用 Impeller 渲染</strong></td>
+    <td>上游修好之后切回来了；之前上的 Skia 让部分机器出白条</td>
+    </tr>
+    <tr>
+    <td><strong>更新后不用重启浏览器</strong></td>
+    <td>装新版时会替换浏览器已经启动的桥接宿主，扩展不再失效到重启为止</td>
+    </tr>
+    <tr>
+    <td><strong>Markdown 预览滚动不再跳</strong></td>
+    <td>看图时上方图片陆续加载，不再把正在读的文字往下推</td>
+    </tr>
+    <tr>
+    <td><strong>表格里的链接能出气泡</strong></td>
+    <td>单元格里的链接右键有菜单了</td>
+    </tr>
+    <tr>
+    <td><strong>AI 改文件不再自动打开</strong></td>
+    <td>文件变化仍列在面板里，但不再抢你的编辑区</td>
+    </tr>
+    </tbody>
+    </table>
+    <h3>一处行为变化</h3>
+    <p><code>CLAUDE_CODE_EFFORT_LEVEL</code> 环境变量<strong>不再钉死</strong> Claude 的思考强度——以前设了它，界面上怎么调都不生效；现在以界面选择为准。</p>
+    <h3>一处修复（git 面板）</h3>
+    <p>打开一个<strong>还没有任何提交</strong>的仓库时，git 面板会在构建期通知界面刷新，Flutter 会报「setState during build」。现在通知推到这一帧构建之后。</p>
+    <h3>内核也跟着上游走了两版</h3>
+    <p>包内的 thincoder 从 <strong>0.12.77 升到 0.12.79</strong>（核心 0.10.11 → 0.10.12）。这一段的改动主要在提示词与流程规则面，日常用法不变：</p>
+    <table>
+    <thead>
+    <tr>
+    <th>规则面</th>
+    <th>一句话</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>三层原则（persona / 共同 / 纪律）</td>
+    <td>重新分层，重复的句子合并，边界写清</td>
+    </tr>
+    <tr>
+    <td>轻通道准入</td>
+    <td>改成让用户<strong>做选择题</strong>，而不是 agent 自己判</td>
+    </tr>
+    <tr>
+    <td>项目根解析</td>
+    <td>单一来源，不再有第二处推算</td>
+    </tr>
+    <tr>
+    <td>台账</td>
+    <td>起点收界，跨项目不再串</td>
+    </tr>
+    <tr>
+    <td>体量帽残留</td>
+    <td>清掉十三处自相矛盾的旧帽句</td>
+    </tr>
+    </tbody>
+    </table>
+    <hr />
+    <h2>怎么升</h2>
+    <p><strong>自动</strong>：已装 1.7.1 的，设置里点「检查更新」→ 提示 1.7.2 → 下载约 43 MB → 安装。</p>
+    <p><strong>手动</strong>：下载下面的 <code>BaoCode-1.7.2-setup.exe</code>，覆盖安装即可（设置和项目都保留）。</p>
+    <h2>不变的部分</h2>
+    <ul>
+    <li>安装包体积（约 43 MB——内置运行时的 Node 那 85 MB 是大头）</li>
+    <li>模型配置页、自动更新、内置隔离的规则</li>
+    <li>配置与数据位置（覆盖安装不动它们）</li>
+    </ul>
+    <h2>已知限制（与 1.7.1 相同）</h2>
+    <ul>
+    <li>Windows 安装包<strong>未签名</strong> ⇒ SmartScreen 点「更多信息 → 仍要运行」</li>
+    <li>macOS 版<strong>未验证</strong></li>
+    <li>配置里 API Key 为<strong>明文</strong>（与 thincoder CLI 自身一致）</li>
+    </ul>
+  </section>
+
   <section class="release" id="v1.7.1">
     <h2 class="plain"><a href="#v1.7.1">1.7.1</a></h2>
     <h2>1.7.1 — 内核跟上上游（0.12.77）</h2>

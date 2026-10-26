@@ -30,6 +30,95 @@
   <h1>Changelog</h1>
   <p class="subtitle">What changed in each version of BaoCode.</p>
 
+  <section class="release" id="v1.7.2">
+    <h2 class="plain"><a href="#v1.7.2">1.7.2</a></h2>
+    <h2>1.7.2 — Keeping up with upstream, and a few Windows fixes</h2>
+    <p>This release merges four fixes from upstream's 1.6.0 line, and fixes a git panel crash on a repository with no commits yet. <strong>The layout is unchanged.</strong></p>
+    <h3>What you may notice</h3>
+    <table>
+    <thead>
+    <tr>
+    <th>Change</th>
+    <th>What it means</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td><strong>Windows renders with Impeller again</strong></td>
+    <td>Switched back now that upstream fixed it; the Skia fallback left a white strip on some machines</td>
+    </tr>
+    <tr>
+    <td><strong>An update no longer needs the browser restarted</strong></td>
+    <td>The installer replaces the browser host a running browser started, so the extension keeps working</td>
+    </tr>
+    <tr>
+    <td><strong>Markdown previews no longer jump while scrolling</strong></td>
+    <td>Images above the view load without pushing the text you are reading down the page</td>
+    </tr>
+    <tr>
+    <td><strong>Links in table cells get their menu</strong></td>
+    <td>A right click on one now offers the link's actions</td>
+    </tr>
+    <tr>
+    <td><strong>An agent's edit no longer opens the file</strong></td>
+    <td>Changes still list in the panel, but no longer take over your editor</td>
+    </tr>
+    </tbody>
+    </table>
+    <h3>One behaviour change</h3>
+    <p><code>CLAUDE_CODE_EFFORT_LEVEL</code> no longer pins Claude's effort — setting it used to override the UI silently; the UI's choice wins now.</p>
+    <h3>One fix (the git panel)</h3>
+    <p>Opening a repository with <strong>no commits yet</strong> notified the UI during a build, which Flutter reports as &quot;setState during build&quot;. The notification now lands after that frame's build.</p>
+    <h3>The bundled core moved two releases</h3>
+    <p>The thincoder inside goes from <strong>0.12.77 to 0.12.79</strong> (core 0.10.11 → 0.10.12). These changes sit mostly in the rules the agent follows rather than in what you do day to day:</p>
+    <table>
+    <thead>
+    <tr>
+    <th>Where</th>
+    <th>In a sentence</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>Prompt layers (persona / common / discipline)</td>
+    <td>Re-cut so each layer answers one question; repeated lines merged</td>
+    </tr>
+    <tr>
+    <td>The light channel</td>
+    <td>The agent now offers you a choice instead of deciding for itself</td>
+    </tr>
+    <tr>
+    <td>Project root resolution</td>
+    <td>One source of truth, no second guess</td>
+    </tr>
+    <tr>
+    <td>The ledger</td>
+    <td>Bounded at the start; projects no longer bleed into each other</td>
+    </tr>
+    <tr>
+    <td>Leftover size caps</td>
+    <td>Thirteen sentences that contradicted each other are gone</td>
+    </tr>
+    </tbody>
+    </table>
+    <hr />
+    <h2>How to update</h2>
+    <p><strong>Automatic</strong>: on 1.7.1, open Settings → Check for updates → 1.7.2 → about 43 MB → install.</p>
+    <p><strong>Manual</strong>: download <code>BaoCode-1.7.2-setup.exe</code> below and install over the old one (settings and projects are kept).</p>
+    <h2>What has not changed</h2>
+    <ul>
+    <li>Installer size (about 43 MB — the bundled Node runtime's 85 MB is the bulk)</li>
+    <li>The model settings page, auto-update, the isolation rules</li>
+    <li>Where the configuration and data live (an over-install leaves them alone)</li>
+    </ul>
+    <h2>Known limits (unchanged from 1.7.1)</h2>
+    <ul>
+    <li>The Windows installer is <strong>unsigned</strong> ⇒ SmartScreen: More info → Run anyway</li>
+    <li>The macOS build is <strong>unverified</strong></li>
+    <li>API keys sit in the configuration <strong>in plain text</strong> (as in the thincoder CLI itself)</li>
+    </ul>
+  </section>
+
   <section class="release" id="v1.6.0">
     <h2 class="plain"><a href="#v1.6.0">1.6.0</a></h2>
     <p>New</p>
