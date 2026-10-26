@@ -69,7 +69,8 @@
 ## 4. 边界（明确不做）
 
 - 不改视觉与交互：粘顶消息、跨重建的选择区、滚动锚定（`_BeforeLayout` / `_StickyFollower`）、`cacheExtent` 语义保持。
-- 不改数据模型（`ChatSession` / transcript 的事件形态零动）；不改内核侧任何代码。
+- 不改数据模型（`ChatSession` / transcript 的事件形态零动）。
+- **内核侧允许改的部分（F7 / F8 需要，2026-10-26 修正）**：`lib/kernel/thincoder/**`（预热池多槽）与 `lib/platform/**` 及既有 `Process.*` 调用点（进程创建挪入代理 isolate）。**内核的语义面不改**——ACP 协议、事件形态、会话模型一律零动；F8 只搬"在哪里创建进程"，不改"创建什么、怎么通信"。
 - 不引入新依赖、不换列表实现（`SuperListView.builder` 保留）。
 - 不做整档重构：`chat_history_view.dart` 若必须拆，**只拆本批需要的那一小块**，并在设计里写明行数预算。
 - 不动非流式路径的既有缓存策略。
@@ -80,10 +81,11 @@
 
 1. F1–F3 各自的机检读数齐备，N1 的改前 / 改后同法可比；
 2. **F5 / F6 的改前读数在动代码前量好，改后用同一场景复量（N2）**，两次读数并列写进批档 §6；F5 的超预算 raster 帧数必须降到 0；F6 的失焦期帧数必须为 0、**失焦时 GPU 占用接近 0%**（改前 30.6–30.7%）；
-3. **F7 达成 `warm hit` > 0 且随切换增长**，单次切换可输入延迟 ≤ 200 ms（`launch: builtin` 行数不降是 A 案的已知结果，不读作未达标）；
-4. **N3 / N4 两条诊断必须落地并各给一次真机读数**：N3 在 DPR 真变化时留下「旧→新」行；N4 在构造 800 ms 同步阻塞时留下 `[stall]` 行（gap 700–1000 ms），且无阻塞时 1 小时零误报；
-5. 既有相关测试全绿（按实测路径）：`test/chat/chat_history_rebuild_test.dart` · `test/chat/history_scroll_test.dart` · `test/chat/fold_view_test.dart` · `test/chat/step_folds_test.dart` · `test/sticky_message_test.dart` · `test/selection_scroll_test.dart` · `test/markdown_test.dart`（后三个在 `test/` 根下）；
-6. 真机走查一次：长对话（≥200 条）持续流式时滚动与打字跟手（用户主观确认）；且**失焦再切回**时界面一次到位、无残影、无内容缺失。
+3. **F7 达成 `warm hit` > 0 且随切换增长**，同一组会话来回切换 N 次（N ≥ 5）时 `launch: builtin` 增量 ≤ 1，单次切换可输入延迟 ≤ 200 ms；
+4. **F8 达成**：同一操作路径下 `logs/hangs/hang-*.txt` 零新增，且 `[stall]`（N4）不再记录 > 500 ms 的窗口线程停顿；**版本探测（`thincoder_locator.dart` 的 `versionOf`）也在范围内**——打开设置页不得产生窗口线程停顿；
+5. **N3 / N4 / N5 三条诊断必须落地并各给一次真机读数**：N3 在 DPR 真变化时留下「旧→新」行；N4 在构造 800 ms 同步阻塞时留下 `[stall]` 行（gap 700–1000 ms）、无阻塞 1 小时零误报；N5 预置一份新挂起报告后启动，日志出现 `[hang] N new reports`；
+6. 既有相关测试全绿（按实测路径）：`test/chat/chat_history_rebuild_test.dart` · `test/chat/history_scroll_test.dart` · `test/chat/fold_view_test.dart` · `test/chat/step_folds_test.dart` · `test/sticky_message_test.dart` · `test/selection_scroll_test.dart` · `test/markdown_test.dart`（后三个在 `test/` 根下）；
+7. 真机走查一次：长对话（≥200 条）持续流式时滚动与打字跟手（用户主观确认）；**会话来回切换 5 次不出现 ≥ 1 秒的停顿**；**失焦再切回**时界面一次到位、无残影、无内容缺失。
 
 ## 6. 依赖
 
