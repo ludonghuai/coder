@@ -40,7 +40,7 @@
 
 **N2 两批读数同法可比**：F5 / F6 的改前与改后，必须用**同一场景、同一窗口尺寸、同一机器**测；改前读数须在动代码前量（设计阶段给出量法，优先复用 `tool/perf` 的既有场景）。
 
-**F8 创建进程不得阻塞窗口线程**：任何子进程的创建（thincoder 内核、git、LSP 等）都不得让窗口线程（Flutter 的 platform/UI 线程）停止处理消息超过 **50 ms**。
+**F8 创建进程不得阻塞窗口线程**：thincoder 内核的**两处**进程创建点（内核自起（含启动时逐项目列会话）与设置页版本探测）不得让窗口线程（Flutter 的 platform/UI 线程）停止处理消息。**本批验收档 = 500 ms**（N4 的量具粒度就是 250 / 400 ms，500 ms 为可机检阈值）；**50 ms 是长期目标，本批无量具，另计**。git / LSP / forge 等低频路径**保持上游原样**，不在本批迁移面内（将来 `[stall]` 指向哪条再迁哪条）。
 事实基线（2026-10-26 02:10，Windows 自带挂起看门狗的 9 份报告）：**8 份**的窗口线程栈停在 `ZwCreateUserProcess ← CreateProcessInternalW ← CreateProcessW`，另 1 份停在 `ZwQueryValueKey ← BasepQueryAppCompat`（同属进程创建内部的兼容性检查）。报告原文：`The windows' thread took no message for 6 s`。⇒ 用户感知的"卡 6 秒"即此。
 验收（可机检）：同一操作路径下，挂起看门狗不再产出 6 秒报告（`logs/hangs/hang-*.txt` 零新增）；`[stall]`（N4）不再记录 > 500 ms 的窗口线程停顿。
 
@@ -48,7 +48,7 @@
 事实基线：本机三显示器、**同时存在 1.5 与 2.25 两种缩放**；用户报告"界面突然放大占满屏幕、约 2 秒后缩回"，而现有日志里 view 0 恒为 `@1.5`、**无任何 DPR 变化记录**。
 验收：真机重现一次放大现象时，日志能给出变化前后的 DPR 值与时刻（有则定位、无则排除这条假设）。
 
-**N4 停顿看门狗：界面线程被卡住时必须留下读数**：在 UI isolate 上挂一个固定周期的计时器（建议 250 ms）；实测两次触发之间的间隔，超过阈值（建议 400 ms）就写一行 `[stall] gap <N> ms; <当时的界面状态>`。理由：界面线程被同步工作堵住时**连一帧都画不出来**，现有 `[slow]` 帧埋点因此零记录——用户侧的"莫名其妙卡住"正是这个缺口。
+**N4 停顿看门狗：界面线程被卡住时必须留下读数**：在 UI isolate 上挂一个固定周期的计时器（建议 250 ms）；实测两次触发之间的间隔，超过阈值（建议 400 ms）就写一行 `[stall] gap <N> ms; <当时的界面状态>`。**`gap` 的定义 = 实测间隔 − 周期**（超出那一段），这样 800 ms 的同步阻塞读作 750–800 ms，落在验收窗口内。理由：界面线程被同步工作堵住时**连一帧都画不出来**，现有 `[slow]` 帧埋点因此零记录——用户侧的"莫名其妙卡住"正是这个缺口。
 事实基线：2026-10-25 22:00–23:15 用户三次报告卡顿，同期 `[slow]` **零条**；`errors.log` 零条；Windows 事件、崩溃转储、内存耗尽、GPU TDR **全部为空**。⇒ 现有观测面看不到这一类停顿。
 验收（可机检）：构造一次 UI 线程 800 ms 的同步阻塞（测试内 sleep 亦可），`[stall]` 行必须出现且 gap 落在 700–1000 ms 之间；无阻塞时 1 小时内 `[stall]` 行数为 0（不得误报）。
 
@@ -66,7 +66,7 @@
 - 不改视觉与交互：粘顶消息、跨重建的选择区、滚动锚定（`_BeforeLayout` / `_StickyFollower`）、`cacheExtent` 语义保持。
 - 不改数据模型（`ChatSession` / transcript 的事件形态零动）。
 - **内核侧允许改的部分**：`lib/platform/**` 及既有 `Process.*` 调用点（进程创建挪入代理 isolate），含 thincoder 适配层里发起进程的那几处（`thincoder_process_io.dart` / `thincoder_locator.dart` / `thincoder_catalog.dart` / `thincoder_lifecycle.dart` / `thincoder_release.dart` 等）。**内核的语义面不改**——ACP 协议、事件形态、会话模型一律零动；F8 只搬"在哪里创建进程"，不改"创建什么、怎么通信"。
-- **删除预热池**：把 `lib/kernel/thincoder/thincoder_warm.dart` 整档删除，并清掉它的挂点（`thincoder_lifecycle` 的领池分支、`thincoder_kernel` 里的池字段与领池判断、`workspace` 的预热调用、`events.log` 的 `timing: warm hit/miss` 行），回到上游 Claude 内核的形态——每会话一个进程、用完关闭。理由：它今天 0 命中（34 miss / 0 hit）、净亏；与其生命周期（TTL / keep / release）带来的复杂度相比，省的 0.6–1.5 s「准备中」不值。**验收**：`lib/**` 与运行时日志里不再出现 `warm` / 预热池相关标识（`grep` 零命中），且开关会话仍正常（每次开会话一个进程、用完释放）。
+- **删除预热池**：把 `lib/kernel/thincoder/thincoder_warm.dart` 整档删除，并清掉它的挂点（`thincoder_lifecycle` 的领池分支、`thincoder_kernel` 里的池字段与领池判断、`workspace` 的预热调用、`events.log` 的 `timing: warm hit/miss` 行），回到上游 Claude 内核的形态——每会话一个进程、用完关闭。理由：它今天 0 命中（34 miss / 0 hit）、净亏；与其生命周期（TTL / keep / release）带来的复杂度相比，省的 0.6–1.5 s「准备中」不值。**验收**：`grep -rn "thincoder_warm\|warm hit\|warm miss\|预热池" lib/ test/` **零命中**（不含 `warmWindow` / `warmUp` 这类同名不同义的标识）；且开关会话仍正常（每次开会话一个进程、用完释放）。
 - 不引入新依赖、不换列表实现（`SuperListView.builder` 保留）。
 - 不做整档重构：`chat_history_view.dart` 若必须拆，**只拆本批需要的那一小块**，并在设计里写明行数预算。
 - 不动非流式路径的既有缓存策略。
