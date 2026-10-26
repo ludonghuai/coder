@@ -114,45 +114,47 @@ class FrameWatch {
     }
     _written++;
     _lastWritten = now;
-    appEvent('slow', '$what; ${_state()}');
+    appEvent('slow', '$what; ${frameWatchState()}');
   }
 
   void _semanticsChanged() {
     final on = WidgetsBinding.instance.semanticsEnabled;
     appEvent('semantics', on ? 'on' : 'off');
   }
+}
 
-  /// The trees' sizes, the conversations shown, memory, the app's state.
-  String _state() {
-    final binding = WidgetsBinding.instance;
-    var objects = 0, nodes = 0;
-    void visit(RenderObject object) {
-      objects++;
-      object.visitChildren(visit);
-    }
-
-    bool count(SemanticsNode node) {
-      nodes++;
-      node.visitChildren(count);
-      return true;
-    }
-
-    for (final view in binding.renderViews) {
-      visit(view);
-      if (view.owner?.semanticsOwner?.rootSemanticsNode case final root?) {
-        count(root);
-      }
-    }
-    final shown = [
-      for (final note in notes.values)
-        if (note() case final text when text.isNotEmpty) text,
-    ];
-    return [
-      binding.semanticsEnabled ? 'semantics on, $nodes nodes' : 'semantics off',
-      '$objects render objects',
-      if (shown.isNotEmpty) 'chats ${shown.join(' / ')}',
-      '${ProcessInfo.currentRss >> 20} MB',
-      binding.lifecycleState?.name ?? 'no lifecycle',
-    ].join('; ');
+/// The trees' sizes, the conversations shown, memory, the app's state: the
+/// end of `[slow]`'s line, and of `[stall]`'s (one definition, so the two
+/// read side by side).
+String frameWatchState() {
+  final binding = WidgetsBinding.instance;
+  var objects = 0, nodes = 0;
+  void visit(RenderObject object) {
+    objects++;
+    object.visitChildren(visit);
   }
+
+  bool count(SemanticsNode node) {
+    nodes++;
+    node.visitChildren(count);
+    return true;
+  }
+
+  for (final view in binding.renderViews) {
+    visit(view);
+    if (view.owner?.semanticsOwner?.rootSemanticsNode case final root?) {
+      count(root);
+    }
+  }
+  final shown = [
+    for (final note in FrameWatch.notes.values)
+      if (note() case final text when text.isNotEmpty) text,
+  ];
+  return [
+    binding.semanticsEnabled ? 'semantics on, $nodes nodes' : 'semantics off',
+    '$objects render objects',
+    if (shown.isNotEmpty) 'chats ${shown.join(' / ')}',
+    '${ProcessInfo.currentRss >> 20} MB',
+    binding.lifecycleState?.name ?? 'no lifecycle',
+  ].join('; ');
 }

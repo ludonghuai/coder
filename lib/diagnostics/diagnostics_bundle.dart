@@ -5,6 +5,8 @@ import 'dart:typed_data';
 
 import 'package:path/path.dart' as p;
 
+import 'hang_reports.dart' show hangsFolderOf;
+
 /// A file of the logs folder (`DataDirectory.logsDir`) that a diagnostics
 /// upload sends: its [name] under the folder, `/`-separated, and its size.
 class DiagnosticsLog {
@@ -56,7 +58,7 @@ List<DiagnosticsLog> listDiagnosticsLogs(String folder) {
     ..sort((a, b) => a.name.compareTo(b.name));
   // hang-YYYYMMDD-HHMMSS-pid: the names sort as the times.
   final hangs = filesOf(
-    p.join(folder, 'hangs'),
+    hangsFolderOf(folder),
     (name) => name.endsWith('.txt') || name.endsWith('.dmp'),
   )..sort((a, b) => b.name.compareTo(a.name));
   return [...logs, ...hangs];

@@ -26,6 +26,9 @@ import 'chat/widgets/turn_footer.dart' show LiveTurnStatsSetting;
 import 'customize/customization_store.dart';
 import 'diagnostics/app_event_watch.dart';
 import 'diagnostics/frame_watch.dart';
+import 'diagnostics/hang_reports.dart';
+import 'diagnostics/stall_watch.dart';
+import 'diagnostics/viewport_watch.dart';
 import 'diagnostics/diagnostics_upload.dart';
 import 'extensions/theme_extensions.dart';
 import 'ide/git/git_repository.dart';
@@ -155,6 +158,10 @@ Future<void> main(List<String> arguments) async {
   if (!kIsWeb) {
     AppEventWatch.start();
     FrameWatch.start();
+    // N3 / N4 / N5: a ratio change, a thread held, reports nobody saw.
+    ViewportWatch.start();
+    StallWatch().start();
+    HangReports(logsDir: DataDirectory.current.logsDir).check();
   }
   // The Windows app's own logs go beside it.
   if (errors != null) unawaited(errors.shareWithHost());

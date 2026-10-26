@@ -5,11 +5,14 @@ import 'package:flutter/services.dart';
 
 import '../../diagnostics/diagnostics_bundle.dart';
 import '../../diagnostics/diagnostics_upload.dart';
+import '../../diagnostics/hang_reports.dart';
 import '../../ide/ide_button.dart';
 import '../../ide/ide_editor_placeholder.dart' show ideFormatSize;
 import '../../ide/ide_input.dart';
 import '../../l10n/l10n.dart';
+import '../../platform/data_dir.dart';
 import '../../theme/workbench_theme.dart' show themeColors;
+import '../../workspace/window_controls.dart';
 import 'model_dialogs.dart';
 
 /// Settings → Updates → Upload…: a note for the logs, what is sent, the
@@ -62,6 +65,9 @@ class _DiagnosticsDialogState extends State<DiagnosticsDialog> {
     _note.dispose();
     super.dispose();
   }
+
+  /// Where the hang reports are (N5): the watchdog's own folder.
+  String get _hangs => hangsFolderOf(DataDirectory.current.logsDir);
 
   Future<void> _list() async {
     final logs = await widget.uploader.logs();
@@ -172,6 +178,20 @@ class _DiagnosticsDialogState extends State<DiagnosticsDialog> {
                       ),
                 style: _text(),
               ),
+              // N5: where the hang reports are — the ones the watchdog wrote
+              // and nothing pointed at (one line and a way there, no popup).
+              const SizedBox(height: 10),
+              Text(_hangs, style: _muted()),
+              if (WindowControls.canRevealInFileManager)
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: IdeButton(
+                    label: l10n.revealInFileManager,
+                    secondary: true,
+                    onPressed: () =>
+                        unawaited(WindowControls.revealInFileManager(_hangs)),
+                  ),
+                ),
               if (dumps.isNotEmpty) ...[
                 const SizedBox(height: 10),
                 Row(

@@ -366,6 +366,30 @@ if (_connection != null || _transport != null) {
 
 **给设计修轮的指令（round=fix，只动 §2）**：把上表原样追加进 §2 的实施段，并给每轮标出「本轮涉及的 §5 行号 + §8 用例号」，让 eng-coder 按轮读得懂边界；**不要改设计档**（已定稿）。
 
+### 实施前两条裁定（2026-10-26 03:52）
+
+1. **T7 / T8（N3）补测试档**：设计 §5 的 5 个新测试档里没有 N3 的位置 ⇒ **新建 `test/diagnostics/viewport_watch_test.dart`**（§5 新测试档 5 → 6，表尾计数与 §2 分轮表同步由修轮/实施轮落在各自笔域）。理由：N3 是一条要留痕的诊断，没有测试就等于没有验收面。
+2. **文档门已过**：`doc_check(gate)` = **PASS（0 命中 / 4 档）**；此前 §1 一段 315 字符与需求档 7 段超长均已在同轮拆开（只断段、内容逐字未动）。
+
+**上游合并暂缓（记录在案）**：2026-10-26 03:45 拉取 `origin/main`（6 个新提交，主题 = Git 日志面板重写）后试合并，**11 个文件冲突**。
+
+其中 3 个是上游**重写整个 SCM 视图**（`test/ide/git/scm_view_test.dart` / `test/ide/workbench/scm_repositories_test.dart` / `test/chat/side_panel/side_panel_test.dart` 的断言面整体换形）。已 `git merge --abort`，基线保持 `88eb967d`。
+
+**合并另立批次**：需先设计「哪些文件按上游、哪些保留我们的」，再实施与验证；不在本批内做。
+
+### 轮 1 落地裁决（2026-10-26 05:25）
+
+**交付核过**：3 新档 + 3 测试档，`analyze` 无问题、`flutter test` **+22 全过**，子代理内代码评审两轮 pass。§5 实施记录已由 eng-coder 写入（本段只记裁决）。
+
+| 上抛 | 裁定 |
+|---|---|
+| **1 N3 与 `[views]` 重复** | **保留两条**。`[views]` 是「任何视图事件时的全量快照」，`[viewport]` 是「DPR 过渡的专用行（带 view id 与旧→新）」——两者用途不同，合并会让 `[views]` 承担它现在不承担的责任。**验收口径按 `[viewport]` 行计**：§7 D 的「两行」= 两条 `[viewport]`，`[views]` 可能另有行、不计入。设计 §6 那句「没有既有 DPR 观察者」是事实错误，须改（派设计修轮）。 |
+| **2 睡眠映射 `unverified`** | **保留为真机走查必测项**：若 Windows 最小化映射到 `inactive` 而非 `hidden`，唤醒后会补拍一行数十分钟的 gap。走查时实测；若误报成立，加判据「gap > 10 分钟视为休眠、不写行」并回设计。此项进 §6 收口，不现在猜。 |
+| **3 §5 计数漂移（29→30 行、6 个新测试档）** | 派设计修轮同步。 |
+| **4 真机读数未做** | 归 §6 收口（D/G/N5/I 四项），实施轮不背。 |
+
+**顺带记**：`flutter` 不在 PATH，统一走 `D:\baocode\build\flutter-3475\flutter\bin\flutter.bat`；`.dart_tool/hooks_runner` 的旧 `hook.dill` 需删后重建（生成物，`pubspec.lock` 未动）——下次轮到实施先清一次，免得又撞 `Invalid SDK hash`。
+
 ## §2 批次任务与设计（eng-designer）
 **状态行**：设计完成 2026-10-26（v8 · 第 5 轮评审 pass · 实施分四轮已写入本段（轮 1 诊断 / 轮 2 F8 / 轮 3 删池 / 轮 4 渲染面））
 <§2 模板占位：本批条目（覆盖） / 设计档落点 / 机制设计 / 受影响文件与测试覆盖 / 验收对照 / 关键决策 / 上抛项>
@@ -935,4 +959,54 @@ VERDICT: pass
 
 ## §4 用户批准（主 agent）
 ## §5 实施记录（eng-coder）
+
+### 轮 1 · 诊断面（N3 / N4 / N5）· 2026-10-26
+
+**范围**：按 §2「实施分轮」表轮 1——`⑦ ⑧ ⑨ ⑩ ⑮ ⑯ ⑰ ⑳ ㉑` 九行，加 §1 03:52 裁定的第 6 个测试档 `test/diagnostics/viewport_watch_test.dart`。轮 2（F8）/ 轮 3（删池）/ 轮 4（渲染面）不在本轮。
+
+| 需求 · 项 | 落点 | 状态 | 用例 |
+|---|---|---|---|
+| N3 DPR 留痕 | `lib/diagnostics/viewport_watch.dart`（新，75 行）· 挂载 `lib/main.dart:162` | ✅ | T7 · T8 |
+| N4 停顿看门狗 | `lib/diagnostics/stall_watch.dart`（新，94 行）· 状态行共用 `lib/diagnostics/frame_watch.dart`（160 行）· 挂载 `lib/main.dart:163` | ✅ | T9–T13 |
+| N5 挂起报告可见 | `lib/diagnostics/hang_reports.dart`（新，125 行）· 目录单一定义接进 `lib/diagnostics/diagnostics_bundle.dart`（203 行）· 诊断入口 `lib/settings/pages/diagnostics_dialog.dart`（304 行）· 挂载 `lib/main.dart:164` | ✅ | T17–T19 |
+| 第 6 个测试档（03:52 裁定） | `test/diagnostics/viewport_watch_test.dart`（90 行） | ✅ | T7 · T8 |
+| 另两个测试档 | `test/diagnostics/stall_watch_test.dart`（84 行）· `test/diagnostics/hang_reports_test.dart`（90 行） | ✅ | — |
+
+**验证读数**
+
+- `flutter analyze --no-pub lib/diagnostics lib/settings/pages/diagnostics_dialog.dart lib/main.dart test/diagnostics` ⇒ **No issues found**。
+- `flutter test --no-pub test/diagnostics/stall_watch_test.dart test/diagnostics/hang_reports_test.dart test/diagnostics/viewport_watch_test.dart test/diagnostics/diagnostics_bundle_test.dart` ⇒ **+22 All tests passed**（stall 5 · hang 5 · viewport 3 · bundle 9）。
+- §2 轮 1 点名的 10 条用例（T7 · T8 · T9–T13 · T17–T19）逐条有断言，无占位。
+- SDK：本机 `flutter` 不在 PATH，本轮统一用 `D:\baocode\build\flutter-3475\flutter\bin\flutter.bat`（3.47.5 / Dart 3.13.4，与 `.dart_tool` 一致）。
+
+**决策与写法（与设计的差异，全部显式）**
+
+- N3：只在 `devicePixelRatio` 变化时写 `[viewport]` 行，逻辑尺寸作为行内读数；仅尺寸变化不写——需求 N3 只要求 DPR，且 `AppEventWatch` 的 `[views]` 行已承担尺寸变化。设计 §3.5「值变化时」若按字面含尺寸，属设计面待裁（上抛 1）。
+- N4：`gap` = 实测间隔 − 周期（D10）；阈值 400 ms 为闭区间（gap = 400 写、399 不写，T11）；心跳不接可见性 gate（D9）；`hidden` / `paused` 不写行，`_last` 照常推进。
+- N4 另加 `assert(threshold > period)`：设计 §3.6 把「阈值必须大于周期」当承重条件，现有调用点全部用默认值。
+- N5：`hangs.seen` 第一行 = 最新 `hang-*.txt` 名，第二行 = 本次检查时刻；下一轮 `since` 用第二行，首启写「首次启动」。目录存在但列举失败 ⇒ 写一行 `cannot read <目录>: <错误>`，不静默当「没有报告」。
+- N5 诊断入口：一行报告目录路径 + 一个复用 `l10n.revealInFileManager` 的按钮（`canRevealInFileManager` 为真时显示），无新 l10n 键、无弹窗。
+
+**设计预算核对（实测行数）**：⑨ +20（设计 ≤+14）· ⑮ 75（≈+40）· ⑰ 125（≈+70）· ⑦ 160（+2）· ⑧ +2 · ⑩ +7（≈+4）· ⑳ 84（≈+120）· ㉑ 90（≈+90）。均远低于 800 行硬上限。设计 §5 表需补第 6 个测试档一行（29 → 30 行，5 → 6 个新测试档）——设计档不是本轮笔域。
+
+**自审与评审轮**
+
+- 探索审计 1 轮：**AUDIT: findings**——🔴 0；1 条读法待裁（N3 的「值变化」）；3 条文书漂移（设计 §5 计数、§2 分轮表 9→10 行、本段待写）。
+- advisor 代码评审轮 1：**VERDICT: pass**（🔴 0 · 🟡 3 · 🔵 6）。处置：Fixed 4（hang 列举加显式失败行；stall 注释数字与 assert；viewport 测试走 binding 注册路径）· Accepted / 上抛 5（重复探针、睡眠映射、§5 行数、§6「不补拍」理由、测试 stop 位置不改——flutter_test 在已失败时跳过 `_verifyInvariants`）· New 0。
+- advisor 代码评审轮 2（复核）：**VERDICT: pass**——4 项 Fixed 复核通过、5 项 Accepted 理由成立；新报 2 条 🔵（新测试泄漏全局观察者、hang 返回值注释过期）已在同轮修掉。
+- 终态：**clean**（两轮均 pass，无 🔴、无 must-fix）。
+
+**上抛项**
+
+1. [上抛·待裁] **N3 与既有 `[views]` 行重复**：`AppEventWatch` 已有 DPR 观察者（`lib/diagnostics/app_event_watch.dart:82` 的 `ratio(before) != ratio(after)`），设计 §6 给 `ViewportWatch` 的「不观察 DPR」理由与 §2 自己的基线（`日志 view 0 恒 @1.5`）矛盾。现一次 DPR 变化落两条（`[views]` + `[viewport]`），§7 D 的「两行」实际会读到四条。请裁「保留两条并改 §6 / §7 D 的措辞」或「合并为一条」，并补设计 §5 的表行。
+2. [上抛·待裁] **睡眠 / 最小化映射**：stall 的 `hidden` / `paused` 盲区依赖 Windows 最小化映射，设计 §6 该条仍为 `unverified`；真机走查时实测，若映射不是 `hidden`，唤醒后补拍可能记一行数十分钟的 gap，需回设计补判据。
+3. [上抛·知会] **设计 §5 计数漂移**：新增 `test/diagnostics/viewport_watch_test.dart`（03:52 裁定）后表为 30 行（6 个新测试档），§2 分轮表轮 1 为 10 行；实测行数见上。
+4. [上抛·知会] **真机读数未做**：§7 D（真机 DPR 重现）· G（1 小时零误报）· N5（诊断入口按钮可点）属运行期读数，本轮只交付代码与单测，请父侧 §6 收口时补。
+
+**环境说明**：首跑 `flutter test` 报 `Invalid SDK hash`——`.dart_tool/hooks_runner` 的 `hook.dill` 为旧 SDK 产物；删其 `hook.dependencies_hash_file.json` 后由 flutter 重建（生成物，非源码），`pubspec.lock` 未改。
+
+**改动文件（全部）**：新增 `lib/diagnostics/viewport_watch.dart` · `lib/diagnostics/stall_watch.dart` · `lib/diagnostics/hang_reports.dart` · `test/diagnostics/stall_watch_test.dart` · `test/diagnostics/hang_reports_test.dart` · `test/diagnostics/viewport_watch_test.dart`。
+
+**修改**：`lib/diagnostics/frame_watch.dart` · `lib/diagnostics/diagnostics_bundle.dart` · `lib/settings/pages/diagnostics_dialog.dart` · `lib/main.dart`。
+
 ## §6 验证与收口（父代理）
