@@ -78,7 +78,9 @@
 2. F6 的用户可见行为（失焦即停更）——**由用户点头**，见下。
 3. F5 的 `EdgeFadeMask` 嫌疑——**不改语义，动代码前实测**，设计已把判据写死，无需裁。
 
-**设计的一条实质更正（值得记）**：F5 原假设"补行级 RepaintBoundary"**不成立**——`SuperListView.builder` 的 `addRepaintBoundaries` 默认已是 `true`（调用点 `chat_history_view.dart:2642` 未关）。新的结构嫌疑是包住整块列表的 `EdgeFadeMask`（`chat_history_view.dart:2620` / `edge_fade_mask.dart:92`）：整块遮罩若走 `saveLayer`，任何一行重绘都要重新合成整块画布——与 `raster 340 ms / build 0–9 ms` 同形。
+**设计的一条实质更正（值得记）**：F5 原假设"补行级 RepaintBoundary"**不成立**——`SuperListView.builder` 的 `addRepaintBoundaries` 默认已是 `true`（调用点 `chat_history_view.dart:2642` 未关）。
+
+新的结构嫌疑是包住整块列表的 `EdgeFadeMask`（`chat_history_view.dart:2620` / `edge_fade_mask.dart:92`）：整块遮罩若走 `saveLayer`，任何一行重绘都要重新合成整块画布——与 `raster 340 ms / build 0–9 ms` 同形。
 
 **父侧待裁项（问用户）**：
 - Q1 F7 是否放行动 `lib/kernel/**` 或 `lib/workspace/**`？
@@ -433,7 +435,11 @@ if (_connection != null || _transport != null) {
 - 设计 §3.2 / §10 按「失焦停更、聚焦一次到位、内容不丢是构造性的」定稿；用户逐字确认落在 §4。
 - 可见行为变化登记在设计 §10 与 §12 第 1 项，不藏在实现里。
 
-**设计 v2 的读数面**（本次实测，`find /c` 计数）：`lib/workspace/workspace.dart` 3027 行 · `lib/diagnostics/frame_watch.dart` 158 · `lib/chat/widgets/edge_fade_mask.dart` 293 · `lib/chat/chat_history_view.dart` 3922 · `lib/chat/widgets/markdown_view.dart` 1076 · `lib/main.dart` 919 · `test/chat/chat_history_rebuild_test.dart` 507。四档已在 800 行以上，本批只加分支与挂载行，不拆档（拆分预案沿用既有设计）。
+**设计 v2 的读数面**（本次实测，`find /c` 计数）：
+
+- `lib/workspace/workspace.dart` 3027 行 · `lib/diagnostics/frame_watch.dart` 158 · `lib/chat/widgets/edge_fade_mask.dart` 293
+- `lib/chat/chat_history_view.dart` 3922 · `lib/chat/widgets/markdown_view.dart` 1076 · `lib/main.dart` 919 · `test/chat/chat_history_rebuild_test.dart` 507
+- 四档已在 800 行以上，本批只加分支与挂载行，不拆档（拆分预案沿用既有设计）。
 
 ### 上抛项（修轮后，交主 agent 处置；设计侧不改需求档）
 
@@ -497,7 +503,7 @@ if (_connection != null || _transport != null) {
 | 12 | 给出 Dart SDK 一手来源：`runtime/bin/process_win.cc` 的 `Process::Start` 同步调 `ProcessStarter::Start()`，后者体内即 `CreateProcessW`；「native 入口在调用方 isolate 线程」这一环标 `unverified`，并写明代理方案不依赖它（验收读的是窗口线程，29 处创建全部搬走） | 设计 §3.2 · §6 公开源调查 |
 | 13 | 统一为「观察者只活在 `WindowVisible`」：§3.4 伪码改为 `ChatHistoryView` 订阅 `WindowVisible.changed`，恢复时由该通知触发一次 `_refold`；与 §4.3 一致 | 设计 §3.4 · §4.3 · §4.4 |
 | 14 | F5 视觉比对改**整帧逐像素**；不等价处置写死（先调带高与色标各一次，仍不等价 ⇒ 回退整块遮罩并上报 F5 未达成） | 设计 §10 · §7 B |
-| 15 | 补可核的归属声明：本档 = 板块第二篇，覆盖 F5–F8 / N3–N5；首篇 `chat-streaming.md` 管 F1–F4 | 设计 页首 · §1 |
+| 15 | 补可核的归属声明：本档 = 板块第二篇，覆盖 F5–F8 / N3–N5；首篇 `docs/design/chat-streaming.md` 管 F1–F4 | 设计 页首 · §1 |
 | 16 | 行数本轮逐档复量（45 行清单，口径写在 §5 表头），实施首步不再需要「复量后补记」这一前置 | 设计 §5 |
 | 17 | §4.7 三处非空断言改成显式空值路径：三件套有任一为空 ⇒ 不放回、照旧关闭（与 §3.1 的放回被拒同一条业务门） | 设计 §4.7 · §3.1 |
 | 18 | §12 第 1 项改为「需求档 F6 已定案，实施按此执行」，只保留可感知后果的告知（并排使用会停更） | 设计 §12 第 1 项 · §10 |
@@ -609,7 +615,11 @@ if (_connection != null || _transport != null) {
 | 4 | §5 表删掉上游迁移行（原 ②–⑱、⑳ 共 18 行）；F8 迁移面只占 3 行（①–③） | 设计 §5 |
 | 5 | §6 新增 D15「兼容上游优先」并引用户原话；D4 由「全量迁移 33 处」改写为「只迁会冻窗口的两处创建点」 | 设计 §6 D4 · D15 |
 
-**本轮读数（实测，2026-10-26）**：`thincoder_warm.dart` 242 · `thincoder_lifecycle.dart` 170 · `thincoder_kernel.dart` 480 · `thincoder_process.dart` 18 · `workspace.dart` 3027 · `test/kernel/thincoder_warm_test.dart` 284 · `test/kernel/thincoder_kernel_test.dart` 4967 · `chat_session.dart` 822；`lib/chat/session/lifecycle.dart:40` = `if (owner._views == 0 && !owner._disposed) owner._kernel.release();`（删后链路里视图离开那一跳的坐标）。
+**本轮读数（实测，2026-10-26）**：
+
+- `thincoder_warm.dart` 242 · `thincoder_lifecycle.dart` 170 · `thincoder_kernel.dart` 480 · `thincoder_process.dart` 18
+- `workspace.dart` 3027 · `test/kernel/thincoder_warm_test.dart` 284 · `test/kernel/thincoder_kernel_test.dart` 4967 · `chat_session.dart` 822
+- `lib/chat/session/lifecycle.dart:40` = `if (owner._views == 0 && !owner._disposed) owner._kernel.release();`（删后链路里视图离开那一跳的坐标）。
 
 **本批覆盖的需求条目（v6）**
 
@@ -678,7 +688,9 @@ if (_connection != null || _transport != null) {
 | N5 | 已有的事故证据必须被看见 | §3.7 · §4.6 · §7 N5 |
 | N2 | 改前读数在动代码前量、同法复量 | §2 · §3.3 · §4.4 · §7 E |
 
-**受影响文件 · 验收 · 用例 · 决策**：一律以设计 v7 为准——受影响文件 **29 行**（14 既有档 · 2 整档删除 · 7 新 lib · 5 新测试 · 1 零改动）→ §5 / §5.1；验收（F8-A/B/C/D/E · A / B / C / D / G / H / I / N5 / P / E）→ §7；用例 T1–T23（含 T2a/T2b）+ 集成用例 1-1 / 2-1 / 3-1 → §8 / §8.1；决策 D1–D15 → §6；集成测试 → §11（`test/RTM.md` + `test/integration/chat_flows_test.dart`，3 / 50–100）。
+**受影响文件 · 验收 · 用例 · 决策**：一律以设计 v7 为准——受影响文件 **29 行**（14 既有档 · 2 整档删除 · 7 新 lib · 5 新测试 · 1 零改动）→ §5 / §5.1；验收（F8-A/B/C/D/E · A / B / C / D / G / H / I / N5 / P / E）→ §7。
+
+用例 T1–T23（含 T2a/T2b）+ 集成用例 1-1 / 2-1 / 3-1 → §8 / §8.1；决策 D1–D15 → §6；集成测试 → §11（`test/RTM.md` + `test/integration/chat_flows_test.dart`，3 / 50–100）。
 
 **上抛项（交主 agent 处置）**
 
