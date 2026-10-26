@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 
 import '../../platform/data_dir.dart';
 import '../../platform/event_log.dart';
+import '../../platform/process_host.dart';
 import 'thincoder_transport.dart';
 
 /// Settings → General → thincoder: the build to run on this machine
@@ -301,14 +302,21 @@ abstract final class ThincoderLocator {
     List<String> arguments = const ['--version'],
   }) async {
     try {
-      final result = await Process.run(
-        executable,
-        arguments,
-        environment: environment,
-        includeParentEnvironment: true,
-        runInShell: throughShell(executable),
+      final result = await ProcessHost.run(
+        ProcessSpec(
+          executable,
+          arguments,
+          environment: environment,
+          includeParentEnvironment: true,
+          runInShell: throughShell(executable),
+        ),
       );
       return parseVersion('${result.stdout}\n${result.stderr}');
+    } on ProcessHostUnavailable catch (error) {
+      // Not "no version": the proxy itself is unavailable. Kept null for the
+      // caller's existing contract, and said here so that it is in the log.
+      appEvent('thincoder', 'version: $error');
+      return null;
     } on Object {
       return null;
     }

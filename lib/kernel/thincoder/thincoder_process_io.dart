@@ -1,11 +1,14 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
+import 'dart:io' hide ProcessSignal;
+import 'dart:io' as io show ProcessSignal;
 
 import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import '../../platform/child_process_registry.dart';
 import '../../platform/data_dir.dart';
+import '../../platform/event_log.dart';
+import '../../platform/process_host.dart';
 import 'thincoder_locator.dart';
 import 'thincoder_transport.dart';
 
@@ -23,7 +26,7 @@ class ThincoderProcess implements ThincoderTransport {
         .transform(_decoder)
         .transform(const LineSplitter())
         .listen(_stderrLine, onError: _undecodable);
-    unawaited(_process.exitCode.then(_exited));
+    unawaited(_process.exitCode.then(_exited, onError: _exitFailed));
   }
 
   /// What both streams are read with, and not strict about it: a line that
@@ -40,8 +43,23 @@ class ThincoderProcess implements ThincoderTransport {
 
   /// A transport over [process], e.g. a stand-in process under test.
   @visibleForTesting
-  factory ThincoderProcess.forProcess(Process process) =>
-      ThincoderProcess._(process);
+  factory ThincoderProcess.forProcess(Process process) {
+    return ThincoderProcess._(
+      HostedProcess(
+        pid: process.pid,
+        stdout: process.stdout,
+        stderr: process.stderr,
+        exitCode: process.exitCode,
+        write: process.stdin.add,
+        closeStdin: () => unawaited(process.stdin.close().catchError((_) {})),
+        kill: (signal) => process.kill(
+          signal.name == 'sigkill'
+              ? io.ProcessSignal.sigkill
+              : io.ProcessSignal.sigterm,
+        ),
+      ),
+    );
+  }
 
   /// Where the running processes are kept track of across runs.
   @visibleForTesting
@@ -75,6 +93,12 @@ class ThincoderProcess implements ThincoderTransport {
       await _process.exitCode.timeout(timeout);
     } on TimeoutException {
       _process.kill(ProcessSignal.sigkill);
+    } on ProcessHostUnavailable catch (error) {
+      // The proxy went down taking the process with it: nothing is left here
+      // to end, and quitting must not be held up by it. Written to the log so
+      // that a stop that could not happen is not silence either; what the
+      // proxy held stays recorded for a later run to end.
+      appEvent('thincoder', 'stop: $error');
     }
   }
 
@@ -83,30 +107,35 @@ class ThincoderProcess implements ThincoderTransport {
     // two processes never go on with one session.
     await registry.reaped;
     try {
-      final process = await Process.start(
-        launch.executable,
-        launch.arguments,
-        workingDirectory: launch.cwd,
-        // The login shell's environment is the whole of it; on Windows it
-        // is the app's own, and the child needs the parent's beside it for
-        // what `cmd.exe` itself runs on (COMSPEC, PATHEXT, …). None of
-        // BaoCode's own proxy variables: thincoder's network is its own.
-        environment: launch.environment,
-        includeParentEnvironment: Platform.isWindows,
-        // An npm shim is a `.cmd`, which only the shell can run.
-        runInShell: ThincoderLocator.throughShell(launch.executable),
+      final process = await ProcessHost.start(
+        ProcessSpec(
+          launch.executable,
+          launch.arguments,
+          workingDirectory: launch.cwd,
+          // The login shell's environment is the whole of it; on Windows it
+          // is the app's own, and the child needs the parent's beside it for
+          // what `cmd.exe` itself runs on (COMSPEC, PATHEXT, …). None of
+          // BaoCode's own proxy variables: thincoder's network is its own.
+          environment: launch.environment,
+          includeParentEnvironment: Platform.isWindows,
+          // An npm shim is a `.cmd`, which only the shell can run.
+          runInShell: ThincoderLocator.throughShell(launch.executable),
+        ),
       );
       return ThincoderProcess._(process, executable: launch.executable);
-    } on ProcessException catch (error) {
+    } on ProcessHostUnavailable catch (error) {
       // Which file: Windows' own words for it leave `%1` in its place.
+      final cause = error.cause;
       throw ThincoderUnavailable(
         'thincoder could not start',
-        detail: '${launch.executable}\n${error.message}',
+        detail:
+            '${launch.executable}\n'
+            '${cause is ProcessException ? cause.message : '$cause'}',
       );
     }
   }
 
-  final Process _process;
+  final HostedProcess _process;
 
   /// The build run, to name in a report of its failing.
   final String? executable;
@@ -146,11 +175,18 @@ class ThincoderProcess implements ThincoderTransport {
     _finish();
   }
 
-  void _exited(int code) {
+  void _exited(int code, {bool stillRunning = false}) {
     _exitCode = code;
     _live.remove(this);
-    unawaited(registry.remove(_process.pid));
+    // A process still running is left recorded: the proxy that held it is
+    // gone, so ending it is the next run's to do (the registry's reaping).
+    if (!stillRunning) unawaited(registry.remove(_process.pid));
     _finish();
+  }
+
+  void _exitFailed(Object error) {
+    _stderrLine('$error');
+    _exited(-1, stillRunning: true);
   }
 
   /// Ends the stream once both the output is read and the process gone, so
@@ -173,19 +209,22 @@ class ThincoderProcess implements ThincoderTransport {
   void write(Map<String, Object?> message) {
     if (_exitCode != null) return;
     try {
-      _process.stdin.writeln(jsonEncode(message));
+      _process.write(utf8.encode('${jsonEncode(message)}\n'));
     } on StateError {
       // Closed under us: the exit message follows.
     }
   }
 
   @override
-  Future<void> get exited => _process.exitCode.then((_) {});
+  Future<void> get exited => _process.exitCode.then(
+    (_) {},
+    onError: (Object _) {},
+  );
 
   @override
   void close() {
     if (_exitCode != null) return;
-    unawaited(_process.stdin.close().catchError((_) {}));
+    _process.closeStdin();
     _process.kill();
   }
 }

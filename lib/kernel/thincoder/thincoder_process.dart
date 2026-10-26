@@ -1,3 +1,4 @@
+import '../../platform/process_host.dart';
 import 'thincoder_transport.dart';
 import 'thincoder_process_stub.dart'
     if (dart.library.io) 'thincoder_process_io.dart'
@@ -10,7 +11,16 @@ Future<ThincoderTransport> startThincoderProcess(ThincoderLaunch launch) =>
 
 /// Ends every thincoder process the app started, and waits for them: for
 /// when the app quits.
-Future<void> stopThincoderProcesses() => platform.ThincoderProcess.stopAll();
+Future<void> stopThincoderProcesses() async {
+  await platform.ThincoderProcess.stopAll();
+  try {
+    await ProcessHost.stopAll();
+  } on ProcessHostUnavailable {
+    // The proxy goes with the processes it held: with nothing left to reach,
+    // quitting is not to fail on it. What it held stays in the process
+    // registry, which ends it on the next run.
+  }
+}
 
 /// Ends the thincoder processes an earlier run of the app left running
 /// (a crash, a force quit, a hot restart); none on the web.

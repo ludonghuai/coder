@@ -1009,4 +1009,72 @@ VERDICT: pass
 
 **修改**：`lib/diagnostics/frame_watch.dart` · `lib/diagnostics/diagnostics_bundle.dart` · `lib/settings/pages/diagnostics_dialog.dart` · `lib/main.dart`。
 
+### 轮 2 · 进程创建（F8）· 2026-10-26
+
+**范围**：按 §2「实施分轮」表轮 2——设计 §5 行 ① ② ③ ⑪ ⑫ ⑬ ⑱ ⑲ 八行；§8 用例 T14 · T15 · T16 · T21 · T22 · T23 六条；§7 读数 F8-A · F8-C · F8-D · F8-E。轮 1（诊断）/ 轮 3（删池）/ 轮 4（渲染面）不在本轮。
+
+**起点状态（如实记账）**：本轮开始时这 8 个文件已在盘（`git status` = 3 改 + 5 新增），是本批上一会话中断留下的产物，没有 §5 记录，也没有任何验收读数。本会话的工作 = **逐档复核 + 修 10 处 + 取读数 + 写本条记录**，不是"从零实现"。复核结论：设计与迁移面成立，但留下 1 个 🔴 与 3 个 🟡（见下），均已修。
+
+| 需求 · 项 | 落点 | 状态 | 用例 |
+|---|---|---|---|
+| F8 迁移面 ①（thincoder 起进程，覆盖开会话与逐项目列会话两条链） | `lib/kernel/thincoder/thincoder_process_io.dart:107-124` `ProcessHost.start` | ✅ | T14 · T21 |
+| F8 迁移面 ②（版本探测） | `lib/kernel/thincoder/thincoder_locator.dart:305-313` `ProcessHost.run` | ✅ | T15（开关 + 既有 locator 用例） |
+| F8 退出路径 ③（`stopAll`） | `lib/kernel/thincoder/thincoder_process.dart:14-23` | ✅ | T22d（新增） |
+| 代理公共面 ⑪ | `lib/platform/process_host.dart`（178 行） | ✅ | T14 · T15 · T21 |
+| 代理真实后端 ⑫ | `lib/platform/process_host_io.dart`（650 行） | ✅ | T14 · T15 · T22a–e · T23 |
+| web 分档 ⑬ | `lib/platform/process_host_stub.dart`（27 行） | ✅ | — |
+| 代理往返用例 ⑱ | `test/platform/process_host_test.dart`（316 行） | ✅ | T14 · T15 · T21 · T22a–e · T23 |
+| 守门扫描 ⑲ | `test/platform/no_window_thread_process_test.dart`（43 行） | ✅ | T16 |
+| F8-C 守门（引入代理的档集合 = 6 档，创建进程的两档零直连） | 同上 | ✅ 本轮实读通过 | T16 |
+| F8-A / F8-D / F8-E 真机读数 | — | ⏳ 未取（见上抛 1） | — |
+
+**验证读数（本轮实测）**
+
+- `flutter analyze --no-pub lib/platform lib/kernel/thincoder test/platform` ⇒ **No issues found**（2.7 s）。
+- `flutter test --no-pub test/platform/process_host_test.dart test/platform/no_window_thread_process_test.dart test/kernel/thincoder_locator_test.dart` ⇒ **+19 ~1 All tests passed**（1 条 skip = T22c，POSIX 专属：`child_process_registry.dart:57` 在 Windows 直接返回）。
+- 红绿对照两对（不是"跑过就算"）：T22d 去掉 `_stop` 的 catch ⇒ 红（`The process-host channel stopped answering (run)`）；T22e 去掉 `stillRunning: true` ⇒ 红（注册表内容为 `[]`，孤儿条目被删）。两处恢复后复跑全绿。
+- SDK：`D:\baocode\build\flutter-3475\flutter\bin\flutter.bat`（3.47.5 / Dart 3.13.4）。
+
+**本轮修掉的 10 处（前 4 处是问题，后 6 处是假绿与硬健壮性）**
+
+1. 🔴 **代理死亡时把仍在跑的孤儿的注册表条目删掉**：`_exitFailed` 原走 `_exited(-1)`，而它无条件 `registry.remove`。子进程在代理死时仍活着（T22a/b 还要 `stopChild` 才收掉），记录一删，设计 §9 承诺的"孤儿由 `ChildProcessRegistry` 按 parent pid 回收"就永远不可能发生。改为 `_exited(int code, {bool stillRunning = false})`，`_exitFailed` 传 `stillRunning: true`。新用例 T22e 断言条目仍在。
+2. 🟡 **退出路径 `ProcessHost.stopAll()` 未接失败面**：它会拒绝（起代理在飞、等结果时代理死掉），而 `main.dart` 的 `Future.wait` 一旦抛出，`onExitRequested` 就不再返回结果。改为 try / on `ProcessHostUnavailable` 继续退出。**代价写明**：共享档 `thincoder_process.dart` 不能写日志——`event_log.dart` 依赖 `dart:io`，共享档在 web 上要编译，所以这里只有注释、没有日志行；可查的证据是第 1 条保留下来的注册表条目。
+3. 🟡 **`versionOf` 把代理故障吞成"没有版本"**：`on Object → null` 让基础设施故障与"这个 build 不说版本"同形。新增 `on ProcessHostUnavailable` 分支写一行 `appEvent('thincoder', 'version: …')` 后仍返回 null（不改既有契约）。无注入面，未配用例。
+4. 🟡 **T22b 的"未重放"断言是空断言**：脚本每次启动都写死同一内容 `'1'`，重放也照样绿。改成 `appendFileSync(...,'x')` 后断言内容为 `'x'`（重放会得 `'xx'`）。
+5. T21 里"`logs/hangs/` 零新增"那条断言是空断言（临时目录没人写），删除；该条款归 F8-A 的真机读数。
+6. 守门正则补 `runSync`（`\bProcess\.(?:start|run|runSync)\(`）：本批自检原就点名三种，设计 §8 T16 只列了两种，收紧后当前树仍绿。
+7. `_fail` 未关三个 `ReceivePort`（每次代理死亡泄 3 个端口）⇒ 补关。
+8. `_send` 的 `bytes as Uint8List` 硬转 ⇒ 改成非 `Uint8List` 时复制：一次转换异常会让 stdout 转发静默中断。
+9. 测试卫生：T22d/T22e 的子进程 cwd 挪出临时目录（Windows 锁运行中进程的 cwd，tearDown 删不掉）；新增 `_awaitedPid` 等子进程把 pid 写完再读。
+10. 测试面 seam 与文案补齐（见"与设计的差异"）。
+
+**与设计的差异（全部显式，设计档不是本轮笔域）**
+
+- **本地 `ProcessSignal` 类**（`process_host.dart:9-16`）、**`run` 的 encoding 可空**（`:108-112`）、**`HostedProcess` 用具名工厂**（`:42-60`）：都是 web 安全的强制结果——`process_host.dart` 被共享档 `thincoder_process.dart` 引入，不能 `import 'dart:io'`，因此 `systemEncoding` 与 `dart:io` 的 `ProcessSignal` 都不能出现在公共面上。行为与设计同义。
+- **测试面 seam 超出 §4.1 契约**：`processHostBackendForTest`（`:19`）、`generation`、`killProxyForTest` / `closeProxyChannelForTest` / `resetForTest`，以及协议里的 `debugCloseChannel`。T22/T23 的失败面必须能被驱动，契约未列这几处，登记为有意 seam。
+- **用例拆分**：设计 T22 一条，本轮拆成 T22a（在飞调用以 `ProcessHostUnavailable` 结束）· T22b（下一次 start 只重建一次、不重放）· T22c（注册表回收，POSIX）· T22d（stop 遇到死代理仍完成）· T22e（孤儿条目保留）。T22d / T22e 是设计的用例表里没有的，理由见上面第 1、2 条。
+- **`⑱` 的用例归属**：设计 §5 写该档"代理往返（T14–T15）"，实际还装 T21 / T22a–e / T23；§2 轮 2 的六条用例只能落在 ⑱ ⑲ 两档里，未新增测试档。
+- **`ThincoderProcess.forProcess` 无调用点**：重构后仍保留（全仓 grep 只命中定义）。记为待删接缝，本批不删。
+- **预算超设计预期（逐行实测）**：① 207 → **244**（设计 +≈25/−≈30）· ② 379 → **382**（≤ +4/−3）· ③ 18 → **22**（+≈3）· ⑪ **178**（≈+60）· ⑫ **650**（≈+220）· ⑬ **27**（≈+20）· ⑱ **316**（≈+120）· ⑲ **43**（≈+50）。无档超 800 行硬上限；⑪ ⑫ ⑱ 的超出量来自 ack/超时协议、失败面收尾与四条测试 seam，属设计预估偏乐观，需设计档同步。
+
+**自审与评审轮**
+
+- 探索审计 1 轮：**AUDIT: findings**（0 红 / 3 黄 / 5 蓝）。处置：2 条当场修（T21 空断言、守门补 `runSync`）；1 条 §5 记录（本块）；其余转入代码评审。
+- advisor 代码评审轮 1：**VERDICT: changes-required**（1 红 / 3 黄 / 5 蓝）。处置：4 条全修（孤儿记录、退出路径、locator 日志、重放断言），5 条蓝记录 / 保留。
+- advisor 代码评审轮 2（复核）：**VERDICT: pass**——4 项修复逐项核过，新问题 0；残留 3 条蓝（`stopAll` 未做错误映射、`forProcess` 无调用点、node 依赖无跳过）已在本块与上抛登记。
+- 终态：**clean**（无未决 🔴、无未修 🟡）。
+
+**上抛项（交主 agent 处置）**
+
+1. [上抛·待裁] **F8-A / F8-D / F8-E 的真机读数本轮未做**：三项都要跑起来的应用（多项目启动、打开设置页、看 `logs/hangs/` 零新增），实施轮无法代跑。请按轮 1 的先例归 §6 收口，或另行安排一次走查。F8-C 已由 T16 落地。
+2. [上抛·知会] **设计档需同步的漂移**（设计档不是本轮笔域）：§5 的 ① 现行 207、⑪ ⑫ ⑱ 的预期增量（本块给了实测）；§9 / T22 的"孤儿由注册表按 parent pid 回收"在 Windows 是空操作（`child_process_registry.dart:57`），该条只在 POSIX 成立；§4.1 的 `run` 签名与 `ProcessSignal` 形状（web 安全所致）；T21 的"`logs/hangs/` 零新增"已归 F8-A 真机读数；§8 需补 T22d / T22e 与 T22a–e 的拆分。
+3. [上抛·知会] **`ProcessHost.stopAll()` 是公共面上唯一没做错误映射的成员**（`process_host.dart:172`），配 `process_host_io.dart:188` 的 `rethrow` 可让 `TimeoutException` 穿过退出路径的 catch。概率极低（需就绪握手 30 s 超时且在飞），记为蓝，未在轮内改。
+4. [上抛·知会] **集成用例本轮不增**：`test/integration/chat_flows_test.dart` 的 1-1 归轮 3、2-1 / 3-1 归轮 4；当前 `test/RTM.md` 三行已定，套件计数仍是 3 / 50–100（尚未落文件）。
+
+**读数更正（同轮复量，以此处为准）**
+
+- 三处行数是评审修完前量的，复量后为：`lib/kernel/thincoder/thincoder_process_io.dart` **246**（写 244）· `lib/kernel/thincoder/thincoder_locator.dart` **387**（写 382）· `lib/kernel/thincoder/thincoder_process.dart` **28**（写 22）。
+- 其余不变：`lib/platform/process_host.dart` 178 · `lib/platform/process_host_io.dart` 650 · `lib/platform/process_host_stub.dart` 27 · `test/platform/process_host_test.dart` 316 · `test/platform/no_window_thread_process_test.dart` 43。
+- 对照设计 §5 的现行 / 预期：① 207（+≈25/−≈30）· ② 379（≤ +4/−3）· ③ 18（+≈3）——三档都只小幅超出，仍远低于 800 行硬上限；⑪ ⑫ ⑱ 的超出量与理由见上块，设计档需同步。
+
 ## §6 验证与收口（父代理）
