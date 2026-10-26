@@ -1121,6 +1121,9 @@ VERDICT: pass
 
 ## §4 用户批准（主 agent）
 ## §5 实施记录（eng-coder）
+**状态行**：实施完成（四轮全部落地 + 实施面终检：analyze clean · T16 绿 · P 零命中 · 设计 §5 清单 29/29 相符；真机读数与收口门归 §6）
+
+
 
 ### 轮 1 · 诊断面（N3 / N4 / N5）· 2026-10-26
 
@@ -1375,5 +1378,30 @@ VERDICT: pass
 
 - 行数（`find /c /v ""` 实测）：`lib/chat/window_visible.dart` **57** · `test/chat/window_visible_test.dart` **351** · `test/integration/chat_flows_test.dart` **523** · `lib/chat/chat_history_view.dart` **3977**（上块写的「`:3973`」是交接修复前量的；现 +55，超设计 §5 ④ 的 ≤ +40 约 15 行）。
 - 工作树状态：本轮只新增 2 档、改 2 档；`docs/design/chat-raster-repaint.md` 与 `docs/requirements/chat-streaming.md` 的未提交改动是设计/父侧笔域的既有改动，本轮未触碰。
+
+### 实施面终检（§2 四轮全部落地后的复核 · 2026-10-26）
+
+**本块的性质（先写清，免得被读成第五轮）**：本次 spawn 的任务书 = §2。§2 的「实施分轮」表共四轮（诊断 / F8 / 删池 / 渲染面），§5 已各有一块实施记录，且全部已在盘提交：`e1eca100`（轮 1）· `daf0e13c`（轮 2）· `71540df4`（轮 3）· `3ff80551`（轮 4）· `014954c7`（设计 v11 落盘，docs）。**§2 没有未执行的轮次**，因此本块不实施任何新改动：它是对已落地实施面做的一次终检，给 §6 收口一份可核的代码面读数。
+
+**起点读数**：`git status` = clean；HEAD = `014954c7`。`git diff --stat 3ff80551..HEAD` = 4 档全部为文档（批档 / 设计档 / 需求档 / `test/RTM.md`），**源码零改动** ⇒ 代码面就是轮 4 交付的那一版。
+
+**终检读数（本轮实测，命令 + 结果）**
+
+| # | 检查 | 命令 | 读数 |
+|---|---|---|---|
+| 1 | 全仓静态面 | `flutter analyze --no-pub` | **No issues found**（6.5 s） |
+| 2 | F8-C 守门（T16） | `flutter test --no-pub test/platform/no_window_thread_process_test.dart` | **+1 All tests passed**（`T16: only the six approved files import the process host`） |
+| 3 | 验收 P（代码面） | `lib/**` 与 `test/**/*.dart` 内匹配四种模式 `thincoder_warm` / `warm hit` / `warm miss` / `预热池` | **零命中**（两处读数均为空） |
+| 4 | 设计受影响表复核 | 逐档数换行符（`wc -l` 同口径），与设计 §5「现值」列逐行比对 | **29 档全部相等、0 处偏差**；两处整档删除（`thincoder_warm.dart` · `thincoder_warm_test.dart`）**在盘不存在** |
+| 5 | 集成索引与用例 | `test/RTM.md` 行数；`test/integration/chat_flows_test.dart` 的用例标题 | RTM **53** 行（设计记 53）· 三行 1-1 / 2-1 / 3-1；三条用例标题逐字带 `1-1` / `2-1` / `3-1` |
+
+**没做的两项，以及为什么（写明归属，不静默略过）**
+
+- **全量 `flutter test`（收口门）**：归 §6 父侧「一次跑完全绿」。本块不跑的理由是重复而非省事：代码面自 `3ff80551` 起零改动（上面 `git diff` 读数），再跑一遍与轮 4 的 **+104** 同值。第 2 项已用一次真实编译 + 用例通过证明当前工具链可用（本轮未撞 `Invalid SDK hash`）。
+- **真机读数**（F8-A / B / D / E · C 的设备面帧数与 `GPU Engine` · D 的 DPR 重现 · G 的 1 小时零误报 · N5 的按钮可点 · F5 的真机窗口复核）：§1 的 05:25 / 06:25 / 07:20 三次裁决已归 **§6**，实施轮不背。
+
+**结论**：§2 定义的四个实施轮全部落地且可复核；代码面**无待改项**；本批剩余工作全部在父侧 §6（真机读数 + 收口门）。
+
+**自审与评审轮**：本次 spawn 无代码改动（`git status` clean、`git diff` 零源码），没有可审的 diff ⇒ 探索审计轮次 **0**、advisor 代码评审轮次 **0**，原因是无可审对象而不是跳过；终态 = **clean**（0 findings，无待修项）。
 
 ## §6 验证与收口（父代理）
