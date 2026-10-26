@@ -25,7 +25,6 @@ import 'thincoder_protocol.dart';
 import 'thincoder_session_ref.dart';
 import 'thincoder_suggestions.dart';
 import 'thincoder_transport.dart';
-import 'thincoder_warm.dart';
 
 part 'thincoder_choices.dart';
 part 'thincoder_lifecycle.dart';

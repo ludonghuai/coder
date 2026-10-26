@@ -32,7 +32,6 @@ import 'package:baocode/kernel/thincoder/thincoder_mock.dart';
 import 'package:baocode/kernel/thincoder/thincoder_protocol.dart';
 import 'package:baocode/kernel/thincoder/thincoder_session_ref.dart';
 import 'package:baocode/kernel/thincoder/thincoder_transport.dart';
-import 'package:baocode/kernel/thincoder/thincoder_warm.dart';
 import 'package:baocode/kernel/transcript.dart';
 import 'package:baocode/l10n/l10n.dart';
 import 'package:baocode/platform/data_dir.dart';
@@ -4306,25 +4305,6 @@ void main() {
       return (session, agents);
     }
 
-    /// A pool of the test's, its processes scripted agents — behind [gate]
-    /// where the test wants the start to take its time; put back in `finally`
-    /// — that is, [addTearDown].
-    ThincoderWarm pool(List<ThincoderMock> agents, {Completer<void>? gate}) {
-      final previous = ThincoderWarm.instance;
-      addTearDown(() => ThincoderWarm.instance = previous);
-      return ThincoderWarm.instance = ThincoderWarm(
-        start: (_) async {
-          final agent = ThincoderMock(serialInbound: true);
-          agents.add(agent);
-          if (gate != null) await gate.future;
-          return agent;
-        },
-        launch: (cwd) async =>
-            ThincoderLaunch(cwd: cwd, executable: '/mock/thincoder'),
-        schedule: (_, _) => _NoTimer(),
-      );
-    }
-
     test('T107①: a session being started takes the message, and says so '
         '(§25.3)', () async {
       final gate = Completer<void>();
@@ -4367,7 +4347,6 @@ void main() {
         ),
         greaterThan(0),
       );
-      expect(logged('timing: warm miss'), hasLength(1));
       expect(logged('timing: session-new'), hasLength(1));
       expect(logged('timing: first-frame'), hasLength(1));
     });
@@ -4414,55 +4393,39 @@ void main() {
       );
     });
 
-    test('T108: a process made warm is taken over whole — one start, one '
-        'handshake (§25.2)', () async {
-      final warmed = <ThincoderMock>[];
-      final gate = Completer<void>();
-      final instance = pool(warmed, gate: gate);
-      // As the app opens a project: warmed and not waited for, the session
-      // created by the same action opening at once.
-      unawaited(instance.warm('/project', files: true));
-      final s = _Session(
-        context: KernelContext(cwd: '/project', files: _BinaryFiles()),
-      );
-      addTearDown(s.dispose);
-      s.kernel.prepare();
+    test('T20: without a pool a session starts its own process, lets it go '
+        'as the view leaves, and starts another on the way back', () async {
+      final (session, agents) = slow();
+
+      // A view opens it: its own process, its own handshake, its own session.
+      session.attach();
       await settle();
+      expect(agents, hasLength(1));
+      expect(agents.single.requests('initialize'), hasLength(1));
+      expect(agents.single.requests('session/new'), hasLength(1));
+      expect(session.health.status, KernelHealthStatus.ready);
 
-      // The start under way is waited for, not raced: nothing else was made.
-      expect(s.agents, isEmpty);
-      gate.complete();
+      // The view leaves: the session is told, and the process goes with it —
+      // over, not merely let go of.
+      session.detach();
       await settle();
+      expect(agents.single.requests('session/close'), hasLength(1));
+      expect(session.health.status, KernelHealthStatus.idle);
+      // The process itself is over, not merely let go of: its frames end.
+      await agents.single.exited.timeout(const Duration(seconds: 1));
 
-      // No start of its own, and no second handshake: the pool's process is
-      // the session's — same folder, same capability bit.
-      expect(s.agents, isEmpty);
-      expect(warmed, hasLength(1));
-      expect(warmed.single.requests('initialize'), hasLength(1));
-      expect(warmed.single.requests('session/new'), hasLength(1));
-      expect(s.kernel.health.status, KernelHealthStatus.ready);
-      expect(s.kernel.sessionId, isNotNull);
-      expect(logged('warm: held'), hasLength(1));
-      expect(logged('timing: warm hit'), hasLength(1));
-      expect(logged('timing: warm miss'), isEmpty);
-    });
-
-    test('T108②: a process held for another handshake is not taken (§25.2)',
-        () async {
-      final warmed = <ThincoderMock>[];
-      final instance = pool(warmed);
-      await instance.warm('/project', files: true);
-
-      // This kernel has no host files: its key is the other bit.
-      final s = _Session();
-      addTearDown(s.dispose);
-      s.kernel.prepare();
+      // The way back starts another one: nothing was kept between them.
+      session.attach();
       await settle();
+      expect(agents, hasLength(2));
+      expect(agents.last.requests('initialize'), hasLength(1));
+      expect(agents.last.requests('session/new'), hasLength(1));
+      expect(session.health.status, KernelHealthStatus.ready);
 
-      expect(warmed, hasLength(1));
-      expect(s.agents, hasLength(1));
-      expect(s.kernel.health.status, KernelHealthStatus.ready);
-      expect(logged('timing: warm miss'), hasLength(1));
+      // The log is the reading the acceptance takes: two handshakes, and no
+      // timing line of the pool that is gone.
+      expect(logged('handshake: protocol'), hasLength(2));
+      expect(logged('timing: warm'), isEmpty);
     });
 
     test('T110: the first content frame is what is read, the state frames are '
@@ -4894,18 +4857,6 @@ void main() {
       expect(events.whereType<SessionRenamed>(), hasLength(1));
     });
   });
-}
-
-/// A timer that never fires: the pool's TTL is moved by the test's clock.
-class _NoTimer implements Timer {
-  @override
-  void cancel() {}
-
-  @override
-  bool get isActive => false;
-
-  @override
-  int get tick => 0;
 }
 
 /// The host's files as one that cannot be read at all: a binary file's.

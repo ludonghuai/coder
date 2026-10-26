@@ -390,8 +390,24 @@ if (_connection != null || _transport != null) {
 
 **顺带记**：`flutter` 不在 PATH，统一走 `D:\baocode\build\flutter-3475\flutter\bin\flutter.bat`；`.dart_tool/hooks_runner` 的旧 `hook.dill` 需删后重建（生成物，`pubspec.lock` 未动）——下次轮到实施先清一次，免得又撞 `Invalid SDK hash`。
 
+### F8 落地裁决 + 设计 v9 处置（2026-10-26 06:25）
+
+**F8（轮 2）交付核过**：`analyze` 无问题、`flutter test` **+19 ~1 全过**（1 skip = T22c 的 POSIX 腿）、提交 `daf0e13c`。它抓到的 🔴 是真缺陷且已红绿验：**代理死亡时把仍在运行的孤儿的注册表条目一起删了** ⇒ 那些进程继续跑、而"由注册表回收"永远不可能发生。
+
+| 上抛 | 裁定 |
+|---|---|
+| **1 F8-A / D / E 真机读数** | 归 **§6 收口**（同轮 1 的 D/G/N5 一例）：都需要跑起来的应用（多项目启动 / 打开设置页 / `logs/hangs/` 零新增），实施轮不背。**§6 将集中做一次走查，把这 7 项一次取齐。** |
+| **2 设计档漂移清单** | 已由设计修轮 v9 清扫（§5 行数 30、T22 只在 POSIX、`run` 签名、T21 归口、T22d/e 补行）——见下一条。 |
+| **3 `stopAll()` 未做错误映射（🔵）** | 接受不改：概率极低，且失败已被捕获不阻断退出（本轮已修那条才是要紧的）。 |
+| **4 集成用例本轮不增（1-1 归轮 3、2-1/3-1 归轮 4）** | 接受，与 §2 分轮表一致。 |
+
+**设计 v9 的两条上抛裁定**
+
+1. **不再发新一轮设计评审**。理由：v9 的语义增量只有一条——**N3 的验收只数 `[viewport]` 行**（收窄，不是放宽），其余是事实更正（"没有既有 DPR 观察者"改成 `existing but unusable`）与计数同步（29→30、5→6）。第 5 轮 pass 覆盖的 v8 与本版的差别，不改变任何已通过的判据方向；发一轮只验证"收窄"的评审是把注意力花在没有分歧的地方。**此裁定与理由即记录**。
+2. **需求档 N3 的行形已按实现补齐**（我的笔域）：现写 `[viewport] view <id> dpr <旧> -> <新> size <逻辑宽×高>`，并写明**只在 DPR 变化时写**、`[views]` 与它并存互不替代。
+
 ## §2 批次任务与设计（eng-designer）
-**状态行**：设计完成 2026-10-26（v8 · 第 5 轮评审 pass · 实施分四轮已写入本段（轮 1 诊断 / 轮 2 F8 / 轮 3 删池 / 轮 4 渲染面））
+**状态行**：设计完成 2026-10-26（v9 · 修轮已落：N3 与 [views] 并存、验收只数 [viewport]；§5 30 行 / 6 个新测试档（㉙））
 <§2 模板占位：本批条目（覆盖） / 设计档落点 / 机制设计 / 受影响文件与测试覆盖 / 验收对照 / 关键决策 / 上抛项>
 
 **范围**：F5 重绘边界 · F6 不可见时不出帧 · F7 切会话复用内核进程 · N3 DPR 留痕（N2 测量纪律贯穿四项）。来源与实测见 §1。
@@ -798,6 +814,45 @@ if (_connection != null || _transport != null) {
 2. **[上抛·知会] ㉘ 跨两轮**：轮 3 起档写集成 1-1，轮 4 续写 2-1 / 3-1。同一档两轮写，交付以最后一轮为准；不拆档（拆开与 §5「1 个集成档」的计数不符）。
 3. **[上抛·知会] ⑤ 是条件行**：`edge_fade_mask.dart` 只在 §3.3 判据成立时改；判据不成立则按规则 4 走，§5 的「≤ +30」是上限、不是承诺。
 
+### 修轮落地（v8 → v9：轮 1 落地裁决的两条设计面派工，2026-10-26）
+
+依据：§1「轮 1 落地裁决（2026-10-26 05:25）」的上抛 1 / 上抛 3，与 §1「实施前两条裁定（03:52）」第 1 条。设计档升 **v9**（`docs/design/chat-raster-repaint.md`，本轮实测 **593 行**）。需求档未动（父侧笔域）。
+
+**逐条（编号 = 上抛号 / 裁定号）**
+
+| # | 处置 | 落点 |
+|---|---|---|
+| 上抛 1（N3 与 `[views]` 重复） | 按裁定「保留两条」写进设计：`[views]` 与 `[viewport]` 并存、互不替代；N3 的验收**只数 `[viewport]`**，`[views]` 可能另有行、不计入 | 设计 §3.5「两条并存，不替代」段 · §7 D · §8 T7/T8 · D12 |
+| 上抛 1 的事实错误 | 删掉「`app_event_watch.dart` 不观察 DPR」：该档 `didChangeMetrics`（`:60-83`）今天就在比 DPR（`_changedNotably` `:82`），改判为 `existing but unusable`（只写全量快照、随尺寸归零/回归触发，无独立的 DPR 过渡行） | 设计 §6 三问表 `ViewportWatch` 行 |
+| 上抛 1 附带（仅尺寸变化） | `[viewport]` 只在 DPR 变化时写；仅逻辑尺寸变化不写（需求 N3 要的是 DPR 过渡，尺寸由 `[views]` 承担）——与实施轮已落的取法对齐 | 设计 §3.5 首段 · §7 D · §8 T7 |
+| 上抛 3 / 03:52-1（§5 计数漂移） | 新增行 ㉙ `test/diagnostics/viewport_watch_test.dart`（N3 用例）；表尾 **29 → 30 行**、新测试档 **5 → 6** | 设计 §5 ㉙ 行 · §5 表尾 |
+
+**受影响文件计数（设计 §5 = 权威，此处只记变化）**：30 行 = 14 既有档 + 2 整档删除 + 7 新 lib + 6 新测试 + 1 零改动（29 + ㉙）。既有编号 ①–㉘ 一律不改：编号是稳态标识，本段此前各块与设计档多处按号引用，改号会让已落地的记录指错行；㉙ 归组排在 ㉑ 之后，设计 §5 表尾已写明这条规则。
+
+**轮 1 的文件集随之 9 → 10 行**（本段「实施分轮」表轮 1 原写 9 行）：⑦ ⑧ ⑨ ⑩ ⑮ ⑯ ⑰ ⑳ ㉑ + **㉙**；用例仍为 T7 · T8 · T9–T13 · T17–T19 = 10 条（㉙ 装的就是 T7/T8，无新增用例号）。其余三轮的行集与用例集不变。
+
+**本批覆盖的需求条目**：与 v8 表逐行相同，无增删——本轮只改 N3 的验收口径与本档 §5 计数，不动需求映射（F8 · 删池 · F5 · F6 · N3 · N4 · N5 · N2）。
+
+**本轮读数（实测，2026-10-26）**
+
+- 设计档 **593 行**（改前 586 行；净 +7：§3.5 三行段 + §5 ㉙ 行与编号说明 + §7 D / §8 T7 / §8 T8 / D12 / 三问行的加长）。
+- `test/diagnostics/viewport_watch_test.dart` 在盘 **90 行**，与 §5 ㉙ 的「预期增量 ≈+90」相符；其首个用例已断言 `[viewport]` 行形如 `^view \d+ dpr 1\.5 -> 2\.25 size \d+x\d+$`（该档 `:25` / `:37`）⇒ 设计新口径与已落地的实现同形，不产生「设计要 A、代码做 B」的差。
+- `lib/diagnostics/app_event_watch.dart` **169 行**；DPR 比较在 `:82`、写行在 `:69`（本轮实读）。
+
+**三处机械自检**
+
+1. **引用 ↔ 标题**：本轮新增/改动的 `§N` 引用（§3.5 · §7 D · §8 T7 · §5 表头 · §6）逐个有对应标题；全档 `^## ` 仍为 12 个（§1–§12），§3.1–§3.7 / §4.1–§4.6 / §5.1 / §8.1 在。
+2. **表格 ↔ 摘要**：§5 现 30 个数据行（逐行脚本重数，非记忆），分类 14 + 2 + 7 + 6 + 1 = 30，与表尾一句相符；用例 T1–T23（含 T2a/T2b）连续无洞，本轮未增删用例号。
+3. **数字 ↔ 实测**：上面三个行数（593 / 90 / 169）均为本轮 `fs` 逐档实测；设计档「改前 586」同法实测。
+
+**`doc_check(gate)`：PASS（0 命中，2 档）**——范围 = `docs/design/chat-raster-repaint.md` + `test/RTM.md`，整档判。
+
+**上抛项（交主 agent 处置）**
+
+1. [上抛·待裁] **本轮属设计面改动，是否要再发一轮 advisor 设计评审由父侧定**：改动面 = N3 的验收口径（只数 `[viewport]`）+ 一条事实更正（`AppEventWatch` 确实观察 DPR）+ §5 计数。前一轮评审的结论（第 5 轮 pass）覆盖的是 v8，本轮的语义增量只有「N3 数哪种行」这一条。
+2. [上抛·知会] **需求档 N3 的行形与实现有一处字面差**：需求 N3 写 `[viewport] dpr <旧> -> <新>`，实现（§5 轮 1 记录）写 `[viewport] view <id> dpr <旧> -> <新> size <宽×高>`——多了 view id 与尺寸，语义是需求的超集。设计 §3.5 与 §8 T7 按实现的行形写死；需求档那句要不要跟，属父侧笔域。
+3. [上抛·知会] **v9 未改设计档里的既有计数句之外任何内容**：§2 本段此前各块的引用（如「设计 §12 第 6 项」已作废的那句）按 append-only 保持原样，以本块与 v9 为准。
+
 ## §3 设计评审（评审子代理）
 
 ### 轮次 1（评审子代理）
@@ -1076,5 +1131,57 @@ VERDICT: pass
 - 三处行数是评审修完前量的，复量后为：`lib/kernel/thincoder/thincoder_process_io.dart` **246**（写 244）· `lib/kernel/thincoder/thincoder_locator.dart` **387**（写 382）· `lib/kernel/thincoder/thincoder_process.dart` **28**（写 22）。
 - 其余不变：`lib/platform/process_host.dart` 178 · `lib/platform/process_host_io.dart` 650 · `lib/platform/process_host_stub.dart` 27 · `test/platform/process_host_test.dart` 316 · `test/platform/no_window_thread_process_test.dart` 43。
 - 对照设计 §5 的现行 / 预期：① 207（+≈25/−≈30）· ② 379（≤ +4/−3）· ③ 18（+≈3）——三档都只小幅超出，仍远低于 800 行硬上限；⑪ ⑫ ⑱ 的超出量与理由见上块，设计档需同步。
+
+### 轮 3 · 删池（删预热池，回到上游形态）· 2026-10-26
+
+**范围**：按 §2「实施分轮」轮 3——设计 §5 行 `㉒ ㉓ ㉔ ㉕ ㉖ ㉗` 六行，加 `㉘` 起档（集成 1-1，§8.1）；§8 用例 T20 + 集成 1-1；§7 读数 P。轮 1（诊断）/ 轮 2（F8）/ 轮 4（渲染面）不在本轮。
+
+| 需求 · 项 | 落点 | 状态 | 用例 |
+|---|---|---|---|
+| ㉒ 池本体整档删除 | `lib/kernel/thincoder/thincoder_warm.dart` 已删（HEAD 上 242 行） | ✅ | — |
+| ㉓ 生命周期直连起进程 | `lib/kernel/thincoder/thincoder_lifecycle.dart:19-43`：`takeWhenReady`、`timing: warm hit/miss`、`warm?.connection ??`、`warm != null` 握手旁路全删；`final transport = await owner._start(await owner._launchFor(owner._cwd));` 一条路，`initialize` 恒发一次（160 行，−10） | ✅ | T20 |
+| ㉔ 内核档删池 import | `lib/kernel/thincoder/thincoder_kernel.dart` 无 `thincoder_warm.dart` import（479 行，−1） | ✅ | 编译面 |
+| ㉕ workspace 四处挂点 | `lib/workspace/workspace.dart`：import、`_warmThincoder(path)` 调用、`_warmThincoder` 方法、`hideProject` 的 `drop('project-closed')` 四处全删（3015 行，−12） | ✅ | workspace 回归 |
+| ㉖ 池测试档整档删除 | `test/kernel/thincoder_warm_test.dart` 已删（HEAD 上 284 行） | ✅ | — |
+| ㉗ 内核测试档删池面 | `test/kernel/thincoder_kernel_test.dart`：import、`pool()` 夹具、T108、T108②、`_NoTimer`、T107① 的 `warm miss` 断言已删；T111 保留（4918 行，净 −49） | ✅ | T20 · T111 |
+| ㉘ 集成用例 1-1 起档 | `test/integration/chat_flows_test.dart`（新档 252 行），`test('1-1 …')` 与 `test/RTM.md:23` 同行号 | ✅ | 1-1 |
+| T20 删池后的开会话 | 起 → `initialize` 1 · `session/new` 1 → 离开 → `session/close` 1 · 进程结束（`exited` 1 s 内）· idle → 再开 → 再起一个 + 再握手；日志 2 条 `handshake: protocol`、0 条 `timing: warm` | ✅ | T20 |
+| 集成 1-1 来回切会话 | 五次切换各起一个进程（假件计 `start`）、每次 300 ms 内 `ready` + 历史行在屏 + 可输入、`[stall]` 0 行（同档先证日志在写：有 `[thincoder]` 行） | ✅ | 1-1 |
+| 验收 P | `grep -rn` 四模式在 `lib/**` 与 `test/**/*.dart` **零命中**；无池仍起会话（T20 + 1-1）；`events.log` 无 `timing: warm …`；`test/RTM.md:19` 一处文档行命中（见上抛 1） | ✅ | T20 · 1-1 |
+
+**验证读数（本轮实测）**
+
+- `flutter analyze --no-pub`（全仓）⇒ **No issues found**（69.5 s）。
+- `flutter test --no-pub test/kernel/thincoder_kernel_test.dart test/integration/chat_flows_test.dart` ⇒ **+153 All tests passed**（内核档 152 + 集成 1）。
+- `flutter test --no-pub test/workspace_test.dart test/sidebar_test.dart` ⇒ **+89 All tests passed**（workspace 删挂点后的回归面）。
+- 红绿对照三对（不是"跑过就算"）：
+  - **进程计数绑住真实创建链**：给 kernel 注入自有 `start:`（绕过 host）⇒ 1-1 在 `expect(host.starts, starts + 1)` 变红（Expected 1 / Actual 0）；撤掉后绿。
+  - **`[stall]` 读数可失败**：在假后端 `start` 里注入 800 ms 真实同步阻塞（复现 F8 之前"窗口线程里 CreateProcessW"）⇒ 日志写出 5 条 `[stall] gap 919 / 719 / 705 / 676 / 705 ms`，1-1 在 `expect(log, isNot(contains('[stall]')))` 变红；撤掉后绿。
+  - **300 ms 可用性绑住真实就绪时机**：早期用单次 `pump(300 ms)` 时 health 停在 `starting`、历史行断言变红；改 6 × 50 ms 后绿——该断言确实在量"切换后多久可用"。
+- SDK：`flutter` 不在 PATH，统一 `D:\baocode\build\flutter-3475\flutter\bin\flutter.bat`（3.47.5 / Dart 3.13.4）。本轮未撞 `Invalid SDK hash`。
+
+**与设计的差异（全部显式；设计档不是本轮笔域）**
+
+- **行数实测 vs 设计预算**：㉓ 160（设计 −≈14，实 −10）· ㉔ 479（−1，相符）· ㉕ 3015（−≈12，相符）· ㉖ 284 删（相符）· **㉗ 4918（设计 4967 / −≈200，实净 −49）** · **㉘ 252 行（设计 ≈+160，多 92）**。㉘ 的超出量是假件成本：假 `ProcessHostBackend`（stdio 接 `ThincoderMock`）+ 假 `SessionCatalog` + 注册表替身；㉗ 的差距说明设计把池用例估得过大（实删池面约 83 行，T20 补回约 34 行）。
+- **测试面三处 seam（设计 §4.1 契约未列，登记为有意接缝）**：
+  1. `_ScriptedHost`（`ProcessHostBackend` 假件）：把 `ThincoderMock` 包成 `HostedProcess` 的 JSON 行 stdio，使"起进程"仍走真实链 `ThincoderKernel → ThincoderProcess → ProcessHost`；`launch:` 注入只跳过可执行文件定位，`start:` **不注入**。
+  2. `_InstantRegistry`（`ThincoderProcessRegistry` 子类，`reaped` 直接返回已完成）：假时钟下真实目录读永不返回——实读不改这一处，进程创建卡在 `registry.reaped`，health 停在 `starting`、`host.starts` 恒 0。
+  3. `StallWatch()` 用**默认真实 Stopwatch**、在应用装好之后 `start()`：集成用例要量的是真实窗口线程是否被占；设计 §4.5 的注入面留给单测（T9–T13）。
+- **设计 §3.2 已核对**：`thincoder_release.dart` 今天没有预热/放回代码（前几轮已记），本轮实读确认未动；删后"用完关闭"只有 `_releaseWhenIdle` 一条路，本轮未改它。
+- **防误删清单逐条核过**：`ChatSession._warm`（`lib/chat/chat_session.dart:204`）保留；`HoverTooltip.warmWindow`、`OutputMeter.warmUp`、l10n 文案未动；需求档窄 grep 模式不命中这些。
+
+**自审与评审轮**
+
+- 探索审计 1 轮：**AUDIT: findings**——🔴 1（§5 无本轮记录，本节即补）· 🟡 1（验收 P 在 `test/RTM.md:19` 命中一次）· 🔵 3（行数漂移、设计 §3.1/§3.2 坐标随删池失效、RTM 前视行）。处置：§5 补齐；行数写实测；RTM 与设计坐标属他人笔域，进上抛与漂移登记。
+- advisor 代码评审轮 1：**VERDICT: changes-required**（🟡 1 must-fix · 🔵 2）。must-fix = 1-1 的 `[stall]` 断言原先注入假时钟，`gap` 恒 0 ⇒ 空断言。处置：改默认真实 Stopwatch + setup 之后 `start()`，并取红绿（上面第二对）；🔵 2 条已修（T20 补 `await agents.single.exited.timeout(1 s)` 断进程结束；行数漂移归本节实测值）。
+- advisor 代码评审轮 2（复核）：**VERDICT: pass**——must-fix 与 🔵 2 逐行核过为 Fixed；🔵 1 条新报（真实时钟 ⇒ 重载机器上两次 tick 间若耗 >650 ms 真实时间会误报一行 `[stall]`）**接受**：要量的正是真实窗口线程，假时钟版本已被判为空断言；该误报前提本身就是"进程被占 ≥650 ms"，与 1-1 要排除的情形同义。
+- 终态：**clean**（两轮均无未决 🔴、无未修 must-fix）。
+
+**上抛项（交主 agent 处置）**
+
+1. [上抛·待裁] **验收 P 的字面 grep 有一处文档命中**：`test/RTM.md:19` 的「回溯需求」行写了 `删预热池`。该档是设计轮产出的集成索引（他人笔域），本轮不改。两条路请父侧择一：① 由设计笔域把该行改成「删池」；② 在 §7 P 记一条豁免，读数改写为"`lib/**` 与 `test/**/*.dart` 零命中"。代码面读数已是零。
+2. [上抛·知会] **设计档需同步的漂移**：§5 ㉗ 实测 4918（记 4967 / −≈200）、㉘ 实测 252（记 ≈+160）；§3.1 `:46` 与 §3.2 挂点表引用的 `thincoder_lifecycle.dart:22-26 / :33 / :38-53` 已随删池失效（现为 `:19-43` 的直连起进程 + 单次握手）。
+3. [上抛·知会] **测试面三处 seam**（`_ScriptedHost` · `_InstantRegistry` · `StallWatch` 起在 setup 之后）为假时钟下让集成用例可跑的必要替代，已在本节差异段逐条写明；若父侧要求"集成用例不新增契约外接缝"，需把它们写进设计 §4.1 / §8.1 再落。
+4. [上抛·知会] **集成 2-1 / 3-1 未落**（归轮 4）；`test/RTM.md` 三行已定，套件计数 3 / 50–100，本轮只落 1-1，交付以轮 4 收尾为准。
 
 ## §6 验证与收口（父代理）

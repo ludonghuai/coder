@@ -3,7 +3,7 @@
 > 板块：对话渲染（chat-streaming）· 范围仓：baocode。
 > 本档 = 该板块第二篇：首篇 `docs/design/chat-streaming.md` 管 F1–F4（增量重建边界 / 折叠 / markdown 节流）；本档管 F5 重绘范围 · F6 出帧时机 · F8 进程创建不阻塞窗口线程 · 删预热池（回到上游形态） · N3 DPR 留痕 · N4 停顿看门狗 · N5 挂起报告可见。
 > 配对需求档：`docs/requirements/chat-streaming.md`（F5 · F6 · F8 · N2 · N3 · N4 · N5）。
-> 状态：设计稿 v8 · 2026-10-26 · 行数 = 本轮逐档实测，17 个既有档逐行相符（口径见 §5 表头）。
+> 状态：设计稿 v9 · 2026-10-26 · 行数 = 本轮逐档实测，17 个既有档逐行相符（口径见 §5 表头）。
 > 集成索引：`test/RTM.md`（本批建立；三条用例落 `test/integration/chat_flows_test.dart`，§8.1）。
 
 ## 1. 模块目标与范围
@@ -180,7 +180,11 @@ _onVisibleChanged（由 WindowVisible 在恢复可见时通知）：
 
 **机制**：一个观察者实现 `WidgetsBindingObserver.didChangeMetrics()`，每次变化读**唯一来源** `WidgetsBinding.instance.platformDispatcher.views`（`View.of(context)` 与 `MediaQuery.devicePixelRatio` 都是它的派生，本档不各读一份）。
 
-逐 view 记 `viewId` + `devicePixelRatio` + `physicalSize / dpr`，值变化时写一行 `[viewport] view <id> dpr <旧> -> <新> size <逻辑宽×高>`；时间戳由 `appEvent` 的既有前缀给出（`lib/platform/event_log.dart:47`）。
+逐 view 记 `viewId` + `devicePixelRatio` + `physicalSize / dpr`，**`devicePixelRatio` 变化时**写一行 `[viewport] view <id> dpr <旧> -> <新> size <逻辑宽×高>`；时间戳由 `appEvent` 的既有前缀给出（`lib/platform/event_log.dart:47`）。仅逻辑尺寸变化不写行：需求 N3 要的是 DPR 过渡，尺寸那一半由既有的 `[views]` 承担（下条）。
+
+**两条并存，不替代（写死）**：`AppEventWatch.didChangeMetrics`（`lib/diagnostics/app_event_watch.dart:60-83`）今天就在观察同一份 metrics——`_changedNotably`（`:78-83`）在 `:82` 比 DPR、在 `:79-80` 比尺寸归零/回归，命中就写一行 `[views] view <id> <旧快照> -> <新快照>`（`:69`）。
+
+本机制不替代它、也不改它：`[views]` 是「值得记的视图事件的全量快照」，`[viewport]` 是「DPR 过渡的专用行（带 view id 与旧→新）」。⇒ 一次 DPR 变化会落两条不同标签的行，**N3 的验收只数 `[viewport]`**（§7 D · §8 T7）。
 
 **落点（定点，一处）**：`lib/diagnostics/viewport_watch.dart`（新档），与 `FrameWatch` / `StallWatch` / `HangReports` 同一处挂载——`lib/main.dart:155-158` 的 `if (!kIsWeb)` 块内一行 `ViewportWatch.start()`。**不在 `BaoCodeApp.build` 旁另挂**（那要 context，且会把挂载点变成三处）。既有媒体查询消费方（`lib/main.dart:872` 的 `PixelSnappedTextScaler`）不动。
 
@@ -407,6 +411,7 @@ final class HangReports {
 | ⑲ | `test/platform/no_window_thread_process_test.dart` | **新档**：守门扫描（§8 T16） | 0 | +≈50 | 新档 |
 | ⑳ | `test/diagnostics/stall_watch_test.dart` | **新档**：N4 用例（§8 T9–T13） | 0 | +≈120 | 新档 |
 | ㉑ | `test/diagnostics/hang_reports_test.dart` | **新档**：N5 用例（§8 T17–T19） | 0 | +≈90 | 新档 |
+| ㉙ | `test/diagnostics/viewport_watch_test.dart` | **新档**：N3 用例（§8 T7–T8） | 0 | +≈90 | 新档 |
 | ㉒ | `lib/kernel/thincoder/thincoder_warm.dart` | **整档删除**（§3.2） | 242 | 0 | — |
 | ㉓ | `lib/kernel/thincoder/thincoder_lifecycle.dart` | 删 `takeWhenReady` / `timing: warm hit/miss` / 预热旁路，直接起进程（§3.2） | 170 | −≈14 | 未超档 |
 | ㉔ | `lib/kernel/thincoder/thincoder_kernel.dart` | 删 `import 'thincoder_warm.dart'`（`:28`） | 480 | −1 | 未超档 |
@@ -416,7 +421,9 @@ final class HangReports {
 | ㉘ | `test/integration/chat_flows_test.dart` | **新档**：三条集成用例 1-1 / 2-1 / 3-1（`test/RTM.md` 三行，§8.1） | 0 | +≈160 | 新档 |
 | — | `test/chat/chat_history_rebuild_test.dart` | 零改动，重跑取 A1/A4 不回退 | 507 | 0 | — |
 
-**共 29 行**：14 个既有档改动 · 2 个整档删除（1 lib + 1 测试）· 7 个新 lib 档 · 5 个新测试档 · 1 行零改动。其中 F8 的迁移面只占 3 行（①–③）。
+**共 30 行**：14 个既有档改动 · 2 个整档删除（1 lib + 1 测试）· 7 个新 lib 档 · 6 个新测试档 · 1 行零改动。其中 F8 的迁移面只占 3 行（①–③）。
+
+**编号 ㉙ 的位置**：它排在 ㉑ 之后、与其它新测试档相邻；既有编号 ①–㉘ 一律不变——编号是稳态标识，§2 分轮表与本档多处按号引用，改号会让已落地的记录指错行。
 
 **现行列本轮逐档实测**（2026-10-26，`find /c /v ""` 同口径数换行符）：17 个既有档与本表逐行相符——207 · 379 · 18 · 3922 · 293 · 1076 · 158 · 201 · 284 · 919 · 242 · 170 · 480 · 3027 · 284 · 4967 · 507。实施首步不必再复量；届时数字若有变，先改本表再动代码。
 
@@ -445,7 +452,7 @@ final class HangReports {
 | D9 | N4 心跳**不接** F6 的可见性 gate，`hidden` / `paused` 不写行 | 失焦期的停顿正是要量的（3/4 慢帧 `inactive`）；睡眠造成的假 gap 会撞掉「1 小时零误报」 |
 | D10 | N4 的 `gap` = 实测间隔 − 周期 | 需求验收窗口是 700–1000 ms；取原始间隔会读成 1000–1050 ms，落在窗口外 |
 | D11 | N4 的状态行与 `FrameWatch._state()` 共用一份 | 一处定义；`[stall]` 与 `[slow]` 字段可直接对读 |
-| D12 | N3 = **新增一行日志**，不改媒体查询链路 | 先量后定；DPR 是既有事实，缺的只是留痕 |
+| D12 | N3 = **新增一行日志**，不改媒体查询链路 | 先量后定；DPR 是既有事实，缺的只是留痕。既有的 `[views]` 行（`AppEventWatch`）不动，两条并存，验收只数 `[viewport]`（§3.5 · §7 D） |
 | D13 | N5 = **启动扫一次 + 一行日志 + 诊断入口一个可点路径**，不弹窗 | 要的是可查的证据，不是打断；复用既有 `appEvent` 与 `revealInFileManager`，不新增 l10n 键 |
 | D14 | N5 只数 `hang-*.txt`，`.dmp` 不另计 | 一份挂起带一个转储；两份都数会把一份报告算成两份 |
 | D15 | F8 的迁移面收窄 = **兼容上游优先** | 用户 03:19「兼容的话会不会更好兼容上下游的更新了呢」——自造机制越少、改上游文件越少，合并成本越低；其余 `Process.*` 不在冻结链上（§3.1 迁移面）；将来 `[stall]` 指向它们时再单独迁 |
@@ -469,7 +476,7 @@ final class HangReports {
 | `ProcessHost`（§4.1） | 现在没有进程创建的公共面：各调用点直接 `Process.start`；`lib/platform/child_process_registry.dart` 只记 pid 供下次回收，自己还调 `Process.run('ps')`（`:179`） | `none found: lib/platform/** 下的进程相关件已逐一核对` ⇒ 新建 |
 | `WindowVisible`（§4.2） | `lib/main.dart:628-631` 的 `inFront()` 是 `_startTelemetry` 里的局部闭包，出不了那个函数 | `existing but unusable: lib/main.dart:628 · name: "inFront" · failed on: 局部闭包，无导出面` ⇒ 新建 |
 | `StallWatch`（§4.5） | `lib/diagnostics/frame_watch.dart:20` 的 `FrameWatch` 按帧计时；没有任何按周期测界面线程的探针 | `none found: lib/diagnostics/**` ⇒ 新建，形状对齐 `FrameWatch` |
-| `ViewportWatch`（§3.5） | `lib/diagnostics/app_event_watch.dart` 记事件的产生，不观察 DPR；`lib/main.dart:872` 的 `PixelSnappedTextScaler` 是媒体查询消费方，不是观察者 | `none found: lib/diagnostics/** 与 lib/main.dart 的媒体查询消费面` ⇒ 新建 |
+| `ViewportWatch`（§3.5） | `lib/diagnostics/app_event_watch.dart:60` 的 `AppEventWatch.didChangeMetrics` **已经观察同一份 metrics**：`_changedNotably`（`:78-83`）在 `:82` 比 DPR，命中写 `[views]` 全量快照（`:69`）；`lib/main.dart:872` 的 `PixelSnappedTextScaler` 是媒体查询消费方，不是观察者 | `existing but unusable: lib/diagnostics/app_event_watch.dart:60 · name: "AppEventWatch.didChangeMetrics" · failed on: 只写 [views] 全量快照、随尺寸归零/回归一并触发，没有独立的 DPR 过渡行（N3 要的「旧 -> 新」按 [viewport] 计）` ⇒ 新建，与它并存（§3.5） |
 | `HangReports`（§4.6） | `lib/diagnostics/diagnostics_bundle.dart:41-63` 的 `listDiagnosticsLogs` 只**列**文件供上传，不判定新旧、不写日志 | `existing but unusable: lib/diagnostics/diagnostics_bundle.dart:41 · name: "listDiagnosticsLogs" · failed on: 无水位概念，且不写事件日志` ⇒ 新建（目录拼接复用它的同一处定义，§5 ⑧） |
 | 标签 `[stall]` | 日志标签命名空间 = `appEvent(category, …)` 写 `[category]`（`lib/platform/event_log.dart:45-47`、`:84-85`），既有 `slow` / `semantics` / `window` / `theme` | 复用命名空间，新增一个 category |
 | 标签 `[viewport]` | 同上 | 复用命名空间，新增一个 category |
@@ -495,7 +502,7 @@ final class HangReports {
 | F5 超预算 raster 帧 → 0 | §3.3 · §4.4 | A：`tool/perf` 大会话流式回放，预算 100 ms 下 `frames.janky` 中 raster 超预算的帧数 = 0（改前读数按 §3.3 第 1 步、§4.4 的入口在动代码前量好，两次读数并列留档）；总帧数与改前同量级（±20%）。规则 3 的分支不成立时按 §3.3 规则 4 的顺序收窄；四步走完仍不成立 ⇒ 另起设计档并记「F5 未达成」 |
 | F5 重绘范围不随界面大小 / 历史增长 | §3.3 | B：组件测试断言流式行最近的重绘边界在行内、列表主体无全区域合成层；另 20 / 200 回合两跑，流式帧的 `ChatItemView` 重建数逐项相等（既有 A1 口径不回退）；视觉等价按 §10 的**整帧**比对 |
 | F6 不可见期帧数 = 0，切回一帧追平 | §3.4 · §4.2 · §4.3 | C：模拟 `inactive` 后回放 120 个增量 ⇒ `ChatItemView` 重建 0 次、`MarkdownView` 解析 0 次；恢复 `resumed` ⇒ 恰 1 次重建，可见文本 == 全文；底部与中段滚动偏移不变（T2a / T2b）。设备面两条并列：① 失焦 60 秒 `FrameTiming` 帧数 0（或仅 1 帧残余尾帧）；② 失焦时 baocode 的 `GPU Engine` 占用接近 0%——同机同窗口、失焦前后各采样 3 次取均值，对照 §2 的 30.6–30.7%（需求档 F6 验收 ②）。② 不归零 ⇒ 按 §3.4 的帧源清单逐个关并复采，仍不归零则上报「F6 未达成」 |
-| N3 DPR 留痕 | §3.5 | D：模拟 DPR 1.5 → 2.25 → 1.5，事件日志出现两行 `[viewport] view 0 dpr 1.5 -> 2.25` / `2.25 -> 1.5`，各带尺寸；无变化零行；真机重现一次即定论（需求档 §5 第 5 条的一次真机读数） |
+| N3 DPR 留痕 | §3.5 | D：模拟 DPR 1.5 → 2.25 → 1.5，事件日志出现**恰两行 `[viewport]`**——`view 0 dpr 1.5 -> 2.25` / `2.25 -> 1.5`，各带尺寸；**按 `[viewport]` 行计，`[views]` 行（`AppEventWatch` 的既有快照）可能同时出现、不计入**；无 DPR 变化零 `[viewport]` 行；仅尺寸变化零行；真机重现一次即定论（需求档 §5 第 5 条的一次真机读数） |
 | N4 停顿必须留读数 | §3.6 · §4.5 | G：构造 800 ms 同步阻塞 ⇒ 恰一行 `[stall]`，gap ∈ 700–1000 ms；无阻塞连续 1 小时 0 行；`hidden` / `paused` 状态 0 行（复现路径见 §3.6，需求档 §5 第 5 条的一次真机读数） |
 | N5 挂起报告必须可见 | §3.7 · §4.6 | N5：预置一份新的 `hang-*.txt` 后启动 ⇒ `events.log` 恰一行 `[hang] 1 new reports since …`；无新报告时启动 ⇒ 0 行；诊断入口显示报告目录且按钮可打开（需求档 §5 第 5 条的一次真机读数；T17–T19） |
 | 既有测试全绿（需求档 §5 第 6 条的七个路径） | §5 · §8 | H：逐条跑 `flutter test <file>`——`test/chat/chat_history_rebuild_test.dart` · `test/chat/history_scroll_test.dart` · `test/chat/fold_view_test.dart` · `test/chat/step_folds_test.dart` · `test/sticky_message_test.dart` · `test/selection_scroll_test.dart` · `test/markdown_test.dart` 全绿；读数逐档记进批档 |
@@ -514,8 +521,8 @@ final class HangReports {
 | T4 | 从头就不可见（边界） | 视图首帧时 `inactive` | 不起计时器、不出帧；恢复后一次到位 |
 | T5 | 流式行重绘边界（正常） | 大会话 + 流式增量 | 该行最近的重绘边界在行内；列表主体无全区域合成层 |
 | T6 | 高度动画期间增量（边界） | `_HeightMotion` 动画中 + 增量 | 允许动画期的额外合成；动画结束回到 T5 |
-| T7 | DPR 变化（正常） | DPR 1.5→2.25→1.5 | 两行日志，带 view id、值与时序正确；无变化时不写行 |
-| T8 | 窗口不可见时 DPR 变化（边界） | `inactive` 中 DPR 变化 | 照写日志（留痕不依赖可见性） |
+| T7 | DPR 变化（正常） | DPR 1.5→2.25→1.5 | 恰两行 `[viewport]`，带 view id、值与时序正确（`[views]` 行不计入）；无 DPR 变化时不写行；仅尺寸变化不写行 |
+| T8 | 窗口不可见时 DPR 变化（边界） | `inactive` 中 DPR 变化 | `[viewport]` 照写（留痕不依赖可见性） |
 | T9 | 心跳无阻塞（正常） | 注入时钟，10 拍各 +250 ms | 0 行 `[stall]` |
 | T10 | 一次 800 ms 同步阻塞（正常） | 一拍后注入 +1050 ms | 恰 1 行，`gap 800 ms`，带当时状态 |
 | T11 | 阈值边界（边界） | 注入 +650 ms（gap = 400）与 +649 ms（gap = 399） | 前者写 1 行，后者 0 行 |

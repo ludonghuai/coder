@@ -15,42 +15,32 @@ Future<void> _launchOf(ThincoderKernel owner) async {
   // One process at a time on a session: the last one, if restarted.
   await owner._stopped;
   owner._setHealth(const KernelHealth(KernelHealthStatus.starting));
-  final clock = Stopwatch()..start();
   try {
-    // A process the project started ahead of this session (§25.2), its
-    // handshake answered — or one on its way, waited for.
-    final warm = await ThincoderWarm.instance.takeWhenReady((owner._cwd, owner._context.files != null));
-    appEvent('thincoder', warm == null
-        ? 'timing: warm miss'
-        : 'timing: warm hit ${clock.elapsedMilliseconds}ms');
-    final transport = warm?.transport ?? await owner._start(await owner._launchFor(owner._cwd));
+    // Its own process, started now: one process per session, ended as the
+    // view leaves. Nothing is kept warm between sessions.
+    final transport = await owner._start(await owner._launchFor(owner._cwd));
     if (owner._disposed) {
       transport.close();
       return;
     }
     owner._transport = transport;
-    final connection = owner._connection =
-        warm?.connection ?? ThincoderConnection(transport.write);
+    final connection = owner._connection = ThincoderConnection(transport.write);
     connection
       ..onRequest = owner._serverRequest
       ..onNotification = owner._notification;
     owner._subscription = transport.messages.listen(owner._receive);
-    if (warm != null) {
-      owner._handshake(warm.handshake);
-    } else {
-      owner._handshake(
-        await connection.request('initialize', {
-          'protocolVersion': 1,
-          // The files the agent edits go through the editor where a host
-          // gives one (F18); otherwise nothing but the protocol's basics,
-          // and no terminal login ever (D12).
-          // What is not said is unsupported.
-          'clientCapabilities': owner._context.files == null
-              ? const <String, Object?>{}
-              : ThincoderFiles.capabilities,
-        }),
-      );
-    }
+    owner._handshake(
+      await connection.request('initialize', {
+        'protocolVersion': 1,
+        // The files the agent edits go through the editor where a host
+        // gives one (F18); otherwise nothing but the protocol's basics,
+        // and no terminal login ever (D12).
+        // What is not said is unsupported.
+        'clientCapabilities': owner._context.files == null
+            ? const <String, Object?>{}
+            : ThincoderFiles.capabilities,
+      }),
+    );
     await owner._openSession();
     // Said of, never blocked (D13): the session goes on all the same.
     if (ThincoderLocator.belowVerified(owner._version)) {
