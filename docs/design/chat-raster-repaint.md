@@ -3,7 +3,7 @@
 > 板块：对话渲染（chat-streaming）· 范围仓：baocode。
 > 本档 = 该板块第二篇：首篇 `docs/design/chat-streaming.md` 管 F1–F4（增量重建边界 / 折叠 / markdown 节流）；本档管 F5 重绘范围 · F6 出帧时机 · F8 进程创建不阻塞窗口线程 · 删预热池（回到上游形态） · N3 DPR 留痕 · N4 停顿看门狗 · N5 挂起报告可见。
 > 配对需求档：`docs/requirements/chat-streaming.md`（F5 · F6 · F8 · N2 · N3 · N4 · N5）。
-> 状态：设计稿 v9 · 2026-10-26 · 行数 = 本轮逐档实测，17 个既有档逐行相符（口径见 §5 表头）。
+> 状态：设计稿 v10 · 2026-10-26 · 行数 = 逐档实测（口径见 §5 表头）；已落地的行在表内给出实测增量与现值。
 > 集成索引：`test/RTM.md`（本批建立；三条用例落 `test/integration/chat_flows_test.dart`，§8.1）。
 
 ## 1. 模块目标与范围
@@ -43,10 +43,10 @@
 - 冻结发生在 `CreateProcessW` 内部（`ZwCreateUserProcess` 与 `BasepQueryAppCompat` 两组栈），且 `app.so` 在栈上是调用方 ⇒ 这次创建是 Dart 代码在**窗口线程**（Flutter 的 platform/UI 线程）上调起的。
 - 应用内的进程创建全走 `dart:io`：`Process.start` 8 处、`Process.run` 23 处、`Process.runSync` 2 处，共 **33 处**（`lib/**` 逐行检索，2026-10-26；`thincoder_process.dart:9` 的 `ThincoderProcess.start` 是自有类的方法，不算创建点）。本批只迁其中会冻窗口的两处创建点（下），其余保持上游原样。`runSync` 的两处是 `lib/kernel/thincoder/thincoder_config_store.dart:458`（`_chmod`，调用点 `:301`，同步写路径里）与 `lib/update/installer_io.dart:95`（macOS 的 `_translated` 同步 getter）。
 - 会冻窗口的进程创建有**三条**，全部在窗口线程上：
-  1. 会话打开时的内核自起（`thincoder_lifecycle.dart:26` 的 `owner._start(...)`；预热池删除后这里就是直连，§3.2）；
+  1. 会话打开时的内核自起（`thincoder_lifecycle.dart:21` 的 `owner._start(...)`；删池后即直连，§3.2）；
   2. **启动 / 刷新时逐项目列会话**：`workspace.dart:345` 的 `unawaited(_listKept(project, …))` → `ThincoderCatalog.sessionsIn`（`lib/kernel/thincoder/thincoder_catalog.dart:39`）→ 同档 `:27-28` 的 `_start` = `startThincoderProcess(...)`——每列一个项目起一个进程、问完即关（`thincoder_catalog.dart:10-21` 的类注释：nothing stays running between refreshes）；
-  3. **设置页的版本探测**：`thincoder_locator.dart:131-134` 的 `versionOf` 走 `Process.run`。
-  1、2 的创建点是**同一处**：`thincoder_process_io.dart:86`（catalog 的 `_start` 经 `thincoder_process.dart:8-9` 走到同一个 `ThincoderProcess.start`）；3 的创建点是 `thincoder_locator.dart` 的 `Process.run`。审计（台账 #173）证明路径 2 与预热池并列：只修池，启动时逐项目起进程仍冻窗口。
+  3. **设置页的版本探测**：`thincoder_locator.dart:299-305` 的 `versionOf`，走 `ProcessHost.run`（②）。
+  1、2 的创建点是**同一处**：`ThincoderProcess.start`（`thincoder_process.dart:9-10`），其创建入口在 `thincoder_process_io.dart:110` 的 `ProcessHost.start`（§4.1）；3 的创建入口是 `thincoder_locator.dart:305` 的 `ProcessHost.run`。审计（台账 #173）证明路径 2 与预热池并列：只修池，启动时逐项目起进程仍冻窗口。
 - **一手来源（Dart SDK）**：`runtime/bin/process_win.cc` 的 `int Process::Start(...)` 直接构造 `ProcessStarter` 并同步调用 `const auto result = starter.Start();`；`ProcessStarter::Start()` 体内即 `BOOL result = CreateProcessW(...)`。⇒ 在 `Process::Start` 返回之前 `CreateProcessW` 已经跑完，中间没有交给任何其他线程。（源：`https://raw.githubusercontent.com/dart-lang/sdk/main/runtime/bin/process_win.cc`，2026-10-26 取。）
 - **未核（`unverified`）**：`dart:io` 的 `Process.start` / `Process.run` native 入口是否在**调用方 isolate 的线程**上进入 `Process::Start`（本轮未打开 `runtime/bin/process.cc` 与 `io_natives.cc`）。这条不成立时结论也不变，见下。
 - **代理方案不依赖上面那条**：F8 的验收读的是**窗口线程**（挂起报告与 `[stall]`）。会冻窗口的两处创建（下方迁移面 ① ②）搬进代理后，这两条链在窗口线程上不再剩 `Process.start`；其余 31 处按 D4 / D15 保持上游原样。
@@ -65,8 +65,8 @@
 
 **迁移面（写死，只迁会冻窗口的两处创建点）**：
 
-- **① thincoder 起进程**（`lib/kernel/thincoder/thincoder_process_io.dart:86`）→ `ProcessHost.start`。同一处覆盖两条触发路径：会话打开（`thincoder_lifecycle.dart:26`）与启动 / 刷新时逐项目列会话（`thincoder_catalog.dart:27-28` 的 `_start`）。
-- **② 版本探测**（`lib/kernel/thincoder/thincoder_locator.dart:131-134` 的 `versionOf`，走 `Process.run`）→ `ProcessHost.run`。设置页打开时触发，是可计时的冻结来源（F8-D）。
+- **① thincoder 起进程**（`lib/kernel/thincoder/thincoder_process_io.dart:110` 的 `ProcessHost.start`）。同一处覆盖两条触发路径：会话打开（`thincoder_lifecycle.dart:21`）与启动 / 刷新时逐项目列会话（`thincoder_catalog.dart:27-28` 的 `_start`）。
+- **② 版本探测**（`lib/kernel/thincoder/thincoder_locator.dart:299-305` 的 `versionOf`，走 `ProcessHost.run`）。设置页打开时触发，是可计时的冻结来源（F8-D）。
 - **其余 `Process.*` 保持上游原样（本批零改动）**：`forge/forge_io.dart` · `ide/lsp/**` · `customize/mcp_probe_io.dart` · `ide/git/**` · `ide/terminal/**` · `installer_io.dart` · `child_process_registry.dart` 等。它们不在冻结链上；改动只会给未来上游合并制造冲突面。将来 N4 的 `[stall]` 指向哪条，再单独迁哪条。
 - **机检守门**（路径级）：一条测试断言引入 `process_host` 的档集合恰为 {`thincoder_process_io.dart` · `thincoder_locator.dart` · `thincoder_process.dart` · 三个新档}；其中创建进程的两档（`thincoder_process_io.dart` / `thincoder_locator.dart`）内零 `\bProcess.start(` / `\bProcess.run(`；`thincoder_process.dart` 只 import 以挂 `stopAll()`、自身不创建进程；其余上游档不扫、允许照旧。
 - 条件导入照既有形状（`lib/kernel/thincoder/thincoder_process.dart:2-4` 的 stub / io 分档）：web 上代理不存在，`ProcessHost` 调用即失败，与今天无进程可起同义。
@@ -88,17 +88,17 @@
 
 上游 Claude 内核的形态是每会话一个进程、用完关闭（`lib/kernel/claude_code/process_transport_io.dart:17` 的 `ProcessTransport` 就是一进程一会话），没有池也长期可用。F8 落地后池只剩「省一次准备中等待」的价值，而 TTL / 冷却 / 换 key 即杀这套生命周期要一直维护——删掉是把复杂度归零。
 
-**挂点（逐处删净，全部在 §5 表内）**：
+**删净后各落点该有的形状（逐处可核，坐标为 2026-10-26 实测；机检见 §7 P）**：
 
-| 位置 | 今天做什么 | 删除后 |
-|---|---|---|
-| `lib/kernel/thincoder/thincoder_warm.dart` | 池本体 | 整档删除 |
-| `thincoder_lifecycle.dart:22-26` | `takeWhenReady` + `timing: warm hit/miss` + `warm?.transport ??` | 直接 `owner._start(await owner._launchFor(owner._cwd))` |
-| `thincoder_lifecycle.dart:33` / `:38-53` | `warm?.connection ??` 与 `warm != null` 的握手旁路 | 只剩一条路：新建 `ThincoderConnection` 并 `initialize` |
-| `lib/kernel/thincoder/thincoder_kernel.dart:28` | `import 'thincoder_warm.dart'` | 删 import |
-| `lib/workspace/workspace.dart:22` · `:443` · `:448-454` · `:1303` | import、`_warmThincoder(path)` 调用、预热方法、`hideProject` 的 `drop('project-closed')` | 四处全删 |
-| `test/kernel/thincoder_warm_test.dart` | 池的用例 | 整档删除 |
-| `test/kernel/thincoder_kernel_test.dart` | `pool()` 夹具（`:4312-4326`）、T108 / T108②、`_NoTimer`（`:4899-4909`）、T107① 的 `timing: warm miss` 断言（`:4370`） | 删除这些；T111 保留（见下） |
+| 位置（现坐标） | 该有的形状 |
+|---|---|
+| `lib/kernel/thincoder/thincoder_warm.dart` | 不存在（整档删除） |
+| `thincoder_lifecycle.dart:19-21` | 打开会话即直连起进程 `owner._start(await owner._launchFor(owner._cwd))`；无 `takeWhenReady`、无 `timing: warm …` 打点 |
+| `thincoder_lifecycle.dart:27-43` | 单次握手：新建 `ThincoderConnection` 后直接 `initialize`；无预热旁路 |
+| `lib/kernel/thincoder/thincoder_kernel.dart` | 无 `thincoder_warm.dart` 的 import；无池字段与领池分支 |
+| `lib/workspace/workspace.dart` | 无 `_warmThincoder`、无池的 `drop(…)` 调用 |
+| `test/kernel/thincoder_warm_test.dart` | 不存在（整档删除） |
+| `test/kernel/thincoder_kernel_test.dart` | 无 `pool()` 夹具、无 T108 / `_NoTimer`、无 `warm miss` 断言；T111 保留（它测 `ChatSession` 的内核对象缓存） |
 
 **删后链路（写死）**：
 
@@ -113,7 +113,7 @@
 再次打开：同「打开会话」，再起一个进程
 ```
 
-- **没有新增分支**：删后的路径就是池不存在时的那条；失败面沿用 `_launchOf` 的既有 `ThincoderUnavailable` / `_fail`（`thincoder_lifecycle.dart:79-96`），不新增默认值，也不静默回退到任何池。
+- **没有新增分支**：删后的路径就是池不存在时的那条；失败面沿用 `_launchOf` 的既有 `ThincoderUnavailable` / `_fail`（`thincoder_lifecycle.dart:69-86`），不新增默认值，也不静默回退到任何池。
 - **`_releaseWhenIdle` 是唯一收尾**：池删掉后，「用完关闭」只由这一条路径负责；它今天就在（`thincoder_release.dart:100-116`），本批不动。
 
 **不是删池的东西（防误删，逐条核过）**：`ChatSession._warm` 是**内核对象**缓存（`lib/chat/chat_session.dart:201-207`、`lib/chat/session/lifecycle.dart:8-22`、`lib/chat/session/mode_state.dart:69-71`），与进程池无关，保留。
@@ -122,7 +122,7 @@
 
 需求档 §5 第 4 条的 `grep` 模式是 `thincoder_warm|warm hit|warm miss|预热池`，不含单独的 `warm`——上面这些不命中，也不该被删。
 
-**验收**：需求档 §5 第 4 条——`grep -rn "thincoder_warm\|warm hit\|warm miss\|预热池" lib/ test/` 零命中；无池仍能起会话（打开会话 ⇒ 起进程、能输入；关掉视图再打开 ⇒ 再起一个）。判据行见 §7 的「P」行，用例见 §8 T20。
+**验收**：需求档 §4 的「删除预热池」条——`thincoder_warm` / `warm hit` / `warm miss` / `预热池` 在 `lib/**` 与 `test/**/*.dart` 里零命中（**代码面**；索引与文档里的描述性文字不计，`warmWindow` / `warmUp` 这类同名不同义不算）；无池仍能起会话（打开会话 ⇒ 起进程、能输入；关掉视图再打开 ⇒ 再起一个）；`events.log` 无 `timing: warm …` 行。判据行见 §7 的「P」行，用例见 §8 T20。
 
 ### 3.3 F5：重绘的代价在「列表外面那一层」——先量，再按判据改
 
@@ -300,7 +300,7 @@ abstract final class ProcessHost {
 
 - 代理内部：`Isolate.spawn(_serve)`；消息 id 对应一次请求；字节以 `Uint8List` 传递；`transport_exit` 语义与 `ThincoderExit` 无关，由各调用方自己按 exitCode 组消息。
 - 失败：代理未起、通道断开、`ProcessException` ⇒ 抛 `ProcessHostUnavailable`（携带原始信息），调用点映射为既有错误类型。**不回退到窗口线程**。
-- 生命周期：代理随应用活；`stopAll()` 在退出路径调用（`lib/kernel/thincoder/thincoder_process.dart:13` 的 `stopThincoderProcesses`；该档因此 +3 行、新增 `import '../../platform/process_host.dart'`，进 §5 表 ③——**守门白名单必须含它**，见 §3.1）。迁入的只有 thincoder 的进程，没有 detached 启动——安装器留在上游原样（§3.1），代理不接管它。
+- 生命周期：代理随应用活；`stopAll()` 在退出路径调用（`lib/kernel/thincoder/thincoder_process.dart:14-23` 的 `stopThincoderProcesses`，其中 `:17` 调 `ProcessHost.stopAll()`；该档新增 `import '../../platform/process_host.dart'`，行数见 §5 ③——**守门白名单必须含它**，见 §3.1）。迁入的只有 thincoder 的进程，没有 detached 启动——安装器留在上游原样（§3.1），代理不接管它。
 - **代理死后重建一次，不重放用户请求**：代理 isolate 死亡后，下一次 `start` / `run` 重建代理再发请求；已发出的请求以 `ProcessHostUnavailable` 结束（重放会重复创建进程）。
 
 ### 4.2 可见性 gate（`lib/chat/window_visible.dart`）
@@ -386,46 +386,46 @@ final class HangReports {
 
 ## 5. 受影响文件清单
 
-行数 = **2026-10-26 本轮逐档复量**（`wc -l` 同口径，数换行符）。符号定位优先于行号：行号是编制日快照。
+行数 = **2026-10-26 逐档实测**（`wc -l` 同口径，数换行符）。**「现行」= 本批动手前**的实测值；已落地的行在「本批增量」列给出实测结果与现值。符号定位优先于行号：行号是编制日快照。
 
 | # | 坐标 | 改动 | 现行 | 预期增量 | 超档与拆分 |
 |---|---|---|---|---|---|
-| ① | `lib/kernel/thincoder/thincoder_process_io.dart` | `Process.start` → `ProcessHost.start`（§3.1；两条触发路径共用的创建点） | 207 | +≈25 / −≈30 | 未超档 |
-| ② | `lib/kernel/thincoder/thincoder_locator.dart` | `Process.run` → `ProcessHost.run`（含 `versionOf` 的版本探测，`:131-134`） | 379 | ≤ +4 / −3 | 未超档 |
-| ③ | `lib/kernel/thincoder/thincoder_process.dart` | 退出路径挂 `ProcessHost.stopAll()` + 新增 `import '../../platform/process_host.dart'`（`:13` 的 `stopThincoderProcesses` 内，§4.1；守门白名单含此档，§3.1） | 18 | +≈3 | 未超档 |
+| ① | `lib/kernel/thincoder/thincoder_process_io.dart` | `Process.start` → `ProcessHost.start`（§3.1；两条触发路径共用的创建点） | 207 | +39（已落地 → 现 246） | 未超档 |
+| ② | `lib/kernel/thincoder/thincoder_locator.dart` | `Process.run` → `ProcessHost.run`（含 `versionOf` 的版本探测，`:299-305`） | 379 | +8（已落地 → 现 387） | 未超档 |
+| ③ | `lib/kernel/thincoder/thincoder_process.dart` | 退出路径挂 `ProcessHost.stopAll()` + 新增 `import '../../platform/process_host.dart'`（`:14-23` 的 `stopThincoderProcesses` 内，§4.1；守门白名单含此档，§3.1） | 18 | +10（已落地 → 现 28） | 未超档 |
 | ④ | `lib/chat/chat_history_view.dart` | F6 gate：`_rebuild()` 包住三个帧源 + `WindowVisible` 订阅 + 恢复时一次全量 | 3922 | ≤ +40 | 超档，见 §5.1 |
 | ⑤ | `lib/chat/widgets/edge_fade_mask.dart` | F5：整块遮罩 → 两条固定高度边缘渐变带（§3.3 判据成立时） | 293 | ≤ +30 | 未超档 |
 | ⑥ | `lib/chat/widgets/markdown_view.dart` | 计时器 gate（§4.3） | 1076 | ≤ +20 | 超档，见 §5.1 |
-| ⑦ | `lib/diagnostics/frame_watch.dart` | 状态行提成档内共享函数（§3.6） | 158 | +≈6 | 未超档 |
-| ⑧ | `lib/diagnostics/diagnostics_bundle.dart` | `hangs` 目录拼接改用 `hangsFolderOf`（`:58-61`），一处定义 | 201 | +2 / −2 | 未超档 |
-| ⑨ | `lib/settings/pages/diagnostics_dialog.dart` | N5：报告目录路径一行 + 既有「在文件管理器中显示」按钮（§3.7） | 284 | ≤ +14 | 未超档 |
-| ⑩ | `lib/main.dart` | 挂 `ViewportWatch` + `StallWatch.start()` + `HangReports.check()` | 919 | +≈4 | 超档，见 §5.1 |
-| ⑪ | `lib/platform/process_host.dart` | **新档**：代理 isolate 的公共面（§4.1） | 0 | +≈60 | 新档 |
-| ⑫ | `lib/platform/process_host_io.dart` | **新档**：`Process` 的真实代理（唯一创建点） | 0 | +≈220 | 新档 |
-| ⑬ | `lib/platform/process_host_stub.dart` | **新档**：web 上无进程 | 0 | +≈20 | 新档 |
+| ⑦ | `lib/diagnostics/frame_watch.dart` | 状态行提成档内共享函数（§3.6） | 158 | +2（已落地 → 现 160） | 未超档 |
+| ⑧ | `lib/diagnostics/diagnostics_bundle.dart` | `hangs` 目录拼接改用 `hangsFolderOf`（`:58-61`），一处定义 | 201 | +2（已落地 → 现 203） | 未超档 |
+| ⑨ | `lib/settings/pages/diagnostics_dialog.dart` | N5：报告目录路径一行 + 既有「在文件管理器中显示」按钮（§3.7） | 284 | +20（已落地 → 现 304） | 未超档 |
+| ⑩ | `lib/main.dart` | 挂 `ViewportWatch` + `StallWatch.start()` + `HangReports.check()` | 919 | +7（已落地 → 现 926） | 超档，见 §5.1 |
+| ⑪ | `lib/platform/process_host.dart` | **新档**：代理 isolate 的公共面（§4.1） | 0 | 现 178（已落地） | 新档 |
+| ⑫ | `lib/platform/process_host_io.dart` | **新档**：`Process` 的真实代理（唯一创建点） | 0 | 现 650（已落地） | 新档 |
+| ⑬ | `lib/platform/process_host_stub.dart` | **新档**：web 上无进程 | 0 | 现 27（已落地） | 新档 |
 | ⑭ | `lib/chat/window_visible.dart` | **新档**：一个观察者 + 静态查询（§4.2） | 0 | +≈50 | 新档 |
-| ⑮ | `lib/diagnostics/viewport_watch.dart` | **新档**：DPR 留痕（§3.5） | 0 | +≈40 | 新档 |
-| ⑯ | `lib/diagnostics/stall_watch.dart` | **新档**：停顿看门狗（§3.6 · §4.5） | 0 | +≈90 | 新档 |
-| ⑰ | `lib/diagnostics/hang_reports.dart` | **新档**：挂起报告可见（§3.7 · §4.6） | 0 | +≈70 | 新档 |
-| ⑱ | `test/platform/process_host_test.dart` | **新档**：代理往返（§8 T14–T15） | 0 | +≈120 | 新档 |
-| ⑲ | `test/platform/no_window_thread_process_test.dart` | **新档**：守门扫描（§8 T16） | 0 | +≈50 | 新档 |
-| ⑳ | `test/diagnostics/stall_watch_test.dart` | **新档**：N4 用例（§8 T9–T13） | 0 | +≈120 | 新档 |
-| ㉑ | `test/diagnostics/hang_reports_test.dart` | **新档**：N5 用例（§8 T17–T19） | 0 | +≈90 | 新档 |
-| ㉙ | `test/diagnostics/viewport_watch_test.dart` | **新档**：N3 用例（§8 T7–T8） | 0 | +≈90 | 新档 |
-| ㉒ | `lib/kernel/thincoder/thincoder_warm.dart` | **整档删除**（§3.2） | 242 | 0 | — |
-| ㉓ | `lib/kernel/thincoder/thincoder_lifecycle.dart` | 删 `takeWhenReady` / `timing: warm hit/miss` / 预热旁路，直接起进程（§3.2） | 170 | −≈14 | 未超档 |
-| ㉔ | `lib/kernel/thincoder/thincoder_kernel.dart` | 删 `import 'thincoder_warm.dart'`（`:28`） | 480 | −1 | 未超档 |
-| ㉕ | `lib/workspace/workspace.dart` | 删预热调用与 `_warmThincoder`（`:22` · `:443` · `:448-454` · `:1303`，§3.2） | 3027 | −≈12 | 超档，见 §5.1 |
-| ㉖ | `test/kernel/thincoder_warm_test.dart` | **整档删除**（池的用例） | 284 | 0 | — |
-| ㉗ | `test/kernel/thincoder_kernel_test.dart` | 删池夹具与用例（`pool()` `:4312-4326` · T108 · T108② · `_NoTimer` `:4899-4909` · T107① 的 `warm miss` 断言 `:4370`） | 4967 | −≈200 | 超档，见 §5.1 |
-| ㉘ | `test/integration/chat_flows_test.dart` | **新档**：三条集成用例 1-1 / 2-1 / 3-1（`test/RTM.md` 三行，§8.1） | 0 | +≈160 | 新档 |
+| ⑮ | `lib/diagnostics/viewport_watch.dart` | **新档**：DPR 留痕（§3.5） | 0 | 现 75（已落地） | 新档 |
+| ⑯ | `lib/diagnostics/stall_watch.dart` | **新档**：停顿看门狗（§3.6 · §4.5） | 0 | 现 94（已落地） | 新档 |
+| ⑰ | `lib/diagnostics/hang_reports.dart` | **新档**：挂起报告可见（§3.7 · §4.6） | 0 | 现 125（已落地） | 新档 |
+| ⑱ | `test/platform/process_host_test.dart` | **新档**：代理往返（§8 T14–T15） | 0 | 现 316（已落地） | 新档 |
+| ⑲ | `test/platform/no_window_thread_process_test.dart` | **新档**：守门扫描（§8 T16） | 0 | 现 43（已落地） | 新档 |
+| ⑳ | `test/diagnostics/stall_watch_test.dart` | **新档**：N4 用例（§8 T9–T13） | 0 | 现 84（已落地） | 新档 |
+| ㉑ | `test/diagnostics/hang_reports_test.dart` | **新档**：N5 用例（§8 T17–T19） | 0 | 现 90（已落地） | 新档 |
+| ㉙ | `test/diagnostics/viewport_watch_test.dart` | **新档**：N3 用例（§8 T7–T8） | 0 | 现 90（已落地） | 新档 |
+| ㉒ | `lib/kernel/thincoder/thincoder_warm.dart` | **整档删除**（§3.2） | 242 | 已删除（现不存在） | — |
+| ㉓ | `lib/kernel/thincoder/thincoder_lifecycle.dart` | 删 `takeWhenReady` / `timing: warm hit/miss` / 预热旁路，直接起进程（§3.2） | 170 | −10（已落地 → 现 160） | 未超档 |
+| ㉔ | `lib/kernel/thincoder/thincoder_kernel.dart` | 删 `import 'thincoder_warm.dart'` | 480 | −1（已落地 → 现 479） | 未超档 |
+| ㉕ | `lib/workspace/workspace.dart` | 删预热调用与 `_warmThincoder`（§3.2） | 3027 | −12（已落地 → 现 3015） | 超档，见 §5.1 |
+| ㉖ | `test/kernel/thincoder_warm_test.dart` | **整档删除**（池的用例） | 284 | 已删除（现不存在） | — |
+| ㉗ | `test/kernel/thincoder_kernel_test.dart` | 删池夹具与用例（`pool()` · T108 · T108② · `_NoTimer` · T107① 的 `warm miss` 断言） | 4967 | −49（已落地 → 现 4918） | 超档，见 §5.1 |
+| ㉘ | `test/integration/chat_flows_test.dart` | **新档**：三条集成用例 1-1 / 2-1 / 3-1（`test/RTM.md` 三行，§8.1） | 0 | 已落 1-1：251 行（实测）；2-1 / 3-1 归轮 4 | 新档 |
 | — | `test/chat/chat_history_rebuild_test.dart` | 零改动，重跑取 A1/A4 不回退 | 507 | 0 | — |
 
 **共 30 行**：14 个既有档改动 · 2 个整档删除（1 lib + 1 测试）· 7 个新 lib 档 · 6 个新测试档 · 1 行零改动。其中 F8 的迁移面只占 3 行（①–③）。
 
 **编号 ㉙ 的位置**：它排在 ㉑ 之后、与其它新测试档相邻；既有编号 ①–㉘ 一律不变——编号是稳态标识，§2 分轮表与本档多处按号引用，改号会让已落地的记录指错行。
 
-**现行列本轮逐档实测**（2026-10-26，`find /c /v ""` 同口径数换行符）：17 个既有档与本表逐行相符——207 · 379 · 18 · 3922 · 293 · 1076 · 158 · 201 · 284 · 919 · 242 · 170 · 480 · 3027 · 284 · 4967 · 507。实施首步不必再复量；届时数字若有变，先改本表再动代码。
+**现行列的来历**（2026-10-26，`find /c /v ""` 同口径数换行符）：207 · 379 · 18 · 3922 · 293 · 1076 · 158 · 201 · 284 · 919 · 242 · 170 · 480 · 3027 · 284 · 4967 · 507——本批动手前的读数。已落地的行，现值与本批实测增量见表内「本批增量」列；尚未动到的行（④⑤⑥⑭㉘ 的后两条）仍按预算执行。
 
 ### 5.1 超 800 行档的拆分方案
 
@@ -496,9 +496,9 @@ final class HangReports {
 | F8 挂起报告零新增 | §3.1 | F8-A：同一操作路径下 `logs/hangs/hang-*.txt` 零新增（现有 9 份为基线） |
 | F8 窗口线程无 > 500 ms 停顿 | §3.1 · §4.5 | F8-B：`[stall]` 无 gap > 500 ms 的行（依赖 N4 已落地）。**本批验收档 = 500 ms**（需求档 F8 原文）；50 ms 是长期目标、本批无量具（N4 的粒度就是 250 / 400 ms，见 §3.6） |
 | F8 会冻窗口的路径不再直连 | §3.1 | F8-C：T16——引入 `process_host` 的档集合恰为 {`thincoder_process_io.dart` · `thincoder_locator.dart` · `thincoder_process.dart` · 三个新 lib 档}；其中创建进程的两档内零 `\bProcess.start(` / `\bProcess.run(`，`thincoder_process.dart` 只 import 不创建；T14–T15 代理往返正确；其余上游档本批零改动 |
-| F8 版本探测也在范围内（需求档 §5 第 3 条） | §3.1 · ② | F8-D：打开设置页（触发 `versionOf` 的版本探测，`thincoder_locator.dart:131-134`）期间 `[stall]` 无 > 500 ms 的行；该项与 F8-B 分两次读数（一次只跑一项，避免互相掩盖） |
+| F8 版本探测也在范围内（需求档 §5 第 3 条） | §3.1 · ② | F8-D：打开设置页（触发 `versionOf` 的版本探测，`thincoder_locator.dart:299-305`）期间 `[stall]` 无 > 500 ms 的行；该项与 F8-B 分两次读数（一次只跑一项，避免互相掩盖） |
 | F8 多项目启动也在范围内（需求档 §5 第 3 条） | §3.1 · ① | F8-E：启动载入多个项目（`workspace.dart:345` 的 `_listKept` 逐项目唤起进程，经 ① 同一创建点）期间 `[stall]` 无 > 500 ms 的行，且 `logs/hangs/` 零新增；与 F8-B / F8-D 分开读数 |
-| 删池完成（需求档 §4 · §5 第 4 条） | §3.2 | P：`grep -rn "thincoder_warm\|warm hit\|warm miss\|预热池" lib/ test/` 零命中；无池仍能起会话——打开一个会话 ⇒ 进程起、`initialize` 一次、能输入；关掉视图再打开 ⇒ 再起一个；`events.log` 无 `timing: warm …` 行 |
+| 删池完成（需求档 §4 的「删除预热池」条） | §3.2 | P：`thincoder_warm` / `warm hit` / `warm miss` / `预热池` 在 `lib/**` 与 `test/**/*.dart` 里零命中（**代码面**；索引与文档里的描述性文字不计）；无池仍能起会话——打开一个会话 ⇒ 进程起、`initialize` 一次、能输入；关掉视图再打开 ⇒ 再起一个；`events.log` 无 `timing: warm …` 行 |
 | F5 超预算 raster 帧 → 0 | §3.3 · §4.4 | A：`tool/perf` 大会话流式回放，预算 100 ms 下 `frames.janky` 中 raster 超预算的帧数 = 0（改前读数按 §3.3 第 1 步、§4.4 的入口在动代码前量好，两次读数并列留档）；总帧数与改前同量级（±20%）。规则 3 的分支不成立时按 §3.3 规则 4 的顺序收窄；四步走完仍不成立 ⇒ 另起设计档并记「F5 未达成」 |
 | F5 重绘范围不随界面大小 / 历史增长 | §3.3 | B：组件测试断言流式行最近的重绘边界在行内、列表主体无全区域合成层；另 20 / 200 回合两跑，流式帧的 `ChatItemView` 重建数逐项相等（既有 A1 口径不回退）；视觉等价按 §10 的**整帧**比对 |
 | F6 不可见期帧数 = 0，切回一帧追平 | §3.4 · §4.2 · §4.3 | C：模拟 `inactive` 后回放 120 个增量 ⇒ `ChatItemView` 重建 0 次、`MarkdownView` 解析 0 次；恢复 `resumed` ⇒ 恰 1 次重建，可见文本 == 全文；底部与中段滚动偏移不变（T2a / T2b）。设备面两条并列：① 失焦 60 秒 `FrameTiming` 帧数 0（或仅 1 帧残余尾帧）；② 失焦时 baocode 的 `GPU Engine` 占用接近 0%——同机同窗口、失焦前后各采样 3 次取均值，对照 §2 的 30.6–30.7%（需求档 F6 验收 ②）。② 不归零 ⇒ 按 §3.4 的帧源清单逐个关并复采，仍不归零则上报「F6 未达成」 |

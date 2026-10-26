@@ -41,6 +41,7 @@ import 'widgets/hover_builder.dart';
 import 'widgets/lazy_segment.dart' show SelectionEndHolder;
 import 'widgets/turn_footer.dart';
 import 'widgets/user_message_bubble.dart';
+import 'window_visible.dart';
 
 /// Virtualized, selectable conversation history followed by the live turn.
 /// Sticks to the bottom while the user is there.
@@ -248,7 +249,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
   /// moment before it folds away.
   late final Steadiness _steady = Steadiness(
     onChange: () {
-      if (mounted) setState(() {});
+      if (mounted) _rebuild();
     },
   );
 
@@ -456,7 +457,8 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
       AnimationController(vsync: this, duration: _motionDuration)
         ..addStatusListener((status) {
           if (status == AnimationStatus.completed && _handoffIndex != null) {
-            setState(() => _handoffIndex = null);
+            _handoffIndex = null;
+            _rebuild();
           }
         });
 
@@ -504,7 +506,10 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
       if (_statusShown &&
           !statusShown &&
           _appearing.contains(_seenItems) &&
-          !_isHidden(_seenItems)) {
+          !_isHidden(_seenItems) &&
+          // Out of sight there is no frame to hand it over in: the item takes
+          // the row's place as it is, when it is next built.
+          WindowVisible.isVisible) {
         _handoffIndex = _seenItems;
         _handoff.forward(from: 0);
       }
@@ -657,6 +662,10 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
       ..addListener(_findChanged);
     _scrollController.addListener(_handleScroll);
     _feed.addListener(_handleSessionChanged);
+    // Out of sight, nothing here is rebuilt (see [_rebuild]): the one observer
+    // of the lifecycle lives in [WindowVisible], this view only hears of it.
+    WindowVisible.start();
+    WindowVisible.changed.addListener(_onVisibleChanged);
     UserMessageStyle.current.addListener(_handleStyleChanged);
     // Its size, for a slow frame's line in the event log.
     FrameWatch.notes[this] = () =>
@@ -816,6 +825,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
   void dispose() {
     FrameWatch.notes.remove(this);
     _noteLeft(_feed);
+    WindowVisible.changed.removeListener(_onVisibleChanged);
     _steady.dispose();
     _feed.removeListener(_handleSessionChanged);
     _find
@@ -1497,7 +1507,49 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
 
   void _setAnchored(bool value) {
     _scrollController.anchored = value;
-    if (_shownAtBottom != value) setState(() => _shownAtBottom = value);
+    if (_shownAtBottom != value) {
+      _shownAtBottom = value;
+      _rebuild();
+    }
+  }
+
+  /// Whether anything came in while the window was out of sight: folded once,
+  /// when it comes back (see [_onVisibleChanged]).
+  bool _hiddenDirty = false;
+
+  /// Rebuilds the history, unless the window is out of sight.
+  ///
+  /// Hidden, nothing is rebuilt — so no frame is drawn for the words that came
+  /// in — and what came in is folded once on the way back. The content is not
+  /// cached by the rows: they read it from the feed when next built, so the one
+  /// fold on the way back is the whole of catching up.
+  void _rebuild() {
+    if (!WindowVisible.isVisible) {
+      _hiddenDirty = true;
+      return;
+    }
+    setState(() {});
+  }
+
+  /// The live row's text grew: only its row is built again — while the window
+  /// is visible; hidden, it is built with the rest on the way back.
+  void _tick() {
+    if (!WindowVisible.isVisible) {
+      _hiddenDirty = true;
+      return;
+    }
+    _liveTick.value++;
+  }
+
+  /// The window came back (or went): shown again, what came in while it was out
+  /// of sight is folded once, in one build.
+  void _onVisibleChanged() {
+    if (!mounted || !WindowVisible.isVisible || !_hiddenDirty) return;
+    _hiddenDirty = false;
+    _refold();
+    _watchTail();
+    _liveTick.value++;
+    setState(() {});
   }
 
   void _handleSessionChanged() {
@@ -1508,7 +1560,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
     if (_tailGrew()) {
       final tail = _contentCount - 1;
       _folds.refreshTail(tail, _feed.itemAt(tail));
-      _liveTick.value++;
+      _tick();
       _wasLive = _feed.isStreaming;
       _prependedSeen = prepended;
       _watchTail();
@@ -1563,7 +1615,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
     if (ended) _toReplyStart = false;
     _itemsCame();
     _scheduleStickyUpdate();
-    setState(() {});
+    _rebuild();
     _watchTail();
     _wantEarlier();
   }
@@ -1717,7 +1769,10 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
       };
       if (setEquals(indices, _stickyIndices)) return;
       _stickyKeys.removeWhere((index, _) => !indices.contains(index));
-      setState(() => _stickyIndices = indices);
+      // A frame's worth of rows moved: out of sight it waits with the rest
+      // (the copies are built from [_stickyIndices] when next built).
+      _stickyIndices = indices;
+      _rebuild();
     });
   }
 

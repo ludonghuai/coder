@@ -406,8 +406,19 @@ if (_connection != null || _transport != null) {
 1. **不再发新一轮设计评审**。理由：v9 的语义增量只有一条——**N3 的验收只数 `[viewport]` 行**（收窄，不是放宽），其余是事实更正（"没有既有 DPR 观察者"改成 `existing but unusable`）与计数同步（29→30、5→6）。第 5 轮 pass 覆盖的 v8 与本版的差别，不改变任何已通过的判据方向；发一轮只验证"收窄"的评审是把注意力花在没有分歧的地方。**此裁定与理由即记录**。
 2. **需求档 N3 的行形已按实现补齐**（我的笔域）：现写 `[viewport] view <id> dpr <旧> -> <新> size <逻辑宽×高>`，并写明**只在 DPR 变化时写**、`[views]` 与它并存互不替代。
 
+### 轮 3 落地裁决（2026-10-26 06:45）
+
+**交付核过**：`analyze` 无问题 · `flutter test` **+153（kernel + 集成 1-1）**、**+89（workspace/sidebar 回归）** · 代码面 P 验收**零命中**（我用 `git grep` 复跑）· 提交 `71540df4`。三对红绿对照（自有 `start:` 绕过 host ⇒ 变红；假后端注入 800 ms 阻塞 ⇒ 5 条 `[stall]`、断言变红；单次 `pump(300 ms)` ⇒ 停在 starting）说明这些用例**不是空断言**。
+
+| 上抛 | 裁定 |
+|---|---|
+| **1 P 的字面 grep 命中 `test/RTM.md:19`** | **改口径，不改索引档**：需求档 §4 的验收已改为「`lib/**` 与 `test/**/*.dart` 零命中（代码面）」，并写明索引与文档里的描述性文字不计。理由：这条验收要防的是**代码回退**（有人又把池加回来），而索引档里「删预热池」是历史陈述、删掉反而丢追溯。 |
+| **2 设计档漂移**（§5 ㉗ 4918 / ㉘ 252、§3.1 与 §3.2 的 lifecycle 坐标已失效） | **派设计修轮**（与轮 4 并行，不同笔域）。 |
+| **3 三处测试 seam**（假 `ProcessHostBackend` · `ThincoderProcessRegistry` 子类 · 真实 `StallWatch`） | **接受并记档**：全部是测试面接缝，不进产品契约；§5 已写明。**若将来要「不新增契约外接缝」，得先写进设计 §4.1 / §8.1 再改**——本轮不做。 |
+| **4 集成 2-1 / 3-1 归轮 4** | 接受；套件计数保持 3 / 50–100。 |
+
 ## §2 批次任务与设计（eng-designer）
-**状态行**：设计完成 2026-10-26（v9 · 修轮已落：N3 与 [views] 并存、验收只数 [viewport]；§5 30 行 / 6 个新测试档（㉙））
+**状态行**：设计完成 2026-10-26（v10 · 修轮已落：轮 3 漂移（㉗ 4918 / ㉘ 已落 1-1 251 行 / lifecycle 坐标）+ P 改代码面口径）
 <§2 模板占位：本批条目（覆盖） / 设计档落点 / 机制设计 / 受影响文件与测试覆盖 / 验收对照 / 关键决策 / 上抛项>
 
 **范围**：F5 重绘边界 · F6 不可见时不出帧 · F7 切会话复用内核进程 · N3 DPR 留痕（N2 测量纪律贯穿四项）。来源与实测见 §1。
@@ -853,6 +864,44 @@ if (_connection != null || _transport != null) {
 2. [上抛·知会] **需求档 N3 的行形与实现有一处字面差**：需求 N3 写 `[viewport] dpr <旧> -> <新>`，实现（§5 轮 1 记录）写 `[viewport] view <id> dpr <旧> -> <新> size <宽×高>`——多了 view id 与尺寸，语义是需求的超集。设计 §3.5 与 §8 T7 按实现的行形写死；需求档那句要不要跟，属父侧笔域。
 3. [上抛·知会] **v9 未改设计档里的既有计数句之外任何内容**：§2 本段此前各块的引用（如「设计 §12 第 6 项」已作废的那句）按 append-only 保持原样，以本块与 v9 为准。
 
+### 修轮落地（v9 → v10：轮 3 落地裁决的两条设计面派工，2026-10-26）
+
+依据：§1「轮 3 落地裁决（2026-10-26 06:45）」——上抛 2（设计档漂移）派设计修轮，上抛 1（P 的 grep 口径）由父侧裁定改口径。设计档升 **v10**（`docs/design/chat-raster-repaint.md`）；需求档未动（父侧笔域）。
+
+**逐条（编号 = 上抛号 / 裁决项）**
+
+| # | 处置 | 落点 |
+|---|---|---|
+| 上抛 2 · ㉗ 行数 | §5 ㉗ 现行 4967（保留为「本批动手前」），增量改 **−49、现值 4918**；同轮把其余已落地行一并补上实测增量与现值（①②③⑦⑧⑨⑩⑪⑫⑬⑮⑯⑰⑱⑲⑳㉑㉙㉒㉓㉔㉕㉖），并改 §5 表头：「现行 = 本批动手前」，已落地行在增量列给现值 | 设计 §5 表 · 表头 · 表下「现行列的来历」 |
+| 上抛 2 · ㉘ 行数 | ㉘ 改为「**已落 1-1：251 行（实测）；2-1 / 3-1 归轮 4**」——轮 4 正在并行写该档，最终值留待轮 4 复量，不在此写死 | 设计 §5 ㉘ |
+| 上抛 2 · lifecycle 坐标 | §3.1 自起点 `:26`→**`:21`**；迁移面 ① `thincoder_process_io.dart:86`（旧 `Process.start`）→**`:110` 的 `ProcessHost.start`**、链路改记 `thincoder_process.dart:9-10`；② 版本探测 `:131-134`→**`:299-305`**（走 `ProcessHost.run`）；§3.1 第 3 条同改；§3.2 的「挂点」表三列（今天做什么 / 删除后）**整表重写**为「删净后各落点该有的形状」——旧表每个坐标都指向已删除的池代码；§3.2 `_launchOf` 失败面 `:79-96`→**`:69-86`**；§4.1 退出路径 `:13`→**`:14-23`** 并写明 `:17` 调 `ProcessHost.stopAll()`；§7 F8-D 同步 | 设计 §3.1 · §3.2 · §4.1 · §7 |
+| 上抛 1 · P 口径 | §3.2 验收与 §7 P 改按需求档 §4「删除预热池」条的**代码面**口径：`lib/**` 与 `test/**/*.dart` 零命中，索引与文档里的描述性文字不计，`warmWindow` / `warmUp` 不算；不再写 `grep … lib/ test/`（那会命中 `test/RTM.md:19` 的描述行） | 设计 §3.2 · §7 P |
+
+**本轮读数（全部本轮实测，行数 = `wc -l` 同口径数换行符）**
+
+- 设计档改前 **593 行**；本轮全部为行内替换与**等行数换表**（§3.2 表 11 行 → 11 行），行数不变。
+- `test/kernel/thincoder_kernel_test.dart` **4918**（§5 轮 3 记 4918，相符）· `test/integration/chat_flows_test.dart` **251**（§5 轮 3 记 252：同一份文件、尾行计数口径差一行，本档按 `wc -l` 记 251）。
+- F8 面：`thincoder_process_io.dart` 246 · `thincoder_locator.dart` 387 · `thincoder_process.dart` 28 · `process_host.dart` 178 · `process_host_io.dart` 650 · `process_host_stub.dart` 27 · `process_host_test.dart` 316 · `no_window_thread_process_test.dart` 43。
+- 删池面：`thincoder_lifecycle.dart` 160 · `thincoder_kernel.dart` 479 · `workspace.dart` 3015；`thincoder_warm.dart` 与 `test/kernel/thincoder_warm_test.dart` **在盘不存在**（删除已落地），四模式 grep 在 `**/*.dart` 零命中（本轮 grep 复核）。
+- 诊断面：`main.dart` 926 · `frame_watch.dart` 160 · `diagnostics_bundle.dart` 203 · `diagnostics_dialog.dart` 304 · `viewport_watch.dart` 75 · `stall_watch.dart` 94 · `hang_reports.dart` 125 · `stall_watch_test.dart` 84 · `hang_reports_test.dart` 90 · `viewport_watch_test.dart` 90。
+
+**三处机械自检（本轮）**
+
+1. **引用 ↔ 标题**：本轮改动涉及的 `§N` 引用逐个有对应标题（§3.1 · §3.2 · §4.1 · §5 · §7）；全档 `^## ` 仍为 12 个（§1–§12），§3.1–§3.7 / §4.1–§4.6 / §5.1 / §8.1 在。
+2. **表格 ↔ 摘要**：§5 数据行仍 **30 行**（本轮未增删行），分类 14 既有 + 2 整档删除 + 7 新 lib + 6 新测试 + 1 零改动 = 30，与表尾一致；§3.2 表 7 行、无摘要依赖旧列数。
+3. **数字 ↔ 实测**：上面每条行数均为本轮逐档实测；唯一未在本轮复量的是 ④⑤⑥⑭（轮 4 正在并行改，保持预算值不动）与设计档的改前 593（本轮等行数替换，构造上不变）。
+
+**本批覆盖的需求条目**：与 v9 表逐行相同，无增删——本轮只改坐标、计数与 P 的读法口径，不动需求映射（F8 · 删池 · F5 · F6 · N3 · N4 · N5 · N2）。
+
+**受影响文件 · 验收 · 用例 · 决策**：仍以设计 v10 为准——受影响文件 30 行（现值见表内）→ §5 / §5.1；验收（F8-A/B/C/D/E · A / B / C / D / G / H / I / N5 / P / E）→ §7；用例 T1–T23（含 T2a/T2b）+ 集成 1-1 / 2-1 / 3-1 → §8 / §8.1；决策 D1–D15 → §6。
+
+**上抛项（交主 agent 处置）**
+
+1. [上抛·待裁] **需求档内部口径不一致（父侧笔域，本侧不改）**：§4 第 3 条（`docs/requirements/chat-streaming.md:83`）已按 06:45 裁定改成「`lib/**` 与 `test/**/*.dart` 零命中（代码面）」，但 **§5 第 4 条（`:95`）仍是旧字面** `grep -rn "thincoder_warm\|warm hit\|warm miss\|预热池" lib/ test/` 零命中。按旧字面跑会在 `test/RTM.md:19` 命中一次（描述性文字）。设计 §7 P 按 §4 的代码面口径写死；§5 第 4 条要不要跟，请父侧定。
+2. [上抛·知会] **§5 ㉘ 的最终值由轮 4 定**：该档现 251 行只含 1-1；2-1 / 3-1 落地后请父侧让修轮（或收口）复量一次再写死，本侧不猜。
+3. [上抛·知会] **252 vs 251 的口径差**：§5 轮 3 记 252、本档 `wc -l` 读 251，差在文件末行是否带换行；本档统一按 `wc -l`（数换行符），已在读数里注明。
+4. [上抛·待办] 本轮属设计面改动（坐标 + 计数 + 验收口径的读法），是否再发一轮 advisor 设计评审由父侧定；前一轮 pass（第 5 轮）覆盖 v8，v9→v10 的语义增量只有「P 数代码面、不数文档」这一条，其余是事实坐标与计数。
+
 ## §3 设计评审（评审子代理）
 
 ### 轮次 1（评审子代理）
@@ -1183,5 +1232,90 @@ VERDICT: pass
 2. [上抛·知会] **设计档需同步的漂移**：§5 ㉗ 实测 4918（记 4967 / −≈200）、㉘ 实测 252（记 ≈+160）；§3.1 `:46` 与 §3.2 挂点表引用的 `thincoder_lifecycle.dart:22-26 / :33 / :38-53` 已随删池失效（现为 `:19-43` 的直连起进程 + 单次握手）。
 3. [上抛·知会] **测试面三处 seam**（`_ScriptedHost` · `_InstantRegistry` · `StallWatch` 起在 setup 之后）为假时钟下让集成用例可跑的必要替代，已在本节差异段逐条写明；若父侧要求"集成用例不新增契约外接缝"，需把它们写进设计 §4.1 / §8.1 再落。
 4. [上抛·知会] **集成 2-1 / 3-1 未落**（归轮 4）；`test/RTM.md` 三行已定，套件计数 3 / 50–100，本轮只落 1-1，交付以轮 4 收尾为准。
+
+### 轮 4 · 渲染面（F6 可见性 gate + F5 先量后判）· 2026-10-26
+
+**范围**：按 §2「实施分轮」轮 4——设计 §5 行 `④ ⑤ ⑥ ⑭ ㉘` 与零改动行；§8 用例 T1 · T2 · T2a · T2b · T3 · T4；§7 读数 A · B · C。轮 1/2/3 不在本轮。
+
+**父侧两条裁定（本轮据此执行，均已落成）**
+
+1. **F5 按 A 结案，不动 `edge_fade_mask.dart`**，判据 B（列表主体无全区域合成层）撤销。依据 = 本轮实测的改前读数（见下），A 在无 GPU 争用条件下已成立，规则 3 的「慢帧集中在遮罩」前提不成立。
+2. **`MarkdownView` 不改**：本树没有首篇 F3 的 50 ms 节流（`lib/chat/widgets/markdown_view.dart` 1076 行，`Timer` 零命中；`lib/**` 无 `currentFrameTimeStamp` 与 `_parseWhenVisible`）⇒ 设计 §4.3 的计时器 gate 无标的，T3 改为「失焦期 0 次解析、回可见 1 次」。
+
+**F5 改前读数（N2，动代码前取，`tool/perf` 现成入口，未改任何产品代码）**
+
+| 轮 | 目录（`build/perf/`） | 场景 / 相位 | 帧数 | raster p50 / p90 / p99 / max (ms) | build max (ms) | raster > 100 ms 的帧 |
+|---|---|---|---|---|---|---|
+| 1 | `2026-10-26T06-46-52` | `chat.long_history` stream | 777 | 4.56 / 6.69 / 14.18 / **31.21** | 27.18 | **0** |
+| 1 | 同上 | 同场景 load | 66 | 3.37 / 5.77 / 10.29 / **25.44** | 75.14 | **0** |
+| 2 | `2026-10-26T06-48-01` | 同场景 stream | 781 | 4.43 / 6.31 / 11.10 / **30.18** | 10.10 | **0** |
+| 2 | 同上 | 同场景 load | 64 | 3.43 / 5.55 / 7.64 / **13.75** | 24.82 | **0** |
+
+- 环境：Windows profile、Impeller（OpenGLESSDF）、60 Hz（预算 16.67 ms）、窗口 1011×754 @2.0；命令 `dart run tool/perf/run.dart --no-build --repeat 1 chat.long_history`。
+- **结论（A 已成立）**：两跑共 1558 帧，raster 超 100 ms 的帧为 0，最大值 31.21 ms；§1 记下的 340–350 ms 只在 GPU 争用时出现。**⇒ F5 不改代码**（父侧裁定 ①）；判据 B 无断言对象，本轮不写。
+- 未做到的一步：`--size 3840x2088` 未能生效（runner 仍按 1011×754 布局），所以本轮读数不等于 §2 基线的窗口尺寸；记录在此，真机复核归 §6。
+
+**交付面**
+
+| 需求 / 项 | 落点 | 状态 | 用例 |
+|---|---|---|---|
+| F6 可见性判据（唯一观察者、幂等 start、翻转才通知） | `lib/chat/window_visible.dart`（新档 57 行；`start()` / `isVisible` / `changed`，`didChangeAppLifecycleState` 只在可见性翻转时 notify） | ✅ | 门控自身的用例 + T1–T4 |
+| F6 重建 gate（设计 §3.4 的三个帧源） | `lib/chat/chat_history_view.dart`：`_rebuild()` / `_tick()` / `_onVisibleChanged()`；`Steadiness.onChange`、尾巴增量的 `_liveTick`、全路径 `setState`、`_setAnchored`、`_scheduleStickyUpdate` 全走同一道 gate | ✅ | T1 · T2 · T3 · T4 · 集成 2-1 |
+| F6 恢复一次追平（全量 `_refold` + 一次 build + 清标记） | 同上 `_onVisibleChanged()`（另加 `_watchTail()`，让快路径快照不过期） | ✅ | T2 · T2a · T2b · 集成 2-1 |
+| F6 状态行交接也不在不可见期出帧（评审发现，见下「评审轮」） | `_itemsCame()` 判 `WindowVisible.isVisible` 才起 `_handoff`；`_handoff` 完成回调用 `_rebuild()` | ✅ | T1b（本轮新增用例，§8 未列） |
+| T1–T4 / T2a / T2b 的宿主档 | `test/chat/window_visible_test.dart`（新档，8 条用例 = T1 · T1b · T2 · T2a · T2b · T3 · T4 + 门控自身一条） | ✅ | 同左 |
+| 集成 2-1（失焦期零重建、回可见一次、底部与中段两段锚定、`[stall]` 零行） | `test/integration/chat_flows_test.dart` | ✅ | 2-1 |
+| 集成 3-1（长会话流式：终态文本、成本不随历史增长） | 同上 | ⚠️ 见「与设计的差异」第 3 条 | 3-1 |
+| F5 改代码 | 无（裁定 ①） | — | T5 · T6 随之撤销 |
+| `MarkdownView` 计时器 gate | 无（裁定 ②） | — | 设计 §4.3 无标的 |
+
+**验证读数（本轮实测）**
+
+- `flutter analyze --no-pub`（全仓）⇒ **No issues found**（6.2 s）。
+- `flutter test --no-pub`（本轮 3 档 + §7 H 的七个既有档）⇒ **+104 All tests passed**：`window_visible_test` 8 · `chat_flows_test` 3 · `chat_history_rebuild_test` 及 H 其余六档 93。
+- **红绿对照四对（不是「跑过就算」）**
+  - gate 关掉（`isVisible` 恒 true）⇒ T1 · T2 · T3 · T4 与门控自身用例全红；恢复后绿。
+  - gate 关掉 ⇒ 集成 2-1 失焦段 **720 次行重建**（60 帧 × 6 行量级）；恢复后 0。
+  - 交接修复退回原样（`_handoff` 不判可见性、完成回 `setState`）⇒ 新增 T1b 失焦段 **8 次重建**；恢复后 0。
+  - `_setAnchored` 走 `_rebuild()` 后，T2a（底部）与 T2b（中段，±1 px）在恢复后仍成立。
+- SDK：`D:\baocode\build\flutter-3475\flutter\bin\flutter.bat`（3.47.5 / Dart 3.13.4）。
+
+**与设计的差异（全部显式；设计档不是本轮笔域）**
+
+1. **判据 B 与 T5 / T6 撤销**：父侧裁定 ① 的直接结果。设计 §5 ⑤、§7 B、§8 T5/T6、§10 首条仍写着「无全区域合成层 / 整帧逐像素比对」，需设计修轮删改。
+2. **设计 §4.3 无主体**：`MarkdownView` 既无 50 ms 计时器也无 `WindowVisible` 订阅；§3.4 残余帧源表的第 ① 条（markdown 计时器）在本树不存在。T3 按父侧口径改写为「0 次解析 / 恢复 1 次」。
+3. **集成 3-1 的判据弱化且历史取值不同**：RTM 与 §8.1 要求「流式帧上列表主体无全区域合成层（`debugDumpLayerTree`）」「每增量 1 次重建」「20 / 200 回合」；本轮实测在**整机**跑（默认 sticky 消息风格）每条增量重建 26–30 行（外壳随粘顶副本重整），跨增量逐项相等，长（500 回合 = 1000 条）/短（20 回合）两组数组**完全相同**。故 3-1 断言「两组逐项相等 + 上界」，不断言「恰 1」。F1 的「每增量 1 次」在组件级（bubble 风格，`chat_history_rebuild_test.dart`）仍成立且本轮全绿。
+4. **新增 T1b**：§8 无此用例，由代码评审的 🔴 引出（状态行交接在不可见期仍出帧），按轮 2 补 T22d/T22e 的先例登记为新增。
+5. **gate 的落点与设计伪码不同、语义等价**：设计 §3.4 写「在 `_handleSessionChanged` 里早退」，本轮把 gate 放进 `_tick()` / `_rebuild()` 两个出口并在 `_setAnchored`、`_scheduleStickyUpdate`、`_handoff` 完成处复用——比早退更不容易漏，且不可见期仍更新 `_tailSeen` / 折叠与索引簿记（早退会让 `_prependedSeen` 等增量状态过期）。
+6. **行数与命名漂移**：`lib/chat/chat_history_view.dart` 现到 `:3973`（设计 §5 ④ 现行 3922 / 预期 ≤ +40 ⇒ 约 +51）；设计把标记叫 `_dirtyWhileHidden`，代码为 `_hiddenDirty`。设计 §5 也缺 `test/chat/window_visible_test.dart` 一行（30 → 31 行、新测试档 6 → 7）。
+
+**自审与评审轮**
+
+- 探索审计 1 轮：**AUDIT: findings**（0 🔴 / 8 🟡 / 4 🔵）。处置：本轮修 4 条（交接帧源 🔴、`_setAnchored` 绕过 gate、用例间可见性未复位、3-1 断言口径写实）；其余进上抛（设计/RTM 笔域）。
+- advisor 代码评审轮 1：**VERDICT: changes-required**（1 🔴 / 3 🟡 / 4 🔵）。处置：🔴 修（`_itemsCame` 判可见性 + 完成走 `_rebuild()`，红绿见上）；🟡 的 `_buildAhead` / `_loadEarlier` 未 gate **接受并登记**（可达性需先有用户操作再说走，属残余帧源，归设计 §3.4 残余表）；🟡「无帧」未机检 **部分处置**（T1 加 `hasScheduledFrame` 断言；T1b 做不到——失焦期间仍有 4 个与本 gate 无关的 Ticker，读数不可归因）；两条文档漂移（RTM 3-1 / 2-1 行）进上抛；🔵「无用 import」经 analyzer 证伪（`ComposerMessage` 需要它，已收窄为 `show ComposerMessage`）。
+- **轮 2 复核未跑**：轮 1 的四条修全部有红绿读数（3 组对照），而非仅代码重读；以此替代复核回合并如实登记。
+- 终态：**clean**（无未决 🔴、无未修 must-fix；接受项与文档漂移见上抛）。
+
+**上抛项（交主 agent 处置）**
+
+1. [上抛·待裁] **3-1 的判据口径**：RTM `:47` 与设计 §8.1 要「每增量 1 次重建 / 20 与 200 回合 / 无全区域合成层」，本轮实交「两组逐项相等 + 上界 / 500 与 20 回合 / 无 layer 断言（B 已撤）」。请设计修轮按实测改写这三处；若 F1 的「恰 1」仍要保留在集成面，需另议（整机默认 sticky 风格下做不到，只有组件级成立）。
+2. [上抛·待裁] **RTM 行 2-1 措辞**：`test/RTM.md:35` 仍写 `ChatHistoryView` / `MarkdownView` 双向 gate 与「关掉…计时器」；本树 `MarkdownView` 无 gate（裁定 ②）⇒ 请改行。
+3. [上抛·知会] **设计 §5 缺一行**：`test/chat/window_visible_test.dart` 未进表（30 行 → 31 行、新测试档 6 → 7），另 §5 ④ 的行数增量请改为实测 +51。
+4. [上抛·知会] **残余帧源两条**：`_buildAhead()`（`chat_history_view.dart:580` 一带）与 `_loadEarlier()`（`:951`）的 `setState` 未过 gate；可达性窄（须用户在失焦前刚拖过 minimap / 刚滚到顶），本轮接受不改，建议设计 §3.4 残余表补登。
+5. [上抛·知会] **「无帧」这一条没有机检**：T1 能断言 `hasScheduledFrame` 为假，交接场景不能（失焦期仍有与 gate 无关的 Ticker 在跑）⇒ F6 验收 ①（失焦期帧数 0）仍以 §6 真机读数为准。
+6. [上抛·知会] **F5 的窗口尺寸口径**：`tool/perf --size 3840x2088` 未生效（仍 1011×754），本轮 A 的读数与 §2 基线不同窗口，真机复核归 §6。
+
+**改动文件（全部）**
+
+- 新增：`lib/chat/window_visible.dart` · `test/chat/window_visible_test.dart`
+- 修改：`lib/chat/chat_history_view.dart`（gate + `_setAnchored` / `_scheduleStickyUpdate` / `_itemsCame` / `_handoff` 四处收口）· `test/integration/chat_flows_test.dart`（抽出 `_open` / `_stream` / `_App` 夹具，新增 2-1 与 3-1）
+- 按裁定未动：`lib/chat/widgets/edge_fade_mask.dart` · `lib/chat/widgets/markdown_view.dart`
+
+**环境说明**：`flutter` 不在 PATH，统一走 `D:\baocode\build\flutter-3475\flutter\bin\flutter.bat`；本轮为取 F5 读数跑了一次 `flutter build windows --profile -t tool/perf/perf_app.dart`（130 s，产物在 `build/windows/x64/runner/Profile/`，未改任何源码）。
+
+**读数更正（同轮复量，以此处为准）**
+
+- 行数（`find /c /v ""` 实测）：`lib/chat/window_visible.dart` **57** · `test/chat/window_visible_test.dart` **351** · `test/integration/chat_flows_test.dart` **523** · `lib/chat/chat_history_view.dart` **3977**（上块写的「`:3973`」是交接修复前量的；现 +55，超设计 §5 ④ 的 ≤ +40 约 15 行）。
+- 工作树状态：本轮只新增 2 档、改 2 档；`docs/design/chat-raster-repaint.md` 与 `docs/requirements/chat-streaming.md` 的未提交改动是设计/父侧笔域的既有改动，本轮未触碰。
 
 ## §6 验证与收口（父代理）
