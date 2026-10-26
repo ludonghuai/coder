@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('T16: only the six approved files import the process host', () {
+  test('T16: only the seven approved files import the process host', () {
     final lib = Directory('lib');
     expect(lib.existsSync(), isTrue, reason: 'run from the repository root');
     final importing = <String>{};
@@ -22,10 +22,16 @@ void main() {
       'lib/kernel/thincoder/thincoder_process_io.dart',
       'lib/kernel/thincoder/thincoder_locator.dart',
       'lib/kernel/thincoder/thincoder_process.dart',
+      'lib/models/secret_store_io.dart',
       'lib/platform/process_host.dart',
       'lib/platform/process_host_io.dart',
       'lib/platform/process_host_stub.dart',
     });
+
+    // Importing the host does not mean every process goes through it:
+    // `lib/models/secret_store_io.dart` keeps one `chmod` (POSIX only, on a
+    // secret the user themselves kept), like the other upstream leaves.
+    // The scan below is the list of files that may create none at all.
 
     final direct = RegExp(r'\bProcess\.(?:start|run|runSync)\(');
     for (final path in const [

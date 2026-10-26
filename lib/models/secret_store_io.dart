@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:path/path.dart' as p;
 
 import '../platform/data_dir.dart';
+import '../platform/process_host.dart';
 import 'secret_store.dart';
 
 /// The system's keychain: the login keychain on macOS, the user's DPAPI
@@ -28,27 +29,75 @@ typedef SecretCommand = Future<ProcessResult> Function(
   String? input,
 });
 
+/// The default [SecretCommand]: the process the host starts, in its own
+/// isolate.
+///
+/// One PowerShell launch is some 460 ms on Windows, and every launch made
+/// on the window thread froze the window for that long — a storm of them
+/// every five minutes held it for six seconds (2026-10-26).
 Future<ProcessResult> _run(
   String executable,
   List<String> arguments, {
   String? input,
 }) async {
-  final process = await Process.start(executable, arguments);
-  // Leniently: what goes to stderr is not always UTF-8 (PowerShell's
-  // progress, in the system's code page on a Chinese Windows).
-  const decoder = Utf8Decoder(allowMalformed: true);
-  final stdout = process.stdout.transform(decoder).join();
-  final stderr = process.stderr.transform(decoder).join();
-  if (input != null) process.stdin.add(utf8.encode(input));
-  await process.stdin.close();
-  final code = await process.exitCode.timeout(
-    const Duration(seconds: 30),
-    onTimeout: () {
-      process.kill();
-      return -1;
-    },
-  );
-  return ProcessResult(process.pid, code, await stdout, await stderr);
+  try {
+    final process = await ProcessHost.start(ProcessSpec(executable, arguments));
+    // Leniently: what goes to stderr is not always UTF-8 (PowerShell's
+    // progress, in the system's code page on a Chinese Windows).
+    const decoder = Utf8Decoder(allowMalformed: true);
+    // Listened to from the start, an error carried into a value: one on a
+    // stream nothing is listening to yet would be reported as unhandled,
+    // and this store's failure is a [SecretStoreException].
+    var out = '';
+    var err = '';
+    Object? streamError;
+    final read = Future.wait<void>([
+      process.stdout
+          .transform(decoder)
+          .join()
+          .then<void>((text) {
+            out = text;
+          }, onError: (Object error) {
+            streamError = error;
+          }),
+      process.stderr
+          .transform(decoder)
+          .join()
+          .then<void>((text) {
+            err = text;
+          }, onError: (Object error) {
+            streamError = error;
+          }),
+    ]);
+    if (input != null) {
+      try {
+        process.write(utf8.encode(input));
+      } on StateError {
+        // Gone already: its exit code and stderr say why.
+      }
+    }
+    process.closeStdin();
+    final code = await process.exitCode.timeout(
+      const Duration(seconds: 30),
+      onTimeout: () {
+        process.kill();
+        return -1;
+      },
+    );
+    // A grace, not a wait: a process killed above may leave its pipes to a
+    // child, and the answer then is what came, with the exit code saying
+    // the rest.
+    await read.timeout(
+      const Duration(seconds: 5),
+      onTimeout: () => const <void>[],
+    );
+    if (streamError != null) {
+      throw SecretStoreException('The secret could not be reached: $streamError');
+    }
+    return ProcessResult(process.pid, code, out, err);
+  } on ProcessHostUnavailable catch (error) {
+    throw SecretStoreException('The secret could not be reached: $error');
+  }
 }
 
 /// The macOS login keychain, through `security`: generic passwords of
@@ -122,6 +171,20 @@ class DpapiSecretStore implements SecretStore {
   final String directory;
   final SecretCommand _command;
 
+  /// What each secret came to, per run: a decryption is a PowerShell
+  /// launch, and a secret is read as often as it is needed (the forge
+  /// reads its token on every request — some 120 launches in 36 seconds
+  /// every five minutes, measured 2026-10-26). One decryption each, then.
+  final Map<String, String> _values = {};
+
+  /// The secrets being decrypted right now: a second [read] of one waits
+  /// for that launch instead of starting another.
+  final Map<String, Future<String?>> _reading = {};
+
+  /// How many times each secret was changed here: a decryption that was
+  /// under way when it changed does not write its answer over the change.
+  final Map<String, int> _changed = {};
+
   /// No progress: PowerShell's first run of a session prepares its modules
   /// with a progress record on stderr.
   static const _prelude =
@@ -138,6 +201,27 @@ class DpapiSecretStore implements SecretStore {
 
   @override
   Future<String?> read(String id) async {
+    final kept = _values[id];
+    if (kept != null) return kept;
+    final pending = _reading[id];
+    if (pending != null) return pending;
+    final changed = _changed[id] ?? 0;
+    final reading = _decrypt(id);
+    _reading[id] = reading;
+    try {
+      final value = await reading;
+      // Kept only if the secret was not changed while it was being read:
+      // what its file holds now is not what this launch read.
+      if (value != null && (_changed[id] ?? 0) == changed) _values[id] = value;
+      return value;
+    } finally {
+      _reading.remove(id);
+    }
+  }
+
+  /// [id]'s secret out of its file: null when there is no file. A failure
+  /// is not remembered — the next [read] tries again.
+  Future<String?> _decrypt(String id) async {
     final file = _file(id);
     if (!file.existsSync()) return null;
     final result = await _powershell(
@@ -147,7 +231,13 @@ class DpapiSecretStore implements SecretStore {
       await file.readAsString(),
     );
     if (result.exitCode != 0) throw _failed('read', result);
-    return utf8.decode(base64.decode('${result.stdout}'.trim()));
+    try {
+      return utf8.decode(base64.decode('${result.stdout}'.trim()));
+    } on FormatException {
+      throw const SecretStoreException(
+        'The key could not be read: what is kept is not what this build wrote',
+      );
+    }
   }
 
   @override
@@ -162,10 +252,14 @@ class DpapiSecretStore implements SecretStore {
     final file = _file(id);
     await file.parent.create(recursive: true);
     await file.writeAsString('${result.stdout}'.trim(), flush: true);
+    _values[id] = value;
+    _changed[id] = (_changed[id] ?? 0) + 1;
   }
 
   @override
   Future<void> delete(String id) async {
+    _values.remove(id);
+    _changed[id] = (_changed[id] ?? 0) + 1;
     final file = _file(id);
     if (file.existsSync()) await file.delete();
   }
@@ -249,13 +343,21 @@ class FileSecretStore implements SecretStore {
     final folder = Directory(directory);
     if (!folder.existsSync()) {
       await folder.create(recursive: true);
-      await Process.run('chmod', ['700', directory]);
+      await _mode(directory, '700');
     }
     final file = _file(id);
     // Made empty and closed to others before the secret goes in.
     await file.writeAsString('');
-    await Process.run('chmod', ['600', file.path]);
+    await _mode(file.path, '600');
     await file.writeAsString(value, flush: true);
+  }
+
+  /// [path] to [mode], who may read it: 0700 a folder, 0600 a file.
+  /// Nothing on Windows, which has no chmod — nor this store
+  /// ([systemSecretStore]).
+  static Future<void> _mode(String path, String mode) async {
+    if (Platform.isWindows) return;
+    await Process.run('chmod', [mode, path]);
   }
 
   @override

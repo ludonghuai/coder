@@ -435,6 +435,25 @@ if (_connection != null || _transport != null) {
 1. **F5 结案口径已写进需求档**（我的笔域）：补「本批结论」段——两跑 1558 帧、`raster > 100 ms 的帧 = 0`（max 31.21 ms）⇒ 判据成立、**本批不改绘制代码**；340–350 ms 只在 GPU 争用时出现，属 F6 与批档 §1 记录的形状，不属 F5。
 2. **不再发新一轮设计评审**：v11 相对 v10 的语义增量只有「3-1 判据收窄」与「F5 结案」两条，且两条都是**按实测把错的判据改对**，方向与第 5 轮 pass 一致。为「把判据改成实测值」再发一轮评审，是把注意力花在没有分歧的地方。**此裁定与理由即记录。**
 
+### 追加条目：读密钥的 powershell 风暴（2026-10-26 07:35，实测锁定）
+
+**用户实报**：新构建（07:19 起）仍然「隔了 4 分钟左右还是卡了一下，6 s 钟」。
+
+**实读证据**（父侧，边跑边抓）：
+- `[stall]`：`07:24:19 gap 5664 ms` · `07:29:19 gap 5345 ms` · `07:34:21 gap 6740 ms` —— **间隔 299 / 300 秒**。
+- 挂起报告 `hang-20261026-072919-16708.txt`：窗口线程栈仍是 `ZwCreateUserProcess ← CreateProcessInternalW ← CreateProcessW ← app.so`。
+- **子进程监视器**（`.thincoder/tmp/watch-children.ps1`，250 ms 采样）在 `07:34:48.395 → 07:34:51.187` 抓到**约 20 个 `powershell.exe`**，命令行逐字为 DPAPI 解密脚本（`Add-Type -AssemblyName System.Security; $b = [Convert]::FromBase64String(…`）。
+
+**链条**：某 5 分钟周期的刷新 → 逐个读 API key → 每个 key 起一次 `powershell.exe` 做 DPAPI 解密（本机实测 **460 ms/次**）→ 20 次 ≈ 6–8 s，且每次 `CreateProcessW` 都落在窗口线程 ⇒ 用户感知的「每 5 分钟卡 6 秒」。
+
+**本条工作（A 案：直改，不走新一轮设计）**：
+1. **解密结果在内存缓存**（一次运行只解一次；写入时更新缓存）——**主因修法**，把 20 次 spawn 降到 ~2 次。
+2. `secret_store_io.dart` 的 `_run` 改走 `ProcessHost.run`（一次性调用面），即使必须起也不占窗口线程。
+3. 守门白名单（`no_window_thread_process_test.dart` 的允许集）加 `secret_store_io.dart`。
+4. 验收：重启后连续运行 ≥ 15 分钟，`[stall]` 无 > 500 ms 行、`logs/hangs/` 零新增。
+
+**为什么走 A**：这不是新机制，是 F8 的**同一要求漏了调用点**（需求 F8 原文即「进程创建不得阻塞窗口线程」，且已写明「`[stall]` 指向哪条再迁哪条」——现在指向了）。完整链会把「补漏」当成「设计」。
+
 ## §2 批次任务与设计（eng-designer）
 **状态行**：设计完成 2026-10-26（v11 · 轮 4 渲染面的设计面收口已落：F5 结案（实测 A 成立、不改代码）· F6 实现形状 · RTM 行 2-1 / 3-1 按实测 · §5 改 31 行）
 <§2 模板占位：本批条目（覆盖） / 设计档落点 / 机制设计 / 受影响文件与测试覆盖 / 验收对照 / 关键决策 / 上抛项>
@@ -1403,5 +1422,56 @@ VERDICT: pass
 **结论**：§2 定义的四个实施轮全部落地且可复核；代码面**无待改项**；本批剩余工作全部在父侧 §6（真机读数 + 收口门）。
 
 **自审与评审轮**：本次 spawn 无代码改动（`git status` clean、`git diff` 零源码），没有可审的 diff ⇒ 探索审计轮次 **0**、advisor 代码评审轮次 **0**，原因是无可审对象而不是跳过；终态 = **clean**（0 findings，无待修项）。
+
+### 修轮 · 读密钥的 powershell 风暴（A 案直改）· 2026-10-26
+
+**范围**：§1「追加条目：读密钥的 powershell 风暴（2026-10-26 07:35，实测锁定）」的四条 + 同块「A 案直改、不走新一轮设计」的定性。§2「实施分轮」的四轮早已落地（本段前四块 + 实施面终检），本轮只做这四条。
+
+**起点读数（动手前实测）**：`%APPDATA%\baocode\secrets` 只有 2 个文件（`forge.github.com.dpapi` · `forge.gitee.com.dpapi`）；子进程监视器日志 `%TEMP%\baocode-children.log` 记 `07:34:14.665 → 07:34:51.187` 之间约 120 次 `powershell.exe`（命令行逐字含 DPAPI 脚本），与三条 `[stall]`（间隔 299 / 300 秒）同期。
+
+**链条（本轮实读；修正 §1 的一处描述）**：`lib/forge/forge_api.dart:281` 每个请求取一次 token → `lib/forge/forge_accounts.dart:237` 每次 `token()` 都 `_secrets.read(...)` → `DpapiSecretStore` 每次都起一个 PowerShell 解密。**不是「20 个 key 各解一次」，而是 2 个 forge token 被读了约 60 次**（目录实有 2 个 `.dpapi`，单次 460–560 ms）。改后每次运行每个 id 只解一次。
+
+| # | 要求 | 落点 | 状态 |
+|---|---|---|---|
+| 1 | 解密结果内存缓存（一次运行只解一次；写入时更新） | `lib/models/secret_store_io.dart:174-186`（`_values` / `_reading` / `_changed`）· `:203-220` 读路径 · `:255-262` 写与删 | ✅ |
+| 2 | `_run` 不再在窗口线程起进程 | 同档 `:38-101`：改走 `ProcessHost.start` + stdin 写入 + `exitCode` 30 s 上限 | ✅（与字面的差异见下） |
+| 3 | 守门白名单加该档 | `test/platform/no_window_thread_process_test.dart:21-31`（七档）+ `:33-36` 豁免注释 | ✅ |
+| 4 | 验收：≥ 15 分钟连续运行，`[stall]` 无 > 500 ms、`logs/hangs/` 零新增 | 未取读数，归 §6（本批 06:25 / 07:20 同一先例） | ❌ |
+
+**验证读数（本轮实测，命令 + 结果）**
+
+- `flutter analyze --no-pub`（全仓）⇒ **No issues found**（5.7 s）。
+- `flutter test --no-pub test/models/models_test.dart test/platform/no_window_thread_process_test.dart test/forge/forge_test.dart test/stash/stash_forge_test.dart test/remote/ssh_passwords_test.dart test/settings/models_page_test.dart` ⇒ **+119 All tests passed**。
+- 缓存用例（`test/models/models_test.dart` 的 `the keychain` 组，四条）：已存的密文读两次只解一次（`:1219`）· 解密途中被删则不再复活（`:1258`）· 同时两读只起一次（`:1291`）· 解密失败不被记住（`:1338`）。
+- **红绿对照三对（不是「跑过就算」）**
+  - 去掉缓存赋值（解密结果不入 `_values`）⇒ `Expected: <1> Actual: <3>`（reason「decrypted once a run」）；恢复后绿。
+  - 去掉代际守卫（改为无条件入缓存）⇒ 删掉的密钥复活：`Expected: null Actual: 'sk-old'`；恢复后绿。
+  - 去掉并发合流（不看 `_reading`）⇒ `Expected: <1> Actual: <2>`（reason「read at once, launched once」）；恢复后绿。
+- **真机冷读探针**（临时档，取完即删）：真实 DPAPI 写 559 ms · 同实例第二次读 **0 ms** · 新实例冷读 **552 ms**（证明解密确实经代理 isolate 跑通，不是只回了内存）。
+- SDK：`D:\baocode\build\flutter-3475\flutter\bin\flutter.bat`（3.47.5 / Dart 3.13.4）。
+
+**与任务书 / 设计的差异（全部显式）**
+
+1. **第 2 条的字面是 `ProcessHost.run`，实交是 `ProcessHost.start`**：`HostedRun` 没有 stdin 面（`lib/platform/process_host.dart:108-112` 只有 `stdoutEncoding` / `stderrEncoding`），而 DPAPI 的 base64 载荷必须走 stdin（明文与密文都不进命令行）。`start` 同样经代理 isolate，`CreateProcessW` 不在窗口线程——「即使必须起也不占窗口线程」的实质达成；字面调用面未达成，请父侧裁「补 `HostedRun.input`」还是「改任务书措辞」。
+2. **额外改一处（同档，任务书未点名）**：`FileSecretStore.write` 的两处 `Process.run('chmod', …)` 收进 `_mode`，Windows 直接返回。原因：既有用例 `elsewhere, a file only the user reads` 在 Windows 上**改前就是红的**（`chmod` 不存在 ⇒ `ProcessException`），本轮把该档纳入验证面时撞上；POSIX 行为不变（同两条、同顺序、同忽略退出码）。
+3. **守门集合 6 → 7，设计档未同步（父侧笔域）**：设计 `docs/design/chat-raster-repaint.md` 的 `:71`（§3.1）· `:499`（§7 F8-C）· `:532`（§8 T16）仍写六档；§5 受影响文件表也没有 `lib/models/secret_store_io.dart` 行，迁移面「两处创建点」实为三处。代码按 07:35 的最新指令落地，文档面请父侧补。
+4. **`git fetch` 风暴仍在**（与本轮同源但不同路径）：监视器日志记 `07:30:48` · `07:33:54` · `07:37:00` 每轮约 30 个 `git.exe`（`git fetch --all --tags` / `status`），属设计 §3.1 明写「上游低频路径不迁、将来 `[stall]` 指向哪条再迁哪条」的那一类；`runGit` 的实现来自 `bao_remote` 包，**它是否在窗口线程创建进程本轮未核（`unverified`）**。若 §6 的 15 分钟读数仍有 `[stall]`，下一个嫌疑是它。
+5. **Linux 侧既有兜底被本轮扩了触发面**：`secret_store_io.dart:271` 的 `onError: (_) => false` 把任何 `_command` 失败读成「`secret-tool` 没装」，随后静默落到明文 `FileSecretStore`；改动后进程宿主故障也会走这条。既有代码、本轮未改，交父侧决定收窄还是明写接受。
+
+**自审与评审轮**
+
+- 探索审计 1 轮（只读子代理）：**AUDIT: findings**——🔴 0 · 🟡 4 · 🔵 3。处置：修 3（缓存代际守卫：写/删落在解密途中会复活死密钥；新增用例覆盖「冷读只解一次」这条真路径；`_run` 的流错误不再裸抛）。1 条 doc drift 上抛（第 3 条）。其余 🔵 记入本块与上抛。
+- advisor 代码评审 1 轮：**VERDICT: pass**（🔴 0 · 🟡 6 · 🔵 2，无 must-fix）。处置：修 4（流转发加 5 s 宽限，避免 `_reading` 被永久钉死；`FormatException` 映射成 `SecretStoreException`；守门测试补「白名单 ≠ 全部经宿主」的豁免注释；补「并发两读只起一次」与「失败可重试」两条用例）。2 条保留并上抛（`start` vs `run` 的字面差、Linux 兜底）。
+- 终态：**clean**（0 未决 🔴、0 未修 must-fix）。
+
+**上抛项（交主 agent 处置）**
+
+1. [上抛·待裁] **验收第 4 条未取读数**：15 分钟连续运行 + `[stall]` 无 > 500 ms + `logs/hangs/` 零新增，需要跑起来的应用；请按先例归 §6，与 F8-A/B/D/E 一起取。
+2. [上抛·待裁] **第 2 条的调用面**：实交 `ProcessHost.start`（理由见差异第 1 条）。要么给 `HostedRun` 补 `input`，要么把任务书那句改成「经 `ProcessHost` 的任一创建面」。
+3. [上抛·知会] **设计档漂移**：守门集合六 → 七（三处）+ §5 表缺 `lib/models/secret_store_io.dart` 行 + 迁移面两处 → 三处。
+4. [上抛·知会] **`git fetch` 风暴的读数与归属**（见差异第 4 条）；`runGit` 在哪个 isolate 起进程 = `unverified`。
+5. [上抛·知会] **Linux 明文兜底**（见差异第 5 条）。
+
+**改动文件（全部）**：修改 `lib/models/secret_store_io.dart`（+79 / −22 行内计）· `test/platform/no_window_thread_process_test.dart`（白名单七档 + 6 行注释）· `test/models/models_test.dart`（四条 DPAPI 用例 + `dart:async` import）。临时档 `test/models/tmp_dpapi_live_test.dart` 已删（`git status` 里没有它）。
 
 ## §6 验证与收口（父代理）

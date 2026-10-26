@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -1213,6 +1214,137 @@ void main() {
 
       exitCode = 1;
       expect(store.read('provider.gw'), throwsA(isA<SecretStoreException>()));
+    });
+
+    test('Windows: a secret already kept is decrypted once a run', () async {
+      final folder = Directory.systemTemp.createTempSync('dpapi-');
+      addTearDown(() => folder.deleteSync(recursive: true));
+      final file = File('${folder.path}/s/forge.github.com.dpapi');
+      file.parent.createSync(recursive: true);
+      file.writeAsStringSync('cipher');
+      var calls = 0;
+      var answer = base64.encode(utf8.encode('sk-1'));
+      final store = DpapiSecretStore(
+        '${folder.path}/s',
+        run: (executable, arguments, {input}) async {
+          calls++;
+          expect(executable, 'powershell.exe');
+          expect(arguments.join(' '), contains('System.Security'));
+          return ProcessResult(0, 0, answer, '');
+        },
+      );
+
+      // Kept already: one launch to decrypt, then memory answers.
+      expect(await store.read('forge.github.com'), 'sk-1');
+      expect(calls, 1);
+      expect(await store.read('forge.github.com'), 'sk-1');
+      expect(await store.read('forge.github.com'), 'sk-1');
+      expect(calls, 1, reason: 'decrypted once a run');
+
+      // Kept anew: what is kept is in memory at once, not read back.
+      answer = base64.encode(utf8.encode('sk-2'));
+      await store.write('forge.github.com', 'sk-2');
+      expect(calls, 2);
+      expect(await store.read('forge.github.com'), 'sk-2');
+      expect(calls, 2, reason: 'written, so not decrypted');
+
+      // Removed: the file goes, and so does what was remembered.
+      await store.delete('forge.github.com');
+      expect(file.existsSync(), isFalse);
+      expect(await store.read('forge.github.com'), isNull);
+      expect(calls, 2);
+    });
+
+    test('Windows: a secret removed while it is being decrypted stays '
+        'removed', () async {
+      final folder = Directory.systemTemp.createTempSync('dpapi-');
+      addTearDown(() => folder.deleteSync(recursive: true));
+      final file = File('${folder.path}/s/forge.github.com.dpapi');
+      file.parent.createSync(recursive: true);
+      file.writeAsStringSync('cipher');
+      final started = Completer<void>();
+      final release = Completer<void>();
+      var calls = 0;
+      final store = DpapiSecretStore(
+        '${folder.path}/s',
+        run: (executable, arguments, {input}) async {
+          calls++;
+          started.complete();
+          await release.future;
+          return ProcessResult(0, 0, base64.encode(utf8.encode('sk-old')), '');
+        },
+      );
+
+      final reading = store.read('forge.github.com');
+      // Under way: its file is read already, the launch is what is left.
+      await started.future;
+      await store.delete('forge.github.com');
+      release.complete();
+
+      // The request that started first gets its answer; the secret it read
+      // is not kept, so it does not come back.
+      expect(await reading, 'sk-old');
+      expect(await store.read('forge.github.com'), isNull);
+      expect(calls, 1, reason: 'nothing kept of a secret that went');
+    });
+
+    test('Windows: two reads of one secret at once launch one PowerShell',
+        () async {
+      final folder = Directory.systemTemp.createTempSync('dpapi-');
+      addTearDown(() => folder.deleteSync(recursive: true));
+      final file = File('${folder.path}/s/forge.github.com.dpapi');
+      file.parent.createSync(recursive: true);
+      file.writeAsStringSync('cipher');
+      final started = Completer<void>();
+      final release = Completer<void>();
+      var calls = 0;
+      final store = DpapiSecretStore(
+        '${folder.path}/s',
+        run: (executable, arguments, {input}) async {
+          calls++;
+          if (!started.isCompleted) started.complete();
+          await release.future;
+          return ProcessResult(0, 0, base64.encode(utf8.encode('sk-1')), '');
+        },
+      );
+
+      final first = store.read('forge.github.com');
+      await started.future;
+      final second = store.read('forge.github.com');
+      release.complete();
+
+      // Both are answered by the one launch: the tokens are read per
+      // request, which is where the storm came from.
+      expect(await first, 'sk-1');
+      expect(await second, 'sk-1');
+      expect(calls, 1, reason: 'read at once, launched once');
+    });
+
+    test('Windows: a decryption that failed is tried again', () async {
+      final folder = Directory.systemTemp.createTempSync('dpapi-');
+      addTearDown(() => folder.deleteSync(recursive: true));
+      final file = File('${folder.path}/s/forge.github.com.dpapi');
+      file.parent.createSync(recursive: true);
+      file.writeAsStringSync('cipher');
+      var calls = 0;
+      var failing = true;
+      final store = DpapiSecretStore(
+        '${folder.path}/s',
+        run: (executable, arguments, {input}) async {
+          calls++;
+          if (failing) return ProcessResult(0, 1, '', 'nope');
+          return ProcessResult(0, 0, base64.encode(utf8.encode('sk-1')), '');
+        },
+      );
+
+      await expectLater(
+        store.read('forge.github.com'),
+        throwsA(isA<SecretStoreException>()),
+      );
+      // Not kept as "no secret": the next read asks again.
+      failing = false;
+      expect(await store.read('forge.github.com'), 'sk-1');
+      expect(calls, 2);
     });
 
     test('elsewhere, a file only the user reads', () async {
