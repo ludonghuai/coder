@@ -2634,9 +2634,14 @@ class IdeEditorState extends State<IdeEditor> {
     WorkbenchColors colors, {
     DiffEditorSide? side,
     ({List<EditorViewZone> zones, List<EditorDecoration> decorations})? agent,
-  }) => EditorSurface(
-    key: _surfaceKey,
-    controller: _nativeController!,
+  }) {
+    // A diff's modified side is built from a callback that outlives the
+    // controller a closing document dropped: nothing to draw, not a crash.
+    final controller = _nativeController;
+    if (controller == null) return const SizedBox.expand();
+    return EditorSurface(
+      key: _surfaceKey,
+      controller: controller,
     focusNode: _focusNode,
     readOnly: widget.active.readOnly,
     // A diff's sides keep their lines aligned unwrapped.
@@ -2650,7 +2655,7 @@ class IdeEditorState extends State<IdeEditor> {
       ...?side?.decorations,
       ...?agent?.decorations,
       ...?_language?.decorations,
-      ..._snippetDecorations(_nativeController!, colors),
+      ..._snippetDecorations(controller, colors),
       ..._findDecorations,
       ..._blameDecorations(colors),
       ..._debugDecorations(),
@@ -2674,7 +2679,8 @@ class IdeEditorState extends State<IdeEditor> {
     lineAnnotations: side == null ? _lineAnnotations(colors) : null,
     contentCursor: _language?.link == null ? null : SystemMouseCursors.click,
     style: _editorStyle(colors),
-  );
+    );
+  }
 
   /// [_blame]'s lines, each after its end (`GitBlameEditorDecoration`).
   List<EditorDecoration> _blameDecorations(WorkbenchColors colors) {

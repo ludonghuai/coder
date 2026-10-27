@@ -42,6 +42,11 @@ class SessionModelPicker extends StatelessWidget {
   final Object? tapRegionGroupId;
   final FocusNode? focusNode;
 
+  /// The name of the model [id], among [options]: the id itself when the
+  /// agent no longer lists it.
+  String _nameOf(String id, List<KernelOption> options) =>
+      options.where((option) => option.id == id).firstOrNull?.label ?? id;
+
   /// The model with its settings, e.g. "Opus · 1M · High": the context
   /// only when it is not the standard one; its upstream before it only
   /// when another upstream has a model of its name.
@@ -121,11 +126,16 @@ class SessionModelPicker extends StatelessWidget {
         onTap: () => unawaited(showModelWelcome(context)),
       );
     }
+    final pending = session.pendingModel;
+    final waiting = pending == null ? null : _nameOf(pending, model.options);
     return ComposerPicker(
       key: pickerKey,
       options: model.options,
       selected: model.selected,
-      label: _label(model.selected, model.options),
+      label: [
+        _label(model.selected, model.options),
+        if (waiting != null) l10n.modelsSwitchPending(waiting),
+      ].join(' · '),
       // Each its name alone, one line; its maker's logo and its upstream's
       // heading tell the rest.
       describes: false,
@@ -142,7 +152,9 @@ class SessionModelPicker extends StatelessWidget {
           ),
         ?_resumeAfterLimit(context, option.id),
       ],
-      tooltip: tooltip,
+      tooltip: waiting == null
+          ? tooltip
+          : [?tooltip, l10n.modelsSwitchPending(waiting)].join(' · '),
       menuWidth: 260,
       searchPlaceholder: l10n.modelsSearch,
       // thincoder 的模型归 CLI 自己的配置管：provider 一长串，打开时先收起，

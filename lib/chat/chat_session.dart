@@ -266,6 +266,11 @@ class ChatSession extends ChangeNotifier
           const Duration(milliseconds: 400),
           () => unawaited(review.observe(full: false)),
         );
+      // The files went back on disk: the list has to follow now, not on the
+      // next unrelated refresh.
+      case ChangesReverted():
+        _lookTimer?.cancel();
+        unawaited(review.observe());
       default:
     }
   }
