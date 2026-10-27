@@ -77,6 +77,40 @@
 
 **④ 4919 行测试档拆分建议**：**采纳，入台账**（另批，不阻塞本批）。
 
+### 实施前置（主 agent，2026-10-26 23:40）— 两件文档活，先于代码
+
+用户 23:22「好，怎么做」⇒ 顺序确定为：**文档前置 → 复核评审 → 实施 → 另批删 autofetch → 进 main**。
+
+**本轮的文档任务（不涉代码，实施前必须完成）**
+
+1. **#187 · `docs/design/host-tool-channel.md` 三行**：`:260` 的 `class HostTool {`（A 案后该类不再定义于自有档）、`:61` 与 `:415` 把正名记成 `ClaudeSdkTool(s)→HostTool(s)`。改法 = 按 A 案改后的事实重述：`ClaudeSdkTool` 定义在上游档，`HostTool` 是自有档里的别名。
+2. **#189 · `docs/design/fork-deltas.md` 登记表整顿**（按 kimi 复核版，**不是**主审的「补 12 行」）：
+   - **删 1 行**：`:29` 的 `test/ide/git/scm_fetch_button_test.dart`（该档已 `git rm`）。
+   - **补 4 行**：`lib/host_tools/host_mcp_server.dart`（自有资产，group/picturesOnly 消费在 `:238-246`/`:281-284`）· `lib/browser/browser_actions.dart` 的 `picturesOnly: true`（`:105`）· `lib/images/image_tools.dart` 的 `group: 'images'`（`:66`）· **`lib/ide/git/git_repository.dart:871-875` 空仓构建期修复**（下次整档取上游会丢，须登记）。
+   - **不补**：`git_settings.dart` / `git_autofetch*.dart` / `git_pull.dart`（随 #184 删除，先登记再删无收益）。
+   - **文案**：`:83` 的「八档」→ 实际七档。
+
+**边界**：只改这两档；不改 `fork-deltas.md` §7（已过审的设计主体）；不动代码；改完自跑 `doc_check(gate)` 须 PASS。
+
+### 第 0 步未完成的三件（主 agent 核盘，2026-10-27 00:00）
+
+上一轮（#21）报告称「四项裁决已落地」，父侧逐条核盘结果：
+
+| 应有 | 盘上实况 |
+|---|---|
+| #189 补 `browser_actions` 行 | ✅ 已有（`fork-deltas.md:58`） |
+| #189 补 `image_tools` 行 | ✅ 已有（`:65`） |
+| #189 补 `host_mcp_server` 行 | ❓ 未见独立行（仅在其他句子里出现） |
+| #189 补 `git_repository.dart:871-875` 行 | ❌ **缺**（全文无 `git_repository` 命中） |
+| #189 删 `scm_fetch_button_test.dart` 死行 | ❌ **仍在**（`:30`） |
+| #187 改 `host-tool-channel.md` 三行 | ❌ **原样未动**（`:61` / `:260` / `:415` 仍是旧表述） |
+
+**本轮只做这四件，别的一律不碰**（不重写 §7、不动 §2 其他段、不碰代码）：
+1. `fork-deltas.md` 删 `:30` 的 `scm_fetch_button_test.dart` 行。
+2. `fork-deltas.md` §2 或 §3 补一行 `lib/host_tools/host_mcp_server.dart`（自有资产；group/picturesOnly 消费在 `:238-246` / `:281-284`）。
+3. `fork-deltas.md` §3 补一行 `lib/ide/git/git_repository.dart:871-875`（空仓构建期修复 `scheduleMicrotask(_notify)`；不登记则下次整档取上游会再丢一次）。
+4. `host-tool-channel.md` 三行按 A 案改后事实重述：`ClaudeSdkTool` 定义在上游 `lib/kernel/claude_code/claude_sdk_tools.dart`，`HostTool` 是自有 `lib/host_tools/host_tools.dart` 里的别名；`:415` 的 D2 决策行同步。
+
 ## §2 批次任务与设计（eng-designer）
 **状态行**：设计完成
 <§2 模板占位：本批条目（覆盖） / 设计档落点 / 机制设计 / 受影响文件与测试覆盖 / 验收对照 / 关键决策 / 上抛项>
@@ -156,6 +190,64 @@
 - 本人引入的一处坏字符（`` `:`14`–`:98` `` 多一个反引号）已在同轮修正。
 
 **交付门**：`doc_check(mode:"gate")` 对 `docs/design/fork-deltas.md` = **PASS**（首跑 REFUSED 3 段过长，同轮拆段后复跑 PASS）。
+
+### 2.9 §1 上抛裁决（2026-10-26 23:20）的落点
+
+父侧 23:20 对 §2.7 的三项与一项知会作出裁决。本轮改动面仍 = `docs/design/fork-deltas.md` + 本档 §2，代码零改动。
+
+| 项 | 裁决 | 落点（本轮已落） |
+|---|---|---|
+| ① 失败阈值口径 | 按实测 `+7107 ~31 −128` 判，不承诺 −119 | 无需改：`docs/design/fork-deltas.md` §7.5 与 §2.5 都已写「失败 ≤ 128 且通过 ≥ 7107」，来源写明父侧全量实跑 333 s |
+| ② `host-tool-channel.md` 3 行 | 另起一轮改写，不塞进本批 | `docs/design/fork-deltas.md` §7.8 的 open 项改为「这 3 行的改写在单独一轮落地，不在本批改动面：本批不碰该档；该轮落地后本条撤除」。台账 #187（条件触发，复启句 = 「#186 实施前完成」）⇒ 本批实施须等该轮落地 |
+| ③ `claude_code_translator.dart:962` 对象模式 | 知会，采纳 | 已在 §7.7 边界：本批不改，复原属下一次精修 |
+| ④ 4919 行测试档拆分 | 采纳，入台账 | 已在 §7.3 末句「本批零改动，拆分按后续拆分批处理」；台账 #188（认账不排期） |
+
+§2.7 的 [上抛·待裁] 项由本条收口。§2 是 append-only，原行按原样保留。
+
+**同轮读数**（本轮实测，非沿用）：
+
+- `docs/design/host-tool-channel.md` 的 `HostTool` 命中：**26 行 / 32 处**，与 §7.8 记的数一致。
+- 3 行的坐标逐条读过：`:260` = `class HostTool {`；`:61` = 「注册面正名（`ClaudeSdkTool(s)` → `HostTool(s)`，文件迁 `lib/host_tools/`）」；`:415` = D2 决策行「注册面正名 `HostTools` / `HostTool` / `HostToolCall`」。
+- 台账两行在盘：#187（`resume_when` = 「#186 实施前完成（否则实施后该档记录与代码相反）」）· #188（认账不排期）。
+
+**交付门**：`doc_check(mode:"gate")` 对 `docs/design/fork-deltas.md` = `DOC-CHECK GATE: PASS`（0 段过长）。
+
+### 2.10 文档前置轮（§1 23:40 两件文档活，2026-10-26）
+
+改动面 = `docs/design/host-tool-channel.md` 3 行 + `docs/design/fork-deltas.md` 登记表；代码零改动。§2.8 / §2.9 已落的整改不重述。
+
+**#187 · `host-tool-channel.md` 3 行按 A 案改后事实重述**
+
+| 位置 | 改后形态 |
+|---|---|
+| §2.2 偏离第 2 条 | 注册表 `HostTools` 与 `HostTool` / `HostToolCall` 两 typedef 在 `lib/host_tools/`；类型类名保留上游原名，定义在 `lib/kernel/claude_code/claude_sdk_tools.dart` |
+| §4.7 注册面代码块 | 类头改 `class ClaudeSdkTool`（注明所属上游档，只加末两字段）；块尾加自有档两行 typedef |
+| §8 D2 | 决策改「注册面留自有档」；理由写搬注册表与搬类型名各自的合并代价 |
+
+D2 原句末的「**提交拆分**：改名先以独立提交落地…」同轮删除：该改名方向本批回退，句子所指的提交拆分已无对象，按「失效表述删除、不留痕迹」处理。
+
+**#189 · `fork-deltas.md` 登记表整顿（§1 23:40 第 2 件）**
+
+| # | 项 | 处置 | 读数（本轮实测） |
+|---|---|---|---|
+| 1 | `scm_fetch_button_test.dart` | 第 2 节该行改为只留 `test/ide/git/git_autofetch_test.dart` | `test/ide/git/` 下无该档；`git_autofetch_test.dart` 在盘 |
+| 2 | `lib/host_tools/host_mcp_server.dart` | 第 2 节新增行（自有资产） | `_offered` `:281-285` · `tools/list` 记组 `:246` · `tools/call` 拒组外 `:259-266` 三处读过 |
+| 3 | `lib/ide/git/git_repository.dart` | 第 3 节新增行：空仓 / 未出生分支经 `scheduleMicrotask(_notify)` 通知，预算净增 ≤5 行 | `:871-875` = 4 行注释 + 1 行代码 |
+| 4 | `browser_actions.dart` 的 `picturesOnly: true` | 已在盘：第 3 节该行早已登记 `:105`，不重复加行 | `:105` = `picturesOnly: true,` |
+| 5 | `image_tools.dart` 的 `group: 'images'` | 已在盘：第 3 节该行早已登记 `:66` 与 `HostTools.unregister` `:46` / `register` `:48` | `:66` = `group: 'images',`；`:58` 今用 `HostTool(` 构造 |
+| 6 | 「八档」→ 七档 | 第 6 节 `lib/chat/session/**` 行的档数改为七 | `lib/chat/session/` 实列 7 档：file_edits / kernel_proxy / lifecycle / mode_state / overlay / send_contexts / transcript_proxy |
+
+§1 写的「补 4 行」实测 = 2 行新登记 + 2 行已在盘（第 4、5 项）：按坐标核过后不重复登记。
+
+**连带一致性修正（越过「不改 §7」边界，请父侧确认）**：`fork-deltas.md` §7.8 的 open 项原文称这 3 行「本批后与现状相反」、「改写另有单独一轮、本批不碰该档」。§1 23:40 把 #187 划入本轮，改完后该表述与两档现状相反 ⇒ 改写为「关联档已对齐…本节无 open 项」。这是 §7 内唯一改动，只动定位陈述，不动设计语义。
+
+**验收 / RTM**：本轮纯文档、无业务可观察结果变化，`fork-deltas.md` §7.9 的 RTM delta = none 不变；不新增集成用例，测试档零改动。
+
+**交付门**：`doc_check(mode:"gate")` 对两档 = `DOC-CHECK GATE: PASS`（0 段过长）。首跑 REFUSED 1 段：`host-tool-channel.md:313` 的「grant 的会话键」段属存量、非本轮改动行；按同轮修正纪律拆成两段，文字零改动，复跑 PASS。
+
+**上抛项**
+
+- [上抛·待裁] `docs/requirements/host-tool-channel.md:13` 仍写「浏览器工具是 `HostTool`…（`lib/host_tools/host_tools.dart`；原 `ClaudeSdkTool(s)`，A 轮改名）」。本批后类名回上游、`HostTool` 只是自有档别名，该括号在实施后与代码相反。需求档改笔在主 agent，本席只报不改。建议改为：类型 = 上游 `ClaudeSdkTool`（`lib/kernel/claude_code/claude_sdk_tools.dart`），自有档以 `typedef HostTool` 提供别名，注册表 `HostTools` 在自有档。
 
 ## §3 设计评审（评审子代理）
 

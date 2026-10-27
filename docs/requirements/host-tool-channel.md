@@ -10,7 +10,7 @@
 
 ## 2. 事实基线（已读）
 
-- 宿主工具现状：浏览器工具是 `HostTool`，注册进 `HostTools`（`lib/host_tools/host_tools.dart`；原 `ClaudeSdkTool(s)`，A 轮改名）；只有 Claude 内核把 SDK MCP server 交给 CLI（`lib/kernel/claude_code/claude_code_kernel.dart:512-516`、`:553`；`claude_code_transport.dart:249-282`）。
+- 宿主工具现状：浏览器工具的类型是上游 `ClaudeSdkTool`（`lib/kernel/claude_code/claude_sdk_tools.dart`，本仓为它加了 `group` 与 `picturesOnly` 两个字段），注册进 `HostTools`（自有档 `lib/host_tools/host_tools.dart`，以 `typedef HostTool = ClaudeSdkTool` 提供别名）；只有 Claude 内核把 SDK MCP server 交给 CLI（`lib/kernel/claude_code/claude_code_kernel.dart:512-516`、`:553`；`claude_code_transport.dart:249-282`）。
 - thincoder 侧：`session/new` 只发空 `mcpServers`（`lib/kernel/thincoder/thincoder_kernel.dart:321-325`）；CLI 忽略非空 `mcpServers`——`thincoder/thincoder-cli/src/acp/handlers-session.mjs:266-267` 明写「MCP forwarding is M2 scope」。
 - ACP 面：工具调用可由内核发起，标准反向请求只有 `fs/*` 与 `session/request_permission`（另有扩展族 `checkpoint/*`、`memory/*`、`ledger/*`、`batch/*`，见 `docs/requirements/thincoder-adapter.md` §2.2）；没有通用的「客户端工具声明」通道。
 - 浏览器边界不变：只碰黄色「BaoCode」分组的标签页（`browser_extension/background.js:20-22`、`:361-393`），扩展 ID 白名单（`lib/browser/browser_bridge.dart:32`），`browser.enabled` 开关（`:41`、`:88-100`）。

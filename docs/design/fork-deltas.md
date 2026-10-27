@@ -25,9 +25,10 @@
 | `lib/chat/session/**` | ChatSession overlay 与独立 helper | 内核适配 | `chat_session_overlay.dart` | 自有 |
 | `lib/chat/chat_session_overlay.dart` | choice 数据、通用 overlay host 与完整生命周期 / 状态投影契约 | 内核适配 | `ChatSession` 构造及生命周期钩 | 自有 |
 | `lib/host_tools/host_tools.dart` | 跨内核宿主工具注册与调用通道；`HostTool` / `HostToolCall` 两个 typedef 与上游符号 re-export | 功能 | `HostTool` / `HostToolCall` / `HostTools` / MCP | 自有 |
+| `lib/host_tools/host_mcp_server.dart` | 环回 Streamable HTTP MCP 端点：按 `group` 分组暴露，`picturesOnly` 与组外工具一律不出（`_offered` `:281-285`、`tools/list` 记组 `:246`、`tools/call` 拒组外 `:259-266`） | 功能 | `HostTools` 注册表；ACP `mcpServers` 面 | 自有 |
 | `lib/chat/editor_context.dart` | editor context 数据形与提示词渲染 | 内核适配 | overlay 发送与 `KernelTurn.contexts` | 自有 |
 | `test/kernel/thincoder*_test.dart`、`test/diagnostics/**` | 自有内核与诊断断言 | 功能 | 对应独立模块 | 自有 |
-| `test/ide/git/scm_fetch_button_test.dart`、`git_autofetch_test.dart` | 自有 SCM 断言，独立于上游测试 | 功能 | SCM 公共入口；#181 未裁定 | 自有 |
+| `test/ide/git/git_autofetch_test.dart` | 自有 SCM 断言，独立于上游测试 | 功能 | SCM 公共入口；#181 未裁定 | 自有 |
 | `test/RTM.md`、`test/integration/**` | 本仓业务集成索引与用例 | 功能 | 用户入口与业务可观察结果 | 自有；50–100 行用例窗 |
 
 ## 3 共享上游文件的登记接缝
@@ -63,6 +64,7 @@
 | `lib/browser/browser_sources.dart` | 无自有块：3 个构造点用上游原名 | 内核适配 | `ClaudeSdkTool` / `ClaudeSdkCall` | 结构不变（净 0） |
 | `lib/browser/browser_watch.dart` | 无自有块：1 个构造点用上游原名 | 内核适配 | `ClaudeSdkTool` / `ClaudeSdkCall` | 结构不变（净 0） |
 | `lib/images/image_tools.dart` | `group: 'images'` + 注册接线（`HostTools.unregister` `:46` / `register` `:48`） | 功能 | `HostTools` 注册表；MCP 面按组暴露 | 净增 ≤1 行（第二根 import） |
+| `lib/ide/git/git_repository.dart` | 空仓与未出生分支：图加载的无 await 早退路径上经 `scheduleMicrotask(_notify)` 通知（`:871-875`），避开 build 期 `setState` | 修 bug | `GitRepository` 图加载 getter 的监听者 | 净增 ≤5 行 |
 
 ## 4 本批冻结的共享文件
 
@@ -90,7 +92,7 @@
 
 | 断点面 | 登记位置 | 重接轮与处置 |
 |---|---|---|
-| `lib/chat/session/**` 八档与 `chat_session.dart` 宿主接缝 | 第 2 节 session glob / overlay 契约；第 3 节 `chat_session.dart` | R1 改为独立 library；两档重复 helper 删除，其余只留自有语义 |
+| `lib/chat/session/**` 七档与 `chat_session.dart` 宿主接缝 | 第 2 节 session glob / overlay 契约；第 3 节 `chat_session.dart` | R1 改为独立 library；两档重复 helper 删除，其余只留自有语义 |
 | `composer_view.dart`、`composer_editing.dart`、`btest_status_switches.dart` 与其它 session 消费方 | 第 2 节 btest glob；第 3 节 composer / session 接缝 | R1 恢复既有公共契约，消费方零改动；第 4 节继续冻结 UI |
 | `browser_tools.dart` | 第 3 节 browser_tools 行 | R2 只修父库 import、注册与调用包装 |
 | `browser_actions.dart`、`browser_debug_tools.dart` | 第 4 节冻结行；经 browser_tools 父库装配 | R2 零改动；不得为消错回退或另写一套工具实现 |
@@ -202,11 +204,7 @@
 
 无界面变化：本批改类型名、导入与两字段的位置，工具描述与返回形状不动。
 
-open 项：`docs/design/host-tool-channel.md` 的 `HostTool` 表述已逐条读过（26 行、32 处命中），其中 3 行在本批后与现状相反。
-
-`:260` 以 `class HostTool {` 写出类型 —— 本批后 `HostTool` 是 `ClaudeSdkTool` 的 typedef，类在 `lib/kernel/claude_code/claude_sdk_tools.dart`。`:61` 与 `:415` 把注册面正名记成 `ClaudeSdkTool(s)` → `HostTool(s)` —— 本批后类名回上游，只有注册表与别名留在自有档。
-
-其余 23 行是 `HostTools` 注册表名、`HostToolCall` 与别名类型引用，本批后仍成立。这 3 行要按现状改写（旧句删除、不留改写痕迹）；该档不在本轮改动面内，登记在此以免实施时遗漏。
+关联档已对齐：`docs/design/host-tool-channel.md` 的 `HostTool` 表述共 26 行、32 处命中，逐条读过；与改后形态相反的 3 行（§4.7 的注册面代码块、§2.2 偏离第 2 条、§8 的 D2）已按 A 案改后形态重写，其余 23 行（注册表名与别名类型引用）本批后仍成立。本节无 open 项。
 
 ### 7.9 集成测试设计（RTM delta）
 
