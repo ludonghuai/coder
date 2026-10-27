@@ -179,63 +179,15 @@
 - **对外暴露**：`ChatComposer` · `ChatComposerState` · `ComposerPermissionSwitch`。调用方 = `lib/chat/chat_screen.dart:35` · `lib/chat/chat_history_view.dart:27` · `test/composer_test.dart` · `test/kernel_ui_test.dart`。
 - **风险**：State 方法体里 `setState` / `context` / `widget` / `mounted` 改成 `state.setState` 等，指向同一对象，行为不变；`build` 仍在 State 内，子树与重建时机不变。
 
-### 4.4 chat_session（1492 → ≤800）
+### 4.4 chat_session（独立 overlay 模块）
 
-现状：自由类 `:30-105` · `ChatSession` `:106-1490`（约 1385 行）。
+当前结构以 `docs/design/thincoder-adapter.md` §29 为准：`ChatSession` 保持上游会话实现，自有行为位于可独立 import 的 `lib/chat/session/**`，通过 `lib/chat/chat_session_overlay.dart` 的 host 与生命周期契约接入。
 
-| # | 段 | 搬什么符号（点名） | 现坐标 | 搬出 | 新档（估） |
-|---|---|---|---|---|---|
-| 1 | 模式与设置投影（SPLIT-3） | `KernelChoice` `ModelSettingChoice` + `kernelLocked` `_kernelOptions` `kernelChoice` `setKernel` `_readSwitch` `models` `switchRestarts` `pendingModel` `_btestId` `_btestOption` `modes` `permissions` `modelSettings` `_modelSettings`（字段，留 owner） `selected` `_choice` | `:52-105` `:497-658` | ≈210 | `lib/chat/session/mode_state.dart` ≈220 |
-| 2 | 内核能力投影 | `health` `loadingHistory` `hasEarlierHistory` `loadingEarlier` `loadEarlier` `sessionId` `stopped` `restart` + `commands` `suggestFiles` `context` `stats` `refreshUsage` `usageLimitResetsAt` `usageLimitApplies` `continuesAfterLimit` `acceptsImages` `acceptsEditorContext` `promptSuggestion` `mcpServers` `refreshMcpServers` `setMcpServerEnabled` `reconnectMcpServer` `authenticateMcpServer` `canEditMessages` `canQueue` `canRename` `renameConfirmed` `ownsTitle` `pendingTitle` `canFork` `fork` | `:433-472` `:659-811` | ≈230 | `lib/chat/session/kernel_proxy.dart` ≈240 |
-| 3 | 转写投影 | `isStreaming` `isUnprompted` `canSend` `pendingInteraction` `awaitingPlan` `canStartPlan` `startPlan` `lastTurnEndSeq` `lastReply` `lastTurnInterrupted` `lastTurnUnprompted` `itemCount` `itemAt` `_statusVisible` `tasks` `terminalTasks` `stopTask` `canStopTasks` `moveToBackgroundAt` `moveToBackgroundOf` `commandOf` `stopAt` `stopOf` `_runningTask`（字段，留 owner） `todos` `goal` `_dismissedGoal`（字段，留 owner） `dismissGoal` `setGoal` `clearGoal` | `:812-1079` | ≈240 | `lib/chat/session/transcript_proxy.dart` ≈250 |
-| 4 | 文件改动与回退投影 | `root` `fileChanges` `filesSeen` `_filesSeen`（字段，留 owner） `_pendingEdits`（私有 getter，留 owner） `keepAllChanges` `keepChanges` `undoAllChanges` `revertTurn` `canPlanRevert` `plansReverts` `revertPlan` `applyRevert` `undoChanges` `originalOf` | `:1080-1244` | ≈133 | `lib/chat/session/file_edits.dart` ≈143 |
-| 5 | 路径助手 | `paths` `_absolute` | `:1132-1148` | ≈17 | `lib/chat/session/file_paths.dart` ≈25 |
-| 6 | 发送上下文助手 | `lastImageNumber` `_editorNotes` `_contexts` | `:1250-1269` `:1286-1295` `:1297-1307` | ≈41 | `lib/chat/session/send_contexts.dart` ≈50 |
-| 7 | 会话命令 | `stop` `answer` `rename` `discardChanges` | `:1452-1475` | ≈21 | `lib/chat/session/session_commands.dart` ≈30 |
-| 8 | 内核连接与视图挂载 | `_connect` `_dropWarm` `attach` `detach` | `:232-241` `:250-255` `:476-493` | ≈33 | `lib/chat/session/lifecycle.dart` ≈42 |
-
-- 八个新档首行 `part of '../chat_session.dart';`（§3.3）；`lib/chat/session/` 为 chat_session 的专属子目录。
-- 「搬出」为指示值（按点名方法与坐标区间估）；坐标只用于定位，不参与加总；判据以行数门为准（主档 ≤800、新档 ≤500）。
-- **委托行数口径（按 kernel 实测）**：kernel 53 个成员 ⇒ 113 行委托（≈2.13 行/成员）；chat_session 点名 **101** 个成员（第 1–8 段：15 / 31 / 29 / 13 / 2 / 3 / 4 / 4；字段与留 owner 的私有 getter 不计）⇒ **≈215 行委托**。
-- **搬出合计**：210 + 230 + 240 + 133 + 17 + 41 + 21 + 33 = **925**。
-- **算式**：1492 − 925 + 215 = **≈782 ≤ 800，余量 ≈18**。
-- **旧四段口径为什么不达标**：90 成员按旧假设 ≈190 行 ⇒ 1492 − 830 + 190 = **852 > 800**（超 ≈52）——kernel 实测 53 成员 → 113 行，一成员一行的假设被推翻。
-- **段 5 不产生新余量，段 6–8 才产生**：`paths` / `_absolute` 的 17 行本在第 4 段的 ≈150 内（切出后第 4 段 ≈133 + 段 5 ≈17），进计划只是固定落点；净减来自段 6 / 7 / 8：(41 − 6) + (21 − 9) + (33 − 9) = **71 行**。
-- **段 5–8 的取舍**：都落在下方「不在本批」清单之外，职责各自单一（路径拼法 · 发送上下文 · 会话命令 · 连接与挂载）；字段 `_toldEditor` / `_toldOfEditor` / `_views` / `_warm` / `_subscription` 一并留 owner（§3.3 字段规则）。
-- **余量管理**：余量 ≈18；若实测仍越界，按 §7 边界行继续切（owner 档补一条 `part` 指令），不改目标、不换机制。
-- **不在本批**：btest 状态面（`:156-216`，归 #55）· 事件应用与回合标记（`_apply` `_cutsAtMessage` `_markTurn` `:257-353`，事件顺序敏感，合并批 #145 已记录 `_apply` 顺序风险，不搬）· 审查面（`:354-412`）· `send`/队列/编辑（`:1319-1452`）· `dispose`。
-- **对外暴露**（沿用 `lib/chat/chat_session.dart` 原路径，调用方零改动）：
-
-| 组 | 公开成员 |
-|---|---|
-| 会话 | `ChatSession` |
-| 消息 | `ComposerMessage` |
-| 选择面类型 | `KernelChoice` `ModelSettingChoice` |
-| 回调类型 | `ChangeReviewOpener` |
-
-调用方（18 档）：
-
-| 文件 | 行 |
-|---|---|
-| `lib/chat/chat_feed.dart` | 4 |
-| `lib/chat/chat_history_view.dart` | 26 |
-| `lib/chat/chat_screen.dart` | 30 |
-| `lib/chat/composer/composer_picker.dart` | 17 |
-| `lib/chat/composer/session_model_picker.dart` | 15 |
-| `lib/chat/stop_confirmation.dart` | 5 |
-| `lib/chat/panels/revert_dialog.dart` | 10 |
-| `lib/chat/side_panel/side_panel_view.dart` | 51 |
-| `lib/chat/widgets/plan_start.dart` | 4 |
-| `lib/ide/ide_agent_changes.dart` | 4 |
-| `lib/ide/ide_agent_edits.dart` | 15 |
-| `lib/link/workspace_bridge.dart` | 9 |
-| `lib/search/conversation_search.dart` | 8 |
-| `lib/settings/pages/thincoder_models_page.dart` | 5 |
-| `lib/workspace/agent_title.dart` | 8 |
-| `lib/workspace/chat_branch_bar.dart` | 13 |
-| `lib/workspace/workspace.dart` | 10 |
-| `lib/workbench.dart` | 24 |
-
+- 不使用 `part of '../chat_session.dart'`，不读取宿主私有成员。
+- 上游持有 transcript、活动内核、review 与视图计数；overlay 持有 warm kernels、turn marks、notices、btest 与切换计时。
+- `KernelChoice` / `ModelSettingChoice` 只在 `chat_session.dart` 定义一次。
+- 对外入口仍是 `lib/chat/chat_session.dart`，现有调用方不改类型。
+- 文件清单、行数预算、验收命令与禁改范围见 `docs/design/thincoder-adapter.md` §29.5；接口顺序见 §29.2。
 ### 4.5 chat_models（839 → ≤800）
 
 | 段 | 搬什么符号 | 现坐标 | 搬出 | 新档 |

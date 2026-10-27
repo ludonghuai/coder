@@ -4316,3 +4316,227 @@ Future<bool> rename(AgentThread thread, String title,
 | U18 | `test/kernel/thincoder_kernel_test.dart` 的现行行数 | **已闭合**：本轮实读 4967（`node -e` 计行，§28.8 ⑧ 的现值即此读数） | 实施轮按 diff 核 delta；不再引用 §27.9 的 4299 |
 
 **将来触发条件（登记）**：需求 F26 功能点 ③——外仓 ACP 面提供命令清单与执行通道时，`/` 从「隐藏」改为「对齐」：那时 `ThincoderKernel` 实现 `ProvidesCommands`、`ChatSession.commands` 由空变实，T133 的断言（能力接口 / 无命令源 / 面板不出现）改成「候选非空 + 面板出现」，§28.5 的结论随之重写。当前无此通道（`thincoder_events.dart:335-337` / `:392` 的 `command` 是终端命令，不是 `/` 命令）。
+
+
+
+---
+
+## 29. 上游共存：ChatSession overlay 与宿主工具重接
+
+### 29.1 方案与理由
+
+目标是让上游 `ChatSession` 继续持有会话、内核、转写与审查状态，自有功能只通过独立 library 和一个 overlay 契约接入。`lib/chat/session/**` 不再以 `part of` 读取宿主私有成员。
+
+采用「窄宿主接口 + 每会话 overlay 实例」。宿主只暴露 overlay 必需的公开读面与生命周期钩；自有状态集中在 overlay，不复制上游状态。上游文件只留下登记过的接线点，合并时不整档覆盖自有模块。
+
+- **最近先例**：`docs/design/thincoder-adapter.md` §5.2 的最小接线点集与 §28.3 的能力探针。对齐点是「宿主只留接线、能力按接口探测」；偏离点是不再使用 `docs/design/structure-splits.md` §4.4 的 `part` 私有访问形态，因为拆文件并未形成模块隔离。
+- **survey 证据**：`PROJECT-MANIFEST.json` 的 `index.publicRepos` 为空；已核 `docs/requirements/thincoder-adapter.md` §4 / §7、`docs/requirements/browser-biz-test.md` §3 / §5、`docs/requirements/host-tool-channel.md` §3 / §5、`docs/design/thincoder-adapter.md` §5.2 / §12 / §28、`docs/design/structure-splits.md` §4.4、`test/RTM.md`。没有其它公开文档源。
+- **现状依据**：`lib/chat/chat_session.dart:100` 的类只实现 `ChatFeed`；八个 `lib/chat/session/*.dart:1` 仍声明 `part of`。上游构造、事件、挂载、切内核、发送与释放路径见同档 `:101-174`、`:377-421`、`:1114-1150`、`:1253-1264`。
+
+### 29.2 接口契约
+
+新增 `lib/chat/chat_session_overlay.dart`。它不 import `chat_session.dart`，因此没有环形依赖。
+
+```dart
+abstract interface class ChatSessionOverlayHost {
+  KernelContext get kernelContext;
+  AgentKernel get agentKernel;
+  Transcript get transcript;
+  bool get canSend;
+  void notifyListeners();
+}
+
+abstract interface class ChatSessionOverlay {
+  List<ChatItem> get items;
+  void onEventBefore(ChatSessionOverlayHost host, KernelEvent event);
+  void onEventAfter(
+    ChatSessionOverlayHost host,
+    KernelEvent event, {
+    required bool changed,
+    required bool sessionChanged,
+  });
+  void onAttach(ChatSessionOverlayHost host);
+  void onDetach(ChatSessionOverlayHost host);
+  void onKernelChanging(
+    ChatSessionOverlayHost host,
+    KernelDescriptor next,
+  );
+  bool cacheKernel(AgentKernel kernel);
+  AgentKernel? restoreKernel(KernelDescriptor descriptor);
+  void onKernelChanged(ChatSessionOverlayHost host);
+  KernelTurn beforeSend(
+    ChatSessionOverlayHost host,
+    KernelTurn turn,
+    OpenEditor? editor,
+  );
+  void onDispose(ChatSessionOverlayHost host);
+}
+```
+
+`ChatSession` 实现 host：现有 `kernelContext`、`canSend`、`notifyListeners` 直接满足；新增 `agentKernel` / `transcript` 两个只读投影。overlay 只读它们，不直接 `apply` 或替换上游状态。
+
+构造器接受可选 overlay，缺省创建 `BaocodeSessionOverlay`，保持现有调用方与测试的构造方式。测试可注入假 overlay。`ChatSession` import 具体 overlay；具体 overlay 只 import 契约，不反向 import `ChatSession`。
+
+| 上游接缝 | 接线 | 依据 |
+|---|---|---|
+| 构造与 `_connect` | 每会话持有一个 overlay；`restoreKernel` 在创建新内核前询问一次；失败缓存由 overlay 自行 dispose 并返回 null | `lib/chat/chat_session.dart:101-120`、`:155-158`；失败缓存规则来自 `lib/chat/session/lifecycle.dart:7-16` |
+| `_apply` | `onEventBefore` 记录 apply 前位置；transcript apply 后、review 与 notify 前调用 `onEventAfter`；`SessionRenamed` / `FilesMayHaveChanged` 的既有早退不改 | `lib/chat/chat_session.dart:160-174`；turn 用例 `test/chat/turn_marks_test.dart:72-241` |
+| `attach/detach` | 调用对应钩；视图计数、prepare、release 仍由上游执行 | `lib/chat/chat_session.dart:374-390` |
+| `setKernel` | `onKernelChanging` 开计时；`cacheKernel` 决定旧内核是否保留；`restoreKernel` 可取回同 descriptor 缓存；切后 `onKernelChanged` 清 turn 状态并重绑 btest | `lib/chat/chat_session.dart:412-421`；启动约束 `lib/chat/session/mode_state.dart:65-88` |
+| 切内核后的挂载 | 若 `_views > 0`，上游统一执行新内核 `prepare()` 与 `_startReview()`，再通知 | `lib/chat/session/mode_state.dart:79-85` 给出了不执行时新内核不启动的可复现路径 |
+| `send` | 恢复 `editorContext = true` 参数；按能力与设置取 editor；构造 `KernelTurn` 后交 `beforeSend`，再交内核 | `lib/chat/chat_session.dart:1114-1150`；`lib/kernel/kernel_types.dart:584-613`；`lib/chat/editor_context_setting.dart:11-17` |
+| `itemCount/itemAt` | transcript 后插入 `overlay.items`，最后才是 live status；`addNotice` 追加并通知 | `lib/chat/chat_session.dart:706-735`；`lib/chat/session/transcript_proxy.dart:81-108`；调用点 `lib/chat/panels/revert_dialog.dart:65-70` |
+| `dispose` | 先 `onDispose` 清缓存与 btest 绑定，再执行既有释放 | `lib/chat/chat_session.dart:1250-1264`；`lib/browser/btest/btest_mode.dart:177-195` |
+
+`onEventAfter` 的两个读数不得合并：`changed` 表示 transcript 实际变化，驱动 turn marks；`sessionChanged = event is KernelInfoChanged || changed` 驱动 btest 重绑、kernelLocked 时清 warm 缓存、切换完成计时。既有 review 与 notify 顺序不变。
+
+宿主公开成员只补调用方已经需要的投影：`hasCommandSource`、`acceptsEditorContext`、`renameConfirmed`、`ownsTitle`、`pendingTitle`、`pendingModel`、`canStopTasks`、btest 七成员、`turns`、回退五成员与 `addNotice`。
+
+`acceptsImages` = `AcceptsImages || AcceptsImageFiles`。`modes` 只在上游基础 choice 非空时叠加 btest；`ChatSession` 实现 `MarksTurns`。其余上游已有实现不复制。
+
+### 29.3 自有模块与状态归属
+
+| 模块 | 职责 | 状态 owner |
+|---|---|---|
+| `lib/chat/session/overlay.dart` | `BaocodeSessionOverlay`，组合各 helper | warm kernels、turn marks、notices、btest、切换计时 |
+| `lib/chat/session/kernel_proxy.dart` | 上游缺少的内核能力投影 | 无；读 `host.agentKernel` |
+| `lib/chat/session/mode_state.dart` | btest option、mode choice 包装、pendingModel | btest 只在 overlay |
+| `lib/chat/session/transcript_proxy.dart` | turn-mark 算法与 notice 投影 | 列表只在 overlay；算法只用 apply 前后读数 |
+| `lib/chat/session/file_edits.dart` | `revertTurn` 与 `PlansReverts` 投影 | 无；审查状态仍在上游 |
+| `lib/chat/session/send_contexts.dart` | editor context 去重、btest 卡片上下文、已告诉文本枚举 | 去重是一次发送的局部状态 |
+| `lib/chat/session/lifecycle.dart` | warm kernel 缓存、挂载与切换计时 | 缓存只在 overlay，dispose 必清空 |
+| `lib/chat/session/file_paths.dart` | 删除；与上游 paths / absolute 重复 | 上游 |
+| `lib/chat/session/session_commands.dart` | 删除；stop / answer / rename / discardChanges 与上游重复 | 上游 |
+
+`KernelChoice` / `ModelSettingChoice` 只保留 `lib/chat/chat_session.dart:46-84` 的一份定义。任何 session 文件不得出现 `part`、`part of` 或对 `ChatSession` 私有成员的访问。
+
+btest 使用 `BtestMode.of/bind/release` 的既有键机制（`lib/browser/btest/btest_mode.dart:127-205`）。overlay 首次接触会话时 `of(...)..fromSettings()`；sessionId 到达或改变时 `bind`；dispose 时 `release`。不在 composer、工具层或另一个单例复制第三份状态。
+
+### 29.4 浏览器与 composer 接法
+
+`lib/browser/browser_tools.dart` 迁到 `lib/host_tools/host_tools.dart` 的 `HostTool` / `HostTools` / `HostToolCall`。`browser_actions.dart:52-342` 与 `browser_debug_tools.dart:8-960` 已使用该形态，父库恢复 import 与注册包装后，这两个文件零改动。
+
+注册包装保留以下既有业务门：
+
+1. 使用当前 `numbersAsSchemaSays` 做递归数字归一（`lib/browser/browser_tools.dart:133-165`），不退回只扫四个键的旧实现。
+2. 注入 `description` schema；entry 工具补用户浏览器说明；`browser_navigate` 补 `detour`，`browser_evaluate` 补 `readOnly`。
+3. `_all` 同时包含 `BtestTools.all`；注册项保留 `group: 'browser'` 与 `picturesOnly`。
+4. 调用先过 btest，再做 tab watch / blocked / `BrowserRecords.acting`；无 tabId 的工具仍走原 `tool.run`。
+5. 新 `lib/browser/btest/btest_tool_gate.dart` 独立封装 `_btest`、entry URL hosts、tab hosts。`BrowserTools` 只提供 `tabHost(tabId)` 回调；通用 `HostTools` 不出现 browser 特判。
+
+btest gate 的真实判据仍由 `BtestGate.check` 决定（`lib/browser/btest/btest_mode.dart:207-256`）。无 btest 状态时不增加调用结果；有状态且无 run、违反 readonly 或 host 规则时明确拒绝，不静默放行。
+
+composer 不需要另接一套状态：
+
+- `composer_view.dart:186-194` 的七个 btest 缓存键与 `:233-237` 的状态行继续读 `ChatSession`。
+- `btest_status_switches.dart:39-50` 继续区分 run 实际值与下次 run 开关；`:84-114` 继续调用 session setter。
+- `composer_editing.dart:430-442` 已有 `hasCommandSource` 能力门，R1 恢复该 getter 即可，`composer.dart` 与此档均零改动。
+
+### 29.5 受影响文件与执行轮次
+
+行数为 2026-10-26 实读，delta 为实施预算。每轮不超过 15 个改动文件，单一改动面；未列的既有测试只运行、不修改，不计入改动档数。
+
+#### R1 · ChatSession overlay（12 档）
+
+| 文件 | 现行 | 预期 delta / 落点 |
+|---|---:|---|
+| `lib/chat/chat_session.dart` | 1266 | ≈ +170 / −20；§29.2 全部宿主接缝 |
+| `lib/chat/chat_session_overlay.dart` | 新 | ≈ +110；host 与 overlay 契约 |
+| `lib/chat/session/overlay.dart` | 新 | ≈ +230；每会话状态与契约实现 |
+| `lib/chat/session/kernel_proxy.dart` | 204 | 收敛到 ≈90；只留缺失 facet |
+| `lib/chat/session/transcript_proxy.dart` | 226 | 收敛到 ≈150；turns / notices / canStopTasks |
+| `lib/chat/session/mode_state.dart` | 187 | 收敛到 ≈100；btest mode / pendingModel |
+| `lib/chat/session/file_edits.dart` | 142 | 收敛到 ≈45；PlansReverts / revertTurn |
+| `lib/chat/session/lifecycle.dart` | 43 | ≈ +60；warm 与计时 helper |
+| `lib/chat/session/send_contexts.dart` | 51 | ≈ +60；editor / btest contexts |
+| `lib/chat/session/file_paths.dart` | 23 | 整档删除 |
+| `lib/chat/session/session_commands.dart` | 22 | 整档删除 |
+| `test/chat/session_overlay_test.dart` | 新 | ≈ +300；生命周期、发送、notice、facet 失败门 |
+
+`chat_session.dart` 已超过 800 行。拆分计划是先把所有 fork 私有逻辑移入独立模块，本批不为了总行数再搬上游类；共享文件用 `fork-deltas.md` 的净增预算约束。后续若要拆上游 facet / review / send，另批按同一公开契约设计，不恢复 part。
+
+验收：
+
+```text
+flutter analyze --no-pub lib/chat
+flutter test --no-pub test/chat/session_overlay_test.dart test/chat/turn_marks_test.dart test/chat/revert_flow_test.dart test/chat/pending_model_test.dart test/kernel/rename_confirmed_test.dart test/chat/thincoder_commands_test.dart test/chat/composer_btest_status_test.dart test/kernel_ui_test.dart
+```
+
+禁改：SCM、browser、composer 产品文件、上游 picker、外仓。`composer_view.dart` 与 `btest_status_switches.dart` 的错误必须由 session API 恢复而消失，不得改 UI 迁就第二套状态。
+
+#### R2 · browser 宿主工具重接（6 档）
+
+| 文件 | 现行 | 预期 delta / 落点 |
+|---|---:|---|
+| `lib/browser/browser_tools.dart` | 711 | 净增 ≤150；HostTools 注册与调用包装 |
+| `lib/browser/btest/btest_tool_gate.dart` | 新 | ≈ +90；btest 与目标 host 推导 |
+| `test/browser/browser_numbers_test.dart` | 88 | 改为 `HostTools.handle` / `HostToolCall`，保留 schema 断言 |
+| `test/browser/btest_tool_gate_test.dart` | 新 | ≈ +180；off / no-run / readonly / write / hosts |
+| `test/RTM.md` | 54 | 新增 §4 与 4-1；总数 3 → 4 |
+| `test/integration/btest_flows_test.dart` | 新 | ≈ +180；4-1 用户入口集成用例 |
+
+验收：
+
+```text
+flutter analyze --no-pub lib/browser
+flutter test --no-pub test/browser/browser_numbers_test.dart test/browser/btest_tool_gate_test.dart test/browser/browser_steps_test.dart test/chat/composer_btest_status_test.dart
+```
+
+禁改：`HostTools` 通用语义、`browser_actions.dart`、`browser_debug_tools.dart`、Claude 工具审批路径、SCM。btest 的单元拒绝用例必须断言拒绝原因包含工具名与未满足的门，不能只测 happy path。
+
+两轮完成后由父侧执行全量 `flutter analyze --no-pub` 与集成套件；这是收口门，不分摊成每轮全量测试。
+
+### 29.6 关键决策记录
+
+| 决策 | 理由 / 被否方案 |
+|---|---|
+| 组合 overlay，不恢复 part，不包装替换 `ChatSession` | 保留现有调用方类型与构造入口；包装类会迫使全部消费者改类型，part 会继续耦合私有成员 |
+| 缺省创建本仓 overlay，允许测试注入 | 不为每个构造点增加装配义务；测试仍能隔离钩与状态 |
+| 删除与上游重复的 helper | 重复投影会形成第二真相；只保留上游没有的自有语义 |
+| warm map 是内核对象缓存，不是进程预热池 | 只复用未开始会话切走的对象；kernelLocked 或 dispose 即清，不创建预热机制 |
+| 通用 `HostTools` 不加 browser 特判 | 数字、schema、btest 与 tab 包装属于 browser 注册面 |
+| 保留当前递归数字归一 | 它覆盖嵌套 step；旧四键转换会丢掉该能力 |
+| composer 只验不改 | 命令源门与 btest UI 已在盘上；缺的是 session 契约，不是另一处 UI 修补 |
+
+### 29.7 验收回溯
+
+| 需求 | 判据 |
+|---|---|
+| `docs/requirements/thincoder-adapter.md` §4 E1/E2、§7 A10 | 自有 session 文件均可独立 import；共享档改动均登记；`part of '../chat_session.dart'` 为 0 |
+| 同档 §2 F25 | `rename_confirmed_test.dart` 覆盖 thincoder 确认与 Claude 回归 |
+| 同档 §2 F26 | `thincoder_commands_test.dart` 断言 thincoder 无空面板、Claude 既有窗口不变 |
+| 同档 §5 图片 / 编辑上下文映射 | `AcceptsImageFiles` 可发送图片；声明 `AcceptsEditorContext` 才携带 contexts；未声明者不携带 |
+| `docs/requirements/browser-biz-test.md` §3 F1/F2/F9/F11、§5 第 1 / 7 项 | btest 切换、提示注入、两个开关与持久化使用同一 overlay；composer 定向测试通过 |
+| `docs/requirements/host-tool-channel.md` §3 F1/F2/F3、§5 A1/A2/A3 | 浏览器工具经 HostTools 注册；开关与错误门明确；Claude 路径不变 |
+| `test/RTM.md` §1 / §2 / §3 / §4 | 父侧收口运行 1-1、2-1、3-1、4-1，业务可观察结果不回退 |
+
+每个单元验收指向本轮回合的改动面。集成套件只在父侧收口运行。
+
+### 29.8 用例表
+
+| 场景 | 输入 | 期望 |
+|---|---|---|
+| overlay 生命周期 | attach → 两次切内核 → detach → dispose | 缓存按契约复用；dispose 后缓存与 btest 绑定为空；无重复订阅 |
+| turn marks | 依次发 TurnStarted / TurnEnded / HistoryPrepended / Rewound | `test/chat/turn_marks_test.dart:72-241` 的起点、时长、平移与裁剪全部一致 |
+| 事件顺序 | transcript 改变事件与 KernelInfoChanged | turn 只在 changed 时变；btest / warm / 计时只在 sessionChanged 时走；review 与 notify 顺序不变 |
+| btest 模式 | 选择 btest，再选普通 mode | 同一 overlay 状态；退出结束未关闭 run；composer 缓存键更新 |
+| 发送上下文 | 同文件 editor、设置关闭、无能力内核、btest card | 按 `dedupeKey` 去重；设置或能力不满足时不带 editor context；btest 文本至多一次 |
+| 回退失败 | 内核不实现 `PlansReverts` 却直接调用 | 明确抛 `UnsupportedError`，不退回另一套写入路径 |
+| browser 数字门 | 数字字符串、非数字字符串、嵌套 step | 数字按 schema 转换；非数字保留并明确拒绝；嵌套行为不退化 |
+| btest 工具门 | off / no-run / readonly / write / 无 tabId | off 结果不变；no-run 与 readonly 给可读拒绝；write 按规则；无 tabId 仍调用原工具 |
+| host 推导 | entry URL、tab 当前 URL、未知 tab | 分别得到 URL host、tab host、未知 host；未知不伪造成允许 |
+
+### 29.9 边界、UI 与 RTM
+
+不改 `ide_scm_view.dart` 或其它 SCM 产品语义；#181 仍未裁定，本设计只保留接缝。不改上游 picker 布局、不恢复被覆盖的旧共享档、不改外仓、不为 overlay 添加配置项或新 UI 入口。
+
+UI 保持现有入口：btest 仍位于 mode picker 与 composer 状态行；命令面板按能力显隐；改名、回退与通知沿用既有视图。无未落定的 UI 决策。
+
+RTM 从 `test/RTM.md` 现有 3 行出发：
+
+- **不改写 / 删除**：1-1、2-1、3-1 的业务断言不变；R1 不新增行。
+- **新增 4-1**：「切换 btest 后，提示与浏览器门使用同一会话状态」。用户入口 = composer 的 mode picker；交互 = Composer ⇄ ChatSession overlay ⇄ BrowserTools / BtestGate。
+- **4-1 断言**：切到 btest 后下一 turn 的 card 恰一次；readonly 写调用被拒且原因可读；切回普通模式后 off 文本恰一次；工具与 composer 读到同一 run / 开关状态。
+- **回溯需求**：`docs/requirements/browser-biz-test.md` §3 F1/F2/F9/F11。落点 = `test/integration/btest_flows_test.dart`，标题以 `4-1` 开头。该用例有真实用户入口和业务结果，不是把单元断言提升成集成用例。
+
+集成规模由 3 / 50–100 变为 4 / 50–100。没有其它新增行。

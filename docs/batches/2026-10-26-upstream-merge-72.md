@@ -29,6 +29,53 @@
 
 **下一步（用户醒来后按序）**：① 裁定 #181 → ② 派 eng-designer 写 §2 任务书 + `fork-deltas.md` 框架 → ③ 用户发设计评审 → ④ 批准 → ⑤ 实施轮派 kimi（`kimi-code:k3.1-pro`；429 则降级 flash 并在此记录）。
 
+### 合并已落地于分支，现在要的是重接设计（主 agent，2026-10-26 18:35 起，19:15 更新）
+
+**用户裁定**：18:15「让kimi来获取上游直接合并」· 19:14「继续做…让kimi设计合并」⇒ 合并操作已执行，语义重接交 kimi 设计。
+
+**已完成的机械合并**（分支 `merge/upstream-20261026`，提交 `be89876a`；`main` 未动 = `26c969aa`；备份 `backup/pre-upstream-20261026`）：
+- 上游 112 提交全部合入；17 档冲突按 A 策略解决：**共享档整档取上游**（含 `lib/ide/git/ide_scm_view.dart`、`lib/workbench.dart`、`lib/chat/chat_session.dart`、`lib/chat/composer/{composer_picker,session_model_picker}.dart`、`lib/ide/{ide_editor,ide_workbench}.dart`、`lib/browser/browser_tools.dart`、两个上游 SCM 测试档、`test/chat/side_panel/side_panel_test.dart`）。
+- l10n：**键级并集**（`app_en.arb` 补回我们独有 139 键 · `app_zh.arb` 补回 78 键；同名沿用上游措辞），生成档由 `gen-l10n` 重生成。
+- 上游最新已追平（`git rev-list --count 07643543..origin/main` = 0）。
+
+**编译现状（实跑 `flutter analyze --no-pub`）：390 error = 333 in `lib/` + 57 in `test/`；另有 104 warning/info。**
+`lib/` 侧集中在：
+| 计数 | 档 |
+|---|---|
+| 76 | `lib/chat/session/kernel_proxy.dart` |
+| 65 | `lib/chat/session/transcript_proxy.dart` |
+| 42 | `lib/chat/session/mode_state.dart` |
+| 35 | `lib/chat/session/file_edits.dart` |
+| 15 | `lib/browser/browser_tools.dart`（上游已改写该档） |
+| 11 | `lib/chat/session/send_contexts.dart` |
+| 10 | `lib/browser/browser_debug_tools.dart` |
+| 9 | `lib/browser/browser_actions.dart` |
+| 9 | `lib/chat/session/lifecycle.dart` |
+| 8 | `lib/chat/composer/composer_view.dart` |
+| 7 | `lib/chat/session/file_paths.dart` |
+| 7 | `lib/browser/btest/btest_status_switches.dart` |
+
+**根因**：`lib/chat/session/**` 现为 `part of '../chat_session.dart'`，依赖上游 `ChatSession` 的私有成员；上游重写后全部断裂。这正是 kimi 在 #50 指出的「拆 part 不等于隔离」。
+
+### 设计任务（交 eng-designer，模型 kimi）
+
+1. **产出一份重接设计档**：把 `lib/chat/session/**` 从 `part of` 寄生体改成**可独立 import 的模块 + 一个 overlay 接口**（定义：ChatSession 暴露什么通用生命周期缝、我们注入什么、谁持有状态），并给出 `lib/browser/**` 三个档（browser_tools / browser_debug_tools / browser_actions）与 `composer_view.dart` 的接法。
+2. **产出 `docs/design/fork-deltas.md` 登记表**：列 = 文件 / 我们的块 / 类型（修 bug · 功能 · 内核适配）/ 接缝 / 行数预算；规则 = **表外不许改上游档**。
+3. **产出 §2 任务书**：按可执行轮次切分（每轮 ≤15 档、单一改动面），每轮写明落点 `file:line`、验收命令、禁改范围与后果。
+4. **不得**把上游档改回去（`ide_scm_view.dart` 等保持上游版）；自有能力只经新模块与接缝存在。
+5. 兼容既有裁定：`#181`（SCM 获取语义）**仍待用户裁定**，设计中按「留接缝、不预判」处理。
+
+### 设计续作（主 agent，2026-10-26 19:56）
+
+**上一轮 eng-designer（kimi）在 19:54 被 429 中断**（第 12 轮，已写 36 分钟）。用户 19:50 指示换第三个 key 继续设计；该 key 经直连探测 **HTTP 200 有额度**，已热应用到主 provider（`settings set providers.2.apiKey`，值不回显）。
+
+**已落盘的进度（续作从此接着做，不重来）**：
+- `docs/design/fork-deltas.md` —— **已写完，70 行**：规则（表外不许改上游档 · 自有档不得整档取上游 · l10n 只并键 · 上游测试与自有断言分档）+ 整档自有资产表（含 `lib/chat/session/**` 与 `lib/chat/chat_session_overlay.dart` 的接缝 `chat_session_overlay.dart`）。
+- `docs/design/thincoder-adapter.md` —— 已修改（适配层设计面，增量待核）。
+- **§2 仍为空** ⇒ 续作必须补齐 §2 任务书。
+
+**续作要求**：① 复核 `fork-deltas.md` 是否覆盖了 390 error 涉及的每个断点（`lib/chat/session/**` 7 档 · `lib/browser/**` 3 档 · `composer_view.dart` · `lib/browser/btest/**`）；② 写出 overlay 接口的具体形状（ChatSession 暴露什么 · 我们注入什么 · 谁持有状态）；③ 补齐 §2 任务书，按轮次切分、每轮 ≤15 档、写明落点与验收命令。
+
 ## §2 批次任务与设计（eng-designer）
 **状态行**：（eng-designer 写入时更新）
 <§2 模板占位：本批条目（覆盖） / 设计档落点 / 机制设计 / 受影响文件与测试覆盖 / 验收对照 / 关键决策 / 上抛项>
