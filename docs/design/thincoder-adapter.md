@@ -344,6 +344,7 @@ thincoder 侧的接口例外见 §16.1。）批 4 的改动点见 §15.4（同�
 
 体量立场（>800 行既有档与测试档的拆分审阅）：
 
+- **行数口径（总则）**：以下各行数 = 该条编制日的快照；跨节不互校（同一档在不同批的实测值不同属正常，例如本档与 §28.8 / §29.5 各记各的日期）；实施首轮以 `wc -l` 复核，冲突时以复核值为准。
 - `chat_session.dart`（1087 行）处 >800 行硬顶之上：**本批不动结构**（只走接线 ③）；拆分缝候选 = Facets（`:329`）/ Projections（`:510`）/ Commands（`:920`）段（段头注释即缝）；触发 = 独立拆分批立项。
 - `chat_screen.dart`（1231 行）处 >800 行硬顶之上：**批 4 不动结构**（只走接线 ⑬，1 行改动 / 净增 0）；拆分缝候选 = `_ChatScreenState`（`:182`）之后的私有构件族（`:903`–`:1231`：标题栏布局 / 会话列渲染 / 底部切换 / 历史载入 / 面板槽）；触发 = 独立拆分批立项。
 - `chat_models.dart`（719 → 806，2026-10-19 实测）：处 >800 行硬顶之上；本批只加 `EditorContext` / `UserMessageItem.contexts`（行级新增，不动结构）；拆分缝候选 = `EditorContext` 段（`:52`–`:131`）出档 `lib/chat/editor_context.dart`；触发 = 下一次结构级触碰或独立拆分批立项。
@@ -4332,7 +4333,7 @@ Future<bool> rename(AgentThread thread, String title,
 **结论：thincoder 隐藏（行首 `/` 不弹面板）；Claude 侧行为不变。**
 
 - 判据是**内核有没有命令源**，不是候选表满不满：`ChatSession.hasCommandSource`（`lib/chat/chat_session.dart:440`）的取值 = 内核是否实现 `ProvidesCommands`（探针 `lib/chat/session/kernel_proxy.dart:47`）。
-- 组合器的面板开关读它（`lib/chat/composer/composer.dart:863-877`）：`visible = commands.isNotEmpty || (trigger.start == 0 && widget.session.hasCommandSource)`。
+- 组合器的面板开关读它（`lib/chat/composer/composer_editing.dart:442`）：`visible = commands.isNotEmpty || (trigger.start == 0 && state.widget.session.hasCommandSource)`。该表达式已在盘上；它读的 `ChatSession.hasCommandSource` 在合并中丢失，由 R1 恢复（§29.4）。
 - `ThincoderKernel` 的 implements 列表（`thincoder_kernel.dart:42-57`）没有 `ProvidesCommands`；实现它的只有 Claude（`claude_code_kernel.dart:99`）与 Codex（`lib/kernel/codex/codex_kernel.dart:22`）。
 - ⇒ thincoder 会话里行首 `/`（以及 `/pl` 这类查询）都不弹面板；`ChatSession.commands` 对无源内核恒 `[]`（`chat_session.dart:439`），所以不是「假装有」，也不是弹一个空壳。
 - ⇒ Claude 会话有命令源：`/` 在**命令表未到 / 表空 / 查询无匹配**三个窗口里面板都照开（空壳 + no-results 说明），与批 22 之前一致；判据 = T139（F26②）。
@@ -4354,7 +4355,13 @@ Future<bool> rename(AgentThread thread, String title,
 | F25② `session/set_title` 抛错 ⇒ 事件数 0、列表标题仍是旧值 | §28.4 | 失败分支只发既有 `error:title` 提示，零事件；释放旁路的作废同形（零事件 + 提示 + 列表旧值） | T132（`test/kernel/thincoder_kernel_test.dart`）/ T138（`test/kernel/rename_confirmed_test.dart`） |
 | F25③ Claude 内核路径行为不变（回归） | §28.3 | `ClaudeCodeKernel` 不实现 `ConfirmsRename` ⇒ `renameConfirmed` 恒假 ⇒ 仍走 `_retitle`；`SessionRenamed` 的发出点（`claude_code_kernel.dart:1704`）与消费面零改动 | T135（`test/kernel/rename_confirmed_test.dart`） |
 | F26① thincoder 会话里 `/` 不弹命令面板 | §28.5 | 内核无命令源（不实现 `ProvidesCommands`）⇒ 面板开关为假 ⇒ 行首 `/` 与 `/pl` 都不弹；判据不看候选表是否为空 | T133（能力接口 + `commands` 为空 ∧ `hasCommandSource == false` + 行首 `/` 与 `/pl` 的 `SuggestionMenu findsNothing`） |
-| F26② Claude 内核会话里命令面板行为不变（回归） | §28.5 | 本批不动 `ProvidesCommands` 与 `_commandSuggestions`（`chat_screen.dart:624-641`）；面板开关只读内核能力（`composer.dart:871-876`），表未到 / 表空 / 无匹配都照开 | T136（`flutter test test/chat/command_details_test.dart` 既有 Claude 用例全绿）+ T139（Claude 表空仍开面板，含 `/pl` 无匹配） |
+| F26② Claude 内核会话里命令面板行为不变（回归） | §28.5 | 本批不动 `ProvidesCommands` 与 `_commandSuggestions`（`chat_screen.dart:624-641`）；面板开关只读内核能力（`composer_editing.dart:440-443`），表未到 / 表空 / 无匹配都照开 | T136（`flutter test test/chat/command_details_test.dart` 既有 Claude 用例全绿）+ T139（Claude 表空仍开面板，含 `/pl` 无匹配） |
+
+**RTM 增量（本批不加行，索引仍是 3 / 50–100；4-1 由 §29.9 立、随 R2 落地）**
+
+- 1-1 / 2-1 / 3-1 的既有断言一条不改：本批不触碰切换、失焦、流式三面的任何业务结果。
+- 不加行的理由：本批改动的可观察结果是「改名在确认后落到列表标题，失败时保持旧值并出提示」；该结果跨的那一跳（`SessionRenamed` → `workspace._sync` → `_retitle`）已由 §28.7 的 T131 / T134 用真实 `Workspace` 与真实 `ChatSession`（mock 传输）驱动到机检。
+- 再加一条集成用例只多一层侧栏 widget 读同一个 `AgentThread.title`，不产生新的组件间交互，也无生产问题的来路 ⇒ 不立项。
 
 ### 28.7 用例表（T131–T139）
 
@@ -4362,7 +4369,7 @@ Future<bool> rename(AgentThread thread, String title,
 |---|---|---|---|
 | T131 | 改名成功同步 | mock 传输 + 开着的 thincoder 会话；`rename('A')`；`session/set_title` 正常应答 | 事件流里恰一条 `SessionRenamed` 且 `title == 'A'`；`session.takeRenamed() == 'A'`；`_sync` 以 `confirmed: true` 落地标题；没有别的 `SessionRenamed` |
 | T132 | 改名失败不发事件 | 同上，`session/set_title` 抛错 | 事件流里**零条** `SessionRenamed`；对话里出现 `error:title` 提示；`takeRenamed()` 为 null；线程标题仍是旧值 |
-| T133 | 命令面对该内核为空（三处断言） | 内核层的 `ThincoderKernel` 实例 + widget 层的 thincoder `ChatScreen` | ① `expect(kernel, isNot(isA<ProvidesCommands>()))`；② `ChatSession.commands` 为空 ∧ `hasCommandSource == false`；③ 行首 `/` 与 `/pl` 后 `SuggestionMenu findsNothing`（面板不出现；开关见 `composer.dart:871-876`） |
+| T133 | 命令面对该内核为空（三处断言） | 内核层的 `ThincoderKernel` 实例 + widget 层的 thincoder `ChatScreen` | ① `expect(kernel, isNot(isA<ProvidesCommands>()))`；② `ChatSession.commands` 为空 ∧ `hasCommandSource == false`；③ 行首 `/` 与 `/pl` 后 `SuggestionMenu findsNothing`（面板不出现；开关见 `composer_editing.dart:440-443`） |
 | T134 | 确认回来的标题不成环 | T131 之后再 `rename('A')` 一次（模拟 `workspace._sync` 的回写） | `session/set_title` 请求数不再增加；无第二条 `SessionRenamed`（内核 `_titleConfirmed` 短路） |
 | T135 | Claude 不实现该能力 ⇒ 路径不变 | `test/kernel/rename_confirmed_test.dart`：一个 Claude 会话 | `expect(claudeKernel, isNot(isA<ConfirmsRename>()))`；`ChatSession.renameConfirmed == false`；`workspace.rename` 走 `_retitle`（列表即改，不等事件） |
 | T136 | Claude 命令面板回归 | `flutter test test/chat/command_details_test.dart` | 该档既有 Claude 用例全绿（本批不改该档任何 Claude 断言）；`_commandSuggestions` 零改动 |
@@ -4377,10 +4384,11 @@ Future<bool> rename(AgentThread thread, String title,
 | # | 坐标 | 现值（本轮实测） | 改动 | delta |
 |---|---|---|---|---|
 | ① | `lib/kernel/agent_kernel.dart` | 539 | `ConfirmsRename` 能力接口（紧邻 `RenamesSession`，`:314-316`） | ≈ +10 |
-| ② | `lib/kernel/thincoder/thincoder_kernel.dart` | 480 | 实现 `ConfirmsRename` + `renameConfirmed` 判据（槽 ∧ 连接 ∧ 未释放）+ `_titleConfirmed` + `rename` 同标题短路 + `_pumpTitle` 成功分支发事件 | ≈ +12 |
+| ② | `lib/kernel/thincoder/thincoder_kernel.dart` | 480 | `implements ConfirmsRename` + `renameConfirmed` 委托一行（`:344`，判据实现在 `thincoder_title.dart`） | ≈ +2 |
+| ②a | `lib/kernel/thincoder/thincoder_title.dart`（`part of 'thincoder_kernel.dart'`） | 84 | 判据 `renameConfirmedOf`（`:10`）+ `_titleConfirmed` 同标题短路（`renameOf` `:13-31`）+ `_pumpTitle` 成功分支发事件（`:38`）；`_pumpTitle` 按符号落在此档，不在上一行 | ≈ +10 |
 | ③ | `lib/chat/chat_session.dart` | 794 | `renameConfirmed` 委托（`_ => false` 兜底，紧邻 `canRename` `:770`）+ 能力面 `hasCommandSource`（`:440`，+1 行，走 `_hasCommandsOf`）；`rename` 签名不动 | ≈ +5 |
 | ④ | `lib/workspace/workspace.dart` | 2984 | `rename()` 增具名参数 `confirmed` + 确认分支 + `renameConfirmed` 分支（`:2766-2795`）；`_sync` 调用点传 `confirmed: true`（`:2270`） | ≈ +9 / −1 |
-| ⑤ | `lib/chat/composer/composer.dart` | 2350 | `_handleEditorChanged` 的命令分支：面板开关读 `session.hasCommandSource`（`visible = commands.isNotEmpty || (trigger.start == 0 && session.hasCommandSource)`，`:863-877`）——行首 `/` 对有源内核恒开、对无源内核不开 | +10 / −6 |
+| ⑤ | `lib/chat/composer/composer_editing.dart` | 475 | 命令分支的面板开关（`:440-443`）：`visible = commands.isNotEmpty || (trigger.start == 0 && state.widget.session.hasCommandSource)` —— 行首 `/` 对有源内核恒开、对无源内核不开。判定已在盘上；缺的是它读的 `hasCommandSource`（合并中丢失，R1 恢复，§29.4） | 0（本档不改） |
 | ⑥ | `lib/chat/session/kernel_proxy.dart` | 203 | `_hasCommandsOf`：`owner._kernel is ProvidesCommands`（`:47`） | +2 |
 | ⑦ | `test/kernel/rename_confirmed_test.dart` | 新增 | T135 / T137 / T138（Claude 不实现该能力；判据在开会话 / 释放后 / 无槽三态；改名被回合压后、释放随后排上的可见丢失） | 193 |
 | ⑧ | `test/kernel/thincoder_kernel_test.dart` | 4967 | T131–T134 追加到文件末尾 | ≈ +90 |
@@ -4425,6 +4433,11 @@ Future<bool> rename(AgentThread thread, String title,
 - **最近先例**：`docs/design/thincoder-adapter.md` §5.2 的最小接线点集与 §28.3 的能力探针。对齐点是「宿主只留接线、能力按接口探测」；偏离点是不再使用 `docs/design/structure-splits.md` §4.4 的 `part` 私有访问形态，因为拆文件并未形成模块隔离。
 - **survey 证据**：`PROJECT-MANIFEST.json` 的 `index.publicRepos` 为空；已核 `docs/requirements/thincoder-adapter.md` §4 / §7、`docs/requirements/browser-biz-test.md` §3 / §5、`docs/requirements/host-tool-channel.md` §3 / §5、`docs/design/thincoder-adapter.md` §5.2 / §12 / §28、`docs/design/structure-splits.md` §4.4、`test/RTM.md`。没有其它公开文档源。
 - **现状依据**：`lib/chat/chat_session.dart:100` 的类只实现 `ChatFeed`；八个 `lib/chat/session/*.dart:1` 仍声明 `part of`。上游构造、事件、挂载、切内核、发送与释放路径见同档 `:101-174`、`:377-421`、`:1114-1150`、`:1253-1264`。
+
+**契约名的三问答复（本轮实读）**
+
+- `ChatSessionOverlay`：`none found` —— 本轮 `grep -rn "ChatSessionOverlay" lib test` 零命中，`lib/chat/session/*.dart` 八档亦无契约档。最近邻是能力探针形（`RenamesSession` / `ConfirmsRename`，`lib/kernel/agent_kernel.dart:324`），但它只答能力有无、不持状态，故不复用。
+- `ChatSessionOverlayHost`：`none found` —— 同上零命中。`existing but unusable` 的最近件 = `ChatSession` 本体（`lib/chat/chat_session.dart:100` 只实现 `ChatFeed`）：它以私有成员服务自己的 part 档，不能充当独立模块的公开宿主面。
 
 ### 29.2 接口契约
 
@@ -4516,6 +4529,12 @@ abstract interface class ChatSessionOverlay {
 | `lib/chat/session/file_paths.dart` | 删除；与上游 paths / absolute 重复 | 上游 |
 | `lib/chat/session/session_commands.dart` | 删除；stop / answer / rename / discardChanges 与上游重复 | 上游 |
 
+模块名的三问答复（本轮实读）：
+
+- `BaocodeSessionOverlay`：`none found` —— 本轮 `grep -rn "BaocodeSessionOverlay" lib test` 零命中。`existing but unusable` = `lib/chat/session/**` 八个 `part of` 档：warm / turn marks / notices / btest 的状态与算法都在，但形态是寄生体，不能被独立 import。
+- `lib/chat/session/overlay.dart`：`none found` —— 该路径不在盘（本轮实读；该目录八档为 file_edits / file_paths / kernel_proxy / lifecycle / mode_state / send_contexts / session_commands / transcript_proxy）。⇒ 新建，不覆盖任何既有文件。
+- `lib/browser/btest/btest_tool_gate.dart`：`existing but unusable` —— 判据在 `lib/browser/btest/btest_mode.dart:209` 的 `BtestGate`，`check`（`:223-256`）的签名已收 `HostToolCall`；不可直接用的部分 = `hosts` / `targeted` 的推导要读浏览器 tab 状态，而该状态在 `browser_tools.dart` 父库内，通用 `HostTools` 面不得出现这一特判（§29.4 ③）。
+
 `KernelChoice` / `ModelSettingChoice` 只在 `chat_session_overlay.dart` 定义，`chat_session.dart` 负责 re-export。任何 session 文件不得出现 `part`、`part of`、对宿主的 import 或对 `ChatSession` 私有成员的访问。
 
 上游继续持有 transcript、活动内核、review、视图计数、`_pendingEdits` 与 editor 已告诉标记；overlay 持有 warm kernels、turn marks、notices、btest 与切换计时。pendingModel 是内核 facet 的只读投影，不在这两处另存。
@@ -4563,7 +4582,20 @@ composer 不需要另接一套状态：
 | `lib/chat/session/session_commands.dart:1` | 22 | 整档删除 |
 | `test/chat/session_overlay_test.dart:1` | 新 | ≈ +340；契约顺序、生命周期、发送、notice、facet 失败门 |
 
-`chat_session.dart` 已超过 800 行。拆分计划是先把所有 fork 私有逻辑移入独立模块，本批不为了总行数再搬上游类；共享文件用 `fork-deltas.md` 的净增预算约束。后续若要拆上游 facet / review / send，另批按同一公开契约设计，不恢复 part。
+`chat_session.dart` 已超过 800 行。本批先把 fork 私有逻辑移入独立模块，不为总行数搬上游类；共享文件受 `docs/design/fork-deltas.md` 的净增预算约束。拆分单元按本档现坐标钉住：
+
+| 拆分单元 | 现坐标 | 拆出后 |
+|---|---|---|
+| facet | 能力投影带，`canRename`（`:604`）起的横向委托（改名 / 模型 / 权限 / 命令） | 投影 helper，只读 host 契约 |
+| review | `_startReview`（`:214`）· `_pendingEdits`（`:995`）· 回退面（`:923`–`:1031`） | 审查与回退出档；`revertTurn` 仍留宿主窄接缝（§29.2） |
+| send | `send`（`:1114`）– `sendQueuedNow`（`:1189`） | 发送构造与排队出档 |
+
+**触发判据**：上述三段任一段被本批以外的改动触碰（改任一线段即算）⇒ 立「chat_session 拆分」分批，按同一公开契约搬出该段，不恢复 `part`；未被触碰则不动。
+
+**R1 净增的代价（≈ +160 / −60）**：
+
+- `+160` 是留在上游类里的接缝与投影 —— §29.2 的九个宿主接缝、`agentKernel` / `transcript` 两个只读投影、choice re-export，以及 `hasCommandSource` / `renameConfirmed` 等委托。它们搬不出去：搬出就要读 `ChatSession` 私有成员，正是本批要结束的形态。
+- `−60` 是搬进 overlay 的自有逻辑。净增 ≈ +100，在 `docs/design/fork-deltas.md` §3 对 `chat_session.dart` 的 ≤180 行预算内。
 
 验收：
 

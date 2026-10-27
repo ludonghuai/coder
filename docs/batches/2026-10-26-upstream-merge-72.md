@@ -102,8 +102,40 @@
 
 **这是父侧笔触到 §2 的一次，据实登记**：动的是指针写法，不是设计内容；若后续评审认为 §2 行文需改，仍由 eng-designer 修订。
 
+### 设计评审裁决（主 agent，2026-10-26 20:47）
+
+评审 `a18a06c9` 结论 **changes-required**（🔴 1 · 🟡 4 · 🔵 2，未签发设计令牌 ⇒ 实施保持封住）。逐条裁决，全部文档面，一轮修完：
+
+| # | 裁决 | 要修什么（交 eng-designer） |
+|---|---|---|
+| 1 🔴 | **接受** | `docs/design/fork-deltas.md` §3 补 4 行：`lib/settings/pages/general_page.dart`（我们的块 = thincoder 设置组，类型 = 功能，接缝 = 设置页，预算 ≤+81）· `lib/chat/chat_screen.dart`（`canStopTasks` 单行接线，修 bug，≤+2）· `lib/kernel/mock/mock_kernels.dart`（thincoder 描述符，内核适配，≤+16）· `lib/platform/data_dir.dart`（路径接缝，修 bug，≤+2）。**或**把 §1 覆盖口径改成「§3 只登记 R1/R2 面、其余以设计档 §5.2 为准」——二选一，但必须只留一个出处。实核坐标：`general_page.dart:442`、`chat_screen.dart:603`、`mock_kernels.dart:34`。 |
+| 2 🟡 | **接受** | §28.8 ② 补 `lib/kernel/thincoder/thincoder_title.dart`（`part of 'thincoder_kernel.dart'`，现值 ≈85，delta ≈+12），或把落点改写成「kernel + title(part)」，使 `_pumpTitle` 可按符号找到。 |
+| 3 🟡 | **接受** | §29.1 / §29.3 给 5 个新名字各补三问答复（`ChatSessionOverlay` · `ChatSessionOverlayHost` · `BaocodeSessionOverlay` · `lib/chat/session/overlay.dart` · `lib/browser/btest/btest_tool_gate.dart`）。 |
+| 4 🟡 | **接受** | §28.6 末补 RTM 增量一句（不改 1-1/2-1/3-1 且不加行 + 理由，或补一行用例），形制照 §29.9。 |
+| 5 🟡 | **接受** | §29.5 把「后续另批」改成可核形状：拆分单元（facet / review / send）+ 触发判据（任一段被本批以外触碰即立拆分批）+ R1 净增的代价说明。 |
+| 6 🔵 | **接受** | §28.5 / §28.8 ⑤ 坐标改为 `composer_editing.dart:442`，注明 `hasCommandSource` 由 R1 恢复。 |
+| 7 🔵 | **接受** | §5.2 体量立场加总则：各行数 = 该节编制日快照、跨节不互校、实施首轮以 `wc -l` 复核。 |
+
+**边界**：只改上述七处文档；不动 §29 的设计语义、不动代码、不改 `test/RTM.md` 实况数字。修完自跑 `doc_check(gate)` 须 PASS。
+
+### 修轮核验（主 agent，2026-10-26 20:52）— 七条实测通过
+
+| # | 核验点 | 实读 |
+|---|---|---|
+| 1 🔴 | 登记表补 4 行 | `docs/design/fork-deltas.md:41` chat_screen / `:45` data_dir / `:49` mock_kernels / `:52` general_page，类型与预算齐 |
+| 2 🟡 | 拆出 part 档 | `thincoder-adapter.md:4387`（② 改为委托）/ `:4388`（②a `thincoder_title.dart` 84 行） |
+| 3 🟡 | 三问答复 | `:4440`（OverlayHost none found）/ `:4534` `:4535` `:4536`（BaocodeSessionOverlay · overlay.dart · btest_tool_gate existing but unusable） |
+| 4 🟡 | RTM 增量 | `:4360`「本批不加行，索引仍是 3 / 50–100；4-1 由 §29.9 立、随 R2 落地」+ 理由 |
+| 5 🟡 | 拆分单元 + 触发 | `:4589`（facet / review / send 三段）/ `:4593`（触发判据：任一段被本批以外改动触碰即立拆分批） |
+| 6 🔵 | 坐标订正 | `:4336` 已改 `composer_editing.dart:442`（另 `:4358` / `:4372` 同源引用一并订正） |
+| 7 🔵 | 行数总则 | `:347`「各行数 = 该条编制日快照；跨节不互校；实施首轮以 `wc -l` 复核，冲突以复核值为准」 |
+
+**本轮新发现的小瑕（未修，记在册）**：`thincoder-adapter.md:348` 写「只走接线 ⑬」，而 §5.2 表只到 ⑫（⑬ 定义在批 4 接线点表 `:684`）—— 指针写法问题，不影响语义，留待下一修轮或评审提出时一并处理。
+
+**状态**：🔴 已清，等待用户发**第二轮设计评审**（验上表 + 抓明显新问题）以取得设计令牌。
+
 ## §2 批次任务与设计（eng-designer）
-**状态行**：设计完成（设计续作轮：清 40 处长段落 + §2 任务书复核）
+**状态行**：设计完成（评审 7 条已修（设计档 §5.2 / §28.5 / §28.6 / §28.8 / §29.1 / §29.3 / §29.5 + fork-deltas §3 四行）；R1 / R2 的条目、落点与判据未变）
 <§2 模板占位：本批条目（覆盖） / 设计档落点 / 机制设计 / 受影响文件与测试覆盖 / 验收对照 / 关键决策 / 上抛项>
 
 ### 本批条目与同源设计
@@ -138,6 +170,25 @@
 - 验证边界：本轮是设计续作，未重新运行 390-error 基线；该基线来自批档 §1 父侧实跑。R1/R2 的实施验收以设计 §29.5 的命令与实跑结果为准。
 
 ## §3 设计评审（评审子代理）
+
+### 轮次 1（评审子代理）
+
+设计评审（docs/design/thincoder-adapter.md + docs/design/fork-deltas.md，全文实读；抽检代码：test/RTM.md 3 行 / 54 行、chat_session.dart 1266 行、lib/chat/session 八档 `part of`、composer_editing.dart:442、thincoder_title.dart、PROJECT-MANIFEST.json:35 publicRepos 为空、§29.5 点名的测试档全在盘）。
+
+| # | Category | Severity | Issue | Suggestion |
+|---|----------|----------|-------|------------|
+| 1 | Document ownership | 🔴 | fork-deltas.md 与设计档对「哪些共享上游档携带 fork 块」给出两套口径：fork-deltas.md:7「表外不许改上游档」、:8「表外共享文件是只读上游面」，而 §3 表（:36-:49）无 general_page.dart / chat_screen.dart / mock_kernels.dart / data_dir.dart 行；设计档同时记录这些文件的自有块：:311（⑦ general_page +≤81）、:314（⑩ data_dir）、:313（⑨ mock_kernels）、:684（⑬ chat_screen）。实reader核：general_page.dart:442-450、chat_screen.dart:603、mock_kernels.dart:34-40 确有自有块 | 在 fork-deltas §3 补 4–5 行（文件 / 块 / 类型 / 接缝 / 行数预算），或把 §1 改成「§3 只覆盖该批面、其余接线以设计档 §5.2 为准」——两者取一，使两档不再各自定义同一张表 |
+| 2 | Clarity（受影响档清册） | 🟡 | §28.8 漏 `lib/kernel/thincoder/thincoder_title.dart`（改名实现已在该 part 档：thincoder_title.dart:1 `part of 'thincoder_kernel.dart'`、:10 `renameConfirmedOf`、:38 `_pumpTitle`），而 §28.8②（:4380）把 `_pumpTitle` / `_titleConfirmed` 全记在 `thincoder_kernel.dart`（480 行）名下 | 表里补一行（现值 ≈85 / delta ≈ +12），或把 ② 的落点写成「thincoder_kernel.dart + thincoder_title.dart（part）」 |
+| 3 | Existing-piece（criterion 11） | 🟡 | §29 未给新名字的三问答复（`ChatSessionOverlay` / `ChatSessionOverlayHost` / `BaocodeSessionOverlay` / `lib/chat/session/overlay.dart` / `lib/browser/btest/btest_tool_gate.dart`）；§28.3（:4203-4207）有该形，§29 没有 | 在 §29.1 / §29.3 各补一句 `existing: … ∥ none found: … ∥ existing but unusable: …`（例：btest 门可写「existing but unusable：`BtestGate.check` 判据在，调用包装住 browser_tools 父库」） |
+| 4 | Integration-test design | 🟡 | 批 22（§28）未写它对 `test/RTM.md` 的增量：§21.7（:2640）/§22.12（:3036）都写了「本批不新增业务场景 + 原因」，§28 一句都没有，而 §28 改动了一个业务可观察结果（改名后侧栏/列表标题） | 在 §28.6 末尾补一句 RTM 增量（不改 1-1/2-1/3-1、不加行 + 理由，或补一行），与 §29.9 同形 |
+| 5 | Scope / size plan（criterion 8 + 体量裁定） | 🟡 | §29.5（:4566）对 `chat_session.dart` 1266 → ≈1366（>800 硬顶）只写「先把 fork 私有逻辑移入独立模块，后续另批」，无触发判据、无立项名；R1 净增 ≈ +100 反而把它推高，与「>800 必拆」的硬口径之间只剩一句无判据的承诺 | 给出可核触发（例：「facet / review / send 三段中任一段被本批以外触碰 ⇒ 立拆分批」），并说明 R1 的 +160/−60 里哪部分是把上游类留在原档的代价 |
+| 6 | Doc accuracy（坐标漂移） | 🔵 | §28.5（:4335）/§28.8 ⑤（:4383）把命令面板开关算在 `composer.dart:863-877`；该表达式实际在 `composer_editing.dart:442`，且 `ChatSession.hasCommandSource` 全仓只此一处消费者（该 getter 合并后尚未恢复）。§29.4（:4543）说对了，§28.5 说成既有面 | 把 §28.5 / §28.8 ⑤ 的坐标改为 `composer_editing.dart:442`，并注明 getter 由 R1 恢复 |
+| 7 | Doc-state（数字漂移） | 🔵 | 同一档多处「本轮实测」互不一致：`chat_session.dart` :4381 记 794（10-23）/ :4553 记 1266（10-26）；`thincoder_kernel.dart` :4380 记 480 / :351、:354 记 1296。两值都能被日期解释，但档里没有跨节总则（§23.3 :3122 只在单节写了） | 在 §5.2 体量立场加一句总则：各行数 = 该节编制日快照、跨节不互校、实施首轮以 `wc -l` 复核为准 |
+
+计数：🔴 1 · 🟡 4 · 🔵 2。抽检结论：§29.5 R1/R2 的行数标注与盘上实况相符（chat_session.dart 恰 1266；lib/chat/session 八档 `part of` 与 §29.1:4427 一致；R1/R2 验收点名的测试档全部存在，唯一新增档 `test/chat/session_overlay_test.dart` 尚未在盘）；§29.9 的 RTM 起点（3 行 / 54 行 / 新增 4-1 / 规模 3→4 在 50–100 窗内）与 `test/RTM.md:9`、`:49` 逐条对上；验收命令是改动面测试档清单而非全量套件（全量 analyze + 集成归父侧收口线），不构成「把发布门写成回合成本」。
+
+VERDICT: changes-required
+
 ## §4 用户批准（主 agent）
 ## §5 实施记录（eng-coder）
 ## §6 验证与收口（父代理）
