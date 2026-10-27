@@ -145,15 +145,25 @@ class SessionModelPicker extends StatelessWidget {
       tooltip: tooltip,
       menuWidth: 260,
       searchPlaceholder: l10n.modelsSearch,
+      // thincoder 的模型归 CLI 自己的配置管：provider 一长串，打开时先收起，
+      // 只让选中的那组展开；底部的管理入口指向 thincoder 的模型页，不是本应用的模型设置。
+      startCollapsed: session.kernel.id == 'thincoder',
       footers: [
         if (SettingsOpener.maybeOf(context) case final open?)
-          (
-            label: ChannelSetup.channelBuild
-                ? l10n.channelAccountTitle
-                : l10n.modelsManage,
-            icon: Icons.tune_rounded,
-            onTap: () => open(SettingsSection.models),
-          ),
+          if (session.kernel.id == 'thincoder')
+            (
+              label: l10n.settingsSectionThincoderModels,
+              icon: Icons.tune_rounded,
+              onTap: () => open(SettingsSection.thincoderModels),
+            )
+          else
+            (
+              label: ChannelSetup.channelBuild
+                  ? l10n.channelAccountTitle
+                  : l10n.modelsManage,
+              icon: Icons.tune_rounded,
+              onTap: () => open(SettingsSection.models),
+            ),
       ],
       tapRegionGroupId: tapRegionGroupId,
       focusNode: focusNode,

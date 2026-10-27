@@ -38,6 +38,7 @@ class ComposerPicker extends StatefulWidget {
     required this.onSelected,
     this.label,
     this.describes = true,
+    this.startCollapsed = false,
     this.descriptionAside = false,
     this.settingsOf,
     this.submenuOf,
@@ -61,6 +62,9 @@ class ComposerPicker extends StatefulWidget {
 
   /// Shows each option's description under it.
   final bool describes;
+
+  /// 每个分组默认收起（选中的那组除外）：provider 很长时，先看到自己选的是哪个。
+  final bool startCollapsed;
 
   /// With [describes], each description at its row's end, on the label's
   /// line: rows as low as without.
@@ -183,6 +187,20 @@ class ComposerPickerState extends State<ComposerPicker> {
   /// The groups collapsed under their headings, by id: open again as the
   /// menu is, until the picker goes.
   final Set<String> _collapsed = {};
+
+  /// 已经处理过的分组：后来才到的模型（会话后面才报）也要默认收起。
+  final Set<String> _seenGroups = {};
+
+  /// 把没见过的分组收起（选中的那组除外），首次构建与选项变化时都调。
+  void _collapseNewGroups() {
+    final selected = widget.selected.group?.id;
+    for (final option in widget.options) {
+      final group = option.group;
+      if (group == null) continue;
+      if (!_seenGroups.add(group.id)) continue;
+      if (group.id != selected) _collapsed.add(group.id);
+    }
+  }
 
   bool get _collapses => _query.trim().isEmpty && _grouped;
 
@@ -373,6 +391,7 @@ class ComposerPickerState extends State<ComposerPicker> {
   @override
   void initState() {
     super.initState();
+    if (widget.startCollapsed) _collapseNewGroups();
     _searchText.addListener(() {
       if (_searchText.text != _query) _search(_searchText.text);
     });
@@ -385,6 +404,7 @@ class ComposerPickerState extends State<ComposerPicker> {
     if (widget.options.length != oldWidget.options.length) {
       _rowKeys = _keysFor(widget.options);
     }
+    if (widget.startCollapsed) _collapseNewGroups();
   }
 
   @override
