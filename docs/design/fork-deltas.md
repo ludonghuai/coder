@@ -28,7 +28,6 @@
 | `lib/host_tools/host_mcp_server.dart` | 环回 Streamable HTTP MCP 端点：按 `group` 分组暴露，`picturesOnly` 与组外工具一律不出（`_offered` `:281-285`、`tools/list` 记组 `:246`、`tools/call` 拒组外 `:259-266`） | 功能 | `HostTools` 注册表；ACP `mcpServers` 面 | 自有 |
 | `lib/chat/editor_context.dart` | editor context 数据形与提示词渲染 | 内核适配 | overlay 发送与 `KernelTurn.contexts` | 自有 |
 | `test/kernel/thincoder*_test.dart`、`test/diagnostics/**` | 自有内核与诊断断言 | 功能 | 对应独立模块 | 自有 |
-| `test/ide/git/git_autofetch_test.dart` | 自有 SCM 断言，独立于上游测试 | 功能 | SCM 公共入口；#181 未裁定 | 自有 |
 | `test/RTM.md`、`test/integration/**` | 本仓业务集成索引与用例 | 功能 | 用户入口与业务可观察结果 | 自有；50–100 条用例窗 |
 
 ## 3 共享上游文件的登记接缝
@@ -265,7 +264,7 @@
 ### 8.3 边界（不做）
 
 - 不改上游按键实现（`_onWorkbenchKey` / `KeybindingService` 的解析链）：只加窗口门。
-- 不动 SCM 语义与 autofetch：SCM「获取」按 #181 的裁定走上游，autofetch 死代码清理在 #184。
+- 不动 SCM 语义：SCM「获取」按 #181 的裁定走上游。autofetch 已清理完，本仓不再有该代码，不恢复。
 - 不删 `IdeScmView` 旧 widget（另批）。
 - 六组不各配集成用例：见 §8.4。
 
