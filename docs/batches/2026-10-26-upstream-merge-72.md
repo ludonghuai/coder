@@ -355,3 +355,36 @@ VERDICT: pass
 | B5 业务集成回溯 | ✅ Done | 1-1/2-1/3-1 未改；新增 4-1（`test/integration/btest_flows_test.dart`），RTM 3 → 4 / 50–100 |
 
 ## §6 验证与收口（父代理）
+
+### 验证与收口（父代理，2026-10-26 21:55）
+
+**分支状态**：`merge/upstream-20261026`（`ffee0759` 实施 + 文档门修正提交），`main` 未动（`26c969aa`）。**本批不进 main** —— 见下方未决项。
+
+**① 编译面（实跑 `flutter analyze --no-pub`）**
+
+| 范围 | 读数 |
+|---|---|
+| `lib/` | **0 error**（合并前 333） |
+| `test/` | **1 error** = `model_picker_test.dart:61` 的 `startCollapsed`（用户已裁定保留该行为，另批 #183） |
+| `part of '../chat_session.dart'` | **0 命中** |
+| 自有模块触碰宿主私有成员（`owner._`） | **0 命中** |
+
+**② 定向测试（eng-coder 实跑，父侧复核口径）**
+`session_overlay` +10 · R1 会话面 +29 · R2 浏览器四档 +27 · 集成 4-1 +1 · `rename_confirmed` +3。
+
+**③ 全量测试（父侧实跑，`flutter test --no-pub`，333 s）**
+`+7107 ~31 -128`（基线 `main` 昨读数 `+6985 ~30 -99`）。
+
+**④ 失败分类（抽样对照，实跑备份分支）**
+取 6 个失败最多的档：`side_panel` / `installer` / `textmate_editor` / `scm_fetch_button` / `ide_editor_keys` / `native_editor_integration`。
+- **合并前**（`backup/pre-upstream-20261026`）：`+67 ~2 -38`
+- **合并后**：`-57`
+- **逐条比对**：新增失败 **20 条**、转绿 1 条。新增全部落在 `side_panel_test`（10）与 `scm_fetch_button_test`（9）与 `installer_test`（1）。
+
+**根因（实读一致的判断）**：上游重写了 SCM / 侧栏面板，我们用 A 策略整档取上游 ⇒ **fork 的 SCM 断言仍在测已经不存在的旧 UI**。这与 §29.9「4-1 立、SCM 面归 #181 裁定」的预设一致，不是重接写错。
+
+**未决（必须留到下一批，不掩盖）**
+1. **约 29 条新增失败尚未逐条分类**（抽样已证 20 条属 SCM/面板面；余 9 条未取）。分类依赖 **#181**（SCM 获取语义保留与否）与 #183（picker）。**判据**：`backup/pre-upstream-20261026` 与 `material_file_icons` 之外的同档对照。
+2. **不进 main 的理由**：进 main 的门槛是全量绿或失败逐条有据；当前 128 条里约 29 条未定性 ⇒ 不满足。
+
+**文档门**：`doc_check(gate)` 批档 **PASS**（父侧清了 12 处格式命中，含 §3/§5 他人笔域，已在 §1 披露）；设计两档 PASS。
