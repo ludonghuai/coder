@@ -1289,8 +1289,16 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
   List<PaletteAction> _paletteActions() {
     final l10n = context.l10n;
     final commands = _chatCommands();
+    // The focused chat's own commands (rename and the like) live on the
+    // chat screen, not the window: the palette reads them the way the keys
+    // do.
+    final thread = _agentThread ?? _workspace.current;
+    final chat = thread == null
+        ? const <ChatKeyTarget>[]
+        : ChatKeys.targetsOf(_chatKey(thread).currentContext);
+    final chatCommands = ChatKeys.commandsOf(chat);
     PaletteAction? action(String id, IconData icon, [VoidCallback? run]) {
-      final command = run ?? commands[id];
+      final command = run ?? commands[id] ?? chatCommands[id];
       if (command == null) return null;
       return PaletteAction(
         id: id,
@@ -1305,6 +1313,7 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
 
     return [
       ?action(ChatCommandIds.newChat, Codicons.add),
+      ?action(ChatCommandIds.renameAgent, Codicons.edit),
       ?action(_customizeCommand, Codicons.plug),
       ?action(openSettingsCommandId, Codicons.settingsGear),
       ?action(openKeybindingsCommandId, Codicons.keyboard),
