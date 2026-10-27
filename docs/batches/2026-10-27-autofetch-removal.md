@@ -179,4 +179,84 @@ VERDICT: pass
 
 ## §4 用户批准（主 agent）
 ## §5 实施记录（eng-coder）
+**状态行**：实施完成（6 笔提交 · analyze 零 error · test/ide/git +203 −1（唯一失败为存量 ask_ai_test.dart:134，父侧裁决保持原样）· 审计+评审各 1 轮，终态 clean）
+
+
+
+### 实施记录（eng-coder · 2026-10-27）
+
+**做了什么**：按 design §5 表 ①–⑩ 删除 fork 的 autofetch 整簇，SCM 面回上游形态。14 个文件、6 笔提交、净 +9 / −2925 行。
+
+#### 逐条覆盖（design §5 表 ↔ 现态）
+
+| # | 条目 | 状态 | 落点 / 读数 |
+|---|---|---|---|
+| ①②③ | `git_autofetch.dart`(300) · `git_autofetch_engine.dart`(410) · `git_pull.dart`(52) | ✅ | 三档已不在盘 |
+| ④⑤ | `git_settings.dart`(112) 整删 · `general_page.dart` 去挂载与 import | ✅ | `grep "GitSettingsGroup\|git_settings" lib/` 零命中；现 843 行（预算 ~842） |
+| ⑥ | `git_repository.dart` 残留 + 泛型回上游 | ✅ | 1007 → 902 行（预算 ~903）；`lastFetchAt` / `autoFetchIssue` / `_markFetched` / 三处调用 / `clock` / `pullFromUpstream` / `fastForward` / 两个 import 全去；`_enqueue`(`:169`) 与 `_operate`(`:189`) 回 `Future<void>` |
+| ⑦ | `git_service.dart` 四方法 | ✅ | 1704 → 1658 行（预算 ~1654）；`merge(ref)` 保留，`git_branch_actions.dart:146` 仍在用 |
+| ⑧⑨ | 21 个 l10n 键 + 重新生成 | ✅ | `app_en.arb` −109 行、`app_zh.arb` −21 行（恰为 21 键）；三个生成档由 `flutter gen-l10n`（退出 0）重出；五档对 21 键全部零命中 |
+| ⑩ | 两个测试档 | ✅ | 两路径已不在盘 |
+| ⑪ | 需求档 | ✅ 父侧已完成 | 29 行，规范面（§1–§5）无 autofetch；档头来源行按 §1 裁决 #2 保留 |
+| ⑫ | 设计档 | ✅ 已完成 | 214 行，按删除后现态 |
+
+`test/ide/git/` 现为 **41 个测试档 + 夹具 `fake_git.dart`**（共 42 项）。删前 44 项 = 这 41 个 + 夹具 + 本批删掉的 2 个——不是删少了档。
+
+#### 提交（每删一组单独提交，D8）
+
+| # | 提交 | 组 | 文件 |
+|---|---|---|---|
+| 1 | `7a46a7c6` | D 测试档 | 2 个测试档删除 |
+| 2 | `cedd3a0e` | B 控件 + 挂载 | `git_settings.dart` + `general_page.dart` |
+| 3 | `7513e66b` | A 引擎（叶子） | `git_autofetch_engine.dart` |
+| 4 | `3f59d5cc` | C 仓库侧 + C′ | `git_repository.dart` + `git_service.dart` |
+| 5 | `04f1533b` | A 余下两档 | `git_autofetch.dart` + `git_pull.dart` |
+| 6 | `17e88b8f` | E l10n | 两个 arb + 三个生成档 |
+
+**A 组为什么拆成两笔**：A 与 C 互相引用——引擎档调用 `pullFromUpstream` 与 `service.fastForward`，仓库档 import `git_pull.dart` 的类型。任何一侧先落，中间那笔都编译不过。按可编译顺序落：引擎（叶子）先走，仓库侧跟上，最后删掉失去全部 import 者的两档。组粒度只变细不变粗，单笔回退照旧成立。
+
+#### 验证读数（实施轮实跑）
+
+| 检查 | 命令 | 读数 |
+|---|---|---|
+| 静态分析 | `flutter analyze`（全仓） | **7 issues / 零 error**；7 条全在未触碰的测试档（`session_overlay_test.dart` 5、`lsp_settings_template_test.dart` 1、`remote_project_test.dart` 1），均为存量 |
+| git 面测试 | `flutter test test/ide/git/` | **+203 −1**；唯一失败 `test/ide/git/ask_ai_test.dart:134`——断言 prompts 含 `lib/a.dart`，Windows 实际给 `lib\a.dart`。**存量**：在实施前基点 `cc18fad1` 单跑该档得 `+3 −1`、同一报错 |
+| 设置面测试 | `flutter test test/settings/settings_wiring_test.dart` 等三档 | 新树 `+8 −4`；基点上 `+4 −4`、**同四条**（3 条 Windows 临时目录 `PathAccessException` 收尾 + 1 条 "Automatic" 文案查找）⇒ 存量、环境性 |
+| l10n 生成 | `flutter gen-l10n` | 退出 0，三个生成档重出 |
+| 文档门 | `doc_check(mode:"gate")`（设计档 + 需求档） | 首行 `DOC-CHECK GATE: PASS` |
+
+**验收判据（按父侧 2026-10-27 裁决改判）**：`test/ide/git/` 判「除 `ask_ai_test.dart:134` 这条存量外全绿」。本批运行读数为 `+203 −1`，失败即该条，非本批引入；断言与产品两侧均未改动。
+
+#### 关键判据复核（design §5 表后三条）
+
+实施首轮按同一 grep 复跑：`lastFetchAt` / `autoFetchIssue` / `pullFromUpstream` / `ideGitPull` / `ideGitAutoFetch*` / `service.fastForward|merging|abortMerge|changedPaths` 在 `lib/` 与 `test/` 全部零命中。命中集与预期完全一致，未出现预期外消费者，删除面未扩大。
+
+#### 偏离与披露
+
+| 项 | 说明 |
+|---|---|
+| 提交顺序 | D8 列的是 A/B/C/D/E/F；实落顺序为 D → B → A(引擎) → C+C′ → A(余下) → E，理由同上（每一笔都要编译得过）。F 组无待办——父侧与设计轮已完成 |
+| 清单外的改动 | **无**。14 个文件 = design §5 ①–⑩ 的并集；`ide_scm_view.dart` / `ide_git_log_view.dart` / `ide_git_commit_panel.dart` / `packages/bao_remote` / `lib/network` 零改动 |
+| 行数预算 | `git_repository.dart` 902（~903）· `git_service.dart` 1658（~1654）· `general_page.dart` 843（~842），均在预算内 |
+| design §5 ⑧ 坐标 | en 的删除区间写到 `:8893-9049`，实删到 `:9057`（最后一个 `@gitAutoFetchOther` 块尾）；zh `:3349-3381` 与实测一致 |
+| §2-8 走查 | **未跑**（需起 GUI 应用）。可机检的一半已证：`lib/` 对 `git.autofetch` / `autoPull` 零读取，设置读法是 `settings?[...]` 容错取键、无键白名单 ⇒ 带旧键的 settings.json 不会炸 |
+| 用户旧设置 | 未迁移、未清洗（D6），且零代码读取 |
+
+#### 审计与评审
+
+| 轮 | 类型 | 结果 | 处置 |
+|---|---|---|---|
+| 1 | 内部 explore 偏离审计（只读，逐条对 design） | 五个检查面全过；**1 条文档漂移** | `docs/design/fork-deltas.md:31` 仍把 `test/ide/git/git_autofetch_test.dart` 登记为现存的 fork 自有档；`:268` 的「autofetch 死代码清理在 #184」是本批要做完的待办指针。**设计档不是我的笔**，未改，交父侧按 D1 路由 |
+| 1 | 独立代码评审（advisor · type=code） | **VERDICT: pass**（🔴0 · 🟡0 · 🔵3） | 三条 🔵 处置见下 |
+
+**三条 🔵 的处置**
+
+1. `git_repository.dart:106` 的 `_enqueue(background: true, () async {`（命名参数排在位置参数前）：**不改**。逐字比对 `git show origin/main:lib/ide/git/git_repository.dart` 第 106 行，上游就长这样；本批目标是回上游形态，改它反而成了偏离。
+2. `test/ide/git/fake_git.dart:40`（`merges` 映射）与 `:166`（`case ['merge', '--ff-only', final ref]:`）：`fastForward` 删掉后已无生产发出者，成为死夹具分支，无行为影响。**不改**——该档不在 design §5 清单内，§1 红线「不新增删除对象」。建议 `归批`：下次碰 git 夹具时扫掉。
+3. 批档 §2 第 6 行「20 个 l10n 键」与现态 21 的差：§2 是 append-only，同节补记已自行声明这几处为旧值，**不改**，属已披露漂移。
+
+**终态**：`clean` —— 审计 1 轮 + 评审 1 轮，零修复轮，无未决修复项。
+
+**上抛（待父侧路由）**：`[上抛·待裁]` `docs/design/fork-deltas.md:31` / `:268` 的设计档漂移——由 eng-designer 就地改（删该登记行、收掉 #184 的待办指针），或记 `归批`。
+
 ## §6 验证与收口（父代理）
