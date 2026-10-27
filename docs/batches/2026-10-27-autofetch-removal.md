@@ -3,7 +3,7 @@
 > 编制：主 agent · 2026-10-27 · 来源 = 用户 2026-10-26 22:07 裁定接受上游 SCM 面（弃 autofetch / 获取=fetch+merge / ↓N）；2026-10-27 00:21「开干」；来源 = kimi 合并审查（explore#24）查出 autofetch 引擎失去唯一构造点、设置页三控件成假开关。
 > 台账 = #184（ide-git · 归批）。前情 = docs/batches/2026-10-27-merge-regressions.md（已收口 2026-10-27）。
 ## §1 讨论（主 agent）
-**状态行**：🔄 进行中（…）
+**状态行**：已收口 2026-10-27
 <§1 模板占位：本批条目 / 关键判据 / 授权口径>
 
 ### 本批：删除 autofetch 整簇（2026-10-27 00:25）
@@ -178,6 +178,21 @@ VERDICT: pass
 计数：🔴 0 · 🟡 7 · 🔵 4
 
 ## §4 用户批准（主 agent）
+
+### 用户批准（2026-10-27 01:05）
+
+**批准口径**：用户 2026-10-27 00:21「开干」= 对删除方案的执行授权（前情 22:07 已裁定接受上游 SCM 面）；00:33「要，我不喜欢休息」= 继续实施；00:45「拉一下代码」期间未收回。**若事后收回，本批可整组回退**（7 笔提交各自独立）。
+
+**批准时的状态**
+
+| 项 | 状态 |
+|---|---|
+| 代码 | 7 笔提交落地：`16a6830e`(§5) · `17e88b8f`(l10n) · `04f1533b` · `3f59d5cc` · `7513e66b` · `cedd3a0e` · `7a46a7c6` |
+| 设计 | `docs/design/ide-git.md` 214 行（删除后现态）· `docs/requirements/ide-git.md` 29 行 |
+| 评审 | 设计评审 `ed218d95` **pass**（🔴0 · 7🟡 · 4🔵 全修）；实施内部审计五面全过 + 代码评审 pass（🔴0 🟡0 🔵3，三条均「不改」并有理由） |
+| 验证 | `flutter analyze` **0 error**（7 条 warning/info 全在未触碰的测试档）· `flutter test test/ide/git/` **+204 −1**（唯一失败 = 已裁定的存量 `ask_ai_test.dart:134`） |
+| 合并 | 上游 3 提交（含 #386 Git 面）已合入，**零冲突**；合并后 analyze 仍 0 error |
+
 ## §5 实施记录（eng-coder）
 **状态行**：实施完成（6 笔提交 · analyze 零 error · test/ide/git +203 −1（唯一失败为存量 ask_ai_test.dart:134，父侧裁决保持原样）· 审计+评审各 1 轮，终态 clean）
 
@@ -260,3 +275,37 @@ VERDICT: pass
 **上抛（待父侧路由）**：`[上抛·待裁]` `docs/design/fork-deltas.md:31` / `:268` 的设计档漂移——由 eng-designer 就地改（删该登记行、收掉 #184 的待办指针），或记 `归批`。
 
 ## §6 验证与收口（父代理）
+
+### 父侧独立核验（2026-10-27 01:10）— 不采信子代理报告，逐条 grep
+
+| 检查 | 读数 |
+|---|---|
+| 6 个待删档 | **全部已删**（`git_autofetch.dart` · `git_autofetch_engine.dart` · `git_pull.dart` · `settings/pages/git_settings.dart` · 两个测试档） |
+| 该留的空仓修复 | **在**：`lib/ide/git/git_repository.dart:770` `scheduleMicrotask(_notify);` |
+| l10n 旧键 | `app_en.arb` **0 处** · `app_zh.arb` **0 处**（查 `gitAutoFetch` / `gitLastFetched` / `gitPeriodMinutes` / `generalSettingsGit` / `scmFetchAndPull` / `scmBehindCommits`） |
+| 死代码 | `lib/` 对 `IdeGitAutoFetch` / `GitSettingsGroup` / `pullFromUpstream` **零命中** |
+| 编译 | `flutter analyze --no-pub` = **0 error**（7 条 warning/info，全在未触碰的测试档） |
+| 测试 | `flutter test test/ide/git/` = **+204 −1**；唯一失败 `ask_ai_test.dart`（存量，已在批外基点复现） |
+| 工作树 | 干净 |
+
+**批量**：删 6 档 / 改 9 档 · **净 +89 / −2925 行** · 7 笔提交，各自可单笔回退。
+
+### 合并上游 3 提交（2026-10-27 01:08）
+
+`origin/main` 新增 3 提交（#386 Git 检查点移出 UI isolate · #384 忽略目录不读 status · #382 步骤动画同帧），**与本次删除面重叠（都在 `lib/ide/git/**`）但合并零冲突**。合并后：`analyze` 0 error · `test/ide/git/` +204 −1（同上存量）· 与上游差距 **179 / 0**。
+
+**过程中撞到一个坑并已按既有经验处置**：合并后首跑 `flutter test` 报 `Building native assets failed`（hook 退出码 253）⇒ 删 `.dart_tool/hooks_runner` + `flutter pub get` ⇒ 恢复。**这是构建缓存失效，不是代码问题**，已记入本节以免下次误判。
+
+### 结算（2026-10-27 01:12）
+
+| 项 | 结论 |
+|---|---|
+| 删除面 | A/B/C/C′/D/E/F 七组全落，逐组核验通过 |
+| 保留面 | 空仓修复 · 系统代理 · 上游 SCM 三档 · `packages/bao_remote` **零改动**（`git diff --stat` 对 `packages/` / `lib/network/` / SCM 三档零命中） |
+| 设计/需求档 | 均已是删除后现态；`doc_check(gate)` **PASS**（3 档） |
+| 单元测试 | 两个测试档随被测对象同批删除（不新增）；本批验证读数 = analyze 0 error + `test/ide/git/` +204 −1 |
+| 集成测试 | RTM 66 行、git 面零命中 ⇒ delta = none（本批是删除，无新业务故事） |
+| 台账 | #184 核销 · #185 已核销（需求档）· #192 新增（ask_ai 存量归批） |
+| 未做 | `fake_git.dart:40/:166` 的死夹具（越出 design §5 清单，建议归批）· §2-8 的旧 settings.json 走查（需起 GUI，可机检的一半已证） |
+
+**转出债**：`docs/design/fork-deltas.md:31` 仍把 `test/ide/git/git_autofetch_test.dart` 登记为现存自有档、`:268` 仍写「autofetch 死代码清理在 #184」——设计档是 eng-designer 的笔，另派一轮改（本批不碰）。
