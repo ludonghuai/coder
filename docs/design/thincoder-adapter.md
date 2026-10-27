@@ -345,7 +345,7 @@ thincoder 侧的接口例外见 §16.1。）批 4 的改动点见 §15.4（同�
 体量立场（>800 行既有档与测试档的拆分审阅）：
 
 - **行数口径（总则）**：以下各行数 = 该条编制日的快照；跨节不互校（同一档在不同批的实测值不同属正常，例如本档与 §28.8 / §29.5 各记各的日期）；实施首轮以 `wc -l` 复核，冲突时以复核值为准。
-- `chat_session.dart`（1087 行）处 >800 行硬顶之上：**本批不动结构**（只走接线 ③）；拆分缝候选 = Facets（`:329`）/ Projections（`:510`）/ Commands（`:920`）段（段头注释即缝）；触发 = 独立拆分批立项。
+- `chat_session.dart`（1087 行）处 >800 行硬顶之上：**本批不动结构**（只走接线 ③）；拆分单元（facet / review / send 三段，按现坐标钉住）与触发判据以 §29.5 为准；本批不拆。
 - `chat_screen.dart`（1231 行）处 >800 行硬顶之上：**批 4 不动结构**（只走接线 ⑬，1 行改动 / 净增 0）；拆分缝候选 = `_ChatScreenState`（`:182`）之后的私有构件族（`:903`–`:1231`：标题栏布局 / 会话列渲染 / 底部切换 / 历史载入 / 面板槽）；触发 = 独立拆分批立项。
 - `chat_models.dart`（719 → 806，2026-10-19 实测）：处 >800 行硬顶之上；本批只加 `EditorContext` / `UserMessageItem.contexts`（行级新增，不动结构）；拆分缝候选 = `EditorContext` 段（`:52`–`:131`）出档 `lib/chat/editor_context.dart`；触发 = 下一次结构级触碰或独立拆分批立项。
 - `workspace.dart`（2795 行）处 >800 行硬顶之上：**本批不动结构**（只走接线 ④⑤；⑤ = `load()` 回路内改造 + `_listKept` 参数化，不新增文件、不拆类）；拆分缝候选 = The IDE's windows（`:727`）/ SSH hosts（`:1281`）/ Color theme（`:1858`）段（段头注释即缝）；触发 = 独立拆分批立项。
@@ -4461,10 +4461,10 @@ abstract interface class ChatSessionOverlay {
 
   bool get btestOn;
   BtestRun? get btestRun;
-  bool get btestTraversal;
+  BtestTraversal get btestTraversal;
   bool get btestWrite;
   void setBtest(bool on);
-  void setBtestTraversal(bool on);
+  void setBtestTraversal(BtestTraversal value);
   void setBtestWrite(bool on);
   KernelChoice? wrapModes(KernelChoice? base);
 
@@ -4522,7 +4522,7 @@ abstract interface class ChatSessionOverlay {
 | `lib/chat/session/overlay.dart` | `BaocodeSessionOverlay`，组合各 helper | warm kernels、turn marks、notices、btest、切换计时 |
 | `lib/chat/session/kernel_proxy.dart` | 上游缺少的内核能力投影 | 无；读 `host.agentKernel` |
 | `lib/chat/session/mode_state.dart` | btest option、`wrapModes`、pendingModel | btest 只在 overlay；pendingModel 直接读内核，无第二份状态 |
-| `lib/chat/session/transcript_proxy.dart` | turn-mark 算法与 notice 投影 | 列表只在 overlay；算法只用 apply 前后读数 |
+| `lib/chat/session/transcript_proxy.dart` | turn-mark 算法、`canStopTasksOf` 与 `cutsAtMessage` | 列表只在 overlay；算法只用 apply 前后读数 |
 | `lib/chat/session/file_edits.dart` | 四个 `PlansReverts` 投影；`revertTurn` 留在宿主接缝 | 无；pending edits 与审查状态仍在上游 |
 | `lib/chat/session/send_contexts.dart` | editor context 去重、btest 卡片上下文、已告诉文本枚举 | 去重是一次发送的局部状态 |
 | `lib/chat/session/lifecycle.dart` | warm kernel 缓存、挂载与切换计时 | 缓存只在 overlay，dispose 必清空 |
@@ -4573,7 +4573,7 @@ composer 不需要另接一套状态：
 | `lib/chat/chat_session_overlay.dart:1` | 新 | ≈ +170；choice 数据、host 与完整 overlay 契约 |
 | `lib/chat/session/overlay.dart:1` | 新 | ≈ +260；每会话状态与契约实现 |
 | `lib/chat/session/kernel_proxy.dart:1` | 204 | 收敛到 ≈90；只留缺失 facet |
-| `lib/chat/session/transcript_proxy.dart:1` | 226 | 收敛到 ≈150；turns / notices / canStopTasks |
+| `lib/chat/session/transcript_proxy.dart:1` | 226 | 收敛到 ≈150；turns / canStopTasks / cutsAtMessage |
 | `lib/chat/session/mode_state.dart:1` | 187 | 收敛到 ≈100；btest mode / pendingModel |
 | `lib/chat/session/file_edits.dart:1` | 142 | 收敛到 ≈35；四个 PlansReverts 投影 |
 | `lib/chat/session/lifecycle.dart:1` | 43 | ≈ +60；warm 与计时 helper |
