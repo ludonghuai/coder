@@ -209,6 +209,10 @@ class BaocodeSessionOverlay implements ChatSessionOverlay {
     _turns.clear();
     _prependedSeen = 0;
     _publishBtest();
+    // A kernel kept warm is ready the moment it comes back: its line is read
+    // here, not on an event it will never send. A cold one stays pending and
+    // the first event reads it (§25.5).
+    if (readKernelSwitch(_switching, host.agentKernel)) _switching = null;
   }
 
   @override
