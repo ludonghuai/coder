@@ -1580,12 +1580,6 @@ class IdeGitService {
     );
   }
 
-  /// Merges [ref] into the current branch: `git merge --no-edit`.
-  Future<void> merge(String ref) async {
-    await _requireRoot();
-    _check(await _git(['merge', '--no-edit', ref]), 'Cannot merge $ref.');
-  }
-
   /// Rebases [branch] (the current one when null) onto [onto]:
   /// `git rebase --autostash <onto> [<branch>]`; with a branch, it is
   /// checked out.

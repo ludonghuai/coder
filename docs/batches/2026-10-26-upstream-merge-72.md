@@ -134,6 +134,27 @@
 
 **状态**：🔴 已清，等待用户发**第二轮设计评审**（验上表 + 抓明显新问题）以取得设计令牌。
 
+### R1 实施轮启动与降级（主 agent，2026-10-26 20:55）
+
+**设计评审通过**（`reviewId a18a06c9`，轮次 2，`VERDICT: pass`；🔴 0 · 新报 🟡 2 项不阻批准，见 §3 轮次 2）。用户 20:51 逐字「开工」⇒ 令牌签发，实施解封。
+
+**降级事实（明写）**：R1 首派 `kimi-code:k3.1-pro`（#7）**立刻 429**；按用户规则降级 `deepseek:deepseek-flash`（#8）重派，任务书与文件域不变。kimi 三把 key 共用 5 小时窗口，本窗口内不可用。
+
+**R1 范围（设计 §29.5）**：12 档，单一 chat 面 —— 新建 `chat_session_overlay.dart` / `session/overlay.dart` / `test/chat/session_overlay_test.dart`；改造 `chat_session.dart`；收敛 `kernel_proxy` / `transcript_proxy` / `mode_state` / `file_edits`；扩写 `lifecycle` / `send_contexts`；整档删 `file_paths.dart` / `session_commands.dart`。
+**红线**：不恢复 `part of`；不改上游档迁就自有代码；不碰 SCM / picker / 外仓（#181 未裁定）。
+**遗留**：§3 轮次 2 的两项 🟡（§5.2:348 拆分口径两套并存 · fork-deltas 两行预算少算）留待实施后一轮小修，不混入本实施轮。
+
+### 用户裁定：picker 行为保留（2026-10-26 21:08）
+
+- **已定决定**：合并后**保留** fork 的 picker 行为（thincoder 会话 `startCollapsed: true` + `footer: null`，即"打开只显示当前选中、底部不放管理模型按钮"）· 用户原话：「要；并且这个影响合并应该不会很大，难度也比较低」 · 时间：2026-10-26 21:08
+
+**依据（实读）**：fork 版 `backup/pre-upstream-20261026:lib/chat/composer/session_model_picker.dart:162-164`
+`startCollapsed: session.kernel.id == 'thincoder',` / `footer: session.kernel.id == 'thincoder'` / `    ? null`。
+合并后该档整档取上游，行为丢失；`test/kernel_ui_test.dart:172` 与 `test/chat/model_picker_test.dart:61` 因此红。
+
+**处置（本批不做，另立小批）**：属产品代码 + 需解冻 `fork-deltas.md` §4 的 picker 冻结，故不入 R1/R2。已入台账，待本批收口后按小批走（设计补 seam 行 + 评审 + 实施）。
+**R1 报告口径**：两处保持红，不由实施轮改测试迁就。
+
 ## §2 批次任务与设计（eng-designer）
 **状态行**：设计完成（评审 7 条已修（设计档 §5.2 / §28.5 / §28.6 / §28.8 / §29.1 / §29.3 / §29.5 + fork-deltas §3 四行）；R1 / R2 的条目、落点与判据未变）
 <§2 模板占位：本批条目（覆盖） / 设计档落点 / 机制设计 / 受影响文件与测试覆盖 / 验收对照 / 关键决策 / 上抛项>
@@ -189,6 +210,119 @@
 
 VERDICT: changes-required
 
+### 轮次 2（评审子代理）
+
+### 轮次 2 复核（7 项全部闭项，新增 2 项 🟡）
+
+上一轮 1 🔴 + 4 🟡 + 2 🔵 全部按当前盘上文档复核（两档本轮重读；`thincoder-adapter.md` 读的是本轮条目所在区段 + 相邻上下文，未读区段不影响任何结论）。
+
+| # | Orig# | File | Severity | Status | Notes |
+|---|-------|------|----------|--------|-------|
+| 1 | 1 | docs/design/fork-deltas.md | 🔴 | Fixed | §3 已补四行：`:41` `lib/chat/chat_screen.dart`（接线点 ⑬，净增 ≤2）、`:45` `lib/platform/data_dir.dart`（净增 ≤2）、`:49` `lib/kernel/mock/mock_kernels.dart`（净增 ≤16）、`:52` `lib/settings/pages/general_page.dart`（净增 ≤81）。§1「表外不许改上游档」与设计档 §5.2 的接线点集不再各说一套。 |
+| 2 | 2 | docs/design/thincoder-adapter.md | 🟡 | Fixed | §28.8 补 `②a` 行（`:4388`）：`lib/kernel/thincoder/thincoder_title.dart`（`part of 'thincoder_kernel.dart'`）84 行 / ≈ +10；`②`（`:4387`）改注「判据实现在 `thincoder_title.dart`」，落点不再指向不含 `_pumpTitle` 的档。 |
+| 3 | 3 | docs/design/thincoder-adapter.md | 🟡 | Fixed | §29 补两组三问答复：`:4439-4440`（`ChatSessionOverlay` / `ChatSessionOverlayHost`）与 `:4534-4536`（`BaocodeSessionOverlay` / `lib/chat/session/overlay.dart` / `lib/browser/btest/btest_tool_gate.dart`），五个新名字都有 `none found` 或 `existing but unusable` 的判词。 |
+| 4 | 4 | docs/design/thincoder-adapter.md | 🟡 | Fixed | §28.6 末尾补 RTM 增量（`:4360`「**RTM 增量（本批不加行，索引仍是 3 / 50–100；4-1 由 §29.9 立、随 R2 落地）**」+ `:4362-4364` 三条理由），形制与 §21.7 / §22.12 / §29.9 一致。 |
+| 5 | 5 | docs/design/thincoder-adapter.md | 🟡 | Fixed | §29.5 补拆分单元表（`:4587-4591` facet / review / send 各带现坐标与拆出后归属）、自动触发判据（`:4593`「上述三段任一段被本批以外的改动触碰（改任一线段即算）⇒ 立「chat_session 拆分」分批…」）、以及 +160/−60 的代价分解（`:4597-4598`，并核 ≤180 预算内）。 |
+| 6 | 6 | docs/design/thincoder-adapter.md | 🔵 | Fixed | §28.5（`:4336`）坐标改为 `lib/chat/composer/composer_editing.dart:442` 并写明「该表达式已在盘上；它读的 `ChatSession.hasCommandSource` 在合并中丢失，由 R1 恢复」；§28.8 ⑤（`:4391`）同改，delta 记「0（本档不改）」。 |
+| 7 | 7 | docs/design/thincoder-adapter.md | 🔵 | Fixed | §5.2（`:347`）新增「**行数口径（总则）**：以下各行数 = 该条编制日的快照；跨节不互校…实施首轮以 `wc -l` 复核，冲突时以复核值为准」，跨节数字不再需要读者自行推断。 |
+| 8 | (new) | docs/design/thincoder-adapter.md | 🟡 | New | `chat_session.dart` 的拆分单元出现两套并存口径：§5.2 `:348`「拆分缝候选 = Facets（`:329`）/ Projections（`:510`）/ Commands（`:920`）段」vs §29.5 `:4589`「\| facet \| 能力投影带，`canRename`（`:604`）起的横向委托（改名 / 模型 / 权限 / 命令） \|」与 `:4590-4591`（review / send）。两处都无「谁作废」指针 —— §29.5 是新增修复引入的后一套。建议在 §5.2:348 加一句指向 §29.5 的替换指针（一行成本），否则起拆分批的人拿到两份不同的单元清单。 |
+| 9 | (new) | docs/design/fork-deltas.md | 🟡 | New | 新补的行只登记了同档的一处接线：`:52` general_page 记「thincoder 设置组…净增 ≤81」，而设计档 `:2382` 另记同一档的「⑪ … 设置 → 通用一行开关 \| ≤ +12（⇒ ≤867）」；`:45` data_dir 记「进程注册表文件名清单…净增 ≤2」，而 `:3831` 另记「⑨ … `thincoderDataDir` 只读访问器 + `items` 加 `runtime-data` \| +5」。⇒ 这两行的块列与行数预算比实际 fork 净增少一格（general_page 实 ≤93、data_dir 实 ≤7）。建议在块列补齐第二处接线并把预算改成合计值。 |
+
+计数：🔴 0 · 🟡 2 · 🔵 0（上一轮 7 项全部闭项；新增 2 项均为 🟡，按判据不阻批准）。
+
+抽检（本轮实读）：`test/RTM.md:9`「**规模窗**：50–100 条。当前 **3 / 50–100**。」与 `:49` 变更记录 ⇒ §29.5 `:4617` 的 54 行 / 3→4 逐条对上；R1/R2 验收点名的测试档均在盘，唯一新增档 `test/chat/session_overlay_test.dart` 不在盘（= 新增，符合预期）。
+
+VERDICT: pass
+
 ## §4 用户批准（主 agent）
 ## §5 实施记录（eng-coder）
+
+### 实施交付（eng-coder，2026-10-26/27）
+
+**轮次与终态**：R1、R2 均按 §2 与设计 §29.5 落地。内部审计 1 轮（只读 explore 子代理比对 §2 + §29.1–29.9，结论 **clean**：代码面 0 偏差，2 处设计档文字漂移见末节）· 自修 1 轮（`session_overlay_test` 一处断言前提写错：切内核用例未先置 `keep = true`，修正后 10 例全过；无其余修正）。本装配无 advisor 工具，未跑独立代码评审——以该只读审计为评审轮，据实登记。
+
+**SDK**：项目 `.dart_tool/version` = 3.47.5，本机在 PATH 的 3.47.8 会撞 hook 缓存（`Invalid SDK hash`），全部实跑改用 `build\flutter-3475\flutter\bin\flutter.bat`。
+
+#### R1 实交读数（行数 = 换行口径；before = HEAD `d81b5a07`）
+
+| 文件 | before | after | 说明 |
+|---|---:|---:|---|
+| `lib/chat/chat_session.dart` | 1265 | 1370 | 净增 105，在登记表 ≤180 预算内 |
+| `lib/chat/chat_session_overlay.dart` | — | 136 | 新档：`ChatSessionOverlayHost` / `ChatSessionOverlay` / `KernelChoice` / `ModelSettingChoice` |
+| `lib/chat/session/overlay.dart` | — | 241 | 新档：`BaocodeSessionOverlay`（warm kernels · turns · notices · btest · 切换计时） |
+| `lib/chat/session/kernel_proxy.dart` | 203 | 44 | 只留上游缺失 facet |
+| `lib/chat/session/transcript_proxy.dart` | 225 | 93 | turn-mark 算法 + `canStopTasksOf` |
+| `lib/chat/session/mode_state.dart` | 186 | 53 | btest 选项 / `wrapModes` / `pendingModelOf` |
+| `lib/chat/session/file_edits.dart` | 141 | 37 | 四个 `PlansReverts` 投影 |
+| `lib/chat/session/lifecycle.dart` | 42 | 62 | warm 缓存与两处计时 |
+| `lib/chat/session/send_contexts.dart` | 50 | 45 | editor 去重 / btest card / 已告诉文本枚举 |
+| `lib/chat/session/file_paths.dart` | 22 | 删除 | 与上游 paths 重复 |
+| `lib/chat/session/session_commands.dart` | 21 | 删除 | 与上游命令重复 |
+| `test/chat/session_overlay_test.dart` | — | 359 | 契约顺序 / 状态投影 / 切内核 / 挂载 / 释放 / 回退拒绝 |
+
+**`part of` 清零证据**（本机实跑）：
+- `git grep -n "part of '../chat_session.dart'" -- lib` → 0 命中（退出码 1）
+- `git grep -n "part of" -- lib/chat/session` → 0 命中
+- `git grep -n "owner\._\|ChatSession" -- lib/chat/session` → 0 命中（会话模块只 import 契约；`ChatSessionOverlayHost` 是唯一宿主面）
+
+**契约装配实现披露**：`BaocodeSessionOverlay` 构造时持有 host（契约 getter 无 host 参数，`wrapModes` / btest 绑定要读宿主投影）；契约面本身与 §29.2 一致。`itemCount`/`itemAt` 按「transcript → overlay.items → live status」插入；`onEventAfter` 的 `changed` / `sessionChanged` 分列传入。
+
+#### R2 实交
+
+| 文件 | before | after | 说明 |
+|---|---:|---:|---|
+| `lib/browser/browser_tools.dart` | 710 | 772 | `HostTools` 注册（group `browser`、`ToolKind.browser`、`picturesOnly` 保留、递归 `numbersAsSchemaSays`、description schema、entry 工具用户浏览器说明、`BtestTools.all`） |
+| `lib/browser/btest/btest_tool_gate.dart` | — | 59 | 新档：`BtestToolGate.check`，hosts 推导（entry URL → tabHost 回调），`BtestGate.check` 仍是判据 |
+| `test/browser/browser_numbers_test.dart` | 87 | 87 | 改用 `HostTools.handle` / `HostToolCall`，schema 断言保留 |
+| `test/browser/btest_tool_gate_test.dart` | — | 173 | off / no-run / exempt / entry host / tab host / unknown host / readonly / 无 tabId，拒绝均断言工具名 + 未满足的门 |
+| `test/RTM.md` | — | +12 行 | 新增 §4 与 4-1，规模 3 → 4 / 50–100；1-1/2-1/3-1 未改 |
+| `test/integration/btest_flows_test.dart` | — | 213 | 4-1：composer mode picker 进入，跨 ChatSession overlay ⇄ BtestGate |
+
+调用顺序按设计：btest → tab watch → blocked → `BrowserRecords.acting`；无 tabId 仍走原 `tool.run`。通用 `HostTools` 零改动。
+
+#### 验收实跑
+
+| 命令 | 结果 |
+|---|---|
+| `flutter analyze --no-pub lib/chat` | **No issues found!** |
+| `flutter test --no-pub test/chat/turn_marks_test.dart test/chat/revert_flow_test.dart test/chat/pending_model_test.dart test/chat/thincoder_commands_test.dart test/chat/composer_btest_status_test.dart` | **+29 All tests passed!** |
+| `flutter test --no-pub test/kernel/rename_confirmed_test.dart test/kernel_ui_test.dart` | rename_confirmed **+3 全过**；kernel_ui **32 过 / 1 已知红**（父裁③，见下） |
+| `flutter test --no-pub test/chat/session_overlay_test.dart` | **+10 All tests passed!** |
+| `flutter analyze --no-pub lib/browser` | **No issues found!** |
+| `flutter test --no-pub test/browser/browser_numbers_test.dart test/browser/btest_tool_gate_test.dart test/browser/browser_steps_test.dart test/chat/composer_btest_status_test.dart` | **+27 All tests passed!** |
+| `flutter test --no-pub test/integration/btest_flows_test.dart` | **+1 All tests passed!** |
+| 全量 `flutter analyze --no-pub`（父侧门读数，仅报） | `lib/` **0 error**；`test/` 剩 1 error = 已知红（下第 2 条） |
+
+#### 两处已知红（父裁③：保持现状，另批处理；本轮未动）
+
+1. `test/kernel_ui_test.dart:172` `expect(find.byIcon(Icons.tune_rounded), findsNothing);`
+   实跑失败原文：`Expected: no matching candidates` / `Actual: _IconWidgetFinder:<Found 1 widget with icon "IconData(U+F0258)": [`。
+   根因：fork 的 picker 行为（thincoder 隐藏模型菜单 footer）随上游 picker 整档替换丢失，而 picker 面冻结、不可在本批恢复。
+2. `test/chat/model_picker_test.dart:61` `startCollapsed: startCollapsed,`
+   分析器原文：`The named parameter 'startCollapsed' isn't defined. Try correcting the name to an existing named parameter's name, or defining a named parameter with the name 'startCollapsed'`。
+   根因：fork 的 `ComposerPicker` 参数，上游版本没有。
+
+#### 冻结档：**一处未碰（明示）**
+
+`docs/design/fork-deltas.md` §4 全表未改：`ide_scm_view.dart`、`ide_editor.dart`、`ide_workbench.dart`、`workbench.dart`、`composer_picker.dart`、`session_model_picker.dart`、`composer.dart`、`composer_editing.dart`、`composer_view.dart`、`btest_status_switches.dart`、`browser_actions.dart`、`browser_debug_tools.dart`、上游 SCM 测试、`side_panel_test.dart`。审计以 touched-set + mtime 双向核过（`git status` 未列这些路径）。
+
+#### 表外改动（如实登记）
+
+`lib/ide/git/git_service.dart`：删除 fork 侧重复的 `Future<void> merge(String ref)`（原 :1583-1587），保留上游同签名实现（:793-802，错误文本更详细）。理由：合并残留导致 `duplicate_definition`，整个项目无法编译、任何测试无法加载（实跑报 `'merge' is already declared in this scope`），阻塞本批全部验收；语义未变（都执行 `git merge --no-edit <ref>`）。
+
+#### 设计档漂移（我的 diff 触及、交回 eng-designer 笔域，未改）
+
+1. `docs/design/thincoder-adapter.md:4464` / `:4467` 契约写 `bool get btestTraversal` / `setBtestTraversal(bool on)`；实交为 `BtestTraversal` 枚举形——冻结 UI `btest_status_switches.dart:84`、`:88-89` 只能按枚举编译。文字应改。
+2. `docs/design/thincoder-adapter.md:4525` 把 `transcript_proxy.dart` 记为「turn-mark 算法与 notice 投影」；notice 实际在 `session/overlay.dart:47`、`:64`（该行第三列「列表只在 overlay」已如此写）。行文应去掉 notice 投影。
+
+#### 交付表（§2 B1–B5）
+
+| 条目 | 状态 | 实交 |
+|---|---|---|
+| B1 上游共存边界 | ✅ Done | 7 个 session 模块独立 library；`part of` / 私有宿主成员访问均 0；共享档仅 `chat_session.dart` 一处改动且已登记 |
+| B2 既有会话能力恢复 | ✅ Done | 改名 / 命令源 / 图片 / editor context 的既有定向测试全过；无能力内核走 `UnsupportedError` 与能力门，无伪造上下文 |
+| B3 btest 同会话状态 | ✅ Done | composer 七键与两个开关读同一 overlay；`composer_btest_status_test` + 4-1 集成用例 |
+| B4 浏览器宿主工具重接 | ✅ Done | 经 `HostTools` 注册；schema / 数字归一 / 目标 host / 拒绝门保留；通用 `HostTools` 无 browser 特判 |
+| B5 业务集成回溯 | ✅ Done | 1-1/2-1/3-1 未改；新增 4-1（`test/integration/btest_flows_test.dart`），RTM 3 → 4 / 50–100 |
+
 ## §6 验证与收口（父代理）

@@ -4,6 +4,8 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
+import '../browser/btest/btest_policy.dart' show BtestTraversal;
+import '../browser/btest/btest_run_state.dart' show BtestRun;
 import '../kernel/agent_kernel.dart';
 import '../kernel/kernel_event.dart';
 import '../kernel/kernel_registry.dart';
@@ -12,13 +14,22 @@ import '../kernel/transcript.dart';
 import '../remote/remote_location.dart';
 import 'chat_feed.dart';
 import 'chat_models.dart';
+import 'chat_session_overlay.dart';
 import 'composer/composer_draft.dart';
 import 'composer/paste_store.dart';
+import 'editor_context_setting.dart';
 import 'mock_conversation.dart';
 import 'open_editor.dart';
 import 'review/change_review.dart';
 import 'review/change_reviews.dart';
 import 'review/review_store.dart';
+import 'session/file_edits.dart';
+import 'session/kernel_proxy.dart';
+import 'session/mode_state.dart' show pendingModelOf;
+import 'session/overlay.dart';
+import 'session/transcript_proxy.dart' show canStopTasksOf;
+
+export 'chat_session_overlay.dart' show KernelChoice, ModelSettingChoice;
 
 /// Opens the review of a project's changes (see [ChangeReview.open]).
 typedef ChangeReviewOpener = Future<ChangeReview?> Function(
@@ -41,48 +52,6 @@ class ComposerMessage {
   bool get isEmpty => text.trim().isEmpty && mentions.isEmpty && images.isEmpty;
 }
 
-/// A choice a kernel offers (its model, its mode, the kernel itself): the
-/// options, the one in effect, and how to pick another.
-class KernelChoice {
-  const KernelChoice({
-    required this.options,
-    required this.selected,
-    required this.onSelected,
-  });
-
-  final List<KernelOption> options;
-  final KernelOption selected;
-  final ValueChanged<KernelOption> onSelected;
-}
-
-/// A setting picked beside a model, e.g. its effort (see [ModelSetting]).
-class ModelSettingChoice {
-  const ModelSettingChoice({
-    required this.kind,
-    required this.options,
-    required this.selected,
-    required this.onSelected,
-    this.toggle = false,
-  });
-
-  /// The kernel's setting it is; null for the app's own, shown beside them
-  /// (`chat.resumeAfterLimitReset`, in the model picker).
-  final KernelChoiceKind? kind;
-  final List<KernelOption> options;
-
-  /// What is in effect, or would stay so with the model picked; null
-  /// while not known.
-  final KernelOption? selected;
-
-  /// Whether this setting is on or off, shown and picked as a switch: what
-  /// it shows under an option is not a check but a switch, and picking it
-  /// leaves the menu open (see [ComposerPicker]).
-  final bool toggle;
-
-  /// Picks the option, and the model with it.
-  final ValueChanged<KernelOption> onSelected;
-}
-
 /// One agent conversation, as the UI sees it, over an [AgentKernel].
 ///
 /// It keeps only these things:
@@ -97,7 +66,8 @@ class ModelSettingChoice {
 /// waiting, the model in effect) is projected from those or read from the
 /// kernel. The UI reaches what the kernel can do through the facets here,
 /// null when the kernel does not declare it.
-class ChatSession extends ChangeNotifier implements ChatFeed {
+class ChatSession extends ChangeNotifier
+    implements ChatFeed, MarksTurns, ChatSessionOverlayHost {
   ChatSession({
     KernelDescriptor? kernel,
     List<KernelDescriptor>? kernels,
@@ -107,6 +77,7 @@ class ChatSession extends ChangeNotifier implements ChatFeed {
     ContextUsage? usage,
     this.quietAfterText = const Duration(seconds: 5),
     ChangeReviewOpener? openReview,
+    ChatSessionOverlay? overlay,
   }) : kernels = kernels ?? KernelRegistry.all,
        _openReview =
            openReview ?? (reviewSupported ? ChangeReview.open : null) {
@@ -116,6 +87,8 @@ class ChatSession extends ChangeNotifier implements ChatFeed {
       changes: changes,
       usage: usage ?? (historyCount > 0 ? MockConversation.usage : null),
     );
+    // Made for this host: the overlay reads it only through the contract.
+    _overlay = overlay ?? BaocodeSessionOverlay(this);
     _connect(kernel ?? this.kernels.first);
   }
 
@@ -123,6 +96,7 @@ class ChatSession extends ChangeNotifier implements ChatFeed {
   final List<KernelDescriptor> kernels;
 
   /// Where its kernel works, and the session it continues.
+  @override
   final KernelContext kernelContext;
 
   /// How long the status row keeps hidden after the agent's text, with
@@ -145,6 +119,18 @@ class ChatSession extends ChangeNotifier implements ChatFeed {
   StreamSubscription<KernelEvent>? _subscription;
   late Transcript _transcript;
 
+  /// The app's own state beside the host's: turn marks, notices, btest,
+  /// the kernels kept warm across a switch (see [ChatSessionOverlay]).
+  late final ChatSessionOverlay _overlay;
+
+  /// The host's kernel, as the overlay reads it: never replaced through it.
+  @override
+  AgentKernel get agentKernel => _kernel;
+
+  /// The conversation as reported, as the overlay reads it.
+  @override
+  Transcript get transcript => _transcript;
+
   /// Changes reported at or below this sequence were kept.
   int _keptSeq = -1;
 
@@ -153,11 +139,17 @@ class ChatSession extends ChangeNotifier implements ChatFeed {
   final Map<String, int> _keptPaths = {};
 
   void _connect(KernelDescriptor descriptor) {
-    _kernel = descriptor.create(kernelContext);
+    // A kernel kept warm for it, unless it failed meanwhile: then this one.
+    _kernel = _overlay.restoreKernel(descriptor) ??
+        descriptor.create(kernelContext);
     _subscription = _kernel.events.listen(_apply);
   }
 
   void _apply(KernelEvent event) {
+    // A frame may land between `cancel()` and the kernel letting go.
+    if (_disposed) return;
+    // A rename is the session's, not the conversation's: it sets the title
+    // the workspace takes, and is not a turn's event.
     if (event case SessionRenamed(:final title)) {
       _renamed = title;
       notifyListeners();
@@ -165,7 +157,17 @@ class ChatSession extends ChangeNotifier implements ChatFeed {
     }
     // Nothing to show: for the review alone.
     if (event is FilesMayHaveChanged) return _reviewEvent(event);
-    if (event is KernelInfoChanged || _transcript.apply(event)) {
+    final info = event is KernelInfoChanged;
+    // Where the turn bookkeeping reads the conversation from.
+    _overlay.onEventBefore(this, event);
+    final changed = info ? false : _transcript.apply(event);
+    _overlay.onEventAfter(
+      this,
+      event,
+      changed: changed,
+      sessionChanged: info || changed,
+    );
+    if (info || changed) {
       _cache.clear();
       _timeQuiet();
       _reviewEvent(event);
@@ -378,11 +380,13 @@ class ChatSession extends ChangeNotifier implements ChatFeed {
     _views++;
     _kernel.prepare();
     _startReview();
+    _overlay.onAttach(this);
   }
 
   /// A view no longer shows it. With none left, an idle kernel frees what
   /// it holds (a view may come right back, e.g. as the layout changes).
   void detach() {
+    _overlay.onDetach(this);
     _views--;
     scheduleMicrotask(() {
       if (_views == 0 && !_disposed) _kernel.release();
@@ -411,12 +415,23 @@ class ChatSession extends ChangeNotifier implements ChatFeed {
 
   void setKernel(KernelDescriptor descriptor) {
     if (kernelLocked || descriptor.id == kernel.id) return;
+    _overlay.onKernelChanging(this, descriptor);
     unawaited(_subscription?.cancel());
-    _kernel.dispose();
+    // Kept warm rather than disposed: before the first message there is no
+    // conversation to protect, and the switch back skips the start.
+    if (!_overlay.cacheKernel(_kernel)) _kernel.dispose();
     _transcript = Transcript(
       changes: [for (final edit in _transcript.edits) edit.change],
     );
     _connect(descriptor);
+    _overlay.onKernelChanged(this);
+    // The view never went away, so its attach will not come again: the new
+    // kernel is started here, or it would sit unstarted and say nothing of
+    // what it offers (mode, model) until the first message.
+    if (_views > 0) {
+      _kernel.prepare();
+      _startReview();
+    }
     notifyListeners();
   }
 
@@ -434,10 +449,13 @@ class ChatSession extends ChangeNotifier implements ChatFeed {
     _ => false,
   };
 
-  KernelChoice? get modes => switch (_kernel) {
-    final SelectsMode kernel => _choice(kernel.mode),
-    _ => null,
-  };
+  /// The kernel's modes, with btest beside them (see [ChatSessionOverlay]).
+  KernelChoice? get modes => _overlay.wrapModes(
+    switch (_kernel) {
+      final SelectsMode kernel => _choice(kernel.mode),
+      _ => null,
+    },
+  );
 
   KernelChoice? get permissions => switch (_kernel) {
     final SelectsPermission kernel => _choice(kernel.permission),
@@ -552,7 +570,7 @@ class ChatSession extends ChangeNotifier implements ChatFeed {
     _ => false,
   };
 
-  bool get acceptsImages => _kernel is AcceptsImages;
+  bool get acceptsImages => acceptsImagesOf(this);
 
   /// What the user would likely send next: offered while the agent waits
   /// for them.
@@ -603,6 +621,27 @@ class ChatSession extends ChangeNotifier implements ChatFeed {
 
   bool get canRename => _kernel is RenamesSession;
 
+  /// Whether it offers `/` commands at all (see [hasCommandSourceOf]).
+  bool get hasCommandSource => hasCommandSourceOf(this);
+
+  /// Whether its kernel confirms a rename itself (see [renameConfirmedOf]).
+  bool get renameConfirmed => renameConfirmedOf(this);
+
+  /// Whether its kernel names sessions itself (see [ownsTitleOf]).
+  bool get ownsTitle => ownsTitleOf(this);
+
+  /// The title picked while a turn ran (see [pendingTitleOf]); null when
+  /// none waits.
+  String? get pendingTitle => pendingTitleOf(this);
+
+  /// The model picked while a turn ran (see [pendingModelOf]); null when
+  /// none waits.
+  String? get pendingModel => pendingModelOf(this);
+
+  /// Whether the file open in the editor goes with each message (see
+  /// [acceptsEditorContextOf]).
+  bool get acceptsEditorContext => acceptsEditorContextOf(this);
+
   /// Whether the conversation can be copied into a new one (see [fork]).
   bool get canFork => switch (_kernel) {
     final ForksConversation kernel => kernel.canFork,
@@ -632,6 +671,7 @@ class ChatSession extends ChangeNotifier implements ChatFeed {
   bool get isUnprompted => _transcript.activeTurnUnprompted;
 
   /// Whether the composer may send now.
+  @override
   bool get canSend => !isStreaming || canQueue;
 
   InteractionRequest? get pendingInteraction => _transcript.pendingInteraction;
@@ -699,15 +739,18 @@ class ChatSession extends ChangeNotifier implements ChatFeed {
   /// e.g. about a background subagent's report.
   bool get lastTurnUnprompted => _transcript.lastTurnUnprompted;
 
-  /// The history, and a status row at its end while a turn runs: the agent
-  /// is live. Hidden (but there, to come and go smoothly) where something
-  /// else says so, or it would only flash.
+  /// The history, what the overlay adds after it, and a status row at its
+  /// end while a turn runs: the agent is live. Hidden (but there, to come
+  /// and go smoothly) where something else says so, or it would only flash.
   @override
-  int get itemCount => _transcript.length + (isStreaming ? 1 : 0);
+  int get itemCount =>
+      _transcript.length + _overlay.items.length + (isStreaming ? 1 : 0);
 
   @override
   ChatItem itemAt(int index) {
     if (index < _transcript.length) return _transcript.itemAt(index);
+    final notice = index - _transcript.length;
+    if (notice < _overlay.items.length) return _overlay.items[notice];
     // Waiting on its model unless its kernel says otherwise.
     final output = _transcript.output;
     return switch (_transcript.activity?.kind) {
@@ -877,6 +920,38 @@ class ChatSession extends ChangeNotifier implements ChatFeed {
             )
             .firstOrNull;
 
+  /// The turns the kernel reported, for the folds (see [MarksTurns]).
+  @override
+  List<TurnMark> get turns => _overlay.turns;
+
+  /// Whether the kernel can stop what runs beside the conversation.
+  bool get canStopTasks => canStopTasksOf(this);
+
+  /// Puts [notice] at the conversation's end: the host's own (§9: a
+  /// revert's summary), the kernel sending none of it.
+  void addNotice(NoticeItem notice) => _overlay.addNotice(notice);
+
+  // --- btest -----------------------------------------------------------------
+
+  /// Whether btest, the host's third mode, is on (§3.1).
+  bool get btestOn => _overlay.btestOn;
+
+  /// The run under way, or null between runs (§3.3).
+  BtestRun? get btestRun => _overlay.btestRun;
+
+  /// How the next run walks (§9.1).
+  BtestTraversal get btestTraversal => _overlay.btestTraversal;
+
+  /// Whether the next run may act (§9.1).
+  bool get btestWrite => _overlay.btestWrite;
+
+  void setBtest(bool on) => _overlay.setBtest(on);
+
+  void setBtestTraversal(BtestTraversal value) =>
+      _overlay.setBtestTraversal(value);
+
+  void setBtestWrite(bool value) => _overlay.setBtestWrite(value);
+
   List<TodoEntry> get todos => _transcript.todos;
 
   /// The goal the agent works toward (`/goal`), if any: just met, it is
@@ -1037,6 +1112,22 @@ class ChatSession extends ChangeNotifier implements ChatFeed {
     return null;
   }
 
+  /// The turn the earliest change not kept or undone came from (F2.1).
+  String? get revertTurn => _pendingEdits.firstOrNull?.turnId;
+
+  /// Whether a revert can be planned and done now (§3.3, §3.5).
+  bool get canPlanRevert => canPlanRevertOf(this);
+
+  /// Whether the kernel plans reverts at all.
+  bool get plansReverts => plansRevertsOf(this);
+
+  /// What a revert from [sinceTurn] on would do; nothing is written.
+  Future<RevertPlan> revertPlan(String sinceTurn) => revertPlanOf(this, sinceTurn);
+
+  /// Does what [revertPlan] planned for [sinceTurn], each file on its own.
+  Future<RevertOutcome> applyRevert(String sinceTurn) =>
+      applyRevertOf(this, sinceTurn);
+
   /// Puts [changes]' files back; null when files cannot be undone one by
   /// one (no review of the project).
   ValueChanged<List<FileChange>>? get undoChanges => switch (_activeReview) {
@@ -1115,20 +1206,33 @@ class ChatSession extends ChangeNotifier implements ChatFeed {
     ComposerMessage message, {
     bool now = false,
     OpenEditor? Function()? editor,
+    bool editorContext = true,
   }) {
     if (message.isEmpty || !canSend) return;
-    final turn = KernelTurn(
-      id: newTurnId(),
-      // Pastes too long to send, kept in files the agent reads; a remote
-      // project's agent cannot, and is sent them.
-      text: switch (kernelContext.cwd) {
-        final cwd? when RemoteLocation.isRemote(cwd) => message.text.trim(),
-        _ => PasteStore.offload(message.text.trim()),
-      },
-      mentions: message.mentions,
-      images: acceptsImages ? message.images : const [],
-      now: now,
-      notes: editor == null ? const [] : _editorNotes(editor()),
+    final takesContext = acceptsEditorContext;
+    final open = takesContext && editorContext && EditorContextSetting.current()
+        ? editor?.call()
+        : null;
+    // What the overlay adds (the editor's context, btest's card) goes in
+    // with the turn: the host builds it, the overlay completes it.
+    final turn = _overlay.beforeSend(
+      this,
+      KernelTurn(
+        id: newTurnId(),
+        // Pastes too long to send, kept in files the agent reads; a remote
+        // project's agent cannot, and is sent them.
+        text: switch (kernelContext.cwd) {
+          final cwd? when RemoteLocation.isRemote(cwd) => message.text.trim(),
+          _ => PasteStore.offload(message.text.trim()),
+        },
+        mentions: message.mentions,
+        images: acceptsImages ? message.images : const [],
+        now: now,
+        notes: takesContext || editor == null
+            ? const []
+            : _editorNotes(editor()),
+      ),
+      open,
     );
     // A turn about to start, not one queued behind another: the project
     // is snapshotted, so that what the agent does is told apart. Not
@@ -1252,6 +1356,7 @@ class ChatSession extends ChangeNotifier implements ChatFeed {
   @override
   void dispose() {
     _disposed = true;
+    _overlay.onDispose(this);
     _quietTimer?.cancel();
     _lookTimer?.cancel();
     _stopScans();

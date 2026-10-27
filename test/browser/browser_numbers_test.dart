@@ -1,5 +1,5 @@
 import 'package:baocode/browser/browser_tools.dart';
-import 'package:baocode/kernel/claude_code/claude_sdk_tools.dart';
+import 'package:baocode/host_tools/host_tools.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -60,11 +60,11 @@ void main() {
     () async {
       BrowserTools.register();
       addTearDown(BrowserTools.unregister);
-      final listed = await ClaudeSdkTools.handle({
+      final listed = await HostTools.handle({
         'jsonrpc': '2.0',
         'id': 1,
         'method': 'tools/list',
-      }, const ClaudeSdkCall(cwd: '/p'));
+      }, const HostToolCall(cwd: '/p'));
       final tools = ((listed['result'] as Map)['tools'] as List).cast<Map>();
       final taking = [
         for (final tool in tools)
