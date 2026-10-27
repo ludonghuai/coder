@@ -11,6 +11,7 @@ import 'package:bao_editor/textmate/textmate_syntax.dart';
 import 'package:bao_editor/monaco/flutter/language_assets.dart';
 import 'package:bao_remote/local.dart' show setGitProcessEnvironment;
 
+import 'base/quiet_view.dart';
 import 'base/smooth_scroll.dart' show BaoScrollBehavior;
 import 'browser/browser_bridge.dart';
 import 'browser/browser_tools.dart' show BrowserHistory;
@@ -31,6 +32,7 @@ import 'diagnostics/stall_watch.dart';
 import 'diagnostics/viewport_watch.dart';
 import 'diagnostics/diagnostics_upload.dart';
 import 'extensions/theme_extensions.dart';
+import 'ide/editor_word_wrap.dart';
 import 'ide/git/git_repository.dart';
 import 'ide/git/repository_scan.dart';
 import 'ide/language_mode.dart';
@@ -316,6 +318,8 @@ Future<void> main(List<String> arguments) async {
     // Settings → Appearance: the code's font, size and ligatures, and the
     // window's text size.
     CodeFont.follow(files.settings, (key) => files.settings[key]);
+    // Whether the editors wrap long lines.
+    EditorWordWrap.follow(files.settings);
   }
   // Emoji as pictures: fetched into the cache the first run, in the
   // background, through the proxy.
@@ -841,7 +845,7 @@ class _BaoCodeAppState extends State<BaoCodeApp> {
                       ])
                         if (_windows.host.viewOf(window.viewId)
                             case final view?)
-                          View(
+                          QuietView(
                             key: ValueKey(window.viewId),
                             view: view,
                             child: _app(window),

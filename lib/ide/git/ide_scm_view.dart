@@ -31,7 +31,6 @@
 // keeps no history of messages (`scm.viewPreviousCommit`).
 
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -66,13 +65,14 @@ import '../ide_panes.dart';
 import '../ide_spinning.dart';
 import '../save_copy.dart';
 import 'commit_message.dart';
-import 'git_autofetch.dart';
-import 'git_autofetch_engine.dart';
 import 'git_graph_painter.dart';
 import 'git_model.dart';
-import 'git_pull.dart';
+import 'git_review.dart';
 import 'git_repository.dart';
 import 'git_service.dart';
+import 'git_branch_tree.dart' show IdeGitFavoriteBranches;
+import 'ide_git_log_view.dart';
+import 'ide_git_ref_labels.dart';
 import 'scm_host.dart';
 import 'scm_tree.dart';
 
@@ -83,7 +83,11 @@ import 'scm_tree.dart';
 enum IdeScmSort { name, path, status }
 
 class IdeScmSession {
-  IdeScmSession({this.settings});
+  IdeScmSession({this.settings, this.favoriteBranches});
+
+  /// The favorite branches of each repository, by its folder, which the
+  /// window keeps (see [IdeGitLogController.favoriteBranches]).
+  final IdeGitFavoriteBranches? favoriteBranches;
 
   /// settings.json, where the choices made in its dialogs (Always, Never,
   /// Don't Show Again) are kept as VS Code keeps them; none under test,
@@ -119,6 +123,62 @@ class IdeScmSession {
   /// The tree's collapsed folders (`group:folder:path`).
   final Set<String> collapsedFolders = {};
 
+  /// The commit panel's check marks by path, where they are not the
+  /// default (the tracked changes checked, the unversioned files not).
+  final Map<String, bool> included = {};
+
+  /// The commit panel's Amend.
+  bool amend = false;
+
+  /// The commit options' author (`Name <email>`), for the next commit
+  /// only; null for the one configured.
+  String? author;
+
+  /// `git.alwaysSignOff`: a Signed-off-by line in each commit.
+  bool get signOff => _choice('git.alwaysSignOff', false);
+  set signOff(bool value) => _choose('git.alwaysSignOff', value);
+
+  /// Whether a commit runs the repository's hooks (else `--no-verify`).
+  bool get runHooks => _choice('baocode.git.runHooks', true);
+  set runHooks(bool value) => _choose('baocode.git.runHooks', value);
+
+  IdeGitCommitOptions get commitOptions =>
+      IdeGitCommitOptions(author: author, signOff: signOff, runHooks: runHooks);
+
+  /// The messages committed with, or tried, the newest first: what the
+  /// commit message history has before those of the log.
+  final List<String> recentMessages = [];
+
+  void rememberMessage(String message) {
+    recentMessages
+      ..remove(message)
+      ..insert(0, message);
+    if (recentMessages.length > 20) recentMessages.removeLast();
+  }
+
+  /// Whether the commit panel lists the ignored files.
+  bool showIgnored = false;
+
+  /// `baocode.git.aiReview`: the model reviews a commit before it is made.
+  bool get aiReview => _choice('baocode.git.aiReview', false);
+  set aiReview(bool value) => _choose('baocode.git.aiReview', value);
+
+  /// What the last review found; null when there is none to show.
+  List<IdeGitReviewProblem>? review;
+
+  /// Completes to stop the review under way; null when none is.
+  Completer<void>? reviewing;
+
+  /// The commit the review holds back (with Push, or not), done when
+  /// committed anyway; null when none waits.
+  bool? reviewHeldPush;
+
+  /// The list's focused row, selection and anchor, kept while the view is
+  /// away (the Git log left for the editor) to be where they were.
+  String? listSelected;
+  final Set<String> listSelection = {};
+  String? listAnchor;
+
   /// `git.enableSmartCommit`: commit every change when none is staged.
   bool get enableSmartCommit => _choice('git.enableSmartCommit', false);
   set enableSmartCommit(bool value) => _choose('git.enableSmartCommit', value);
@@ -132,6 +192,16 @@ class IdeScmSession {
   bool get confirmSync => _choice('git.confirmSync', true);
   set confirmSync(bool value) => _choose('git.confirmSync', value);
 
+  /// `git.rebaseWhenSync`: Update Project (and Sync) rebases, else merges.
+  bool get rebaseWhenSync => _choice('git.rebaseWhenSync', false);
+  set rebaseWhenSync(bool value) => _choose('git.rebaseWhenSync', value);
+
+  /// Whether Update Project asks how, as JetBrains IDEs' does until told
+  /// not to.
+  bool get updateProjectAsks => _choice('baocode.git.updateProjectAsks', true);
+  set updateProjectAsks(bool value) =>
+      _choose('baocode.git.updateProjectAsks', value);
+
   /// Completes to cancel the commit message being generated; null when
   /// none is. Kept here, so that the message still arrives when the view
   /// has closed meanwhile.
@@ -142,10 +212,17 @@ class IdeScmSession {
     expandedCommits,
   );
 
+  /// The Git log's (see ide_git_log_view.dart).
+  late final IdeGitLogController log = IdeGitLogController(
+    favoriteBranches: favoriteBranches,
+  );
+
   void dispose() {
     generating?.complete();
+    reviewing?.complete();
     message.dispose();
     graph.dispose();
+    log.dispose();
   }
 }
 
@@ -337,6 +414,7 @@ class IdeScmView extends StatefulWidget {
     this.commitMessage,
     this.onCheckout,
     this.showTitle = true,
+    this.showGraph = true,
     this.background,
   });
 
@@ -347,6 +425,10 @@ class IdeScmView extends StatefulWidget {
   /// Whether the view's title shows over it: not where the page it is on
   /// is named already (the side panel's).
   final bool showTitle;
+
+  /// Whether the Graph pane shows under CHANGES: not where the Git log
+  /// shows the history (see ide_git_log_view.dart).
+  final bool showGraph;
 
   /// Behind it; the side bar's when null.
   final Color? background;
@@ -671,6 +753,9 @@ class IdeScmViewState extends State<IdeScmView>
     _message = _session.message.text;
     _session.message.addListener(_messageChanged);
     _listFocus.addListener(_rebuild);
+    _selected = _session.listSelected;
+    _selection.addAll(_session.listSelection);
+    _anchor = _session.listAnchor;
   }
 
   @override
@@ -694,6 +779,11 @@ class IdeScmViewState extends State<IdeScmView>
   @override
   void dispose() {
     _session.message.removeListener(_messageChanged);
+    _session
+      ..listSelected = _selected
+      ..listSelection.clear()
+      ..listSelection.addAll(_selection)
+      ..listAnchor = _anchor;
     _inputFocus.dispose();
     for (final focus in _inputFocuses.values) {
       focus.dispose();
@@ -807,42 +897,43 @@ class IdeScmViewState extends State<IdeScmView>
             ],
             body: _changesList(git, state),
           ),
-          IdePane(
-            id: 'graph',
-            title: l10n.scmGraph,
-            // Which repository's, with several.
-            description: _grouped ? p.basename(git.service.root) : null,
-            weight: 2,
-            actions: [
-              IdePaneAction(
-                icon: Codicons.target,
-                tooltip: l10n.scmGoToCurrent,
-                onPressed: () => _graph.goToCurrent(git),
-              ),
-              IdeMenuButton(
-                icon: Codicons.gitBranch,
-                tooltip: l10n.scmGraphBranches,
-                entries: () => [
-                  IdeMenuAction(
-                    l10n.scmGraphCurrentBranch,
-                    checked: !git.graphAllBranches,
-                    onSelected: () => git.graphAllBranches = false,
-                  ),
-                  IdeMenuAction(
-                    l10n.scmGraphAllBranches,
-                    checked: git.graphAllBranches,
-                    onSelected: () => git.graphAllBranches = true,
-                  ),
-                ],
-              ),
-              IdePaneAction(
-                icon: Codicons.refresh,
-                tooltip: l10n.commonRefresh,
-                onPressed: () => unawaited(git.refresh()),
-              ),
-            ],
-            body: _graphList(git),
-          ),
+          if (widget.showGraph)
+            IdePane(
+              id: 'graph',
+              title: l10n.scmGraph,
+              // Which repository's, with several.
+              description: _grouped ? p.basename(git.service.root) : null,
+              weight: 2,
+              actions: [
+                IdePaneAction(
+                  icon: Codicons.target,
+                  tooltip: l10n.scmGoToCurrent,
+                  onPressed: () => _graph.goToCurrent(git),
+                ),
+                IdeMenuButton(
+                  icon: Codicons.gitBranch,
+                  tooltip: l10n.scmGraphBranches,
+                  entries: () => [
+                    IdeMenuAction(
+                      l10n.scmGraphCurrentBranch,
+                      checked: git.graphBranch == ideGraphCurrentBranch,
+                      onSelected: () => git.graphBranch = ideGraphCurrentBranch,
+                    ),
+                    IdeMenuAction(
+                      l10n.scmGraphAllBranches,
+                      checked: git.graphBranch == null,
+                      onSelected: () => git.graphBranch = null,
+                    ),
+                  ],
+                ),
+                IdePaneAction(
+                  icon: Codicons.refresh,
+                  tooltip: l10n.commonRefresh,
+                  onPressed: () => unawaited(git.refresh()),
+                ),
+              ],
+              body: _graphList(git),
+            ),
         ],
       );
     }
@@ -888,12 +979,10 @@ class IdeScmViewState extends State<IdeScmView>
   /// with the keyboard.
   Future<void> commit() => _commit(repo: _inputRepository);
 
-  /// `git.fetch` (Git: Fetch): the repository shown fetches and pulls its
-  /// upstream (§12.2/§12.3): the remote's commits come down, merged where
-  /// the branch diverged.
+  /// `git.fetch` (Git: Fetch): every remote of the repository shown.
   Future<void> fetch() async {
     final git = _git;
-    if (git != null) await _pullFromUpstream(git);
+    if (git != null) await _run(git.fetch);
   }
 
   /// `git.fetchAll` (Git: Fetch From All Remotes).
@@ -1656,60 +1745,55 @@ class IdeScmViewState extends State<IdeScmView>
           ),
         );
       },
-      builder: (context, hovered) => LayoutBuilder(
-        builder: (context, constraints) => Padding(
-          padding: EdgeInsets.only(
-            left: _rowInset(
-              constraints.maxWidth,
-              indent + 8.0 + (depth - 1) * 8,
+      builder: (context, hovered) => Padding(
+        padding: EdgeInsets.only(
+          left: indent + 8.0 + (depth - 1) * 8,
+          right: 12,
+        ),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 22,
+              child: Transform.translate(
+                offset: const Offset(3, 0),
+                child: Icon(
+                  collapsed ? Codicons.chevronRight : Codicons.chevronDown,
+                  size: 16,
+                  color: themeColors['sideBar.foreground'],
+                ),
+              ),
             ),
-            right: 12,
-          ),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 22,
-                child: Transform.translate(
-                  offset: const Offset(3, 0),
+            FolderIcon(folder.path, size: 16, expanded: !collapsed),
+            const SizedBox(width: 6),
+            Expanded(
+              child: IdeResourceLabel(
+                name: folder.label,
+                actions: [
+                  if (hovered ||
+                      ((_selected == key || _isSelected(key)) &&
+                          _listFocus.hasFocus))
+                    for (final action in actions)
+                      _InlineAction(
+                        icon: action.icon,
+                        tooltip: action.label,
+                        onPressed: action.run,
+                      ),
+                ],
+              ),
+            ),
+            if (bubble != null)
+              Padding(
+                padding: const EdgeInsets.only(left: 5),
+                child: SizedBox(
+                  width: 14,
                   child: Icon(
-                    collapsed ? Codicons.chevronRight : Codicons.chevronDown,
-                    size: 16,
-                    color: themeColors['sideBar.foreground'],
+                    Codicons.circleFilled,
+                    size: 14,
+                    color: bubble.withValues(alpha: .4),
                   ),
                 ),
               ),
-              FolderIcon(folder.path, size: 16, expanded: !collapsed),
-              const SizedBox(width: 6),
-              Expanded(
-                child: IdeResourceLabel(
-                  name: folder.label,
-                  actions: [
-                    if (hovered ||
-                        ((_selected == key || _isSelected(key)) &&
-                            _listFocus.hasFocus))
-                      for (final action in actions)
-                        _InlineAction(
-                          icon: action.icon,
-                          tooltip: action.label,
-                          onPressed: action.run,
-                        ),
-                  ],
-                ),
-              ),
-              if (bubble != null)
-                Padding(
-                  padding: const EdgeInsets.only(left: 5),
-                  child: SizedBox(
-                    width: 14,
-                    child: Icon(
-                      Codicons.circleFilled,
-                      size: 14,
-                      color: bubble.withValues(alpha: .4),
-                    ),
-                  ),
-                ),
-            ],
-          ),
+          ],
         ),
       ),
     );
@@ -2022,51 +2106,15 @@ class IdeScmViewState extends State<IdeScmView>
     }
   }
 
-  /// Git: Fetch From All Remotes (`git.fetchAll`): every repository of the
-  /// workspace fetches and pulls its upstream (§12.3),
-  /// [IdeGitAutoFetch.workers] at a time; one failing leaves the others
-  /// alone, each failure told with its own name.
+  /// Git: Fetch From All Remotes (`git.fetchAll`): every remote of every
+  /// repository in the workspace.
   Future<void> _fetchAll() async {
     final repositories = widget.host.repositories;
     if (repositories.isEmpty) {
       _report(const IdeGitException('No Git repositories to fetch from.'));
       return;
     }
-    var next = 0;
-    Future<void> worker() async {
-      while (next < repositories.length) {
-        final (_, git) = repositories[next++];
-        await _pullFromUpstream(git);
-      }
-    }
-
-    await Future.wait([
-      for (
-        var i = 0;
-        i < math.min(IdeGitAutoFetch.workers, repositories.length);
-        i++
-      )
-        worker(),
-    ]);
-  }
-
-  /// The Get action (fetch + merge, §12.2): a failure is told with the
-  /// repository's name and Git's own words; what the merge updated is read
-  /// again in the open files.
-  Future<void> _pullFromUpstream(IdeGitRepository git) async {
-    try {
-      final outcome = await git.pullFromUpstream(mode: IdeGitPullMode.merge);
-      if (outcome.updated.isNotEmpty) {
-        try {
-          await widget.host.reload(outcome.updated);
-        } catch (_) {
-          // The workspace could not read them again (it may be going): the
-          // files on disk are updated all the same.
-        }
-      }
-    } catch (error) {
-      _report('${p.basename(git.service.root)}: $error');
-    }
+    await Future.wait([for (final (_, git) in repositories) _run(git.fetch)]);
   }
 
   /// Refresh (the CHANGES pane's): reads the status of every shown
@@ -2130,7 +2178,7 @@ class IdeScmViewState extends State<IdeScmView>
         [
           IdeMenuAction(
             l10n.scmFetch,
-            onSelected: () => unawaited(_pullFromUpstream(git)),
+            onSelected: () => unawaited(_run(git.fetch)),
           ),
           // This repository's every remote, as its Fetch: not the others'.
           IdeMenuAction(
@@ -2214,8 +2262,6 @@ class IdeScmViewState extends State<IdeScmView>
     final key = 'repo:$root';
     final collapsed = widget.host.scmCollapsedRepositories.contains(root);
     final l10n = context.l10n;
-    final state = git.state;
-    final behind = state?.head.behind ?? 0;
     return IdeListRow(
       key: ValueKey(key),
       selected: _isSelected(key),
@@ -2232,103 +2278,76 @@ class IdeScmViewState extends State<IdeScmView>
       },
       onContextMenu: (position) =>
           unawaited(_repositoryMenu(git, position, null)),
-      tooltip: _repositoryTooltip(git),
-      builder: (context, hovered) => LayoutBuilder(
-        builder: (context, constraints) {
-          // Narrow: the actions would overflow the header — they wait in its
-          // menu, and the name keeps the room.
-          final roomy = constraints.maxWidth >= 220;
-          return Padding(
-            padding: const EdgeInsets.only(left: 8, right: 12),
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 22,
-                  child: Transform.translate(
-                    offset: const Offset(3, 0),
-                    child: Icon(
-                      collapsed ? Codicons.chevronRight : Codicons.chevronDown,
-                      size: 16,
-                      color: themeColors['sideBar.foreground'],
-                    ),
-                  ),
+      tooltip: root,
+      builder: (context, hovered) => Padding(
+        padding: const EdgeInsets.only(left: 8, right: 12),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 22,
+              child: Transform.translate(
+                offset: const Offset(3, 0),
+                child: Icon(
+                  collapsed ? Codicons.chevronRight : Codicons.chevronDown,
+                  size: 16,
+                  color: themeColors['sideBar.foreground'],
                 ),
-                // The name, then its branch, cut short in turn when there is
-                // no room.
-                Expanded(
-                  child: Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          p.basename(root),
-                          maxLines: 1,
-                          softWrap: false,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      if (state != null)
-                        if (_headLabel(state) case final label?)
-                          Flexible(
-                            child: _RepositoryBranch(
-                              label,
-                              behind: roomy ? 0 : behind,
-                            ),
-                          ),
-                    ],
-                  ),
-                ),
-                if (roomy) ...[
-                  _InlineAction(
-                    icon: Codicons.check,
-                    tooltip: _withCommitKeys(l10n.scmCommit),
-                    onPressed: () => unawaited(_commit(repo: git)),
-                  ),
-                  _InlineAction(
-                    key: ValueKey('fetch:$root'),
-                    icon: Codicons.repoFetch,
-                    iconWidget: behind > 0 ? _fetchWithBehind(behind) : null,
-                    width: behind > 0
-                        ? _fetchWithBehindWidth(
-                            behind,
-                            MediaQuery.textScalerOf(context),
-                          )
-                        : null,
-                    tooltip: behind > 0
-                        ? '${l10n.scmFetchAndPull}\n${l10n.scmBehindCommits(behind)}'
-                        : l10n.scmFetchAndPull,
-                    onPressed: git.busy
-                        ? null
-                        : () => unawaited(_pullFromUpstream(git)),
-                  ),
-                  _InlineAction(
-                    icon: Codicons.refresh,
-                    tooltip: l10n.commonRefresh,
-                    onPressed: () => unawaited(_run(git.refresh)),
-                  ),
-                  _InlineAction(
-                    icon: Codicons.ellipsis,
-                    tooltip: l10n.commonMoreActions,
-                    onPressed: () => unawaited(
-                      _repositoryMenu(git, Offset.zero, _rowEndAnchor(context)),
-                    ),
-                  ),
-                ],
-              ],
+              ),
             ),
-          );
-        },
+            // The name, then its branch, cut short in turn when there is
+            // no room.
+            Expanded(
+              child: Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      p.basename(root),
+                      maxLines: 1,
+                      softWrap: false,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  if (git.state case final state?)
+                    if (_headLabel(state) case final label?)
+                      Flexible(child: _RepositoryBranch(label)),
+                ],
+              ),
+            ),
+            _InlineAction(
+              icon: Codicons.check,
+              tooltip: _withCommitKeys(l10n.scmCommit),
+              onPressed: () => unawaited(_commit(repo: git)),
+            ),
+            _InlineAction(
+              icon: Codicons.repoFetch,
+              tooltip: l10n.scmFetch,
+              onPressed: () => unawaited(_run(git.fetch)),
+            ),
+            _InlineAction(
+              icon: Codicons.refresh,
+              tooltip: l10n.commonRefresh,
+              onPressed: () => unawaited(_run(git.refresh)),
+            ),
+            _InlineAction(
+              icon: Codicons.ellipsis,
+              tooltip: l10n.commonMoreActions,
+              onPressed: () => unawaited(
+                _repositoryMenu(git, Offset.zero, _rowEndAnchor(context)),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   /// The Git extension's `Repository.headLabel`: the branch, `*` when it
   /// has changes in the working tree, `+` staged ones, `!` conflicts; null
-  /// off a branch. The commits the branch is behind its upstream show as
-  /// the count inside the Get action (roomy) or after the name (narrow).
+  /// off a branch.
   static String? _headLabel(IdeGitState state) {
     final branch = state.head.branch;
     if (branch == null) return null;
@@ -2336,21 +2355,6 @@ class IdeScmViewState extends State<IdeScmView>
         '${state.group(IdeGitGroup.workingTree).isNotEmpty ? '*' : ''}'
         '${state.group(IdeGitGroup.staged).isNotEmpty ? '+' : ''}'
         '${state.group(IdeGitGroup.merge).isNotEmpty ? '!' : ''}';
-  }
-
-  /// A repository's header tooltip: its root, when its remote last came in,
-  /// and why the automatic fetch did not pull.
-  String _repositoryTooltip(IdeGitRepository git) {
-    final l10n = context.l10n;
-    final root = git.service.root;
-    final fetchedAt = git.lastFetchAt;
-    final issue = git.autoFetchIssue;
-    return [
-      root,
-      if (fetchedAt != null) l10n.gitLastFetched(ideGitFetchedAt(fetchedAt)),
-      if (issue != null)
-        ideGitAutoFetchTooltip(l10n, issue, repository: p.basename(root)),
-    ].join('\n');
   }
 
   /// [git]'s commit box under its header when several repositories show
@@ -2434,52 +2438,43 @@ class IdeScmViewState extends State<IdeScmView>
           ]),
         ),
       ),
-      builder: (context, hovered) => LayoutBuilder(
-        builder: (context, constraints) {
-          // Narrow: the hover actions would overflow the group row.
-          final roomy = constraints.maxWidth >= 220;
-          return Padding(
-            padding: EdgeInsets.only(
-              left: _rowInset(constraints.maxWidth, indent + 8),
-              right: 12,
-            ),
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 22,
-                  child: Transform.translate(
-                    offset: const Offset(3, 0),
-                    child: Icon(
-                      collapsed ? Codicons.chevronRight : Codicons.chevronDown,
-                      size: 16,
-                      color: themeColors['sideBar.foreground'],
-                    ),
-                  ),
+      builder: (context, hovered) => Padding(
+        padding: EdgeInsets.only(left: indent + 8, right: 12),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 22,
+              child: Transform.translate(
+                offset: const Offset(3, 0),
+                child: Icon(
+                  collapsed ? Codicons.chevronRight : Codicons.chevronDown,
+                  size: 16,
+                  color: themeColors['sideBar.foreground'],
                 ),
-                Expanded(
-                  child: Text(
-                    group.localizedLabel(context.l10n),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: themeColors['sideBar.foreground'],
-                    ),
-                  ),
-                ),
-                if (roomy && hovered)
-                  for (final action in actions)
-                    _InlineAction(
-                      icon: action.icon,
-                      tooltip: action.label,
-                      onPressed: action.run,
-                    ),
-                const SizedBox(width: 6),
-                IdeTitleBadge(resources.length),
-              ],
+              ),
             ),
-          );
-        },
+            Expanded(
+              child: Text(
+                group.localizedLabel(context.l10n),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: themeColors['sideBar.foreground'],
+                ),
+              ),
+            ),
+            if (hovered)
+              for (final action in actions)
+                _InlineAction(
+                  icon: action.icon,
+                  tooltip: action.label,
+                  onPressed: action.run,
+                ),
+            const SizedBox(width: 6),
+            IdeTitleBadge(resources.length),
+          ],
+        ),
       ),
     );
   }
@@ -2729,54 +2724,39 @@ class IdeScmViewState extends State<IdeScmView>
         _selectForMenu(key);
         unawaited(_showResourceMenu(position, git, state, resource, targets()));
       },
-      builder: (context, hovered) => LayoutBuilder(
-        builder: (context, constraints) {
-          // In a narrow panel the hover actions would overflow the row — they
-          // are fixed width beside a name that shrinks: below this the row
-          // keeps its name and letter, and the actions wait in its menu.
-          final roomy = constraints.maxWidth >= 220;
-          return Padding(
-            padding: EdgeInsets.only(
-              left: _rowInset(
-                constraints.maxWidth,
-                indent +
-                    (treeDepth == null
-                        ? 16
-                        : 8.0 + (treeDepth - 1) * 8 + 22),
+      builder: (context, hovered) => Padding(
+        padding: EdgeInsets.only(
+          left:
+              indent +
+              (treeDepth == null ? 16 : 8.0 + (treeDepth - 1) * 8 + 22),
+          right: 12,
+        ),
+        child: Row(
+          children: [
+            FileIcon(resource.path),
+            const SizedBox(width: 6),
+            Expanded(
+              child: IdeResourceLabel(
+                name: p.basename(resource.path),
+                description: treeDepth != null || folder == '.' ? null : folder,
+                strikeThrough: resource.status.strikeThrough,
+                letter: resource.status.letter,
+                letterColor: resource.status.color,
+                actions: [
+                  if (hovered ||
+                      ((_selected == key || _isSelected(key)) &&
+                          _listFocus.hasFocus))
+                    for (final action in actions)
+                      _InlineAction(
+                        icon: action.icon,
+                        tooltip: action.label,
+                        onPressed: action.run,
+                      ),
+                ],
               ),
-              right: 12,
             ),
-            child: Row(
-              children: [
-                FileIcon(resource.path),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: IdeResourceLabel(
-                    name: p.basename(resource.path),
-                    description: treeDepth != null || folder == '.'
-                        ? null
-                        : folder,
-                    strikeThrough: resource.status.strikeThrough,
-                    letter: resource.status.letter,
-                    letterColor: resource.status.color,
-                    actions: [
-                      if (roomy &&
-                          (hovered ||
-                              ((_selected == key || _isSelected(key)) &&
-                                  _listFocus.hasFocus)))
-                        for (final action in actions)
-                          _InlineAction(
-                            icon: action.icon,
-                            tooltip: action.label,
-                            onPressed: action.run,
-                          ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
+          ],
+        ),
       ),
     );
     // A deleted file is not there to put in.
@@ -2949,7 +2929,7 @@ class IdeScmViewState extends State<IdeScmView>
       ),
       const IdeMenuSeparator(),
       IdeMenuAction(
-        l10n.scmFetchAndPullAll,
+        l10n.scmFetchFromAllRemotes,
         onSelected: () => unawaited(_fetchAll()),
       ),
       IdeMenuAction(l10n.scmPull, onSelected: () => unawaited(_pull())),
@@ -3437,7 +3417,7 @@ class IdeGitGraph extends StatelessWidget {
     return [
       for (final (index, ref) in refs.indexed) ...[
         if (index > 0) const SizedBox(width: 4),
-        Flexible(child: _RefBadge(ref, color(ref))),
+        Flexible(child: IdeGitRefBadge(ref, color(ref))),
       ],
     ];
   }
@@ -3498,30 +3478,18 @@ class _Action {
 /// A row's inline action: a 16px icon with a 2px padding.
 class _InlineAction extends StatelessWidget {
   const _InlineAction({
-    super.key,
     required this.icon,
     required this.tooltip,
     required this.onPressed,
-    this.iconWidget,
-    this.width,
   });
 
   final IconData icon;
-
-  /// Drawn instead of [icon]: the Get action carries the commits it would
-  /// pull inside the button.
-  final Widget? iconWidget;
   final String tooltip;
-  final VoidCallback? onPressed;
-
-  /// Wider than the icon alone (see [iconWidget]).
-  final double? width;
+  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) => IdeActionButton(
     icon: icon,
-    iconWidget: iconWidget,
-    width: width,
     tooltip: tooltip,
     size: 20,
     onPressed: onPressed,
@@ -3661,12 +3629,10 @@ class _SplitButtonState extends State<_SplitButton> {
           radius: widget.onDropdown == null
               ? BorderRadius.circular(4)
               : const BorderRadius.horizontal(left: Radius.circular(4)),
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Center(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
+          child: Center(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
                 if (widget.spinning) ...[
                   IdeSpinning(Icon(Codicons.sync, size: 16, color: foreground)),
                   const SizedBox(width: 4),
@@ -3706,7 +3672,6 @@ class _SplitButtonState extends State<_SplitButton> {
           ),
         ),
       ),
-    ),
     );
     final onDropdown = widget.onDropdown;
     return Opacity(
@@ -3766,8 +3731,8 @@ class _SplitButtonState extends State<_SplitButton> {
 /// short of room); filled with the reference's color, else outlined in the
 /// description's, quiet on any row (a selected one's color is often the
 /// badges' default).
-class _RefBadge extends StatelessWidget {
-  const _RefBadge(this.ref, this.color);
+class IdeGitRefBadge extends StatelessWidget {
+  const IdeGitRefBadge(this.ref, this.color, {super.key});
 
   final IdeGitRef ref;
 
@@ -3843,9 +3808,18 @@ class _RefBadge extends StatelessWidget {
 /// A commit's hover, as the graph and the timeline show it: the author,
 /// when, the message, its references and its id.
 class IdeCommitHover extends StatelessWidget {
-  const IdeCommitHover(this.commit, {super.key, this.referenceColors});
+  const IdeCommitHover(
+    this.commit, {
+    super.key,
+    this.referenceColors,
+    this.labels = false,
+  });
 
   final IdeGitCommit commit;
+
+  /// The references as the Git log draws them ([IdeGitRefLabelView]), not
+  /// as badges.
+  final bool labels;
 
   /// The graph's color ids of [commit]'s references, by id (the others in
   /// the default label's); without them (the timeline's), the references
@@ -3902,11 +3876,15 @@ class IdeCommitHover extends StatelessWidget {
               when commit.references.isNotEmpty) ...[
             const SizedBox(height: 8),
             Wrap(
-              spacing: 4,
+              spacing: labels ? 12 : 4,
               runSpacing: 4,
               children: [
-                for (final ref in commit.references)
-                  _RefBadge(ref, referenceColors[ref.id]),
+                if (labels)
+                  for (final label in ideGitRefLabels(commit.references))
+                    IdeGitRefLabelView(label, foreground: foreground)
+                else
+                  for (final ref in commit.references)
+                    IdeGitRefBadge(ref, referenceColors[ref.id]),
               ],
             ),
           ],
@@ -4087,18 +4065,6 @@ String _subject(IdeGitCommit commit, AppLocalizations l10n) {
   return commit.subject;
 }
 
-/// A row's left inset, cut short so a narrow panel keeps room for the name:
-/// past that the padding alone would overflow the row, whose twistie, icon
-/// and letter cannot shrink.
-double _rowInset(double room, double wanted) {
-  // The twistie (22), the icon (16), its gap (6), the status letter (19) and
-  // the right inset (12) add up to more than this; below it nothing sane fits
-  // and the row would overflow by the difference.
-  final limit = room - 80;
-  if (wanted <= limit) return wanted;
-  return limit < 0 ? 0 : limit;
-}
-
 /// A row's `...` menu drops from the row's right end.
 Rect? _rowEndAnchor(BuildContext context) {
   final box = context.findRenderObject();
@@ -4184,13 +4150,9 @@ class _RenderReportHeight extends RenderProxyBox {
 /// branch icon and label, only as wide as they are, the label cut short
 /// when there is no room.
 class _RepositoryBranch extends StatelessWidget {
-  const _RepositoryBranch(this.branch, {this.behind = 0});
+  const _RepositoryBranch(this.branch);
 
   final String branch;
-
-  /// Shown after the name where the actions do not fit; the roomy header
-  /// carries it inside the Get action instead.
-  final int behind;
 
   @override
   Widget build(BuildContext context) {
@@ -4211,75 +4173,8 @@ class _RepositoryBranch extends StatelessWidget {
               style: TextStyle(fontSize: 12, color: color),
             ),
           ),
-          if (behind > 0) _RepositoryBehind(behind),
         ],
       ),
     );
   }
-}
-
-/// The Get action's face, as measured: its icon, the gap after it, and the
-/// room the button leaves on each side of them.
-const double _fetchFaceIcon = 16;
-const double _fetchFaceGap = 2;
-const double _fetchFaceSlack = 4;
-
-/// The Get action's face with the commits it would pull: its icon and the
-/// count in one button (the count is not a second arrow beside it).
-Widget _fetchWithBehind(int behind) => Row(
-  mainAxisSize: MainAxisSize.min,
-  children: [
-    Icon(
-      Codicons.repoFetch,
-      size: _fetchFaceIcon,
-      color: IdeActionButton.foreground,
-    ),
-    const SizedBox(width: _fetchFaceGap),
-    Text(
-      '$behind',
-      style: TextStyle(
-        fontSize: 11,
-        height: 1,
-        color: IdeActionButton.foreground,
-      ),
-    ),
-  ],
-);
-
-/// [_fetchWithBehind]'s width, measured the way the digits are drawn: the
-/// icon, the gap, the digits at [textScaler], and the button's room on each
-/// side (the button's own box has no padding to add).
-double _fetchWithBehindWidth(int behind, TextScaler textScaler) {
-  final painter = TextPainter(
-    text: TextSpan(
-      text: '$behind',
-      style: const TextStyle(fontSize: 11, height: 1),
-    ),
-    textDirection: TextDirection.ltr,
-    textScaler: textScaler,
-  )..layout();
-  return _fetchFaceIcon + _fetchFaceGap + painter.width + _fetchFaceSlack * 2;
-}
-
-/// The commits a repository's branch is behind its upstream: `↓N` after the
-/// branch name, where the actions do not fit.
-class _RepositoryBehind extends StatelessWidget {
-  const _RepositoryBehind(this.behind);
-
-  final int behind;
-
-  @override
-  Widget build(BuildContext context) => IdeHover(
-    message: context.l10n.scmBehindCommits(behind),
-    child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 2),
-      child: Text(
-        '↓$behind',
-        style: TextStyle(
-          fontSize: 12,
-          color: themeColors['descriptionForeground'],
-        ),
-      ),
-    ),
-  );
 }

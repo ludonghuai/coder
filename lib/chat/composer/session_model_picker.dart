@@ -42,6 +42,11 @@ class SessionModelPicker extends StatelessWidget {
   final Object? tapRegionGroupId;
   final FocusNode? focusNode;
 
+  /// The name of the model [id], among [options]: the id itself when the
+  /// agent no longer lists it.
+  String _nameOf(String id, List<KernelOption> options) =>
+      options.where((option) => option.id == id).firstOrNull?.label ?? id;
+
   /// The model with its settings, e.g. "Opus · 1M · High": the context
   /// only when it is not the standard one; its upstream before it only
   /// when another upstream has a model of its name.
@@ -58,11 +63,6 @@ class SessionModelPicker extends StatelessWidget {
               selected != setting.options.first)
         selected.label,
   ].join(' · ');
-
-  /// The name of the model [id], among [options]: the id itself when the
-  /// agent no longer lists it.
-  String _nameOf(String id, List<KernelOption> options) =>
-      options.where((option) => option.id == id).firstOrNull?.label ?? id;
 
   /// Runs [pick], which switches to [option]: once confirmed, if that
   /// restarts the agent on another upstream mid-conversation.
@@ -157,21 +157,26 @@ class SessionModelPicker extends StatelessWidget {
           : [?tooltip, l10n.modelsSwitchPending(waiting)].join(' · '),
       menuWidth: 260,
       searchPlaceholder: l10n.modelsSearch,
-      // A long provider list opens on the one chosen; the rest wait
-      // collapsed. Claude's few groups keep their own face.
+      // thincoder 的模型归 CLI 自己的配置管：provider 一长串，打开时先收起，
+      // 只让选中的那组展开；底部的管理入口指向 thincoder 的模型页，不是本应用的模型设置。
       startCollapsed: session.kernel.id == 'thincoder',
-      footer: session.kernel.id == 'thincoder'
-          ? null
-          : switch (SettingsOpener.maybeOf(context)) {
-              final open? => (
-                label: ChannelSetup.channelBuild
-                    ? l10n.channelAccountTitle
-                    : l10n.modelsManage,
-                icon: Icons.tune_rounded,
-                onTap: () => open(SettingsSection.models),
-              ),
-              null => null,
-            },
+      footers: [
+        if (SettingsOpener.maybeOf(context) case final open?)
+          if (session.kernel.id == 'thincoder')
+            (
+              label: l10n.settingsSectionThincoderModels,
+              icon: Icons.tune_rounded,
+              onTap: () => open(SettingsSection.thincoderModels),
+            )
+          else
+            (
+              label: ChannelSetup.channelBuild
+                  ? l10n.channelAccountTitle
+                  : l10n.modelsManage,
+              icon: Icons.tune_rounded,
+              onTap: () => open(SettingsSection.models),
+            ),
+      ],
       tapRegionGroupId: tapRegionGroupId,
       focusNode: focusNode,
       onSelected: (option) =>

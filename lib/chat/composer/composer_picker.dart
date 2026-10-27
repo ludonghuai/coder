@@ -38,6 +38,7 @@ class ComposerPicker extends StatefulWidget {
     required this.onSelected,
     this.label,
     this.describes = true,
+    this.startCollapsed = false,
     this.descriptionAside = false,
     this.settingsOf,
     this.submenuOf,
@@ -49,8 +50,7 @@ class ComposerPicker extends StatefulWidget {
     this.tapRegionGroupId,
     this.focusNode,
     this.searchPlaceholder,
-    this.footer,
-    this.startCollapsed = false,
+    this.footers = const [],
   }) : assert(settingsOf == null || submenuOf == null);
 
   final List<KernelOption> options;
@@ -62,6 +62,9 @@ class ComposerPicker extends StatefulWidget {
 
   /// Shows each option's description under it.
   final bool describes;
+
+  /// 每个分组默认收起（选中的那组除外）：provider 很长时，先看到自己选的是哪个。
+  final bool startCollapsed;
 
   /// With [describes], each description at its row's end, on the label's
   /// line: rows as low as without.
@@ -105,12 +108,8 @@ class ComposerPicker extends StatefulWidget {
   /// never when null.
   final String? searchPlaceholder;
 
-  /// An action under the options (Manage Models…).
-  final ComposerPickerFooter? footer;
-
-  /// Starts the groups collapsed under their headings, all but the one
-  /// [selected] is in: a long list opens on what is chosen.
-  final bool startCollapsed;
+  /// Actions under the options (Create Branch…, New Worktree…).
+  final List<ComposerPickerFooter> footers;
 
   /// Options from which the search shows.
   static const searchFrom = 10;
@@ -189,14 +188,10 @@ class ComposerPickerState extends State<ComposerPicker> {
   /// menu is, until the picker goes.
   final Set<String> _collapsed = {};
 
-  /// The groups this picker has seen. One that arrives later — a session's
-  /// models reported after the first — starts collapsed too, all but the
-  /// one [selected] is in; a group the user opened or closed by hand is
-  /// left as it is.
+  /// 已经处理过的分组：后来才到的模型（会话后面才报）也要默认收起。
   final Set<String> _seenGroups = {};
 
-  /// Collapses the groups not seen before, all but the one [selected] is
-  /// in. Called as the picker is made and whenever its options change.
+  /// 把没见过的分组收起（选中的那组除外），首次构建与选项变化时都调。
   void _collapseNewGroups() {
     final selected = widget.selected.group?.id;
     for (final option in widget.options) {
@@ -409,9 +404,6 @@ class ComposerPickerState extends State<ComposerPicker> {
     if (widget.options.length != oldWidget.options.length) {
       _rowKeys = _keysFor(widget.options);
     }
-    // A model list that grows after this picker was made (a session's
-    // models reported later) starts collapsed as well, not just the groups
-    // present at the first build.
     if (widget.startCollapsed) _collapseNewGroups();
   }
 
@@ -867,10 +859,8 @@ class ComposerPickerState extends State<ComposerPicker> {
   /// Settings open this far from the menu's edge.
   static const _settingsGap = 4.0;
 
-  /// Both lines of a described row (its label, its description below) take
-  /// 44: 40 was two pixels short of what Windows' text metrics need.
   double get _rowHeight =>
-      widget.describes && !widget.descriptionAside ? 44 : 30;
+      widget.describes && !widget.descriptionAside ? 40 : 30;
 
   /// As upstream's action widget, its pickers' menu: in a context menu's
   /// colors ([IdeMenuColors]), as the other dropdowns.
@@ -1097,7 +1087,6 @@ class ComposerPickerState extends State<ComposerPicker> {
       for (final i in matching)
         if (!_collapsedAt(i)) i,
     };
-    final footer = widget.footer;
     final menu = Container(
       key: _menuKey,
       width: widget.menuWidth,
@@ -1138,9 +1127,9 @@ class ComposerPickerState extends State<ComposerPicker> {
                 child: _buildList(rows),
               ),
             ),
-          if (footer != null)
+          for (final (index, footer) in widget.footers.indexed)
             Padding(
-              padding: sides.copyWith(top: _menuPadding),
+              padding: sides.copyWith(top: index == 0 ? _menuPadding : 0),
               child: _FooterRow(
                 footer: footer,
                 onTap: () {

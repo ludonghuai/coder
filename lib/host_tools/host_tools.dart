@@ -9,92 +9,13 @@
 
 import 'dart:async';
 
-import '../chat/chat_models.dart' show ToolCallItem, ToolKind;
+import '../kernel/claude_code/claude_sdk_tools.dart';
 
-/// Where a tool is called from: the agent's working directory (its
-/// project's path, as the workspace has it) and its session.
-class HostToolCall {
-  const HostToolCall({
-    required this.cwd,
-    this.sessionId,
-    this.cancelled,
-    this.toolUseId,
-  });
+export '../kernel/claude_code/claude_sdk_tools.dart'
+    show ClaudeSdkTool, ClaudeSdkCall, claudeSdkImage, claudeSdkText;
 
-  final String cwd;
-  final String? sessionId;
-
-  /// The tool use it answers, as Claude Code says (`_meta`'s
-  /// `claudecode/toolUseId`): its step's in the conversation
-  /// ([ToolCallItem.callId]).
-  final String? toolUseId;
-
-  /// Completes once the call is given up: the turn stopped, or the agent
-  /// cancelled it. A tool that waits long (on the user, say) stops then.
-  final Future<void>? cancelled;
-}
-
-/// One tool: its name, what it does and the JSON schema of its input, for
-/// the model; [run] answers a call with text, or MCP content blocks (a
-/// list of them: text, an image), or throws to say it failed.
-class HostTool {
-  const HostTool({
-    required this.name,
-    required this.description,
-    required this.inputSchema,
-    required this.run,
-    this.kind,
-    this.summary,
-    this.files,
-    this.alwaysLoad = false,
-    this.group = '',
-    this.picturesOnly = false,
-  });
-
-  final String name;
-  final String description;
-  final Map<String, Object?> inputSchema;
-  final Future<Object> Function(Map<String, Object?> input, HostToolCall call)
-  run;
-
-  /// The step a call is in the conversation; else any MCP tool's.
-  final ToolKind? kind;
-
-  /// What a call is about, in a few words, from its input and (once
-  /// answered) what it answered: the step's line, when the agent did not
-  /// say it (an input's `description`, as Bash's).
-  final String Function(Map<String, Object?> input, String? output)? summary;
-
-  /// The files its pictures were saved to, one each, from what it answered
-  /// ([ToolCallItem.imageFiles]): in place of the CLI's copies.
-  final List<String> Function(String output)? files;
-
-  /// Always in the model's prompt, never deferred behind Claude Code's tool
-  /// search (where it would see only its name): for a tool it should think
-  /// of unprompted.
-  final bool alwaysLoad;
-
-  /// The group of tools it belongs to (`'browser'`, `'images'`): a server
-  /// that exposes one group alone gives only its tools.
-  final String group;
-
-  /// Whether its answer is pictures alone: a client whose protocol cannot
-  /// carry them (ACP's MCP face, §12-1) is not given it.
-  final bool picturesOnly;
-}
-
-/// An image as MCP content, for a tool's answer.
-Map<String, Object?> claudeSdkImage(String base64, String mimeType) => {
-  'type': 'image',
-  'data': base64,
-  'mimeType': mimeType,
-};
-
-/// Text as MCP content, for a tool's answer.
-Map<String, Object?> claudeSdkText(String text) => {
-  'type': 'text',
-  'text': text,
-};
+typedef HostTool = ClaudeSdkTool;
+typedef HostToolCall = ClaudeSdkCall;
 
 /// The app's server and its tools (registered as their features start).
 abstract final class HostTools {

@@ -140,8 +140,9 @@ Map<String, Object?> result(
 };
 
 void main() {
-  testWidgets('a thincoder session hides the models page footer; Claude keeps '
-      'it', (tester) async {
+  testWidgets('a thincoder session keeps the footer, pointed at its own models '
+      'page; Claude points at the app\'s', (tester) async {
+    final opened = <SettingsSection>[];
     Future<void> pumpWithOpener(KernelDescriptor kernel) async {
       final session = ChatSession(
         kernel: kernel,
@@ -153,7 +154,7 @@ void main() {
         MaterialApp(
           theme: buildAppTheme(),
           home: SettingsOpener(
-            open: (_) {},
+            open: opened.add,
             child: ChatScreen(key: UniqueKey(), session: session),
           ),
         ),
@@ -169,13 +170,19 @@ void main() {
     );
     tester.state<ComposerPickerState>(picker).toggle();
     await tester.pump(const Duration(milliseconds: 300));
-    expect(find.byIcon(Icons.tune_rounded), findsNothing);
+    // thincoder 的模型归 CLI 管：底部不藏，指向它自己的模型页。
+    expect(find.byIcon(Icons.tune_rounded), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.tune_rounded));
+    await tester.pump();
+    expect(opened.last, SettingsSection.thincoderModels);
 
     await pumpWithOpener(MockKernels.claudeCode);
     await tester.pump(const Duration(milliseconds: 300));
     tester.state<ComposerPickerState>(picker).toggle();
     await tester.pump(const Duration(milliseconds: 300));
-    expect(find.byIcon(Icons.tune_rounded), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.tune_rounded));
+    await tester.pump();
+    expect(opened.last, SettingsSection.models);
   });
 
   testWidgets('Enter in the empty composer while the agent works sends the '

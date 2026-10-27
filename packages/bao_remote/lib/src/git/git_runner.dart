@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 
 import '../files/ide_file.dart';
 import '../files/recursive_watch.dart';
+import '../platform/process_isolate.dart';
 import 'git_types.dart';
 
 // `GIT_OPTIONAL_LOCKS=0` rather than `--no-optional-locks`: the same in Git
@@ -87,13 +88,41 @@ List<String> _gitArguments(List<String> arguments) => [
 /// With [limit], the output is NUL-terminated records (`-z`) of which only
 /// the first [limit] are read: Git is stopped at the one after, and the
 /// output is [IdeGitOutput.truncated] (VS Code's `git.statusLimit`).
+/// [stdin] is written to it, and [environment] added to its. It is started
+/// from the isolate of [onProcessIsolate], not this one.
 Future<IdeGitOutput> runGit(
   List<String> arguments, {
   required String workingDirectory,
   int? limit,
+  String? stdin,
+  Map<String, String>? environment,
+}) => onProcessIsolate(
+  () => _runGit(
+    arguments,
+    workingDirectory: workingDirectory,
+    limit: limit,
+    stdin: stdin,
+    environment: environment,
+  ),
+);
+
+Future<IdeGitOutput> _runGit(
+  List<String> arguments, {
+  required String workingDirectory,
+  int? limit,
+  String? stdin,
+  Map<String, String>? environment,
 }) async {
   final timeout = gitTimeoutFor(arguments);
   try {
+    if (stdin != null || environment != null) {
+      return await _runWith(
+        arguments,
+        workingDirectory,
+        stdin: stdin,
+        environment: environment,
+      );
+    }
     if (limit != null) {
       return await _runLimited(arguments, workingDirectory, limit);
     }
@@ -124,6 +153,36 @@ Future<IdeGitOutput> runGit(
     );
   } on FormatException {
     throw const IdeGitException('Git returned text that is not UTF-8.');
+  }
+}
+
+/// [runGit] with [stdin] written to it and [environment] added.
+Future<IdeGitOutput> _runWith(
+  List<String> arguments,
+  String workingDirectory, {
+  String? stdin,
+  Map<String, String>? environment,
+}) async {
+  final process = await Process.start(
+    'git',
+    _gitArguments(arguments),
+    workingDirectory: workingDirectory,
+    environment: {..._gitEnvironment, ...?environment},
+  );
+  final stdout = process.stdout.transform(utf8.decoder).join();
+  final stderr = process.stderr
+      .transform(const Utf8Decoder(allowMalformed: true))
+      .join();
+  if (stdin != null) process.stdin.add(utf8.encode(stdin));
+  await process.stdin.close();
+  try {
+    final exitCode = await process.exitCode.timeout(
+      const Duration(seconds: 60),
+    );
+    return IdeGitOutput(exitCode, await stdout, await stderr);
+  } on TimeoutException {
+    process.kill();
+    rethrow;
   }
 }
 
@@ -200,8 +259,9 @@ Future<IdeGitOutput> _runLimited(
 
 /// File changes under [repositoryRoot] that can change the status: the
 /// working tree, and the index, HEAD and refs of `.git` (not its objects
-/// or logs). An error (changes lost) is passed on.
-Stream<void> watchRepository(String repositoryRoot) {
+/// or logs), each as the path changed. An error (changes lost) is passed
+/// on.
+Stream<String> watchRepository(String repositoryRoot) {
   final gitDir = p.join(repositoryRoot, '.git');
   bool relevant(String path) {
     if (!p.isWithin(gitDir, path)) return true;
@@ -223,7 +283,14 @@ Stream<void> watchRepository(String repositoryRoot) {
                   event.destination != null &&
                   relevant(event.destination!)),
         )
-        .map((_) {});
+        .map(
+          (event) => switch (event) {
+            FileSystemMoveEvent(:final destination?)
+                when relevant(destination) =>
+              destination,
+            _ => event.path,
+          },
+        );
   } on FileSystemException {
     return const Stream.empty();
   } on UnsupportedError {
@@ -234,7 +301,7 @@ Stream<void> watchRepository(String repositoryRoot) {
 /// [watchRepository] where a tree cannot be watched whole (Linux): each
 /// folder on its own, but not those of `.git` other than `refs`, nor the
 /// dependency and build folders Quick Open skips.
-Stream<void> watchRepositoryRecursively(String repositoryRoot) {
+Stream<String> watchRepositoryRecursively(String repositoryRoot) {
   final gitDir = p.join(repositoryRoot, '.git');
   bool relevant(String path) {
     if (!p.isWithin(gitDir, path)) return true;
@@ -254,5 +321,5 @@ Stream<void> watchRepositoryRecursively(String repositoryRoot) {
       return dir != gitDir &&
           ideIndexExcludedDirectories.contains(p.basename(dir));
     },
-  ).where((event) => relevant(event.path)).map((_) {});
+  ).where((event) => relevant(event.path)).map((event) => event.path);
 }

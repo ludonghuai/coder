@@ -58,13 +58,24 @@ import 'explorer_history.dart'
     show explorerRedoCommandId, explorerUndoCommandId;
 import 'file_views.dart';
 import 'file_service.dart'
-    show IdeFileListing, IdeHostFiles, localizedFileError, readFileBytes;
+    show
+        IdeFileListing,
+        IdeFileService,
+        IdeHostFiles,
+        localizedFileError,
+        readFileBytes;
 import 'git/commit_message.dart';
-import 'git/git_autofetch.dart';
+import 'git/git_branch_actions.dart';
+import 'git/git_branch_tree.dart' show IdeGitFavoriteBranches;
+import 'git/ide_git_branch_popup.dart';
 import 'git/git_change_editor.dart';
 import 'git/git_checkout.dart';
+import 'git/git_changelists.dart';
 import 'git/git_model.dart';
+import 'git/git_partial.dart' show IdeGitHunkSelection;
 import 'git/git_repository.dart';
+import 'git/ide_git_commit_panel.dart';
+import 'git/ide_git_log_view.dart';
 import 'git/ide_scm_view.dart';
 import 'git/ide_timeline_view.dart';
 import 'ide_agent_edits.dart';
@@ -82,10 +93,15 @@ import 'ide_image_preview.dart';
 import 'markdown/markdown_paste.dart';
 import 'markdown/markdown_preview.dart';
 import 'ide_explorer.dart';
+import 'ide_code_diff.dart' show IdeDiffAgentMarks;
+import 'ide_dates.dart' show ideFromNow;
+import 'ide_folder_compare.dart';
+import 'ide_local_history.dart';
 import 'ide_hover.dart';
 import 'ide_layout.dart';
 import 'ide_list.dart' show IdeKeyboardList;
 import 'ide_modern_ui.dart';
+import 'ide_diff_options.dart';
 import 'ide_notifications.dart';
 import 'ide_panes.dart';
 import 'ide_quick_input.dart';
@@ -128,6 +144,7 @@ class IdeWorkbench extends StatefulWidget {
     required this.visible,
     required this.chat,
     this.onAddToChat,
+    this.onAskInChat,
     required this.onBack,
     this.backLabel,
     this.editorBuilder,
@@ -195,6 +212,10 @@ class IdeWorkbench extends StatefulWidget {
   /// Puts files and folders in [chat]'s composer (Source Control's Add to
   /// Chat); none offered when null.
   final ValueChanged<List<ComposerFile>>? onAddToChat;
+
+  /// Puts a request in [chat]'s composer, to be sent once looked over
+  /// (Ask AI about a commit, changes, a conflict); none offered when null.
+  final ValueChanged<String>? onAskInChat;
   final VoidCallback onBack;
 
   /// The title bar's way back's label: Back to Chat, by default; in a
@@ -428,6 +449,10 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
   ({IdeRows rows, double room})? _panelDragStart;
   IdeSideView _view = IdeSideView.explorer;
 
+  /// The workspace being taken up: its editor in front then is not one
+  /// opened, which would leave the Git log.
+  bool _attaching = false;
+
   /// The workspace's notifications (the debugger's go there too).
   IdeNotifications get _notifications => widget.workspace.notifications;
 
@@ -447,7 +472,20 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
   String? _activeKey;
 
   /// The Source Control view's message and state, while other views show.
-  late IdeScmSession _scm = IdeScmSession(settings: widget.settings);
+  /// The favorite branches of the window's repositories, kept with its
+  /// state.
+  final IdeGitFavoriteBranches _favoriteBranches = IdeGitFavoriteBranches();
+
+  /// The changes left unchecked in the Commit panel's diffs.
+  final IdeGitHunkSelection _hunks = IdeGitHunkSelection();
+
+  /// The changelists the Commit panel sorts the changes into.
+  final IdeGitChangelists _changelists = IdeGitChangelists();
+
+  late IdeScmSession _scm = IdeScmSession(
+    settings: widget.settings,
+    favoriteBranches: _favoriteBranches,
+  );
 
   /// The explorer's open panes (Folders first, then Outline and Timeline,
   /// collapsed as VS Code starts them), and what the timeline follows.
@@ -474,7 +512,8 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
   /// only then are they shown in the file manager, opened in other apps,
   /// or moved to the trash.
   bool get _local => widget.workspace.files is! IdeHostFiles;
-  final _scmKey = GlobalKey<IdeScmViewState>();
+  final _scmKey = GlobalKey<IdeGitCommitPanelState>();
+  final _gitLogKey = GlobalKey<IdeGitLogViewState>();
   IdeGitRepository? _git;
 
   /// The Extensions view's language servers and search, made when it
@@ -506,12 +545,6 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
 
   /// The status the open revisions were last read against.
   IdeGitState? _gitState;
-
-  /// What the shown repository last told the status bar of the automatic
-  /// fetch: the commits behind, when it last succeeded, and its issue.
-  int _gitBehind = 0;
-  DateTime? _gitFetchedAt;
-  IdeGitAutoFetchIssue? _gitIssue;
 
   /// The quick input's text while it is open (its prefix picks the mode).
   String? _quickInput;
@@ -696,6 +729,13 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
     _sidebarWidth = size('sidebarWidth') ?? _sidebarWidth;
     _chatWidth = size('chatWidth') ?? _chatWidth;
     _panelHeight = size('panelHeight');
+    _changelists.restore(kept['gitChangelists']);
+    _search.restore(kept['search']);
+    if (kept['gitFavoriteBranches'] case final Object json) {
+      final favorites = IdeGitFavoriteBranches.fromJson(json);
+      _favoriteBranches.restore(favorites);
+      favorites.dispose();
+    }
     if (kept['view'] case final String name) {
       _view = IdeSideView.values.asNameMap()[name] ?? _view;
     }
@@ -731,13 +771,18 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
         if (doc.label == null && (doc.isFile || doc.isMedia)) doc.path,
     ];
     final active = widget.workspace.active?.key;
+    final search = _search.kept;
     return {
       'sidebarWidth': _sidebarWidth,
       'chatWidth': _chatWidth,
       'panelHeight': ?_panelHeight,
       ..._layout.toJson(),
       'view': _view.name,
+      if (search.isNotEmpty) 'search': search,
       if (_markdownSources.isNotEmpty) 'markdownSource': [..._markdownSources],
+      if (!_favoriteBranches.isEmpty)
+        'gitFavoriteBranches': _favoriteBranches.toJson(),
+      if (_changelists.several) 'gitChangelists': _changelists.toJson(),
       'editors': editors,
       if (editors.contains(active)) 'active': active,
     };
@@ -1058,6 +1103,8 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
   @override
   void initState() {
     super.initState();
+    IdeDiffOptions.instance.attach(widget.settings);
+    widget.workspace.localHistory ??= IdeLocalHistory.inDataDirectory();
     FocusManager.instance.addEarlyKeyEventHandler(_onChordKey);
     FocusManager.instance.addLateKeyEventHandler(_onLateKey);
     KeybindingService.instance.addListener(_keybindingsChanged);
@@ -1085,11 +1132,13 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
       ];
     }
     _restoreView();
+    _search.keptChanges.addListener(_keepViewSoon);
+    _favoriteBranches.addListener(_keepViewSoon);
+    _changelists.addListener(_keepViewSoon);
+    widget.agentEdits?.addListener(_assignTurns);
     _attach();
     _lifecycle = AppLifecycleListener(
-      onResume: () {
-        unawaited(_git?.refresh());
-      },
+      onResume: () => unawaited(_git?.refresh()),
       // The window left: `onFocusChange` and `onWindowChange` save.
       onInactive: () =>
           unawaited(_autoSaveNow(const {'onFocusChange', 'onWindowChange'})),
@@ -1165,7 +1214,9 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
     workspace.layout.addListener(_layoutChanged);
     _shownPanel = workspace.layout.panel;
     _activeKey = null;
+    _attaching = true;
     _workspaceChanged();
+    _attaching = false;
     _git = workspace.git?..addListener(_gitChanged);
     _gitChanged();
     // New terminals start in the project (a workspace's first folder);
@@ -1255,7 +1306,12 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
     if (identical(git, _git)) return;
     _git?.removeListener(_gitChanged);
     _scmSessions[_git] = _scm;
-    _scm = _scmSessions.remove(git) ?? IdeScmSession(settings: widget.settings);
+    _scm =
+        _scmSessions.remove(git) ??
+        IdeScmSession(
+          settings: widget.settings,
+          favoriteBranches: _favoriteBranches,
+        );
     _git = git?..addListener(_gitChanged);
     _gitChanged();
     if (mounted) setState(() {});
@@ -1290,7 +1346,10 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
     }
     _scmSessions.clear();
     _scm.dispose();
-    _scm = IdeScmSession(settings: widget.settings);
+    _scm = IdeScmSession(
+      settings: widget.settings,
+      favoriteBranches: _favoriteBranches,
+    );
     _explorer.dispose();
     _fileIndex.dispose();
     _languages?.removeListener(_languagesChanged);
@@ -1326,22 +1385,9 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
     _listenToRepositories();
     final count = _changesInAllRepositories;
     final branch = state?.head.branch;
-    final behind = state?.head.behind ?? 0;
-    final fetchedAt = _git?.lastFetchAt;
-    final issue = _git?.autoFetchIssue;
-    if (count == _gitCount &&
-        branch == _gitBranch &&
-        behind == _gitBehind &&
-        fetchedAt == _gitFetchedAt &&
-        issue == _gitIssue &&
-        !loaded) {
-      return;
-    }
+    if (count == _gitCount && branch == _gitBranch && !loaded) return;
     _gitCount = count;
     _gitBranch = branch;
-    _gitBehind = behind;
-    _gitFetchedAt = fetchedAt;
-    _gitIssue = issue;
     if (mounted) setState(() {});
   }
 
@@ -1445,6 +1491,8 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
         oldWidget.agentEdits?.open = null;
       }
       widget.agentEdits?.open = _openAgentChange;
+      oldWidget.agentEdits?.removeListener(_assignTurns);
+      widget.agentEdits?.addListener(_assignTurns);
     }
     if (!identical(oldWidget.commands, widget.commands)) {
       _registerCommandKeybindings();
@@ -1476,6 +1524,7 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
     if (widget.agentEdits?.open == _openAgentChange) {
       widget.agentEdits?.open = null;
     }
+    widget.agentEdits?.removeListener(_assignTurns);
     FocusManager.instance.removeEarlyKeyEventHandler(_onChordKey);
     FocusManager.instance.removeLateKeyEventHandler(_onLateKey);
     KeybindingService.instance.removeListener(_keybindingsChanged);
@@ -1495,6 +1544,7 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
     _workbenchFocus.dispose();
     _explorerFocus.dispose();
     _timeline.dispose();
+    _search.keptChanges.removeListener(_keepViewSoon);
     _search.dispose();
     _scm.dispose();
     for (final subscription in _terminalRequests) {
@@ -1508,6 +1558,9 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
     _referencesList.dispose();
     _sidebarFocus.dispose();
     _chatFocus.dispose();
+    _favoriteBranches.dispose();
+    _hunks.dispose();
+    _changelists.dispose();
     super.dispose();
   }
 
@@ -1577,6 +1630,15 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
     // maximizing, and has the side bar give way to it rather than it to
     // the side bar.
     _layout.showEditor();
+    // In the Git log's place, which has the editor's: the explorer's view
+    // back beside it.
+    if (_view == IdeSideView.sourceControl && !_attaching) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _view == IdeSideView.sourceControl) {
+          setState(() => _view = IdeSideView.explorer);
+        }
+      });
+    }
     if (!_closingEditors) _extensionPageShown = false;
     _recommendServers();
     _recentFiles.add(path);
@@ -1668,6 +1730,371 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
       _report(error);
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// The explorer's view in place of the Git log, for the editor it hides
+  /// to show.
+  /// [hash] selected in the Git log, shown in the editor's place.
+  void _showCommitInLog(String hash) {
+    _showView(IdeSideView.sourceControl);
+    _scm.log.reveal(hash);
+  }
+
+  /// Show History: the Git log of [path], a file or folder, or of [lines]
+  /// of a file; the other filters go, as from a fresh log.
+  /// JetBrains' Compare with Branch…, Compare with Revision… and Compare
+  /// with Clipboard: [path]'s file against what is picked, in a diff tab.
+  Future<void> _compareWith(String path, IdeCompareWith what) async {
+    final l10n = context.l10n;
+    final workspace = widget.workspace;
+    final name = p.basename(path);
+    final git = workspace.gitAt(path);
+    void show(IdeQuickInputModel model) {
+      if (mounted) _showQuickModel(model);
+    }
+
+    try {
+      switch (what) {
+        case IdeCompareWith.clipboard:
+          final text =
+              (await Clipboard.getData(Clipboard.kTextPlain))?.text ?? '';
+          await workspace.openDiff(
+            path,
+            label: l10n.compareWithClipboardLabel(name),
+            original: () async => text,
+          );
+        case IdeCompareWith.branch:
+          if (git == null) return;
+          final ref = await ideGitPickRef(
+            git,
+            show: show,
+            l10n: l10n,
+            placeholder: l10n.gitCompareWithBranchPlaceholder,
+          );
+          if (ref == null) return;
+          await workspace.openDiff(
+            path,
+            label: l10n.gitCompareLabel(name, ref.name),
+            original: () =>
+                git.service.show(ref.name, path).catchError((Object _) => ''),
+          );
+        case IdeCompareWith.localHistory:
+          await _showLocalHistory(path);
+        case IdeCompareWith.revision:
+          if (git == null) return;
+          final commit = await ideGitPickRevision(
+            git,
+            path,
+            show: show,
+            l10n: l10n,
+            placeholder: l10n.gitCompareWithRevisionPlaceholder,
+          );
+          if (commit == null) return;
+          await workspace.openDiff(
+            path,
+            label: l10n.gitCompareLabel(name, commit.shortId),
+            original: () =>
+                git.service.show(commit.id, path).catchError((Object _) => ''),
+          );
+      }
+    } catch (error) {
+      _report(error);
+    }
+  }
+
+  /// Show Local History: the file's versions as saved, the latest first;
+  /// one picked, in a diff tab against the file, to be taken back from.
+  Future<void> _showLocalHistory(String path) async {
+    final l10n = context.l10n;
+    final workspace = widget.workspace;
+    final history = workspace.localHistory;
+    if (history == null) return;
+    final name = p.basename(path);
+    final List<IdeLocalVersion> versions;
+    try {
+      versions = await history.versionsOf(path);
+    } catch (error) {
+      _report(error);
+      return;
+    }
+    if (!mounted) return;
+    if (versions.isEmpty) {
+      _notifications.notify(IdeSeverity.info, l10n.localHistoryNone(name));
+      return;
+    }
+    String two(int n) => '$n'.padLeft(2, '0');
+    String stamp(DateTime t) =>
+        '${t.year}-${two(t.month)}-${two(t.day)} '
+        '${two(t.hour)}:${two(t.minute)}:${two(t.second)}';
+    final items = {
+      for (final version in versions)
+        IdeQuickPickItem(
+          label: stamp(version.time),
+          description: ideFromNow(version.time, ago: true, l10n: l10n),
+        ): version,
+    };
+    _showQuickModel(
+      IdeQuickPick(
+        placeholder: l10n.localHistoryPick(name),
+        sortByLabel: false,
+        items: items.keys.toList(),
+        onDidAccept: (item) {
+          final version = items[item];
+          if (version == null) return;
+          unawaited(
+            workspace.openDiff(
+              path,
+              label: l10n.localHistoryLabel(name, stamp(version.time)),
+              original: () => history.read(version),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  /// Compare Files: [original]'s text against [modified]'s. Two folders:
+  /// the files they differ in, stepped through as a commit's are in the
+  /// Git log's place (picked from a list outside a repository).
+  Future<void> _compareFiles(
+    String original,
+    String modified, {
+    bool folders = false,
+  }) async {
+    final l10n = context.l10n;
+    final workspace = widget.workspace;
+    final files = workspace.files;
+    if (!folders) {
+      await workspace.openDiff(
+        modified,
+        label: l10n.compareFilesLabel(
+          p.basename(original),
+          p.basename(modified),
+        ),
+        original: () => files.read(original),
+      );
+      return;
+    }
+    final List<IdeFolderDifference> differences;
+    try {
+      differences = await ideCompareFolders(files, original, modified);
+    } catch (error) {
+      _report(error);
+      return;
+    }
+    if (!mounted) return;
+    if (differences.isEmpty) {
+      _notifications.notify(
+        IdeSeverity.info,
+        l10n.compareFoldersSame(p.basename(original), p.basename(modified)),
+      );
+      return;
+    }
+    String at(String folder, String path) =>
+        p.joinAll([folder, ...path.split('/')]);
+    Future<String> read(String path) =>
+        files.read(path).catchError((Object _) => '');
+    final git = workspace.gitAt(modified) ?? workspace.gitAt(original);
+    if (git != null) {
+      workspace.selectRepository(git);
+      _showView(IdeSideView.sourceControl);
+      _scm.log.showDiff([
+        for (final (:path, :change) in differences)
+          IdeGitDiffFile(
+            path: at(
+              change == IdeFolderChange.deleted ? original : modified,
+              path,
+            ),
+            status: switch (change) {
+              IdeFolderChange.added => IdeGitStatus.untracked,
+              IdeFolderChange.deleted => IdeGitStatus.deleted,
+              IdeFolderChange.modified => IdeGitStatus.modified,
+            },
+            originalLabel: p.basename(original),
+            modifiedLabel: p.basename(modified),
+            original: () async =>
+                change == IdeFolderChange.added ? '' : read(at(original, path)),
+            modified: () async => change == IdeFolderChange.deleted
+                ? ''
+                : read(at(modified, path)),
+            write: change == IdeFolderChange.deleted
+                ? null
+                : (text) => files.write(at(modified, path), text),
+            onOpenInEditor: change == IdeFolderChange.deleted
+                ? null
+                : () => unawaited(_open(at(modified, path))),
+          ),
+      ], 0);
+      return;
+    }
+    final items = {
+      for (final difference in differences)
+        IdeQuickPickItem(
+          label: difference.path,
+          description: switch (difference.change) {
+            IdeFolderChange.added => l10n.compareFoldersOnlyIn(
+              p.basename(modified),
+            ),
+            IdeFolderChange.deleted => l10n.compareFoldersOnlyIn(
+              p.basename(original),
+            ),
+            IdeFolderChange.modified => l10n.compareFoldersModified,
+          },
+        ): difference,
+    };
+    _showQuickModel(
+      IdeQuickPick(
+        placeholder: l10n.compareFoldersPick(
+          p.basename(original),
+          p.basename(modified),
+        ),
+        sortByLabel: false,
+        items: items.keys.toList(),
+        onDidAccept: (item) {
+          final difference = items[item];
+          if (difference == null) return;
+          final (:path, :change) = difference;
+          unawaited(
+            workspace.openDiff(
+              at(change == IdeFolderChange.deleted ? original : modified, path),
+              label: l10n.compareFilesLabel(
+                p.basename(original),
+                p.basename(modified),
+              ),
+              original: () async => change == IdeFolderChange.added
+                  ? ''
+                  : read(at(original, path)),
+              modified: change == IdeFolderChange.deleted
+                  ? () async => ''
+                  : null,
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void _showHistory(String path, [IdeGitLogLines? lines]) {
+    final git = widget.workspace.gitAt(path);
+    if (git == null) return;
+    widget.workspace.selectRepository(git);
+    final log = _scm.log;
+    if (lines == null) log.rememberPath(path);
+    log
+      ..search.clear()
+      ..selected = null;
+    git.graphFilter = lines == null
+        ? IdeGitLogFilter(paths: [path])
+        : IdeGitLogFilter(lines: lines);
+    _showView(IdeSideView.sourceControl);
+  }
+
+  void _leaveGitLog() {
+    if (_view == IdeSideView.sourceControl) {
+      setState(() => _view = IdeSideView.explorer);
+    }
+  }
+
+  /// Shows [resource]'s change in the Git log's table's place, the other
+  /// changes a step away (a click); in the editor, the log left, where the
+  /// editor is asked for ([focusEditor]: Open Changes, Enter, a double
+  /// click) and for its original ([head], Open File (HEAD)).
+  Future<void> _openChangeInLog(
+    IdeGitResource resource, {
+    bool head = false,
+    bool focusEditor = false,
+  }) async {
+    final git = _git;
+    final state = git?.state;
+    if (head || focusEditor || git == null || state == null) {
+      _leaveGitLog();
+      return _openChange(resource, head: head, focusEditor: focusEditor);
+    }
+    final resources = [
+      for (final group in IdeGitGroup.values) ...state.group(group),
+    ];
+    final l10n = context.l10n;
+    final files = widget.workspace.files;
+    _scm.log.showDiff(
+      [
+        for (final change in resources)
+          ideLocalDiffFile(
+            git,
+            state,
+            change,
+            files.read,
+            l10n,
+            onOpenInEditor: () {
+              _leaveGitLog();
+              unawaited(_openChange(change, focusEditor: true));
+            },
+            write: _writeFromDiff,
+            hunks: _hunks,
+            agent: _agentMarksOf(change.path),
+          ),
+        // The keys go on walking the changes.
+      ],
+      resources.indexOf(resource),
+      focus: false,
+    );
+  }
+
+  /// What an agent changed in the file at [path] and is not yet kept, and
+  /// what the turns that changed it were asked, for its diff to mark.
+  IdeDiffAgentMarks? _agentMarksOf(String path) {
+    final edits = widget.agentEdits;
+    final edit = edits?.of(path);
+    if (edits == null || edit == null) return null;
+    final turns = <String, String>{
+      for (final turn in edits.turnEdits)
+        if (turn.path == path) turn.turn: turn.request,
+    };
+    return IdeDiffAgentMarks(edit.base, turns.values.toList());
+  }
+
+  /// The agents' changes in a changelist of the turn that made them, named
+  /// after what it was asked (the start of its first line).
+  void _assignTurns() {
+    final edits = widget.agentEdits;
+    if (edits == null || !mounted) return;
+    final turns = <String, ({String request, List<String> paths})>{};
+    for (final edit in edits.turnEdits) {
+      turns
+          .putIfAbsent(edit.turn, () => (request: edit.request, paths: []))
+          .paths
+          .add(edit.path);
+    }
+    final l10n = context.l10n;
+    for (final MapEntry(key: turn, value: (:request, :paths))
+        in turns.entries) {
+      final line = request.trim().split('\n').first.trim();
+      final title = line.length > 40 ? '${line.substring(0, 40)}…' : line;
+      _changelists.assignTurn(turn, l10n.gitChangelistTurn(title), paths);
+    }
+  }
+
+  /// What was edited in a diff in the Git log's place: into the file's
+  /// open document, saved, where it has one; else into the file.
+  Future<void> _writeFromDiff(
+    String path,
+    String text, {
+    String? expectedText,
+  }) async {
+    final workspace = widget.workspace;
+    final doc = workspace.documents
+        .where((doc) => doc.path == path && doc.isFile)
+        .firstOrNull;
+    try {
+      if (doc == null) {
+        await workspace.files.write(path, text, expectedText: expectedText);
+      } else {
+        workspace.edit(path, text);
+        await workspace.save(doc);
+      }
+    } on Object catch (error) {
+      _notifications.notify(IdeSeverity.error, '$error');
+      rethrow;
     }
   }
 
@@ -1902,25 +2329,24 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
     final searched = <String>{};
     for (final doc in [...widget.workspace.documents]) {
       if (!doc.isFile || !searched.add(doc.path)) continue;
-      final matches = <IdeTextMatch>[];
-      for (final (line, text) in doc.text.split(_lineBreak).indexed) {
-        for (final match in pattern.allMatches(text)) {
-          if (match.end == match.start) continue;
-          if (count == query.maxResults) {
-            limitHit = true;
-            break;
-          }
-          count++;
-          matches.add(IdeTextMatch(line, match.start, match.end, text));
-        }
+      final left = query.maxResults - count;
+      final matches = ideMatchLines(
+        doc.text,
+        pattern,
+        // One more: whether the limit cut it short.
+        limit: left + 1,
+        multiline: query.isMultiline,
+      );
+      if (matches.length > left) {
+        limitHit = true;
+        matches.removeRange(left, matches.length);
       }
+      count += matches.length;
       if (matches.isNotEmpty) yield IdeFileMatches(doc.path, matches);
       if (limitHit) break;
     }
     yield IdeTextSearchComplete(limitHit: limitHit);
   }
-
-  static final _lineBreak = RegExp(r'\r\n|\r|\n');
 
   void _tabAction(IdeDocument doc, IdeTabAction action) {
     final docs = widget.workspace.documents;
@@ -2390,6 +2816,12 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
   }
 
   void _toggleChat() => _layout.toggleChat();
+
+  /// [text] in the chat's composer, the chat shown.
+  void _askInChat(String text) {
+    widget.onAskInChat?.call(text);
+    if (!_chatShown) _toggleChat();
+  }
 
   /// VS Code's Toggle Panel: the panel as it was last, or hidden.
   void _togglePanelVisibility() =>
@@ -2906,16 +3338,9 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
   /// on the window, and hears both (`_registerKeyListeners`); a dialog
   /// over the workbench, a menu in the overlay, or an input method
   /// composing text keeps its keys.
-  KeyEventResult _onLateKey(KeyEvent event) {
-    if (identical(event, _offeredKey) || !_holdsKeys()) {
-      return KeyEventResult.ignored;
-    }
-    return _onWorkbenchKey(_workbenchFocus, event);
-  }
-
   /// Whether a key pressed now is this workbench's to take: the window is
-  /// the one in front (its focus holds the primary focus, its route the current
-  /// one), so a key pressed in another window goes there.
+  /// the one in front (its focus holds the primary focus, its route the
+  /// current one), so a key pressed in another window goes there.
   bool _holdsKeys() {
     if (!mounted || !widget.visible) return false;
     final focus = FocusManager.instance.primaryFocus;
@@ -2931,27 +3356,20 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
     return ModalRoute.isCurrentOf(context) ?? true;
   }
 
+  KeyEventResult _onLateKey(KeyEvent event) {
+    if (identical(event, _offeredKey) || !_holdsKeys()) {
+      return KeyEventResult.ignored;
+    }
+    return _onWorkbenchKey(_workbenchFocus, event);
+  }
+
   /// The key after a first chord, before the focus sees it: upstream's
   /// keybinding service takes it wherever the focus is.
   KeyEventResult _onChordKey(KeyEvent event) {
-    if (event is KeyUpEvent || _modifierKeys.contains(event.logicalKey)) {
-      return KeyEventResult.ignored;
-    }
     final chord = _chord;
-    if (chord == null) {
-      // A chord's first key starts it here, before the focus sees it: a text
-      // field (the chat's input) stops every Ctrl key with
-      // `skipRemainingHandlers`, and a chord typed while writing would
-      // never begin. Only a prefix starts one — a whole binding is the
-      // field's to keep.
-      if (!_holdsKeys() || ChatKeys.isComposing) {
-        return KeyEventResult.ignored;
-      }
-      if (_resolveKey(event) case MoreChordsNeeded(:final chords)) {
-        _offeredKey = event;
-        _expectAnotherChord(chords);
-        return KeyEventResult.handled;
-      }
+    if (chord == null ||
+        event is KeyUpEvent ||
+        _modifierKeys.contains(event.logicalKey)) {
       return KeyEventResult.ignored;
     }
     // A key pressed in another window goes there: this one's chord would
@@ -3401,6 +3819,70 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
         enabled: _languages != null,
         run: () => setState(() => _formatOnSave = !_formatOnSave),
       ),
+      IdeCommand(
+        id: 'baocode.git.toggleAnnotations',
+        category: 'Git',
+        label: _editor?.annotated ?? false
+            ? 'Close Annotations'
+            : 'Annotate with Git Blame',
+        enabled: _editor?.canAnnotate ?? false,
+        run: () => _editor?.toggleAnnotations(),
+      ),
+      IdeCommand(
+        id: 'baocode.git.branches',
+        category: 'Git',
+        label: 'Branches…',
+        enabled: widget.workspace.git?.state != null,
+        run: _showBranchPopup,
+      ),
+      IdeCommand(
+        id: 'baocode.git.pushDialog',
+        category: 'Git',
+        label: 'Push…',
+        enabled: widget.workspace.git?.state?.head.branch != null,
+        run: _pushDialog,
+      ),
+      IdeCommand(
+        id: 'baocode.git.updateProject',
+        category: 'Git',
+        label: 'Update Project…',
+        enabled: widget.workspace.git?.state != null,
+        run: _updateProject,
+      ),
+      IdeCommand(
+        id: 'baocode.git.manageRemotes',
+        category: 'Git',
+        label: 'Manage Remotes…',
+        enabled: widget.workspace.git?.state != null,
+        run: _manageRemotes,
+      ),
+      IdeCommand(
+        id: 'baocode.localHistory.show',
+        category: 'Local History',
+        label: 'Show History',
+        enabled:
+            widget.workspace.localHistory != null &&
+            (widget.workspace.active?.isFile ?? false),
+        run: () {
+          if (widget.workspace.active case final doc? when doc.isFile) {
+            unawaited(_showLocalHistory(doc.path));
+          }
+        },
+      ),
+      IdeCommand(
+        id: 'baocode.git.showFileHistory',
+        category: 'Git',
+        label: 'Show History',
+        enabled: _editor?.canShowHistory ?? false,
+        run: () => _editor?.showHistory(),
+      ),
+      IdeCommand(
+        id: 'baocode.git.showSelectionHistory',
+        category: 'Git',
+        label: 'Show History for Selection',
+        enabled: _editor?.selectionHistoryLines != null,
+        run: () => _editor?.showHistory(selection: true),
+      ),
       _catalogCommand(
         'git.blame.toggleEditorDecoration',
         () => setState(() => _gitBlame = !_gitBlame),
@@ -3655,10 +4137,11 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
     );
   }
 
-  /// The side bar, its border on its right.
-  Widget _sidebarPart() => IdePart(
+  /// The side bar, its border on its right ([border]: not where it has
+  /// the editor's place).
+  Widget _sidebarPart({bool border = true}) => IdePart(
     color: themeColors['sideBar.background'],
-    border: Border(right: _sideBarBorder),
+    border: border ? Border(right: _sideBarBorder) : null,
     child: Focus(focusNode: _sidebarFocus, child: _sidePanel()),
   );
 
@@ -3674,26 +4157,69 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
           _open(path, range: range, select: true, focusEditor: focusEditor),
       onError: _report,
     ),
-    IdeSideView.sourceControl => IdeScmView(
-      key: _scmKey,
+    // The Git log, in the side bar's and the editor's place (see
+    // [_split]): the local changes' commit box and groups its first row's
+    // details, their changes in its table's place.
+    IdeSideView.sourceControl => IdeGitLogView(
+      key: _gitLogKey,
       host: widget.workspace,
       session: _scm,
-      sessionOf: (git) => identical(git, _git)
-          ? _scm
-          : _scmSessions.putIfAbsent(
-              git,
-              () => IdeScmSession(settings: widget.settings),
-            ),
       notifications: _notifications,
-      onOpen: (path, {focusEditor = false}) =>
-          _open(path, focusEditor: focusEditor),
-      onOpenChange: _openChange,
-      onRevealInExplorer: _revealInExplorer,
-      onOpenInTerminal: _terminals == null ? null : _openInTerminal,
+      ai: widget.commitMessage,
+      onAsk: widget.onAskInChat == null ? null : _askInChat,
+      onFixup: (git, commit) async =>
+          _scmKey.currentState?.fixupInto(git, commit),
+      onOpen: (path) {
+        _leaveGitLog();
+        unawaited(_open(path, focusEditor: true));
+      },
       onAddToChat: widget.onAddToChat,
-      trash: WindowControls.canMoveToTrash ? WindowControls.moveToTrash : null,
-      commitMessage: widget.commitMessage,
-      onCheckout: _gitCheckoutOf,
+      // Another worktree's changes and branch in Source Control.
+      worktrees: IdeGitWorktreeChoice(
+        following: false,
+        onSelect: widget.workspace.openWorktree == null
+            ? null
+            : (path) {
+                if (path != null) widget.workspace.showWorktree(path);
+              },
+      ),
+      changes: IdeGitCommitPanel(
+        onAsk: widget.onAskInChat == null ? null : _askInChat,
+        key: _scmKey,
+        host: widget.workspace,
+        session: _scm,
+        sessionOf: (git) => identical(git, _git)
+            ? _scm
+            : _scmSessions.putIfAbsent(
+                git,
+                () => IdeScmSession(
+                  settings: widget.settings,
+                  favoriteBranches: _favoriteBranches,
+                ),
+              ),
+        notifications: _notifications,
+        onOpen: (path, {focusEditor = false}) {
+          _leaveGitLog();
+          return _open(path, focusEditor: focusEditor);
+        },
+        onOpenChange: _openChangeInLog,
+        onRevealInExplorer: (path) {
+          _leaveGitLog();
+          _revealInExplorer(path);
+        },
+        onAddToChat: widget.onAddToChat,
+        trash: WindowControls.canMoveToTrash
+            ? WindowControls.moveToTrash
+            : null,
+        commitMessage: widget.commitMessage,
+        hunks: _hunks,
+        changelists: _changelists,
+        onShowDiff: (files, index) => _scm.log.showDiff(files, index),
+        onOpenAt: (path, line) {
+          _leaveGitLog();
+          return _open(path, line: line, center: true, focusEditor: true);
+        },
+      ),
     ),
     IdeSideView.debug => switch (_debug) {
       final debug? => DebugView(
@@ -3872,6 +4398,18 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
                             onOpenInTerminal: _terminals == null
                                 ? null
                                 : _openInTerminal,
+                            onShowHistory: _showHistory,
+                            onShowLocalHistory: (path) =>
+                                unawaited(_showLocalHistory(path)),
+                            onCompareFiles:
+                                (original, modified, {folders = false}) =>
+                                    unawaited(
+                                      _compareFiles(
+                                        original,
+                                        modified,
+                                        folders: folders,
+                                      ),
+                                    ),
                           ),
                   ),
                 IdePane(
@@ -3999,6 +4537,7 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
                             actions: [
                               for (final id in const [
                                 'workbench.action.files.openFolder',
+                                'git.clone',
                                 'baocode.remote.openFolder',
                                 IdeWorkbench.createWorkspaceCommandId,
                                 'workbench.action.files.openFile',
@@ -4096,6 +4635,10 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
                                 onShowReferences: _showReferences,
                                 onShowCommands: () => _showQuickInput('>'),
                                 gitBlame: _gitBlame,
+                                onShowCommit: _showCommitInLog,
+                                onShowHistory: _showHistory,
+                                onCompare: (path, what) =>
+                                    unawaited(_compareWith(path, what)),
                                 keyResolver: _resolveEditorKey,
                                 onPaste: _pasteInEditor,
                                 formatOnSave: _formatOnSave,
@@ -4218,6 +4761,11 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
     );
     final sidebarVisible = columns.sidebar > 0;
     final chatVisible = columns.chat > 0;
+    // Source Control, the Git log, has the side bar's and the editor's
+    // place, above the panel; the editor is kept, back as another view
+    // shows.
+    final gitLog =
+        !editorHidden && sidebarVisible && _view == IdeSideView.sourceControl;
     final sidebar = SizedBox(
       key: const ValueKey('ide-sidebar'),
       width: columns.sidebar,
@@ -4272,13 +4820,18 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
                 key: const ValueKey('ide-activity-bar'),
                 child: _activityBar(sidebarShowing: sidebarVisible),
               ),
-              if (!editorHidden && sidebarVisible) sidebar,
+              if (!editorHidden && sidebarVisible && !gitLog) sidebar,
               Expanded(
                 key: const ValueKey('ide-editor-column'),
                 child: _editorColumn(
                   size.height,
                   commands,
-                  inPlace: !editorHidden
+                  inPlace: gitLog
+                      ? KeyedSubtree(
+                          key: _sidebarKey,
+                          child: _sidebarPart(border: false),
+                        )
+                      : !editorHidden
                       ? null
                       : sidebarVisible
                       ? Stack(
@@ -4302,7 +4855,7 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
             ],
           ),
         ),
-        if (!editorHidden)
+        if (!editorHidden && !gitLog)
           _sashAt(bar + columns.sidebar, size.width, sidebarSash),
         if (!editorHidden && (chatVisible || _chatSashDragging))
           _sashAt(size.width - columns.chat, size.width, chatSash)
@@ -4654,17 +5207,17 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
       ?widget.remote?.item(context),
       if (_gitBranch ?? _branch case final branch?)
         // Upstream's `CheckoutStatusBar`: Checkout to…, its tooltip the
-        // repository's (`<folder> (Git) - `) before the command's; here with
-        // the commits the upstream is ahead by and the last fetch.
+        // repository's (`<folder> (Git) - `) before the command's.
         if (_git?.state case final state?)
           IdeStatusBarItem(
-            _gitBranchText(branch),
+            branch,
             icon: Codicons.gitBranch,
             tooltip: keys.titleWithKeybinding(
-              _gitBranchTooltip(state, branch, l10n),
-              'git.checkout',
+              '${p.basename(state.root)} (Git) - $branch, '
+                  '${l10n.gitBranchesTitle}',
+              'baocode.git.branches',
             ),
-            onTap: _gitCheckout,
+            onTapRect: _showBranchPopup,
           )
         else
           IdeStatusBarItem(
@@ -4754,34 +5307,6 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
     );
   }
 
-  /// The branch as the status bar shows it: `main ↓2 · 02:15` — the commits
-  /// the upstream is ahead by, and when the remote was last fetched.
-  String _gitBranchText(String branch) {
-    final behind = _git?.state?.head.behind ?? 0;
-    final fetchedAt = _git?.lastFetchAt;
-    return '$branch'
-        '${behind > 0 ? ' ↓$behind' : ''}'
-        '${fetchedAt == null ? '' : ' · ${ideGitFetchedAt(fetchedAt)}'}';
-  }
-
-  /// The branch's tooltip: the repository, when the remote was last
-  /// fetched, and why the automatic fetch did not pull (`↓N` alone does not
-  /// say).
-  String _gitBranchTooltip(
-    IdeGitState state,
-    String branch,
-    AppLocalizations l10n,
-  ) {
-    final root = p.basename(state.root);
-    final fetchedAt = _git?.lastFetchAt;
-    final issue = _git?.autoFetchIssue;
-    return [
-      '$root (Git) - $branch, ${l10n.gitCheckoutBranchTag}',
-      if (fetchedAt != null) l10n.gitLastFetched(ideGitFetchedAt(fetchedAt)),
-      if (issue != null) ideGitAutoFetchTooltip(l10n, issue, repository: root),
-    ].join('\n');
-  }
-
   @override
   Widget build(BuildContext context) {
     _keepViewSoon();
@@ -4809,11 +5334,13 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
                         ),
                       ),
                       // Typing moves the caret and edits the document, and
-                      // the status bar is all that shows either.
+                      // the status bar is all that shows either; as it is
+                      // all that shows a language server's progress.
                       ListenableBuilder(
                         listenable: Listenable.merge([
                           _caret,
                           widget.workspace.edits,
+                          _languages?.progressChanges,
                         ]),
                         builder: (context, _) => _statusBar(),
                       ),

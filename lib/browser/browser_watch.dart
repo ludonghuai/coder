@@ -566,7 +566,7 @@ class WatchedStep {
   }
 }
 
-final _watchTool = HostTool(
+final _watchTool = ClaudeSdkTool(
   name: 'browser_watch',
   description:
       'Watches the user do something in a shared tab, to see it done '

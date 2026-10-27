@@ -27,9 +27,11 @@ import 'package:baocode/chat/widgets/fold_line.dart';
 import 'package:baocode/chat/widgets/markdown_view.dart';
 import 'package:baocode/chat/widgets/tool_call_row.dart';
 import 'package:baocode/ide/file_service.dart';
+import 'package:baocode/ide/git/ide_git_commit_panel.dart';
 import 'package:baocode/ide/git/commit_message.dart';
+import 'package:baocode/ide/git/git_model.dart';
 import 'package:baocode/ide/git/git_repository.dart';
-import 'package:baocode/ide/git/ide_scm_view.dart';
+import 'package:baocode/ide/git/ide_git_log_view.dart';
 import 'package:baocode/ide/ide_code_diff.dart';
 import 'package:baocode/ide/ide_code_editor.dart';
 import 'package:baocode/ide/ide_explorer.dart';
@@ -61,19 +63,9 @@ import '../../workspace/chat_window_keys_test.dart' show press;
 import '../../workspace_test.dart' show pumpLoaded;
 import '../../kernel_ui_test.dart' show pumpScripted;
 
-/// The host's spelling of the paths these tests write (`/p/...`): the panel
-/// joins paths with the host's separator, so what it returns is that.
-String _q(String path) => p.normalize(path);
-
-
-/// A project's files, in memory. Keys are held in the host's spelling, as
-/// the panel hands paths to it.
+/// A project's files, in memory.
 class _Files implements IdeFileService {
-  _Files(Map<String, String> texts)
-    : texts = {
-        for (final MapEntry(:key, :value) in texts.entries)
-          _q(key): value,
-      };
+  _Files(this.texts);
 
   final Map<String, String> texts;
   final List<String> listed = [];
@@ -82,22 +74,21 @@ class _Files implements IdeFileService {
   @override
   Future<String> read(String path, {bool force = false}) async =>
       reader?.call(path) ??
-      texts[_q(path)] ??
+      texts[path] ??
       (throw IdeFileNotFoundException(path));
 
   @override
   Future<void> write(String path, String text, {String? expectedText}) async {
-    if (texts[_q(path)] != expectedText) throw IdeFileConflictException(path);
-    texts[_q(path)] = text;
+    if (texts[path] != expectedText) throw IdeFileConflictException(path);
+    texts[path] = text;
   }
 
   @override
   Future<List<IdeFile>> list(String directory) async {
     listed.add(directory);
-    final folder = _q(directory);
     return [
       for (final path in texts.keys)
-        if (p.dirname(path) == folder)
+        if (p.dirname(path) == directory)
           IdeFile(path, p.basename(path), isDirectory: false),
     ];
   }
@@ -144,6 +135,7 @@ Future<({AgentSidePanel panel, ChatSession session, _Files files})> _pumpChat(
   TerminalService? terminals,
   IdeGitRepository? git,
   IdeCommitMessageModel? commitMessage,
+  IdeGitWorktreeChoice Function(IdeGitRepository git)? worktreesOf,
   double titleBarInset = 0,
   Widget? leading,
 }) async {
@@ -170,6 +162,7 @@ Future<({AgentSidePanel panel, ChatSession session, _Files files})> _pumpChat(
           terminals: terminals,
           git: git,
           commitMessage: commitMessage,
+          worktreesOf: worktreesOf,
           titleBarInset: titleBarInset,
           leading: leading,
         ),
@@ -370,7 +363,7 @@ void main() {
     expect(find.text('test  ·  Failed'), findsOneWidget);
     expect(find.textContaining('Output unavailable:'), findsOneWidget);
     expect(await _previewScreen(tester), 'command failed');
-    files.texts[_q('/tmp/missing.output')] = 'recovered output';
+    files.texts['/tmp/missing.output'] = 'recovered output';
     await tester.tap(find.byIcon(Codicons.refresh));
     await tester.pumpAndSettle();
     // Not what it showed with more: printed again, on a reset screen.
@@ -428,10 +421,10 @@ void main() {
     final listening = _previewTerminal(tester).output
         .listen((data) => printed.add(utf8.decode(data)));
     addTearDown(listening.cancel);
-    files.texts[_q('/tmp/run.output')] = 'one\n';
+    files.texts['/tmp/run.output'] = 'one\n';
     await tester.pump(const Duration(seconds: 1));
     expect(await _previewScreen(tester), 'one');
-    files.texts[_q('/tmp/run.output')] = 'one\n\x1b[31mtwo\x1b[0m\n';
+    files.texts['/tmp/run.output'] = 'one\n\x1b[31mtwo\x1b[0m\n';
     await tester.pump(const Duration(seconds: 1));
     expect(await _previewScreen(tester), 'one\ntwo');
     expect(printed.last, '\x1b[31mtwo\x1b[0m\n');
@@ -626,10 +619,7 @@ void main() {
     await tester.pumpAndSettle();
     final from = tester.getTopLeft(find.text('one')) - const Offset(1, -4);
     final to = tester.getTopRight(find.text('three')) + const Offset(1, 4);
-    final drag = await tester.startGesture(
-      from,
-      kind: PointerDeviceKind.mouse,
-    );
+    final drag = await tester.startGesture(from, kind: PointerDeviceKind.mouse);
     await tester.pump();
     await drag.moveTo(to);
     await tester.pump();
@@ -920,7 +910,6 @@ void main() {
     await tester.tap(find.byKey(const ValueKey(SidePanelSection.files)));
     await tester.pumpAndSettle();
     expect(find.byType(FilePreview), findsOneWidget);
-    // Opened by this test, given as written: kept as it is.
     expect(_active(panel, session)!.path, '/p/lib/main.dart');
     panel.width = AgentSidePanel.minWidth;
     await tester.pumpAndSettle();
@@ -943,7 +932,7 @@ void main() {
     expect(find.text('Select a file to preview it'), findsOneWidget);
     await tester.tap(find.descendant(of: list, matching: find.text('b.dart')));
     await tester.pumpAndSettle();
-    expect(_active(panel, session)!.path, _q('/p/b.dart'));
+    expect(_active(panel, session)!.path, '/p/b.dart');
     expect(_edited(tester).text, 'beta');
 
     // The list hides, and comes back as wide as dragged.
@@ -980,10 +969,8 @@ void main() {
     expect(list, findsOneWidget);
   });
 
-  testWidgets('the changes page lists Git\'s changes as the Source Control '
-      'view does, and opens their diffs against HEAD and the index', (
-    tester,
-  ) async {
+  testWidgets('the changes page lists the local changes as JetBrains IDEs '
+      'do, and opens their diffs against HEAD and the index', (tester) async {
     final fake = FakeGit('/p')
       ..status =
           '## main\x00'
@@ -1006,8 +993,8 @@ void main() {
     );
     panel.showSection(session, SidePanelSection.changes);
     await tester.pumpAndSettle();
-    final list = find.byType(IdeScmView);
-    String? letterOf(String name) => tester
+    final list = find.byType(IdeGitCommitPanel);
+    Color? colorOf(String name) => tester
         .widget<IdeResourceLabel>(
           find.descendant(
             of: list,
@@ -1016,14 +1003,16 @@ void main() {
             ),
           ),
         )
-        .letter;
-    expect(
-      find.descendant(of: list, matching: find.text('Staged Changes')),
-      findsOneWidget,
-    );
-    expect(letterOf('staged.dart'), 'M');
-    expect(letterOf('main.dart'), 'M');
-    expect(letterOf('notes.md'), 'U');
+        .nameColor;
+    for (final group in ['Changes', 'Unversioned Files']) {
+      expect(
+        find.descendant(of: list, matching: find.text(group)),
+        findsOneWidget,
+      );
+    }
+    expect(colorOf('staged.dart'), IdeGitStatus.indexModified.color);
+    expect(colorOf('main.dart'), IdeGitStatus.modified.color);
+    expect(colorOf('notes.md'), IdeGitStatus.untracked.color);
 
     // The count of changes in the page's tab, in a badge as high as the
     // panel title's, not stretched to the bar's.
@@ -1113,19 +1102,11 @@ void main() {
     expect(compared(), ('before staging\n', 'staged text\n'));
     expect(panel.tabsOf(session).diffs, hasLength(2));
 
-    // As a list, from the Source Control view's View & Sort: each file with
-    // its folder, and the panel remembers it.
-    await drag.moveTo(
-      tester.getCenter(
-        find.descendant(of: list, matching: find.text('Changes')).first,
-      ),
+    // Not grouped by directory: each file with its folder, and the panel
+    // remembers it.
+    await tester.tap(
+      find.descendant(of: list, matching: find.byTooltip('Group by Directory')),
     );
-    await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('More Actions...').first);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('View & Sort'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('View as List'));
     await tester.pumpAndSettle();
     expect(panel.changesAsTree, isFalse);
     final main = tester.widget<IdeResourceLabel>(
@@ -1151,27 +1132,19 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       [for (final tab in panel.tabsOf(session).diffs) tab.path],
-      [_q('/p/lib/staged.dart')],
+      ['/p/lib/staged.dart'],
     );
 
-    // A row's menu stages it.
-    await tester.tap(
-      find.descendant(
-        of: list,
-        matching: find.byWidgetPredicate(
-          (widget) => widget is IdeResourceLabel && widget.name == 'main.dart',
-        ),
-      ),
-      buttons: kSecondaryButton,
-    );
+    // An unversioned file's menu adds it to Git.
+    await tester.tap(row('notes.md'), buttons: kSecondaryButton);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Stage Changes'));
+    await tester.tap(find.text('Add to VCS'));
     await tester.pumpAndSettle();
-    expect(fake.callsTo('add').single, contains('lib/main.dart'));
+    expect(fake.callsTo('add').single, contains('notes.md'));
   });
 
-  testWidgets('a changed folder\'s menu puts it in the chat, reveals it, '
-      'copies its path and folds the tree; a file\'s opens it too', (
+  testWidgets('a changed folder\'s menu puts it in the chat, reveals it and '
+      'copies its path; a click folds it; a file\'s menu opens it too', (
     tester,
   ) async {
     final fake = FakeGit('/p')
@@ -1188,7 +1161,7 @@ void main() {
     );
     panel.showSection(session, SidePanelSection.changes);
     await tester.pumpAndSettle();
-    final list = find.byType(IdeScmView);
+    final list = find.byType(IdeGitCommitPanel);
     Finder row(String name) => find.descendant(
       of: list,
       matching: find.byWidgetPredicate(
@@ -1199,17 +1172,17 @@ void main() {
     await tester.tap(row('lib/a'), buttons: kSecondaryButton);
     await tester.pumpAndSettle();
     for (final item in [
-      'Discard Changes',
-      'Stage Changes',
+      'Rollback…',
       'Add to Chat',
       'Reveal in Files',
       'Copy Path',
       'Copy Relative Path',
-      'Collapse All',
     ]) {
       expect(find.text(item), findsOneWidget, reason: item);
     }
-    await tester.tap(find.text('Collapse All'));
+    await tester.tapAt(Offset.zero);
+    await tester.pumpAndSettle();
+    await tester.tap(row('lib/a'));
     await tester.pumpAndSettle();
     expect(row('main.dart'), findsNothing);
 
@@ -1237,8 +1210,8 @@ void main() {
     await tester.tap(row('main.dart'), buttons: kSecondaryButton);
     await tester.pumpAndSettle();
     for (final item in [
-      'Open Changes',
-      'Open File',
+      'Show Diff',
+      'Jump to Source',
       'Add to Chat',
       'Reveal in Files',
       'Copy Path',
@@ -1246,13 +1219,10 @@ void main() {
     ]) {
       expect(find.text(item), findsOneWidget, reason: item);
     }
-    expect(find.text('Collapse All'), findsNothing);
   });
 
-  testWidgets('under the changes, the Source Control view\'s graph: a '
-      'commit\'s files show once it is tapped, and a file opens', (
-    tester,
-  ) async {
+  testWidgets('the changes page is the Git log: a commit tapped shows its '
+      'files, and a file its changes in the log\'s place', (tester) async {
     final fake = FakeGit('/p')
       ..status = '## main\x00 M lib/main.dart\x00'
       ..log =
@@ -1260,6 +1230,8 @@ void main() {
           '${gitLogRecord('c1', [], 'First')}';
     fake.refs['HEAD'] = 'c2';
     fake.show['c2'] = 'M\x00lib/main.dart\x00';
+    fake.show['c1:lib/main.dart'] = 'first\n';
+    fake.show['c2:lib/main.dart'] = 'second\n';
     final git = fake.repository();
     addTearDown(git.dispose);
     final (:panel, :session, files: _) = await _pumpChat(
@@ -1269,43 +1241,86 @@ void main() {
     );
     panel.showSection(session, SidePanelSection.changes);
     await tester.pumpAndSettle();
-    expect(find.text('Graph'), findsOneWidget);
-    final second = find.textContaining('Second', findRichText: true);
-    expect(second, findsOneWidget);
-    expect(find.textContaining('First', findRichText: true), findsOneWidget);
-    final file = ValueKey('file:c2:${_q('/p/lib/main.dart')}');
-    expect(find.byKey(file), findsNothing);
+    // The local changes first, selected: their commit box and groups.
+    expect(find.text('Local Changes (1)'), findsOneWidget);
+    expect(find.byType(IdeGitCommitPanel), findsOneWidget);
+    expect(find.text('Second'), findsOneWidget);
+    expect(find.text('First'), findsOneWidget);
 
-    await tester.tap(second);
+    await tester.tap(find.text('Second'));
     await tester.pumpAndSettle();
-    // Under its folder, lib.
-    expect(
-      find.byKey(ValueKey('folder:c2:${_q('/p/lib')}')),
-      findsOneWidget,
+    expect(find.text('commit: c2'), findsOneWidget);
+    final file = find.byWidgetPredicate(
+      (widget) => widget is IdeResourceLabel && widget.name == 'main.dart',
     );
-    final changes = find.byKey(file).first;
-    expect(tester.getSize(changes).height, IdeListColors.rowHeight);
-    await tester.tap(
-      find
-          .descendant(
-            of: changes,
-            matching: find.byWidgetPredicate(
-              (widget) =>
-                  widget is IdeResourceLabel && widget.name == 'main.dart',
-            ),
-          )
-          .first,
-    );
+    await tester.tap(file.last);
     await tester.pumpAndSettle();
-    expect(
-      [for (final tab in panel.tabsOf(session).files) tab.path],
-      [_q('/p/lib/main.dart')],
+    final tab = panel.tabsOf(session).activeDiff!;
+    expect(tab.path, '/p/lib/main.dart');
+    expect(tab.request.readOnly, isTrue);
+    final diff = tester.widget<IdeCodeDiff>(
+      find.descendant(
+        of: find.byType(FilePreview),
+        matching: find.byType(IdeCodeDiff),
+      ),
     );
+    expect((diff.original, diff.modified), ('first\n', 'second\n'));
+
+    // Back to the log, the change's tab kept.
+    await tester.tap(find.byTooltip('Back to Log'));
+    await tester.pumpAndSettle();
+    expect(panel.tabsOf(session).activeDiff, isNull);
+    expect(panel.tabsOf(session).diffs, hasLength(1));
+    // In the table, and as the message of the commit still selected.
+    expect(find.text('Second'), findsNWidgets(2));
   });
 
-  testWidgets('the changes page is the Source Control view: a message '
-      'wanted, written by the sparkle from the staged changes, then the '
-      'staged changes committed', (tester) async {
+  testWidgets('in a worktree where the agent works: its name, its branch '
+      'marked, the others to pick from', (tester) async {
+    final fake = FakeGit('/p-wt')
+      ..status = '## feature\x00 M lib/main.dart\x00'
+      ..worktrees =
+          'worktree /p\nHEAD ${'1' * 40}\nbranch refs/heads/main\n\n'
+          'worktree /p-wt\nHEAD ${'2' * 40}\nbranch refs/heads/feature\n'
+      ..log =
+          '${gitLogRecord('c2', ['c1'], 'Second', refs: 'HEAD -> refs/heads/feature')}\n'
+          '${gitLogRecord('c1', [], 'First', refs: 'refs/heads/main')}';
+    fake.refs['HEAD'] = 'c2';
+    final git = fake.repository();
+    addTearDown(git.dispose);
+    final picked = <String?>[];
+    final (:panel, :session, files: _) = await _pumpChat(
+      tester,
+      git: git,
+      texts: {'/p-wt/lib/main.dart': 'main\n'},
+      worktreesOf: (_) => IdeGitWorktreeChoice(
+        agentPath: '/p-wt/lib/main.dart',
+        onSelect: picked.add,
+      ),
+    );
+    panel.showSection(session, SidePanelSection.changes);
+    await tester.pumpAndSettle();
+    // Which worktree's changes, the agent's.
+    expect(
+      find.textContaining('p-wt · feature', findRichText: true),
+      findsOneWidget,
+    );
+    expect(find.byTooltip('The agent works here'), findsWidgets);
+    // main is checked out in the other.
+    expect(find.byTooltip('Checked out in worktree p\n/p'), findsOneWidget);
+
+    await tester.tap(find.text('p-wt'));
+    await tester.pumpAndSettle();
+    expect(find.text('Follow the Agent'), findsOneWidget);
+    expect(find.text('p-wt  ✦ AI'), findsOneWidget);
+    await tester.tap(find.text('p  (main worktree)'));
+    await tester.pumpAndSettle();
+    expect(picked, ['/p']);
+  });
+
+  testWidgets('the changes page commits as JetBrains IDEs do: a message '
+      'wanted, written by the sparkle from the files checked, then those '
+      'committed', (tester) async {
     final fake = FakeGit('/p')
       ..status =
           '## main\x00'
@@ -1326,22 +1341,29 @@ void main() {
     );
     panel.showSection(session, SidePanelSection.changes);
     await tester.pumpAndSettle();
-    expect(find.byType(IdeScmView), findsOneWidget);
+    expect(find.byType(IdeGitCommitPanel), findsOneWidget);
     // The panel's own title, not the view's.
     expect(find.text('Source Control'), findsNothing);
-    final commit = find.byTooltip('Commit Changes (Ctrl+Enter)');
+    final commit = find.descendant(
+      of: find.byType(IdeGitCommitPanel),
+      matching: find.text('Commit'),
+    );
 
     // No message: said so, nothing committed.
     await tester.tap(commit);
     await tester.pumpAndSettle();
-    expect(find.text('Please provide a commit message'), findsOneWidget);
+    expect(find.text('Enter a commit message.'), findsOneWidget);
     expect(fake.callsTo('commit'), isEmpty);
 
-    // The sparkle: the staged changes' diff to the model, its message in.
+    // The sparkle: the checked files' diff against HEAD to the model, its
+    // message in.
     await tester.tap(find.byTooltip('Generate Commit Message'));
     await tester.pumpAndSettle();
     expect(prompts.single.user, contains('+staged'));
-    expect(fake.callsTo('diff').single, contains('--cached'));
+    expect(
+      fake.callsTo('diff').single,
+      containsAllInOrder(['HEAD', '--', 'lib/main.dart', 'lib/staged.dart']),
+    );
     expect(panel.scmOf(git).message.text, 'Stage the staged file');
 
     await tester.tap(commit);
@@ -1351,6 +1373,10 @@ void main() {
       '--quiet',
       '-m',
       'Stage the staged file',
+      '--only',
+      '--',
+      'lib/main.dart',
+      'lib/staged.dart',
     ]);
     expect(panel.scmOf(git).message.text, isEmpty);
   });
@@ -1659,7 +1685,7 @@ void main() {
         await _previewScreen(tester),
         '\$ sleep 120 && echo one\nfirst output',
       );
-      files.texts[_q('/tmp/one.output')] = 'first output\nnew output';
+      files.texts['/tmp/one.output'] = 'first output\nnew output';
       await tester.pump(const Duration(seconds: 1));
       await tester.pump();
       expect(
@@ -1821,7 +1847,7 @@ void main() {
 
     expect(panel.shown, isTrue);
     final tab = _active(panel, session)!;
-    expect(tab.path, _q('/p/lib/main.dart'));
+    expect(tab.path, '/p/lib/main.dart');
     expect(tab.diff, isFalse);
     expect(tab.request.range, const FileLineRange(1, 562));
     expect(find.byType(FilePreview), findsOneWidget);
@@ -1845,7 +1871,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final tab = _active(panel, session)!;
-    expect(tab.path, _q('/p/lib/main.dart'));
+    expect(tab.path, '/p/lib/main.dart');
     expect(tab.diff, isTrue);
     // At its first change.
     expect(tab.request.range?.start, 143);
@@ -1865,7 +1891,7 @@ void main() {
     await tester.tap(find.text('lib/main.dart:142'));
     await tester.pumpAndSettle();
     final tab = _active(panel, session)!;
-    expect(tab.path, _q('/p/lib/main.dart'));
+    expect(tab.path, '/p/lib/main.dart');
     expect(tab.request.range, const FileLineRange(142));
   });
 
@@ -1952,7 +1978,7 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.keyS);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     await tester.pumpAndSettle();
-    expect(files.texts[_q('/p/a.dart')], 'alpha!');
+    expect(files.texts['/p/a.dart'], 'alpha!');
     expect(tab.dirty, isFalse);
     expect(dot, findsNothing);
   });
@@ -1970,7 +1996,7 @@ void main() {
       ..selectAll()
       ..replaceSelection('mine');
     await tester.pump();
-    files.texts[_q('/p/a.dart')] = 'theirs';
+    files.texts['/p/a.dart'] = 'theirs';
 
     final close = find.descendant(
       of: find.byType(TabStripScroll),
@@ -1998,7 +2024,7 @@ void main() {
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
     // Not saved over theirs: open still, saying why.
-    expect(files.texts[_q('/p/a.dart')], 'theirs');
+    expect(files.texts['/p/a.dart'], 'theirs');
     expect(_active(panel, session), same(tab));
     expect(find.textContaining('changed on disk'), findsOneWidget);
 
@@ -2007,7 +2033,7 @@ void main() {
     await tester.tap(find.text("Don't Save"));
     await tester.pumpAndSettle();
     expect(_active(panel, session), isNull);
-    expect(files.texts[_q('/p/a.dart')], 'theirs');
+    expect(files.texts['/p/a.dart'], 'theirs');
   });
 
   testWidgets('the same file opens in its tab again; tabs close', (
@@ -2041,7 +2067,7 @@ void main() {
     _tapSpan(tester, 'the screen');
     await tester.pumpAndSettle();
     final tab = _active(panel, session)!;
-    expect(tab.path, _q('/p/lib/chat_screen.dart'));
+    expect(tab.path, '/p/lib/chat_screen.dart');
     expect(tab.request.range, const FileLineRange(4, 6));
     // The caret at the lines' start.
     final edited = _edited(tester);
@@ -2049,7 +2075,7 @@ void main() {
 
     _tapSpan(tester, 'notes');
     await tester.pumpAndSettle();
-    expect(_active(panel, session)!.path, _q('/p/docs/release notes.md'));
+    expect(_active(panel, session)!.path, '/p/docs/release notes.md');
   });
 
   testWidgets('inline code naming a file is a link once the file is known '
@@ -2065,7 +2091,7 @@ void main() {
     _tapSpan(tester, 'lib/main.dart:12');
     await tester.pumpAndSettle();
     final tab = _active(panel, session)!;
-    expect(tab.path, _q('/p/lib/main.dart'));
+    expect(tab.path, '/p/lib/main.dart');
     expect(tab.request.range, const FileLineRange(12));
   });
 
@@ -2123,7 +2149,7 @@ void main() {
     await tester.tap(find.byType(ToolCallRow).first);
     expect(opened, isEmpty);
     await tester.tap(find.byType(ToolCallRow).last);
-    expect([for (final request in opened) request.path], [_q('/p/a.dart')]);
+    expect([for (final request in opened) request.path], ['/p/a.dart']);
   });
 
   testWidgets('the side panel is toggled from the title bar, and kept shown '

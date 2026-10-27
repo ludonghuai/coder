@@ -258,7 +258,7 @@ function () {
 ''';
 
 final _inspectTools = [
-  HostTool(
+  ClaudeSdkTool(
     name: 'browser_inspect',
     description:
         "An element of a shared tab, as DevTools' Elements panel shows it: "
@@ -462,7 +462,7 @@ final _inspectTools = [
       return _clip(out.join('\n'), 40000);
     },
   ),
-  HostTool(
+  ClaudeSdkTool(
     name: 'browser_storage',
     description:
         "A shared tab's site data, as DevTools' Application panel shows "
@@ -596,7 +596,7 @@ final _inspectTools = [
       throw const BrowserError('Say which kind.');
     },
   ),
-  HostTool(
+  ClaudeSdkTool(
     name: 'browser_dialog',
     description:
         "Answers a shared tab's dialog (alert, confirm, prompt, the page "

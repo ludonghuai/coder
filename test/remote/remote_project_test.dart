@@ -21,6 +21,7 @@ import 'package:baocode/ide/lsp/lsp_server_definition.dart';
 import 'package:baocode/kernel/agent_kernel.dart';
 import 'package:baocode/kernel/claude_code/claude_code_transport.dart';
 import 'package:baocode/kernel/claude_code/claude_core_setting.dart';
+import 'package:baocode/kernel/claude_code/claude_install_progress.dart';
 import 'package:baocode/kernel/mock/mock_kernels.dart';
 import 'package:baocode/l10n/l10n.dart';
 import 'package:baocode/models/launch_environment.dart';
@@ -33,6 +34,7 @@ import 'package:baocode/remote/remote_location.dart';
 import 'package:baocode/remote/remote_services.dart';
 import 'package:baocode/remote/remote_status.dart';
 import 'package:baocode/remote/ssh_host.dart';
+import 'package:baocode/theme/codicons.dart';
 import 'package:baocode/workspace/workspace.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -324,6 +326,27 @@ void main() {
         await until(() => changes > after);
       },
     );
+
+    test('a folder watched while the host could not be reached: told '
+        'once it is, to be read again', () async {
+      connector.failure = const SshConnectException(
+        SshFailure.server,
+        'The BaoCode server could not be downloaded',
+      );
+      final host = hosts['dev'];
+      final files = host.files(root) as RemoteIdeFileService;
+      await expectLater(files.list(root), throwsA(isA<SshConnectException>()));
+      var changes = 0;
+      final watching = files.watchDirectory(root).listen((_) => changes++);
+      addTearDown(watching.cancel);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(changes, 0);
+
+      connector.failure = null;
+      await host.reconnect();
+      await until(() => changes > 0);
+      expect(await files.list(root), isEmpty);
+    });
 
     test('Git runs there', () async {
       Process.runSync('git', ['init', '-q'], workingDirectory: root);
@@ -833,6 +856,52 @@ printf '%s\n' "$line"
       expect(connected, 'dev');
     });
 
+    test("this machine's WSL distributions last, by their names; not "
+        'edited', () async {
+      final before = defaultWslHosts;
+      defaultWslHosts = () async => ['wsl+Ubuntu-24.04', 'wsl+Debian'];
+      addTearDown(() => defaultWslHosts = before);
+      final shown = <IdeQuickPick>[];
+      String? connected;
+      final flow = OpenRemoteFlow(
+        show: shown.add,
+        l10n: englishLocalizations,
+        onOpen: (_) {},
+        onConnected: (host) => connected = host,
+        onEdit: (_) {},
+        added: ['wsl+Debian'],
+        hosts: hosts,
+        configHosts: () async => ['dev'],
+      );
+      await flow.start();
+      final pick = shown.single;
+      final items = pick.itemsFor!('');
+      expect(
+        [
+          for (final item in items)
+            switch (item) {
+              IdeQuickPickSeparator(:final label) => '-- $label',
+              IdeQuickPickItem(:final label) => label,
+            },
+        ],
+        [
+          '-- Added',
+          'Debian',
+          '-- ~/.ssh/config',
+          'dev',
+          '-- WSL',
+          'Ubuntu-24.04',
+        ],
+      );
+      final ubuntu = items.whereType<IdeQuickPickItem>().last;
+      expect(ubuntu.description, isNull);
+      expect(ubuntu.buttons, isEmpty);
+      expect((ubuntu.icon! as Icon).icon, Codicons.terminalLinux);
+      pick.onDidAccept!(ubuntu);
+      await until(() => connected != null);
+      expect(connected, 'wsl+Ubuntu-24.04');
+    });
+
     test('a server added, what was typed given; those added edited, '
         "not ~/.ssh/config's", () async {
       final shown = <IdeQuickPick>[];
@@ -1061,6 +1130,34 @@ printf '%s\n' "$line"
       expect(plain.text, 'SSH: dev (disconnected)');
       expect(plain.onTapRect, isNull);
       expect(plain.tooltip, isNot(contains('Click for')));
+      // A WSL distribution: by its name.
+      expect(
+        SshStatusIndicator(hosts['wsl+Ubuntu']).item(context).text,
+        'WSL: Ubuntu (disconnected)',
+      );
+      expect(
+        claudeInstallText(
+          englishLocalizations,
+          'wsl+Ubuntu',
+          const ClaudeInstallProgress(0, null),
+        ),
+        englishLocalizations.remoteInstallingClaude('Ubuntu'),
+      );
+
+      // Installing Claude Code there: how far once its size is known.
+      await tester.runAsync(() => hosts['dev'].reconnect());
+      hosts['dev'].installingClaude = const ClaudeInstallProgress(10, null);
+      expect(
+        SshStatusIndicator(hosts['dev']).item(context).text,
+        'SSH: dev (installing Claude Code...)',
+      );
+      hosts['dev'].installingClaude = const ClaudeInstallProgress(50, 100);
+      expect(
+        SshStatusIndicator(hosts['dev']).item(context).text,
+        'SSH: dev (installing Claude Code 50%)',
+      );
+      hosts['dev'].installingClaude = null;
+      await tester.runAsync(() => hosts['dev'].close());
 
       // With the menu: the same state, clickable, its tooltip saying so.
       Rect? chosen;

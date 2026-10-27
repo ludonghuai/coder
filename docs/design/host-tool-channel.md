@@ -58,7 +58,7 @@ thincoder CLI（子进程）
 偏离（逐条给理由）：
 
 1. **新档 `lib/host_tools/host_mcp_server.dart`**。Claude 的 SDK server 走 CLI 控制通道，不经网络；ACP 只接受 MCP 服务器的**连接参数**（URL 或命令），没有进程内注册面 ⇒ 必须有一个本机监听。Claude 路径零改动。
-2. **注册面正名**（`ClaudeSdkTool(s)` → `HostTool(s)`，文件迁 `lib/host_tools/`）。同一注册表从此服务两个内核，旧名只说了一半；改名是机械改动（见 §7 与 D2）。
+2. **注册面留自有档**（注册表 `HostTools` 与 `HostTool` / `HostToolCall` 两个 typedef 在 `lib/host_tools/`；类型类名保留上游原名 `ClaudeSdkTool` / `ClaudeSdkCall`，定义在 `lib/kernel/claude_code/claude_sdk_tools.dart`）。同一注册表从此服务两个内核，注册表旧名 `ClaudeSdkTools` 只说了一半；类型名搬进自有档会把 9 个上游工具档的每个构造点变成常驻 fork 差异，故只搬注册表（见 D2）。
 3. **加 `group` 字段**。注册表里已有浏览器与图片两组（`lib/images/image_tools.dart:44-50`）；MCP 面按组暴露，本批只开浏览器组（B1）。
 
 ### 2.3 公开资料调查（survey-evidence）
@@ -257,17 +257,22 @@ Accept: application/json, text/event-stream
 ### 4.7 宿主注册面
 
 ```dart
-class HostTool {
+// lib/kernel/claude_code/claude_sdk_tools.dart（上游档：类定义在此，本仓只加末两个字段）
+class ClaudeSdkTool {
   final String name, description;
   final Map<String, Object?> inputSchema;
-  final Future<Object> Function(Map<String, Object?> input, HostToolCall call) run;
+  final Future<Object> Function(Map<String, Object?> input, ClaudeSdkCall call) run;
   final ToolKind? kind;
   final String Function(Map<String, Object?> input, String? output)? summary;
   final List<String> Function(String output)? files;
   final bool alwaysLoad;
-  final String group;          // 新增：'browser' | 'images'
-  final bool picturesOnly;     // 新增：答案只有图（MCP 面不出，见 §12-1）
+  final String group;          // 自有新增：'browser' | 'images'
+  final bool picturesOnly;     // 自有新增：答案只有图（MCP 面不出，见 §12-1）
 }
+
+// lib/host_tools/host_tools.dart（自有档）
+typedef HostTool = ClaudeSdkTool;
+typedef HostToolCall = ClaudeSdkCall;
 
 abstract final class HostTools {
   // 既有语义零变（Claude 面）：register / unregister / instruct / called / any / servers / handle
@@ -305,9 +310,9 @@ thincoder 会话 prepare()
 
 监听器**活到进程退出**（D7）。**不设应用退出钩子**：进程退出由 OS 回收本机 socket（无持久状态要清）；`shutdown()` 只用于单元测试收尾（⑰），不接应用生命周期。懒启动触发者 = 上面 `prepare()` 的首次过门（`ThincoderKernel` 调 `HostMcpServer.ensure()`，不新增调用档）。
 
-**grant 的会话键**：`session/new` 的 `mcpServers` 在会话有 id 之前发出 ⇒ grant 初值 `sessionId` 为空串（`thincoder_kernel.dart:297`）；应答带回会话 id 后，`_openNew` 用 `HostMcpServer.rebind(token, sessionId)` 回填
-（`thincoder_kernel.dart:394-399`；`host_mcp_server.dart:93-100`）。宿主工具调用的 `HostToolCall.sessionId` 因此是真实会话 id；取消表以 `(sessionId, requestId)` 为键（`host_tools.dart:208`），两个新会话的同号请求不再互相取消。
-`session/load` / `session/resume` 发出时 id 已知，不需要回填。
+**grant 的会话键**：`session/new` 的 `mcpServers` 在会话有 id 之前发出 ⇒ grant 初值 `sessionId` 为空串（`thincoder_kernel.dart:297`）；应答带回会话 id 后，`_openNew` 用 `HostMcpServer.rebind(token, sessionId)` 回填（`thincoder_kernel.dart:394-399`；`host_mcp_server.dart:93-100`）。
+
+宿主工具调用的 `HostToolCall.sessionId` 因此是真实会话 id；取消表以 `(sessionId, requestId)` 为键（`host_tools.dart:208`），两个新会话的同号请求不再互相取消。`session/load` / `session/resume` 发出时 id 已知，不需要回填。
 
 ### 5.2 会话期的状态
 
@@ -412,7 +417,7 @@ thincoder 会话 prepare()
 | # | 决策 | 理由 / 被否 |
 |---|---|---|
 | D1 | 通道 = ACP 标准 `mcpServers` + 环回 HTTP MCP server | §3；规格逐字允许、上游已登记 M2 ⇒ 可合并 |
-| D2 | 注册面正名 `HostTools` / `HostTool` / `HostToolCall`（文件迁 `lib/host_tools/`） | 同一注册表服务两个内核，旧名只说了一半；机械改名、零行为变化。**提交拆分**：改名先以独立提交（或独立 diff）落地，功能接线随后——评审面不被改名噪声稀释、上游合并可辨认（E2）；不另起批次；改名提交零行为变化，可单独复核 |
+| D2 | 注册面留自有档：注册表 `HostTools` 与两个 typedef（`HostTool` = `ClaudeSdkTool`、`HostToolCall` = `ClaudeSdkCall`）在 `lib/host_tools/`；类型类名保留上游原名，定义在 `lib/kernel/claude_code/claude_sdk_tools.dart` | 同一注册表服务两个内核，注册表旧名 `ClaudeSdkTools` 只说了一半；搬注册表不把自有注册逻辑塞进上游档，搬类型名则让 9 个上游工具档的每个构造点常驻 fork 差异 |
 | D3 | 加 `group`，MCP 面按组暴露 | 注册表已有浏览器 / 图片两组；本批只开浏览器（B1），后续工具一行扩 |
 | D4 | 能力位门：`mcpCapabilities.http == true` 且暴露组内有已注册工具（`anyIn`）才发 `mcpServers` | ACP 规格要求；旧 CLI 零感知（F4）；不发则不触发 CLI 的 warn 日志；门形统一见 §4.2 |
 | D5 | 宿主工具免审（信任标 → `permissionExempt`） | 与 Claude 面同权；主防线是共享分组；信任锚 = 提交请求的客户端。**上游接受风险**：信任位是第二个上游面（非标准扩展），被判拒 ⇒ 回落逐调用审批（§12-11）。被否：逐调用审批（摩擦大、与 Claude 分叉）；`readonly:true`（假契约 + 流进只读子代） |

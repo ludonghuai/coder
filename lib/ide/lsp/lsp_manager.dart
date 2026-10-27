@@ -147,12 +147,16 @@ class LspManager extends ChangeNotifier
   /// Diagnostics by document path, then by server.
   final _diagnostics = <String, Map<_Server, List<LspDiagnostic>>>{};
   final _edits = StreamController<LspApplyEditRequest>.broadcast();
+  final _progressChanges = ValueNotifier(0);
   final _installs = <String, Future<void>>{};
   StreamSubscription<LspFileEvent>? _watch;
   final _fileEvents = <String, LspFileChangeType>{};
   Timer? _fileEventTimer;
   bool _shutDown = false;
   bool _disposed = false;
+
+  /// Whether it was shut down: it runs no servers again.
+  bool get isShutDown => _shutDown;
 
   String _normalize(String path) => _paths.normalize(_paths.absolute(path));
 
@@ -434,6 +438,11 @@ class LspManager extends ChangeNotifier
         onDiagnostics: (uri, diagnostics) =>
             _publish(server, started, uri, diagnostics),
         onChanged: () => _clientChanged(server, started),
+        onProgress: () {
+          if (identical(server.client, started) && !_disposed) {
+            _progressChanges.value++;
+          }
+        },
         onApplyEdit: _applyEdit,
         onExit: (code, {required crashed}) =>
             _exited(server, started, code, crashed: crashed),
@@ -727,6 +736,7 @@ class LspManager extends ChangeNotifier
     unawaited(shutdown());
     _disposed = true;
     unawaited(_edits.close());
+    _progressChanges.dispose();
     super.dispose();
   }
 
@@ -1432,6 +1442,9 @@ class LspManager extends ChangeNotifier
 
   @override
   Stream<LspApplyEditRequest> get workspaceEdits => _edits.stream;
+
+  @override
+  Listenable get progressChanges => _progressChanges;
 
   @override
   List<LanguageServerStatus> statusFor(String path) {
