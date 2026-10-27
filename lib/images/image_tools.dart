@@ -10,6 +10,7 @@ import 'package:path/path.dart' as p;
 import '../chat/chat_models.dart' show ToolKind;
 import '../host_tools/host_tools.dart';
 import '../ide/file_service.dart' show IdeFileExistsException;
+import '../kernel/claude_code/claude_sdk_tools.dart';
 import '../models/image_api.dart';
 import '../models/model_provider.dart';
 import '../models/model_providers.dart';
@@ -55,7 +56,7 @@ abstract final class ImageTools {
       providers.imageModels;
 
   /// The tool, offering [models].
-  static HostTool tool(List<ImageModel> models) => HostTool(
+  static ClaudeSdkTool tool(List<ImageModel> models) => ClaudeSdkTool(
     name: name,
     description: _description(models),
     inputSchema: _schema(models),
@@ -166,7 +167,7 @@ abstract final class ImageTools {
 
   static Future<Object> _run(
     Map<String, Object?> input,
-    HostToolCall call,
+    ClaudeSdkCall call,
   ) async {
     final prompt = _string(input['prompt']);
     if (prompt == null) throw const ImageToolError('Give a prompt.');
@@ -259,13 +260,13 @@ abstract final class ImageTools {
   static Future<ImageModel> modelFor(
     List<ImageModel> models, {
     String? named,
-    required HostToolCall call,
+    required ClaudeSdkCall call,
   }) => _model(models, named: named, call: call);
 
   static Future<ImageModel> _model(
     List<ImageModel> models, {
     String? named,
-    required HostToolCall call,
+    required ClaudeSdkCall call,
   }) async {
     String refOf(ImageModel entry) =>
         modelRef(entry.provider.id, entry.model.id);

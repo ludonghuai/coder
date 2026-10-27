@@ -5,7 +5,7 @@ part of 'browser_tools.dart';
 // from the first time BaoCode used the tab (see browser_records.dart).
 
 final _debugTools = [
-  HostTool(
+  ClaudeSdkTool(
     name: 'browser_console',
     description:
         "A shared tab's console since BaoCode first used it: console calls, "
@@ -94,7 +94,7 @@ final _debugTools = [
       return lines.join('\n');
     },
   ),
-  HostTool(
+  ClaudeSdkTool(
     name: 'browser_network',
     description:
         "Lists the requests of a shared tab's page since BaoCode first used "
@@ -184,7 +184,7 @@ final _debugTools = [
       ].join('\n');
     },
   ),
-  HostTool(
+  ClaudeSdkTool(
     name: 'browser_request',
     description:
         'Requests of a shared tab (their ids, from browser_network): what '
@@ -272,7 +272,7 @@ final _debugTools = [
       return answer;
     },
   ),
-  HostTool(
+  ClaudeSdkTool(
     name: 'browser_performance',
     description:
         "Records a shared tab's performance, as DevTools' Performance panel "
@@ -321,7 +321,7 @@ final _debugTools = [
       }
     },
   ),
-  HostTool(
+  ClaudeSdkTool(
     name: 'browser_emulate',
     description:
         'Makes a shared tab run as on a slower machine or network, or a '
@@ -527,7 +527,7 @@ final _debugTools = [
       return done.isEmpty ? 'Nothing asked.' : done.join('\n');
     },
   ),
-  HostTool(
+  ClaudeSdkTool(
     name: 'browser_coverage',
     description:
         "What of a shared tab's style sheets was used, as DevTools' "
@@ -574,7 +574,7 @@ final _debugTools = [
       }
     },
   ),
-  HostTool(
+  ClaudeSdkTool(
     name: 'browser_memory',
     description:
         "A shared tab's memory, as DevTools' Memory panel: \"usage\" (the "

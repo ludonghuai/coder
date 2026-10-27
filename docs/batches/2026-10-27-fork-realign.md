@@ -333,4 +333,80 @@ VERDICT: pass（无 🔴；🟡 9 项 · 🔵 5 项，均不阻塞）
 
 ## §4 用户批准（主 agent）
 ## §5 实施记录（eng-coder）
+
+**状态行**：实施完成（审计 + 独立代码评审均 pass，修复轮 0；全量测试留父侧 §6）
+
+### 5.1 交付摘要（新建 1 档 · 改 10 档）
+
+设计 §7.3 的行数预算逐档命中：新档 91 行；`host_tools.dart` 264 → **185 行**（预算 183–185 的上界，净减 79）；`browser_tools.dart` 773 → **774**；`image_tools.dart` 601 → **602**；六个纯改名档行数不变。
+
+| 文件 | 变化 | 读数（本轮实测） |
+|---|---|---|
+| `lib/kernel/claude_code/claude_sdk_tools.dart` | 新建：上游档逐字 + `group` / `picturesOnly`；注册表类 `ClaudeSdkTools` 不取 | `git diff --numstat origin/main` = **6 增 / 144 删**；删除块唯一（上游 `:86`–`:229`）；改后 **91 行** |
+| `lib/host_tools/host_tools.dart` | 移出 4 个声明（`HostToolCall` / `HostTool` / `claudeSdkImage` / `claudeSdkText`）；留 `HostTools` 注册表逐字 + 两 typedef + import / export | `:14-15` re-export；`:17-18` 两 typedef；`abstract final class HostTools` 在 `:21` |
+| 7 个 part 档（actions / debug_tools / history / inspect / intercept / sources / watch） | 只改标识符，import 零改动 | 逐档 diff 7/7 · 7/7 · 1/1 · 3/3 · 1/1 · 3/3 · 1/1（各 = 该档构造点数） |
+| `lib/browser/browser_tools.dart` | +1 上游 import；构造点 6 + 类型引用 3 改名 | diff 10 增 / 9 删；`HostTools.` 4 处逐字保留 |
+| `lib/images/image_tools.dart` | +1 上游 import；构造点 1 + 类型引用 4 改名 | diff 5 增 / 4 删；`HostTools.` 2 处逐字保留 |
+
+设计 §7.5 八条判据的静态面实读（编译与测试见 5.4）：
+
+| # | 判据 | 读数 |
+|---|---|---|
+| ① | 上游档只加两字段、增 ≤6、删除块唯一、91 行 | 6 / 144 / 唯一 / 91 ✓（见上表） |
+| ② | 注册表留自有档 | 新档 `static final Map` = 0；`abstract final class HostTools` 在自有档 ✓ |
+| ③ | 九档标识符级 = 0 | `HostTool` = 0 · `HostToolCall` = 0 · `ClaudeSdkTool(` = **30** · `HostTools` = **6**；九档 `git diff origin/main` 的 `+` 行内 `ClaudeSdkToolCall` = 0 · `ClaudeSdkTools` = 0 ✓ |
+| ④ | 九档 import 面 | 七档 `:1` 仍为 `part of 'browser_tools.dart';`；两档各恰 +1 行，其余 import 逐字相同 ✓ |
+| ⑤ | 三处真值逐行读回 | 内容全在原位，坐标为改前值 +1（见 5.3）✓ |
+| ⑥ | 自有档与测试档别名不清零 | lib `HostToolCall` 13 行 + test 19 处；lib `HostTool(` 3 处 + test 9 处 ✓ |
+| ⑦ | 自有档零改动（`host_tools.dart` 除外） | `git status --porcelain` = 10 M + 1 A，与 {`lib/browser/btest/**`, `lib/host_tools/host_mcp_server.dart`, `lib/kernel/thincoder/**`, `test/**`} 交集为空 ✓ |
+
+合并面收益：九档相对上游的总差异从「121 增 / 57 删」降到「**87 增 / 21 删**」，其中 6 行是设计预期的注册表名 `HostTools.` 残留。
+
+### 5.2 决策披露（越出设计逐字描述的每一处，逐条给理由）
+
+| # | 改动 | 为什么 | 偏差级别 |
+|---|---|---|---|
+| 1 | 删 `host_tools.dart` 原 `import '../chat/chat_models.dart' show ToolCallItem, ToolKind;` | 该 import 的两个符号只被移出的 `HostTool` / `HostToolCall` 使用，留着会新增 `unused_import`。删后 185 行，仍在 §7.3 预算内 | 设计未逐个列 import，属必然连带；净减 79–81 的不变量未破 |
+| 2 | 新档保留上游 `import 'dart:async';`（该档已无使用点） | 红线 1 要求删除块只有 `ClaudeSdkTools` 一段，删它会生第二个删除块。实测 analyze 未报 `unused_import`，故按设计保留且无代价 | 无偏差（先怀疑、后实测排除） |
+| 3 | 两新字段各 1 行文档注释、与相邻成员之间无空行 | §7.2 的 +6 行算术 = 构造参数 2 + 字段 2 + 单行注释 2；加空行即 8 行，破「增 ≤6」的机器判据 | 按设计算术执行；代价 = 该处样式比同档其它成员更密 |
+| 4 | `browser_tools.dart:13` / `image_tools.dart:13` 各新增 1 条 `unnecessary_import` info | 设计 §7.4 选定「恢复上游 import + 保留自有 import」；自有档 re-export 同四符号 ⇒ 直接 import 冗余。按设计执行 | 成本已披露，不改代码（见 5.5 未采纳项） |
+
+### 5.3 真值坐标（设计 §7.5 写的是改前坐标）
+
+| 目标 | 设计坐标 | 盘上实读 |
+|---|---|---|
+| `picturesOnly: true,` | `browser_actions.dart:105` | `:105` ✓（part 档，无 import 变动） |
+| `group: 'browser',` | `browser_tools.dart:116` | `:117`（`:116` = 注释 `// group would not show there.`） |
+| `picturesOnly: tool.picturesOnly,` | `browser_tools.dart:117` | `:118` |
+| `group: 'images',` | `image_tools.dart:66` | `:67`（`:66` = `alwaysLoad: true,`） |
+
+### 5.4 编译与测试读数
+
+SDK = `D:\baocode\build\flutter-3475\flutter\bin\flutter.bat`（Flutter 3.47.5 / Dart 3.13.4，与 `.dart_tool/version` 一致；PATH 上的另一个 Flutter 与 `.dart_tool` 哈希不符，跑测试会报 `Invalid SDK hash`，故用本仓这份）。
+
+- `flutter analyze --no-pub` → **0 error**；9 issues，其中本批新增 2 条 info（5.2 #4），其余 7 条落在未触及的 test 档。
+- `flutter test --no-pub test/host_tools test/browser test/platform` → **All tests passed（+233 ~8）**。
+- `flutter test --no-pub test/kernel/thincoder_kernel_test.dart test/images/image_tools_test.dart` → **All tests passed（+164）**。
+- 全量 `flutter test --no-pub`：**本席未跑**。理由 = 项目 `CLAUDE.md:3` 只许跑改动相关档，且全量是父侧收尾门。§7.5 第 8 条第③项留给 §6（门槛：失败 ≤128 且通过 ≥7107）。
+
+### 5.5 审计与评审轮次（终态 clean）
+
+| 轮 | 类型 | 结论 |
+|---|---|---|
+| 1 | 内部偏离审计（explore，只读） | §7.5 八条 + §2.1 五条全 PASS；越清单改动 0、行为偏离 0；4 条发现全在文档坐标面 |
+| 2 | 独立代码评审（advisor code） | VERDICT **pass**（🔴 0 · 🟡 3 · 🔵 2），无一标「批准前必修」 |
+| 修复轮 | — | **0 轮**：无代码项可改；三条 🟡 是设计档 / 登记表文字与一处已披露的 lint 成本，改代码反会破红线 1 |
+
+**未采纳的两条（理由留父侧裁）**：
+
+- 评审 🔵「`host_tools.dart:1` 头注释仍在描述已移出的类型」：修它要删 4 行，落到 181 行、破 §7.3 的 183–185 预算。按设计留，改法并入下一轮调预算时处理。
+- 评审 🟡「`unnecessary_import` 两行」：删掉即恢复本批要消除的常驻差异，故不删；该成本需在 §3 登记表加一句「禁随 lint 清扫删除」（eng-designer 面）。
+
+### 5.6 文档面发现（本席不改，交父侧路由）
+
+1. `docs/design/fork-deltas.md:186` 的三处真值坐标是改前值，逐档 +1（真值见 5.3）。
+2. `docs/design/fork-deltas.md:187` 把 `host_tools.dart:41` 的 `HostTool(` 声明列为「逐字不变」，与同表 `:188` 及盘上相反 —— 该声明正是本批移出的那 4 个之一；九档外 `HostTool(` 现为 lib 3 处（`btest_mode.dart:264` / `:336`、`claude_code_translator.dart:962`）+ test 9 处，`HostToolCall` 为 lib 13 行 + test 19 处。
+3. `docs/design/fork-deltas.md:65` / `:153` 的定位坐标是改前值（+1）：`image_tools.dart` 注册接线现为 `:47` / `:49`，`browser_tools.dart` 的 `List<ClaudeSdkTool>` 在 `:73`。
+4. `docs/design/fork-deltas.md` §7.2 的「229 − 144 + 6 = 91」按内容行计；§7.1 的行数口径写「按 `\n` 切分计数」，按该口径上游读 230、改后读 92。两种口径差 1，建议 §7.1 口径行标明本条算术用内容行。
+
 ## §6 验证与收口（父代理）

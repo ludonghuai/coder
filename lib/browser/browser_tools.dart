@@ -10,6 +10,7 @@ import 'package:path/path.dart' as p;
 
 import '../chat/chat_models.dart' show ToolKind;
 import '../host_tools/host_tools.dart';
+import '../kernel/claude_code/claude_sdk_tools.dart';
 import '../platform/data_dir.dart';
 import 'btest/btest_mode.dart';
 import 'btest/btest_tool_gate.dart';
@@ -69,7 +70,7 @@ abstract final class BrowserTools {
     await bridge.start();
   }
 
-  static List<HostTool> get _all => [
+  static List<ClaudeSdkTool> get _all => [
     ..._tools,
     ..._actionTools,
     ..._debugTools,
@@ -98,7 +99,7 @@ abstract final class BrowserTools {
     HostTools.instruct('browser', rules);
     for (final tool in _all) {
       HostTools.register(
-        HostTool(
+        ClaudeSdkTool(
           name: tool.name,
           description: _entryTools.contains(tool.name)
               ? '${tool.description}$_userBrowser'
@@ -133,9 +134,9 @@ abstract final class BrowserTools {
   /// One tool's run, with the btest gate passed first, the page watched and
   /// the dialogs answered.
   static Future<Object> _runTool(
-    HostTool tool,
+    ClaudeSdkTool tool,
     Map<String, Object?> input,
-    HostToolCall call,
+    ClaudeSdkCall call,
   ) async {
     final tabId = input['tabId'];
     await BtestToolGate.check(tool.name, input, call, tabHost: _tabHost);
@@ -277,7 +278,7 @@ Do not use the browser tools to scrape or bulk-collect data from government, hea
   };
 
   static final _tools = [
-    HostTool(
+    ClaudeSdkTool(
       name: 'browser_tabs',
       description:
           "Lists the tabs of the user's browser shared with you (the "
@@ -298,7 +299,7 @@ Do not use the browser tools to scrape or bulk-collect data from government, hea
         ].join('\n');
       },
     ),
-    HostTool(
+    ClaudeSdkTool(
       name: 'browser_open',
       description:
           "Opens a URL in a new tab of the user's browser, in the BaoCode "
@@ -327,7 +328,7 @@ Do not use the browser tools to scrape or bulk-collect data from government, hea
         return _arrived(browser, tabId);
       },
     ),
-    HostTool(
+    ClaudeSdkTool(
       name: 'browser_navigate',
       description:
           'Goes to a URL in a shared tab, or back, forward, or reloads it; '
@@ -365,7 +366,7 @@ Do not use the browser tools to scrape or bulk-collect data from government, hea
         return _arrived(browser, tabId);
       },
     ),
-    HostTool(
+    ClaudeSdkTool(
       name: 'browser_evaluate',
       description:
           "Runs JavaScript in a shared tab's page and returns its value (as "
@@ -394,7 +395,7 @@ Do not use the browser tools to scrape or bulk-collect data from government, hea
         return jsonEncode(value);
       },
     ),
-    HostTool(
+    ClaudeSdkTool(
       name: 'browser_close',
       description: 'Closes a shared tab.',
       inputSchema: {

@@ -336,7 +336,7 @@ class _Interception {
   }
 }
 
-final _interceptTool = HostTool(
+final _interceptTool = ClaudeSdkTool(
   name: 'browser_intercept',
   description:
       "Rules on a shared tab's requests (by URL: what it has, or a pattern "
