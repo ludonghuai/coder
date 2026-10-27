@@ -302,6 +302,38 @@ D2 原句末的「**提交拆分**：改名先以独立提交落地…」同轮�
 
 复核方式 = 按每行的唯一内容串逐条定位（`fork-deltas.md` 当前 321 行）。
 
+### 2.12 实施后文档面收敛（§5.6 四条 + §5.5 一条，2026-10-27）
+
+改动面 = `docs/design/fork-deltas.md` 一档；代码零改动；§7 的设计语义未变（A 案、注册表留自有档、净增 ≤6 行、九档只改名）。§2.1 条目表与 §7.5 判据的**判据内容**未动，只把指向代码的坐标与计数改成实施后的真值。
+
+| # | 来源 | 落点（`fork-deltas.md` 现行行号） | 改法 | 本轮读数（实测） |
+|---|---|---|---|---|
+| 1 | §5.6 #1 | §7.5 三处真值行 `:188` | 坐标按实施后值改写 | 三处里只有两处动了：`browser_actions.dart:105` = `picturesOnly: true,` 未变；`browser_tools.dart:117` = `group: 'browser',`、`:118` = `picturesOnly: tool.picturesOnly,`；`image_tools.dart:67` = `group: 'images',` |
+| 2 | §5.6 #2 | §7.5 别名判据行 `:189` | `HostToolCall` 34 → **32**（lib 15 → 13）；`HostTool(` 4 → **12**（lib 3 + test 9）；删掉「`host_tools.dart:41` 声明」这一死项（该声明本批已移出） | `HostToolCall`：lib 13 处（`:18` typedef 在内）+ test 19 处；`HostTool(`：lib 3 = `btest_mode.dart:264` / `:336`、`claude_code_translator.dart:962`；test 9 = `browser_steps_test:37` · `host_mcp_server_test:17/304/349` · `host_tools_test:8/32/71/135` · `thincoder_kernel_test:2824` |
+| 3 | §5.6 #3 | 第 3 节 `image_tools.dart` 行 `:65`；§7.3 的 `browser_tools.dart` 行 `:155`、`image_tools.dart` 行 `:157` | 定位坐标按实施后值改写 | `image_tools.dart:47` `HostTools.unregister` / `:49` `register`；`browser_tools.dart:73` `List<ClaudeSdkTool>`、`:137` `ClaudeSdkTool tool,`、`:139` `ClaudeSdkCall call,`；`image_tools.dart:59` 返回类型 `ClaudeSdkTool`、`:170` / `:263` / `:269` `ClaudeSdkCall` |
+| 4 | §5.6 #4 | §7.1 行数口径行 `:128`；连带 §7.1 上游源行 `:124`、§7.2 `:136`、§7.3 `:147`、§7.5 `:184`、第 3 节 `:57` | 统一到「`\n` 切分」口径：上游 **230**、改后 **92**；并写明 `wc -l` 各少 1。原 `229 / 91` 是 `wc -l` 口径，与同表其余三档的切分口径混用 | node 实测（`split('\n').length` / `\n` 计数）：`claude_sdk_tools.dart` 92/91 · `host_tools.dart` 185/184 · `browser_tools.dart` 774/773 · `image_tools.dart` 602/601 ⇒ 前四档声明数只有第一档是 `wc -l` 口径 |
+| 5 | §5.5 🟡 | 第 3 节表后新增一段（`:71`） | 写明两处 `unnecessary_import` info 属预期、**禁随 lint 清扫删除**及理由 | `browser_tools.dart:13` / `image_tools.dart:13` = §5.2 #4 报的两行；两档 `HostTools.` 引用仍为 4 / 2 处 |
+
+**同轮顺手（同类一致面，逐条报，均为失效坐标 / 计数不合）**
+
+| 项 | 落点 | 处置与读数 |
+|---|---|---|
+| 自有档契约坐标 | §7.2 `:137` | 改为 `import`（`:12`）+ re-export（`:14-15`）+ typedef（`:17` / `:18`）+ `HostTools`（`:21-185`）；原写 `:100-263` 是移出前的位置 |
+| 注册表调用坐标 | §7.2 `:138`、§7.3 `:155` | `browser_tools.dart` `:90/92/99/101`、`image_tools.dart` `:47/49`（grep 逐行核过） |
+| 调查证据三条 | §7.1 `:124`–`:127` | 按现状重述：helper 只剩上游一份实现（`:81` / `:88`）；自有档 185 行；`ClaudeSdkTool` 现已 30 处、九档外 `HostTool(` 3 + 测试 9。删掉 `:16-35` / `:40-84` / `:87-97` / `:100-263` 这些已不存在的块坐标 |
+| `HostTools.` 引用计数 | §7.3 `:148`（host_tools 行） | **4 处 → 0**：该档是注册表定义处，`HostTools.` 实测 0 命中（grep 无匹配）；原 4 处与 §7.2「其余 7 档 0 处」自相矛盾 |
+| 列名与现状相反 | §1 `:15`、§7.3 `:145`、§8.5 `:297` | 「现状行数」→「实施前行数」：这三列装的是实施前读数，实施后再叫「现状」即与盘相反 |
+
+**交付门**：`doc_check(mode:"gate")` 对 `docs/design/fork-deltas.md` = `DOC-CHECK GATE: PASS`（0 段过长，首跑即过）。
+
+**三向一致**：本批条目、§7.5 判据条目、§2.1 表均未增删，只改坐标与计数口径 ⇒ 三向仍同源；代码零改动，`git status` 仅该设计档。
+
+**上抛项**
+
+- [上抛·待裁] `docs/design/host-tool-channel.md:315` 仍引「取消表以 `(sessionId, requestId)` 为键（`host_tools.dart:208`）」。该档现 185 行，`:208` 已不存在（取消表 `_calls` 在 `:29`）⇒ 死指针。该档不在本轮改动面，请父侧路由；§2.10 的「其余 23 行仍成立」据此需限定为「23 行的表述成立，其中 `:315` 的行号需另轮更新」。
+- [上抛·知会] §7.1 `:114` 的「9 档 121 增 / 57 删」是决策理由引用的**改动前**实测值，未按 §5.1 的改后读数（87 增 / 21 删）更新。它作为「为什么做」的对照数据不失效，故本席未动；是否补改后值请父侧裁。
+- [上抛·知会] §5.5 的第一条未采纳项（`host_tools.dart:1` 头注释仍描述已移出的类型）本席不动：删它落 181 行、破 §7.3 的 183–185 预算，处置仍按 §5.5「并入下一轮调预算时处理」。
+
 ## §3 设计评审（评审子代理）
 
 ### 轮次 1（评审子代理）
@@ -410,3 +442,35 @@ SDK = `D:\baocode\build\flutter-3475\flutter\bin\flutter.bat`（Flutter 3.47.5 /
 4. `docs/design/fork-deltas.md` §7.2 的「229 − 144 + 6 = 91」按内容行计；§7.1 的行数口径写「按 `\n` 切分计数」，按该口径上游读 230、改后读 92。两种口径差 1，建议 §7.1 口径行标明本条算术用内容行。
 
 ## §6 验证与收口（父代理）
+
+### 实施与验证（2026-10-27 01:55）
+
+**实施**：`3d311afb`（11 档 = 新建 1 + 改 10，与设计 §7.3 完全一致）。
+
+**父侧独立核验（不采信报告，逐条 grep）**
+
+| 判据 | 要求 | 实测 |
+|---|---|---|
+| 九档 `HostTool` / `HostToolCall` | 0 / 0 | **0 / 0** |
+| 九档 `ClaudeSdkTool(` | 30 | **30** |
+| 九档 `HostTools` | 6 | **6** |
+| 七档仍 `part of` | 7 | **7 / 7** |
+| `claude_sdk_tools.dart` | 91（设计口径） | **92**（`\n` 切分口径；设计 §7.1 自己标过两口径差 1） |
+| `host_tools.dart` | 183–185 | **185** |
+| 三处真值 | 在位 | `browser_actions.dart:105` `picturesOnly: true` · `browser_tools.dart:117` `group: 'browser'` · `:118` 透传 · `image_tools.dart:67` `group: 'images'` |
+| 越界面 | 零改动 | btest / host_mcp_server / thincoder / test **全未触碰** |
+| `flutter analyze --no-pub` | 0 error | **0 error**（4 条 `unnecessary_import` info = 设计 §7.4「上游行零差异」的已知代价） |
+
+**定向测试**（实施者跑）：`test/host_tools test/browser test/platform` = **+233 ~8 全绿**；`test/kernel/thincoder_kernel_test.dart test/images/image_tools_test.dart` = **+164 全绿**。
+
+**全量测试（父侧收口门）**：`flutter test --no-pub` = **+7075 ~31 −127**（5 分 22 秒）。
+
+**与基线的对照**：基线 `+7107 ~31 −128` ⇒ **失败 128 → 127（净改善 1）· 通过 7107 → 7075（−32）**。通过数下降**全部来自删掉的两个测试档**（`git_autofetch_test.dart` 976 行 + `git_pull_real_test.dart` 320 行，随 #184 删除），**不是退化**。
+
+**设计 §7.5 的「通过 ≥7107」判据已过期** —— 它写于删测试之前。**以失败数 ≤128 为判据，本次 127 通过；通过数只作参考。** 该判据的订正派设计者本轮一并改。
+
+**上游合并**：`#388`（窗口只在变化时收帧）已合入，**零冲突**；与上游差距 **186 / 0**，合并后 analyze 仍 0 error。
+
+### 转出（设计档坐标漂移，5 处，派设计者本轮修）
+
+实施者上抛、父侧确认的五处：① `:186` 三处真值坐标改后 +1（`browser_tools.dart:117`/`:118`、`image_tools.dart:67`）② `:187` 把 `host_tools.dart:41` 的 `HostTool(` 声明写成「逐字不变」，实际本批已移出（九档外现为 lib 3 + test 9）③ `:65`/`:153` 的定位坐标是改前值 ④ §7.1 两种行数口径 ⑤ §3 两行补一句「第二根 import 属有意保留，禁随 lint 清扫删除」。

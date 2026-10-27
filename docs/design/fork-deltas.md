@@ -12,7 +12,7 @@
 - l10n 只合并 `app_en.arb` / `app_zh.arb` 的键级并集；生成文件由 `flutter gen-l10n` 重产，不手解、不选边。
 - 上游测试与自有断言分档；不为保留 fork 断言改写上游测试。
 - 每次上游合并后按符号核对本表，不以旧行号判断接线是否仍在。
-- 第 2 / 3 节各行登记的是**改后形态**（本批实施后成立）；实施前的现状读数见第 7.3 节 / §8.5 的「现状行数」列，两者可互证。
+- 第 2 / 3 节各行登记的是**改后形态**（本批已实施）；实施前的读数见第 7.3 节 / §8.5 的「实施前行数」列，两者可互证。
 
 ## 2 整档自有资产
 
@@ -54,7 +54,7 @@
 | `lib/settings/app_settings.dart`、`settings/settings_dialog.dart` | thincoder 设置入口 | 功能 | `SettingsSection.thincoderModels` | 合计净增 ≤50 行 |
 | `lib/chat/composer/composer_picker.dart` | `startCollapsed` 参数与 `_collapseNewGroups`（新到的分组也收起，选中那组除外） | 功能 | `ComposerPicker.startCollapsed`；收起集合仍留在 picker 内 | 净增 ≤25 行 |
 | `lib/chat/composer/session_model_picker.dart` | thincoder 会话默认收起 + 底部管理入口指向 thincoder 模型页；回合在飞时的等待态后缀（`pendingModel` → label / tooltip 的 `modelsSwitchPending`；机制见 `thincoder-adapter.md` §24） | 内核适配 | `ComposerPicker.startCollapsed`；`SettingsSection.thincoderModels`；`ChatSession.pendingModel` | 净增 ≤20 行 + 等待态块 17 行（`:45-48` · `:129-138` · `:155-157`） |
-| `lib/kernel/claude_code/claude_sdk_tools.dart` | `ClaudeSdkTool` 的 `group` / `picturesOnly` 两字段；上游注册表类 `ClaudeSdkTools` 整段不取（注册表在自有 `HostTools`） | 内核适配 | `HostTools` 注册表；ACP 的 MCP 面按 group 分服与 `picturesOnly` 门 | 净增 ≤6 行 + 1 个删除块（229 行 ⇒ 91 行） |
+| `lib/kernel/claude_code/claude_sdk_tools.dart` | `ClaudeSdkTool` 的 `group` / `picturesOnly` 两字段；上游注册表类 `ClaudeSdkTools` 整段不取（注册表在自有 `HostTools`） | 内核适配 | `HostTools` 注册表；ACP 的 MCP 面按 group 分服与 `picturesOnly` 门 | 净增 ≤6 行 + 1 个删除块（230 行 ⇒ 92 行，`\n` 切分口径；`wc -l` 各少 1） |
 | `lib/browser/browser_actions.dart` | `browser_screenshot` 的 `picturesOnly: true`（`:105`）+ 7 个构造点用上游原名 | 内核适配 | `ClaudeSdkTool` / `ClaudeSdkCall`；MCP 面按 `picturesOnly` 过滤 | 结构不变（净 0） |
 | `lib/browser/browser_debug_tools.dart` | 无自有块：7 个构造点用上游原名 | 内核适配 | `ClaudeSdkTool` / `ClaudeSdkCall` | 结构不变（净 0） |
 | `lib/browser/browser_history.dart` | 无自有块：1 个构造点用上游原名 | 内核适配 | `ClaudeSdkTool` / `ClaudeSdkCall` | 结构不变（净 0） |
@@ -62,11 +62,13 @@
 | `lib/browser/browser_intercept.dart` | 无自有块：1 个构造点用上游原名 | 内核适配 | `ClaudeSdkTool` / `ClaudeSdkCall` | 结构不变（净 0） |
 | `lib/browser/browser_sources.dart` | 无自有块：3 个构造点用上游原名 | 内核适配 | `ClaudeSdkTool` / `ClaudeSdkCall` | 结构不变（净 0） |
 | `lib/browser/browser_watch.dart` | 无自有块：1 个构造点用上游原名 | 内核适配 | `ClaudeSdkTool` / `ClaudeSdkCall` | 结构不变（净 0） |
-| `lib/images/image_tools.dart` | `group: 'images'` + 注册接线（`HostTools.unregister` `:46` / `register` `:48`） | 功能 | `HostTools` 注册表；MCP 面按组暴露 | 净增 ≤1 行（第二根 import） |
+| `lib/images/image_tools.dart` | `group: 'images'` + 注册接线（`HostTools.unregister` `:47` / `register` `:49`） | 功能 | `HostTools` 注册表；MCP 面按组暴露 | 净增 ≤1 行（第二根 import） |
 | `lib/ide/git/git_repository.dart` | 空仓与未出生分支：图加载的无 await 早退路径上经 `scheduleMicrotask(_notify)` 通知（`:871-875`），避开 build 期 `setState` | 修 bug | `GitRepository` 图加载 getter 的监听者 | 净增 ≤5 行 |
 | `lib/workbench.dart` | 命令面板的会话命令源（`_paletteActions` 里窗口命令 ∪ 焦点会话的 `ChatKeys.commandsOf`，Rename Agent 一项在 `:1316`）；侧栏仓库扫描的失败面（机制见 `ide-git.md` §4.7） | 修 bug | `ChatKeys.targetsOf` / `ChatKeys.commandsOf`；`_sidePanelFolderRepositories` 的扫描 async 块 | 面板 ≤10 行 · 扫描 ≤59 行 |
 | `lib/ide/ide_workbench.dart` | chord 第二键的窗口门（`_holdsKeys` `:3344-3357`：本窗口持有主焦点且本路由当前才吃键；`_onChordKey` 守卫 `:3375-3380` 与 5 秒检查器 `:3397` 共用） | 修 bug | 上游按键服务的 `_onChordKey` / `_onLateKey` 钩 | 净增 ≤22 行（实测 21） |
 | `lib/ide/ide_editor.dart` | 控制器为空时的空渲染（三处 `SizedBox.expand`：`_surface` `:2638-2641` · diff 原侧 `:2757-2758` · build 的 native 分支 `:2890`） | 修 bug | `_nativeController` / `IdeOriginalDiff.controller` | 净增 ≤7 行 |
+
+**恢复的上游 import 与自有 re-export 档重复**：`lib/browser/browser_tools.dart:13` 与 `lib/images/image_tools.dart:13` 各带一条 `unnecessary_import` info（自有 `host_tools.dart` 的 re-export 覆盖同样四个符号）。这两行是上游行，删掉即重建常驻 fork 差异，**禁随 lint 清扫删除**。
 
 ## 4 保持上游实现的共享文件
 
@@ -119,11 +121,11 @@
 
 **调查证据**：
 
-- 上游源：`git show origin/main:lib/kernel/claude_code/claude_sdk_tools.dart`（229 行，本轮逐字读过）。`ClaudeSdkCall`（类头 `:14`）、`ClaudeSdkTool`（类头 `:38`；八个字段，无 `group` / `picturesOnly`）、`claudeSdkImage` / `claudeSdkText`、注册表类 `ClaudeSdkTools`（类头 `:88`，到文件尾）。
-- `claudeSdkImage` / `claudeSdkText` 两边逐字相同：签名与函数体一致（自有 `lib/host_tools/host_tools.dart:87-97`，上游同段以 `:85` 收尾）⇒ 用上游符号 re-export 后 `run` 的返回值不变，`lib/browser/btest/btest_mode.dart:264/336` 两处调用语义不动。
-- 自有 `lib/host_tools/host_tools.dart`（264 行，本轮读过）：`HostToolCall`（`:16-35`）、`HostTool`（`:40-84`，多 `group` `:79`、`picturesOnly` `:83`）、`claudeSdkImage` / `claudeSdkText`（`:87-97`）、`HostTools`（`:100-263`，多 `byGroup` `:116`、`anyIn` `:123`、`lookup` `:128`、`named` `:151`）。
-- 现状实测：`ClaudeSdkTool` 全仓 0 命中；`HostTool(` 12 档 34 处 —— 上游 9 档 30 处、`lib/browser/btest/btest_mode.dart:264/336` 2 处、`host_tools.dart:41` 声明 1 处、`lib/kernel/claude_code/claude_code_translator.dart:962` 对象模式 1 处。
-- **行数口径**：本表行数 = 文本按 `\n` 切分的元素数（末行换行也计 1）；`wc -l` 口径比它少 1（例：`host_tools.dart` 记 264，`wc -l` 读 263）。
+- 上游源：`git show origin/main:lib/kernel/claude_code/claude_sdk_tools.dart`（230 行，按 `\n` 切分口径；本轮逐字读过）。`ClaudeSdkCall`（类头 `:14`）、`ClaudeSdkTool`（类头 `:38`；八个字段，无 `group` / `picturesOnly`）、`claudeSdkImage` / `claudeSdkText`、注册表类 `ClaudeSdkTools`（类头 `:88`，到文件尾）。
+- `claudeSdkImage` / `claudeSdkText` 只在上游档有一份实现（`lib/kernel/claude_code/claude_sdk_tools.dart:81` / `:88`），自有档 re-export ⇒ 全仓一份函数体，`lib/browser/btest/btest_mode.dart:264/336` 两处调用走同一实现，`run` 的返回值不变。
+- 自有 `lib/host_tools/host_tools.dart`（185 行）：`import`（`:12`）+ re-export（`:14-15`）+ 两 typedef（`:17` / `:18`）+ `HostTools`（`:21-185`，自有静态方法 `byGroup` / `anyIn` / `lookup` / `named`）。
+- 现状实测：上游 9 档内 `HostTool` / `HostToolCall` 均 0 命中、`ClaudeSdkTool(` 30 处；九档外 `HostTool(` 3 处（`btest_mode.dart:264` / `:336`、`claude_code_translator.dart:962` 对象模式）+ 测试 9 处。
+- **行数口径**：本表行数 = 文本按 `\n` 切分的元素数（末行换行也计 1）；`wc -l` 比它少 1。例：`host_tools.dart` 记 185，`wc -l` 读 184。第 7.2 的算式同此口径：上游 230 − 删除块 144 + 6 = 92。
 - `docs/design/host-tool-channel.md` 的 `HostTool` 表述本轮已逐条读过（26 行、32 处命中），结论见 7.8。`test/RTM.md`（66 行）读过：唯一同字命中是 1-1 行的 `ProcessHost`，与本机制无关。
 - 公开来源：`manifest.index.publicRepos` 为空，无独立文档仓；上游源码经本仓 `origin` 远端读取，属仓内读。查过，无外部相关来源。
 
@@ -131,28 +133,28 @@
 
 | 面 | 契约 |
 |---|---|
-| `lib/kernel/claude_code/claude_sdk_tools.dart` | 上游 229 行 − `ClaudeSdkTools` 类整段（`:86`–`:229`，144 行 = 类前空行 `:86` + 类文档注释 `:87` + 类体 `:88`–`:229`）+ `ClaudeSdkTool` 的 `group`（默认 `''`）/ `picturesOnly`（默认 `false`）⇒ 91 行 |
-| `lib/host_tools/host_tools.dart` | `import` + `export ... show ClaudeSdkTool, ClaudeSdkCall, claudeSdkImage, claudeSdkText`（两个 helper 与上游逐字同形，见 7.1）；`typedef HostTool = ClaudeSdkTool;`；`typedef HostToolCall = ClaudeSdkCall;`；`HostTools` 类体逐字保留（`:100-263`） |
-| 9 个上游档 | 改名按标识符分三步、次序固定：`HostToolCall` → `ClaudeSdkCall`，`HostTool` → `ClaudeSdkTool`，`HostTools` 不动。禁止按子串替换：子串做法会把 `HostToolCall` 改成 `ClaudeSdkToolCall`、把 `HostTools` 改成 `ClaudeSdkTools`。改写面 = 构造点 30 处 + 类型引用 7 处（坐标见 7.3）。import 只在两档动：`browser_tools.dart` 与 `image_tools.dart` 恢复上游 import 并保留自有 `host_tools.dart` import；其余七档是 `part of 'browser_tools.dart'`，part 档不能写 import，只改类型名。注册表调用只在 `browser_tools.dart`（`unregister` `:89` · `instruct` `:91` · `:98` · `register` `:100`）与 `image_tools.dart`（`unregister` `:46` · `register` `:48`），其余 7 档 0 处 |
+| `lib/kernel/claude_code/claude_sdk_tools.dart` | 上游 230 行 − `ClaudeSdkTools` 类整段（`:86`–`:229`，144 行 = 类前空行 `:86` + 类文档注释 `:87` + 类体 `:88`–`:229`）+ `ClaudeSdkTool` 的 `group`（默认 `''`）/ `picturesOnly`（默认 `false`）⇒ 92 行 |
+| `lib/host_tools/host_tools.dart` | `import`（`:12`）+ `export ... show ClaudeSdkTool, ClaudeSdkCall, claudeSdkImage, claudeSdkText`（`:14-15`）；`typedef HostTool = ClaudeSdkTool;`（`:17`）；`typedef HostToolCall = ClaudeSdkCall;`（`:18`）；`HostTools` 类体逐字保留（`:21-185`） |
+| 9 个上游档 | 改名按标识符分三步、次序固定：`HostToolCall` → `ClaudeSdkCall`，`HostTool` → `ClaudeSdkTool`，`HostTools` 不动。禁止按子串替换：子串做法会把 `HostToolCall` 改成 `ClaudeSdkToolCall`、把 `HostTools` 改成 `ClaudeSdkTools`。改写面 = 构造点 30 处 + 类型引用 7 处（坐标见 7.3）。import 只在两档动：`browser_tools.dart` 与 `image_tools.dart` 恢复上游 import 并保留自有 `host_tools.dart` import；其余七档是 `part of 'browser_tools.dart'`，part 档不能写 import，只改类型名。注册表调用只在 `browser_tools.dart`（`unregister` `:90` · `instruct` `:92` · `:99` · `register` `:101`）与 `image_tools.dart`（`unregister` `:47` · `register` `:49`），其余 7 档 0 处 |
 | 数据流 | 不变：注册 → `HostTools.handle`（JSON-RPC）→ `ClaudeSdkTool.run(input, ClaudeSdkCall)` |
 
 净增 6 行的算术：构造参数 2 行（`this.group = '',` / `this.picturesOnly = false,`）+ 字段 2 行 + 单行文档注释 2 行。
 
 ### 7.3 受影响文件与行数
 
-| 文件 | 现状行数 | 期望变化 | `HostTools.` 引用 |
+| 文件 | 实施前行数 | 变化 | `HostTools.` 引用 |
 |---|---|---|---|
-| `lib/kernel/claude_code/claude_sdk_tools.dart` | 无（新建） | 上游 229 行 − `ClaudeSdkTools` 类段（`:86`–`:229`，144 行）+ 6 行 ⇒ **91 行** | 0 |
-| `lib/host_tools/host_tools.dart` | 264 | 移出 4 个声明连注释（`HostToolCall` `:16-35` · `HostTool` `:40-84` · `claudeSdkImage` `:87-91` · `claudeSdkText` `:94-97`；`:14`–`:98` 共 85 行）+ import / export / 两 typedef（4–6 行）⇒ **183–185 行**（净减 79–81） | 4 处 |
+| `lib/kernel/claude_code/claude_sdk_tools.dart` | 无（新建） | 上游 230 行 − `ClaudeSdkTools` 类段（`:86`–`:229`，144 行）+ 6 行 ⇒ **92 行** | 0 |
+| `lib/host_tools/host_tools.dart` | 264 | 移出 4 个声明连注释（`HostToolCall` · `HostTool` · `claudeSdkImage` · `claudeSdkText`，85 行）+ import / export / 两 typedef（4–6 行）⇒ **183–185 行**（净减 79–81） | 0 |
 | `lib/browser/browser_actions.dart` | 627 | `part of`（`:1`）⇒ import 零改动；构造点 7 处改 `ClaudeSdkTool(`、类型引用 0 处；`picturesOnly: true`（`:105`）保留 ⇒ 行数不变 | 0 |
 | `lib/browser/browser_debug_tools.dart` | 1786 | `part of`（`:1`）⇒ import 零改动；构造点 7 处、类型引用 0 处 ⇒ 不变 | 0 |
 | `lib/browser/browser_history.dart` | 788 | `part of`（`:1`）⇒ import 零改动；构造点 1 处、类型引用 0 处 ⇒ 不变 | 0 |
 | `lib/browser/browser_inspect.dart` | 1169 | `part of`（`:1`）⇒ import 零改动；构造点 3 处、类型引用 0 处 ⇒ 不变 | 0 |
 | `lib/browser/browser_intercept.dart` | 477 | `part of`（`:1`）⇒ import 零改动；构造点 1 处、类型引用 0 处 ⇒ 不变 | 0 |
 | `lib/browser/browser_sources.dart` | 1566 | `part of`（`:1`）⇒ import 零改动；构造点 3 处、类型引用 0 处 ⇒ 不变 | 0 |
-| `lib/browser/browser_tools.dart` | 773 | 独立库。恢复上游 import `import '../kernel/claude_code/claude_sdk_tools.dart';`（与上游同档 `:12` 逐字相同）+ 保留自有 `../host_tools/host_tools.dart`（现状 `:12`）⇒ +1 行。构造点 6 处 + 类型引用 3 处（`:72` `List<HostTool>` · `:136` `HostTool tool,` · `:138` `HostToolCall call,`）；`group: 'browser'`（`:116`）与 `picturesOnly: tool.picturesOnly`（`:117`）保留 ⇒ 774 | 4 处 `:89/91/98/100` |
+| `lib/browser/browser_tools.dart` | 773 | 独立库。恢复上游 import `import '../kernel/claude_code/claude_sdk_tools.dart';`（与上游同档 `:12` 逐字相同）+ 保留自有 `../host_tools/host_tools.dart`（现状 `:12`）⇒ +1 行。构造点 6 处 + 类型引用 3 处（`:73` `List<ClaudeSdkTool>` · `:137` `ClaudeSdkTool tool,` · `:139` `ClaudeSdkCall call,`）；`group: 'browser'`（`:117`）与 `picturesOnly: tool.picturesOnly`（`:118`）保留 ⇒ 774 | 4 处 `:90/92/99/101` |
 | `lib/browser/browser_watch.dart` | 616 | `part of`（`:1`）⇒ import 零改动；构造点 1 处、类型引用 0 处 ⇒ 不变 | 0 |
-| `lib/images/image_tools.dart` | 601 | 独立库。同形恢复上游 import（与上游同档 `:12` 逐字相同）+ 保留自有 import（现状 `:11`）⇒ +1 行。构造点 1 处 + 类型引用 4 处（`:58` 返回类型 `HostTool` · `:169` / `:262` / `:268` `HostToolCall`）；`group: 'images'`（`:66`）保留 ⇒ 602 | 2 处 `:46/48` |
+| `lib/images/image_tools.dart` | 601 | 独立库。同形恢复上游 import（与上游同档 `:12` 逐字相同）+ 保留自有 import（现状 `:11`）⇒ +1 行。构造点 1 处 + 类型引用 4 处（`:59` 返回类型 `ClaudeSdkTool` · `:170` / `:263` / `:269` `ClaudeSdkCall`）；`group: 'images'`（`:67`）保留 ⇒ 602 | 2 处 `:47/49` |
 
 构造点合计 7+7+1+3+1+3+6+1+1 = 30；类型引用合计 3+4 = 7 处（只在 `browser_tools` 与 `image_tools` 两档），九档合计改写 37 个标识符位。九档 `HostTools` 引用 6 处（`browser_tools` 4 · `image_tools` 2）逐字保留。
 
@@ -179,12 +181,12 @@
 
 | 条目 | 判据（机器可判） |
 |---|---|
-| 上游档只动 `claude_sdk_tools.dart` 且 +2 字段 | `git diff --numstat origin/main -- lib/kernel/claude_code/claude_sdk_tools.dart` 的「增」≤ 6，删除块只有 `ClaudeSdkTools` 一段（`:86`–`:229`）；改后文件 91 行 |
+| 上游档只动 `claude_sdk_tools.dart` 且 +2 字段 | `git diff --numstat origin/main -- lib/kernel/claude_code/claude_sdk_tools.dart` 的「增」≤ 6，删除块只有 `ClaudeSdkTools` 一段（`:86`–`:229`）；改后文件 92 行（`\n` 切分口径，`wc -l` 读 91） |
 | 注册表留在自有档 | `lib/kernel/claude_code/claude_sdk_tools.dart` 内 `static final Map` 计数 = 0；`lib/host_tools/host_tools.dart` 内 `abstract final class HostTools` 在 |
 | 9 档只改名字（标识符级） | 九档内 `HostTool` 与 `HostToolCall` 两个标识符命中均为 0 —— 含构造点与类型引用；只数 `HostTool(` 会漏掉 7 处类型引用。同档 `ClaudeSdkTool(` = 30、`HostTools` = 6（`browser_tools` 4 · `image_tools` 2）逐字不变；`git diff origin/main -- <9 档>` 不含 `HostTool` / `HostToolCall`，也不含 `ClaudeSdkToolCall` / `ClaudeSdkTools`（子串误改的读数） |
 | 9 档 import 面 | 七档 `:1` 仍为 `part of 'browser_tools.dart';`；`browser_tools.dart` 与 `image_tools.dart` 各恰 +1 行（上游 `claude_sdk_tools.dart` import），其余 import 行与现状逐字相同 |
-| 三处真值逐行读回（不许只跑合成用例） | 三行原样在盘：`browser_actions.dart:105` = `picturesOnly: true,` · `browser_tools.dart:116` = `group: 'browser',` 且 `:117` = `picturesOnly: tool.picturesOnly,` · `image_tools.dart:66` = `group: 'images',`。理由：`test/host_tools/host_mcp_server_test.dart:11-24` 的 `_tool()` 自造带两字段的工具，不经过这三处真实注册路径，宽面误删后测试仍绿 |
-| 自有档与测试档继续用别名（不清零） | 九档之外 `HostToolCall` 命中 34 处（8 个自有 `lib/` 档 15 处 + 10 个测试档 19 处）、`HostTool(` 4 处（`btest_mode.dart:264/336` · `host_tools.dart:41` 声明 · `claude_code_translator.dart:962` 对象模式）逐字不变 |
+| 三处真值逐行读回（不许只跑合成用例） | 三行原样在盘：`browser_actions.dart:105` = `picturesOnly: true,` · `browser_tools.dart:117` = `group: 'browser',` 且 `:118` = `picturesOnly: tool.picturesOnly,` · `image_tools.dart:67` = `group: 'images',`。理由：`test/host_tools/host_mcp_server_test.dart:11-24` 的 `_tool()` 自造带两字段的工具，不经过这三处真实注册路径，宽面误删后测试仍绿 |
+| 自有档与测试档继续用别名（不清零） | 九档之外 `HostToolCall` 命中 32 处（8 个自有 `lib/` 档 13 处 + 10 个测试档 19 处）、`HostTool(` 12 处（自有 `btest_mode.dart:264/336` 2 处 · `claude_code_translator.dart:962` 对象模式 1 处 · 测试档 9 处）逐字不变 |
 | 自有档零改动（`lib/host_tools/host_tools.dart` 除外） | 本批允许改动的自有档只有 `lib/host_tools/host_tools.dart`（注册表所在：移出 4 个声明 + 加 typedef 与 re-export）；判据 = `git status --porcelain` 与 {`lib/browser/btest/**`, `lib/host_tools/host_mcp_server.dart`, `lib/kernel/thincoder/**`, `test/**`} 交集为空 |
 | 编译与测试 | ① `flutter analyze --no-pub` 的 **error 数 = 0**（读命令尾行；与测试失败数不同量纲，分开判）；② `flutter test test/host_tools test/browser test/kernel/thincoder_kernel_test.dart test/platform` 全绿；③ 全量 `flutter test --no-pub` 收尾行 **失败数 ≤ 128 且通过数 ≥ 7107** —— 取自父侧 2026-10-26 全量实跑（333 s）的 `+7107 ~31 -128`（`+` 通过 / `~` 跳过 / `-` 失败） |
 
@@ -292,7 +294,7 @@
 
 行数 = 本轮实测（`split('\n')` 口径，含末行换行）；块的形态与坐标见第 3 节对应行，不在此重复。
 
-| 文件 | 现状行数 | 本批块 | 预算（第 3 节） |
+| 文件 | 实施前行数 | 本批块 | 预算（第 3 节） |
 |---|---|---|---|
 | `lib/chat/composer/session_model_picker.dart` | 225 | 回合在飞时的等待态后缀，17 行 | ≤20 行 |
 | `lib/workbench.dart` | 4910 | 面板命令源 · 扫描失败面 | 面板 ≤10 · 扫描 ≤59 |
