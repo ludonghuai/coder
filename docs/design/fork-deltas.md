@@ -12,7 +12,7 @@
 - l10n 只合并 `app_en.arb` / `app_zh.arb` 的键级并集；生成文件由 `flutter gen-l10n` 重产，不手解、不选边。
 - 上游测试与自有断言分档；不为保留 fork 断言改写上游测试。
 - 每次上游合并后按符号核对本表，不以旧行号判断接线是否仍在。
-- 第 2 / 3 节各行登记的是**改后形态**（本批实施后成立）；实施前的现状读数见第 7.3 节的「现状行数」列，两者可互证。
+- 第 2 / 3 节各行登记的是**改后形态**（本批实施后成立）；实施前的现状读数见第 7.3 节 / §8.5 的「现状行数」列，两者可互证。
 
 ## 2 整档自有资产
 
@@ -71,7 +71,7 @@
 
 ## 4 保持上游实现的共享文件
 
-以下文件不带自有语义，保持上游实现：
+以下文件保持上游实现（两档带自有块，例外在行内注明）：
 
 - `lib/ide/git/ide_scm_view.dart`；SCM「获取」语义按 #181 的裁定走上游。
 - `lib/chat/composer/composer.dart`：无自有块。
@@ -298,7 +298,7 @@
 | `lib/ide/ide_editor.dart` | 3013 | 控制器为空的空渲染，7 行 | ≤7 行 |
 | `lib/chat/chat_session.dart` | 1376 | 回退后的审查刷新钩，5 行 | ≤180 行 |
 
-**体量立场（不拆档）**：五档都是上游共享档。本批改动合计 +112 / −18（净增 94 行，两笔提交的 `git diff --numstat` 合计），形态都是第 3 节登记块内的小块。
+**体量立场（不拆档）**：五档都是上游共享档。本批改动合计 +112 / −18（净增 94 行；`54f94769` +76 / −9 与 `e5661df4` +36 / −9，`git diff --numstat` 实测，不计批档自身 32 行），形态都是第 3 节登记块内的小块。
 
 `workbench` 4910 · `ide_workbench` 5822 · `ide_editor` 3013 · `chat_session` 1376 四档过 800 行，属存量债，按 §7.3 同一理由不拆档：把上游共享档拆成两档，两半都成常驻 fork 差异，每次上游合并要在两处对账，与第 1 节的目标相反。
 
@@ -310,7 +310,7 @@
 |---|---|---|
 | 1 | `flutter test test/chat/model_picker_test.dart test/kernel_ui_test.dart`；静态：`session_model_picker.dart` 内 `modelsSwitchPending` = 2（label 与 tooltip 各一） | 51 通过 |
 | 2 | `flutter analyze --no-pub` 的 error 计数；静态：`workbench.dart` 内 `commandsOf` ≥1（本轮 2） | 0 error |
-| 3 | 同上；静态：`_sidePanelRetryAt` ≥2（本轮 4）· `_sidePanelRetryTimer` ≥2（本轮 4）· `_scanWarned` ≥2（本轮 3）· `scmScanFailed` ≥1（本轮 1）· `appEvent(` ≥1（本轮 1） | 0 error |
+| 3 | 同上；静态：`_sidePanelRetryAt` ≥2（本轮 4）· `_sidePanelRetryTimer` ≥2（本轮 4）· `_scanWarned` ≥2（本轮 3）· `scmScanFailed` ≥1（本轮 1）· `appEvent(` ≥1（本轮 1）；时序（30 秒重试、同一位置只提示一次）未实测 | 0 error |
 | 4 | 同上；静态：`_holdsKeys` ≥2（本轮 4 = 定义 1 + 判定 3）。跨窗行为未实测（无多窗口 harness） | 0 error |
 | 5 | 同上；静态：`SizedBox.expand` = 3（三处） | 0 error |
 | 6 | `flutter test test/chat/revert_flow_test.dart test/chat/session_overlay_test.dart`；静态：`ChangesReverted` ≥1（本轮 1） | 19 通过 |
