@@ -111,6 +111,27 @@
 3. `fork-deltas.md` §3 补一行 `lib/ide/git/git_repository.dart:871-875`（空仓构建期修复 `scheduleMicrotask(_notify)`；不登记则下次整档取上游会再丢一次）。
 4. `host-tool-channel.md` 三行按 A 案改后事实重述：`ClaudeSdkTool` 定义在上游 `lib/kernel/claude_code/claude_sdk_tools.dart`，`HostTool` 是自有 `lib/host_tools/host_tools.dart` 里的别名；`:415` 的 D2 决策行同步。
 
+### kimi 复核裁决（主 agent，2026-10-27 01:35）— 可实施，4 处必带进实施单
+
+用户 01:13 给 key、01:14「重新审核一下186」。kimi（explore#35）结论：**能实施，无 🔴**；typedef 四种用法（构造 / 注解 / `is` / 对象模式）**依 Dart 规范全部成立**，§7.7 的「未实测前提」可以销掉。
+
+**父侧已独立核实第 1 条**（最要紧的那条）：
+
+| # | kimi 的发现 | 父侧核对 | 处置 |
+|---|---|---|---|
+| 1 | 七个浏览器工具档是 `part of 'browser_tools.dart'`，**自身无 import**；设计写「import 换上游路径 1:1」会让 part 档编译失败 | **成立**：`browser_actions` / `browser_debug_tools` / `browser_history` / `browser_inspect` / `browser_intercept` / `browser_sources` / `browser_watch` **七个全是 `part of`**；只有 `browser_tools` 与 `image_tools` 是独立库 | 设计 §7.3 改：**import 只落在 `browser_tools.dart` 与 `image_tools.dart` 两处**（各 +1 上游 import，保留原 `host_tools.dart` import）；其余七档**只改类型名，不碰 import** |
+| 2 | 不能按子串替换：`HostTool`→`ClaudeSdkTool` 会把 `HostToolCall` 错成 `ClaudeSdkToolCall`、把 `HostTools` 错成 `ClaudeSdkTools` | 成立（`HostTools` 必须保留） | 实施纪律写死：**按标识符重命名**，三步分开：`HostToolCall → ClaudeSdkCall` · `HostTool → ClaudeSdkTool` · **`HostTools` 不动** |
+| 3 | 30 个构造点之外还有类型引用；验收只数 `HostTool(` 会漏 | 成立：`HostToolCall` 全仓 18 处（九档内 4 处 + 自有档 14 处） | §7.5 判据改成**标识符级**：**九个上游档内 `HostTool` 与 `HostToolCall` 均 = 0**；自有档（btest / host_tools / host_mcp_server / claude_code_kernel）继续用别名，**不要求清零** |
+| 4 | 现有测试用**合成工具**（`host_mcp_server_test.dart:11-24` 自造 `_tool`），若宽面编辑误删 `picturesOnly: true` / `group: 'images'`，测试仍绿 | 成立（该测试不经过真实注册路径） | 实施后**逐行核三处真值**：`browser_actions.dart:105` `picturesOnly: true` · `browser_tools.dart:116-117` 透传 · `image_tools.dart:66` `group: 'images'` —— 列为硬验收，不许只跑合成用例 |
+
+**另有一处坐标错**：kimi 指出设计 `:147` 把 `HostToolCall` 的引用位置写成 `browser_actions.dart`，该档实为 0 处（真实在 `browser_tools` / `image_tools`）。
+
+**派单**：以上五件（4 条 + 坐标错）派设计者一轮改 `fork-deltas.md` §7，改完即派实施。**令牌 `2f9d8cbd…` 有效至 11-03，无需重签。**
+
+**订正（2026-10-27 01:38）**：上文「`HostToolCall` 全仓 18 处」口径有误——那是我只扫 `lib/` 的读数。设计者按 `\bHostToolCall\b` 扫 `lib/` + `test/` 实测 **38 处**（九档 4 + 自有 `lib/` 8 档 15 + 测试 10 档 19）。**判据不依赖总数**（判的是「九个上游档内两个名字均 = 0」），故不阻塞；此处按实测订正。
+
+**§7.4 B 案那条「静态成员经 typedef 访问未实测」**：驳回 B 案的首因是违反「注册表留自有档」，该前提不承担驳回责任，本轮不动——**知会采纳**。
+
 ## §2 批次任务与设计（eng-designer）
 **状态行**：设计完成
 <§2 模板占位：本批条目（覆盖） / 设计档落点 / 机制设计 / 受影响文件与测试覆盖 / 验收对照 / 关键决策 / 上抛项>
@@ -248,6 +269,38 @@ D2 原句末的「**提交拆分**：改名先以独立提交落地…」同轮�
 **上抛项**
 
 - [上抛·待裁] `docs/requirements/host-tool-channel.md:13` 仍写「浏览器工具是 `HostTool`…（`lib/host_tools/host_tools.dart`；原 `ClaudeSdkTool(s)`，A 轮改名）」。本批后类名回上游、`HostTool` 只是自有档别名，该括号在实施后与代码相反。需求档改笔在主 agent，本席只报不改。建议改为：类型 = 上游 `ClaudeSdkTool`（`lib/kernel/claude_code/claude_sdk_tools.dart`），自有档以 `typedef HostTool` 提供别名，注册表 `HostTools` 在自有档。
+
+### 2.11 kimi 复核五件 + §7.7 前提（设计修正轮，2026-10-27）
+
+改动面 = `docs/design/fork-deltas.md` 一档；代码零改动。改的是实施面与判据的精度，§7 的设计语义（A 案、注册表留自有档、净增 ≤6 行）未变。来源 = §1「kimi 复核裁决」表的四件 + 坐标错一件；第六件 = 同节末句「§7.7 的『未实测前提』可以销掉」。
+
+| # | 发现 | 落点（`fork-deltas.md` 现行行号） | 改法 | 本轮读数（实测） |
+|---|---|---|---|---|
+| 1 | 七个浏览器工具档是 `part of 'browser_tools.dart'`，自身无 import；「import 换上游路径 1:1」会让 part 档编译失败 | §7.2 `:136` · §7.3 `:147`–`:155` · §7.5 `:183` | 七档只改类型名、import 零改动；import 只落 `browser_tools.dart` 与 `image_tools.dart`，各 +1 行（恢复上游 `claude_sdk_tools.dart` import，保留自有 `host_tools.dart` import） | 逐档实读 `:1`：`browser_actions` / `browser_debug_tools` / `browser_history` / `browser_inspect` / `browser_intercept` / `browser_sources` / `browser_watch` 七个全是 `part of`。上游 `browser_tools.dart:12` 与 `image_tools.dart:12` 都是 `import '../kernel/claude_code/claude_sdk_tools.dart';`，现状 `browser_tools.dart:12` / `image_tools.dart:11` 是自有 import ⇒ 恢复上游行即与上游逐字相同、只多一行新增 |
+| 2 | 不能按子串替换：`HostTool` → `ClaudeSdkTool` 会错改 `HostToolCall` / `HostTools` | §7.2 `:136` · §7.5 `:182` | 改写按标识符三步、次序固定：`HostToolCall` → `ClaudeSdkCall`、`HostTool` → `ClaudeSdkTool`、`HostTools` 不动；判据加一条「diff 不含 `ClaudeSdkToolCall` / `ClaudeSdkTools`」 | 九档 `HostTools` 引用 6 处（`browser_tools` 4 · `image_tools` 2）；子串误改会被该判据抓到 |
+| 3 | 30 个构造点之外还有类型引用；只数 `HostTool(` 会漏 | §7.3 `:153` / `:155` / `:157` · §7.5 `:182` · `:185` | 判据改标识符级：九档内 `HostTool` 与 `HostToolCall` 均 = 0；自有档与测试档继续用别名、不清零 | 九档类型引用 7 处：`browser_tools.dart:72` `List<HostTool>` · `:136` `HostTool tool,` · `:138` `HostToolCall call,`；`image_tools.dart:58` 返回类型 `HostTool` · `:169` / `:262` / `:268` `HostToolCall`。合计改写 37 个标识符位 = 30 + 7 |
+| 4 | 现有测试用合成工具，宽面误删 `picturesOnly` / `group` 时测试仍绿 | §7.5 `:184` 新增硬判据 | 三处真值逐行读回，不许只跑合成用例；理由写进判据（`test/host_tools/host_mcp_server_test.dart:11-24` 的 `_tool()` 自造带两字段的工具，不经过真实注册路径） | 三处本轮实读：`browser_actions.dart:105` = `picturesOnly: true,` · `browser_tools.dart:116` = `group: 'browser',` 且 `:117` = `picturesOnly: tool.picturesOnly,` · `image_tools.dart:66` = `group: 'images',` |
+| 5 | 坐标错：`HostToolCall` 的引用被记在 `browser_actions.dart` | §7.3 `:147`（该档改为「类型引用 0 处」）· `:153` / `:155` | 按逐档实测改回真实位置 | `browser_actions.dart` 的 `HostToolCall` = 0；真实 4 处 = `browser_tools.dart:138` 一处 + `image_tools.dart:169` / `:262` / `:268` 三处 |
+| 6 | §7.7 的「未实测 Dart 语义前提」可销掉 | §7.7 `:203`，尾段整段删除 | 改陈述句：`typedef` 是类型别名，构造调用、类型注解、`is` 判定与对象模式四种用法都按别名解析 | 删掉的是「实施时第一次编译即验证 + 若不成立就落回 `ClaudeSdkTool(...)`」那段兜底；首条边界仍写「本批不改 `claude_code_translator.dart:962`」 |
+
+**§7 之外的一处一致面自修（按纪律逐条报）**：§3 `:43` 的 `browser_tools.dart` 行接缝名从 `HostTool` / `HostTools` / `HostToolCall` 改为 `ClaudeSdkTool` / `HostTools` / `ClaudeSdkCall`。依据 = 本档 §1 `:15` 的规则「第 2 / 3 节登记的是改后形态」：原行写的是改前形态，与本批改后的 §7.3 相反。只改类型名，登记内容与行数预算不动。
+
+**同轮未动**：§7.4 `:172` 的 B 案行仍写「静态成员经 typedef 访问…本仓未实测」。B 案的驳回首因是违反「注册表留自有档」，该前提不承担驳回，本轮不改。
+
+**交付门**：`doc_check(mode:"gate")` 对 `docs/design/fork-deltas.md` = PASS。首跑前自查发现一段 400 字超限（§7.3 表后的合计段），同轮拆成两段，文字零改动。
+
+**上抛项**
+
+- [上抛·待裁] **§1「kimi 复核裁决」表第 3 条的全仓总数与实测不符**：该行写「`HostToolCall` 全仓 18 处（九档内 4 处 + 自有档 14 处）」；本席按 `\bHostToolCall\b` 扫 `lib/` + `test/` 得 **38 处**，拆开 = 九档 4 处（`browser_tools` 1 · `image_tools` 3）+ 自有 `lib/` 8 档 15 处（`host_tools.dart` 5 · `host_mcp_server.dart` 2 · `btest_mode.dart` 2 · `btest_expect_file` / `btest_run_end` / `btest_run_state` / `btest_tool_gate` 各 1 · `claude_code_kernel.dart` 2）+ 测试 10 档 19 处（`btest_expect_file_test` 6 · `host_tools_test` 3 · `btest_policy` / `btest_tool_gate_test` 各 2 · 其余 5 档各 1）。「九档内 4 处」与实测一致；差异只在全仓总数，且设计不依赖总数（判据按「九档 = 0」）⇒ 未阻塞本批，请父侧订正 §1 口径或说明 18 的统计范围。复现 = 对 `lib/` 与 `test/` 逐个 `.dart` 扫 `\bHostToolCall\b` 计数。
+
+**2.11 行号订正（同轮）**：2.11 表内的「现行行号」是在拆段之前记的 —— §7.3 的合计段从 400 字拆成两段时 +2 行，其后所有行号整体后移 2。落盘后按节名 + 内容复核的真值（行号只作定位）：
+
+- §7.4：import 决策行 = `:176`，B 案行 = `:174`（记录里写的 `:172` 已失效）。
+- §7.5：标识符级判据 = `:184`、import 面 = `:185`、三处真值 = `:186`、别名不清零 = `:187`（记录里写的 `:182`–`:185` 各后移 2）。
+- §7.7：首条边界（`translator:962` 不改）= `:204`（记录里写的 `:203` 后移 1）。
+- 与本轮记录一致、无需订正：§3 `:43`、§7.2 `:136`、§7.3 `:147` / `:153` / `:155` / `:157` / `:159`。
+
+复核方式 = 按每行的唯一内容串逐条定位（`fork-deltas.md` 当前 321 行）。
 
 ## §3 设计评审（评审子代理）
 
