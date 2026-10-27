@@ -1,14 +1,14 @@
 ﻿# 浏览器业务测试模式（browser-biz-test）设计档
 
 > 板块：浏览器业务测试（宿主 overlay + 测试状态 + 预期文件）· 范围仓：baocode。
-> 需求：`docs/requirements/browser-biz-test.md`（F1–F11 · F2.1 · F3.1 · F3.2 · §4 边界 · §5 验收 1–7）。
-> 结构：本档覆盖设计档 8 项（做法与理由 / 接口契约 / 受影响文件 / 关键决策 / 验收回指 / 用例表 / 边界 / UI 决定），并含最近先例行与 survey 证据行。
+> 需求：`docs/requirements/browser-biz-test.md`（F1–F12 · F2.1 · F3.1 · F3.2 · §4 边界 · §5 验收 1–7 · §8 效果门三条）。
+> 结构：本档覆盖设计档 9 项（做法与理由 / 接口契约 / 受影响文件 / 关键决策 / 验收回指 / 用例表 / 边界 / UI 决定 / 集成用例决定），并含最近先例行与 survey 证据行。
 
 ## 1. 目标与范围
 
 一句话：让 BaoCode 在 Chrome 上把一条航运业务线跑完整，判断依据（预期结果、case 来源）来自盘上的文件而不是模型记忆，一轮结束给一份可复验的问题清单。
 
-范围内的十四行（`F7.1` 计入 `F7`）：
+范围内的十七行（`F7.1` 计入 `F7`；最后三行是需求 §8 的效果门，标 `§8-` 前缀以区别同号的 §3 条目）：
 
 | 编号 | 内容 | 落点 |
 |---|---|---|
@@ -27,11 +27,15 @@
 | F10 | `chain` 断点可派只读子代理查明原因（`cause`）：上限 3 次/run，不可用降级 | §3.9 · §3.3 · §3.10 |
 | F11 | 模式与两个开关跨重启：三个全局键 `btest.on` / `btest.traversal` / `btest.mode` 的读入与写回 | §9.1（持久化）· §3.1 · §3.3 |
 
+| §8-F7 | 收尾必须是门：缺项拒绝收尾，零覆盖 + 零 issue 不得 closed | §3.3.1 · §3.3（`domains`）· §3.8 |
+| §8-F8 | 每步是一次实验：预期 + 依据 → 一个动作 → 独立回读 → 证据 → 才标 covered | §3.12 · §3.2（`[D10]`） |
+| §8-F9 | 子 agent 调用契约：五字段任务书模板、只 `explore`、需结果就结束回合 | §3.13 · §3.2（模板）· §3.9 · §3.10 |
+
 范围外：见 §8。
 
 ## 2. 做法与理由
 
-### 2.1 机制总览（七件事，缺一件就退化）
+### 2.1 机制总览（九件事，缺一件就退化）
 
 1. **模式是宿主 overlay**：`btest` 是会话级的一个开关，显示在内核模式旁边，但不发给内核（内核只认 `plan` / `normal`）。
 2. **一轮测试是一个有头有尾的 run**：`btest_run_start` 开、`btest_run_end` 收；没有 run 的浏览器动作一律拒绝——这是"忘没忘纪律"的机械判据，不靠模型自觉。
@@ -41,6 +45,8 @@
 6. **遍历有方向**：一轮要么 `chain`（能往下走就往下走，走不动记断点、回头找别的路）要么 `surface`（把一个界面的页签 / 按钮 / 表单 / 筛选 / 列表底逐个摸完，就走到下一个界面继续，直到本轮声明的范围走完）；两种遍历共用一个权重表，按本工作区的历史缺陷密度排先后（§3.9）。这一轮选哪种由状态行的「遍历」开关给出（§9.1），模型显式传参时以参数为准（§3.3）。
    `chain` 走不动时当场派一个只读子代理查清原因、不等它继续走（§3.9，一次 run 最多 3 次）：回答在 run 内回来 ⇒ 写进断点的 `cause`；run 已结束 ⇒ 进收尾消息。
 7. **待确认项只给建议**：弱 / 无来源的项在报告里永远标「待确认」；run 之后由会话主代理派只读子代理逐条给倾向、理由与优劣势，回填「建议」列——判定权在用户（§3.10）。
+8. **收尾是门，不是小结**：声明的 case 必须有交代（covered，或带原因的 `uncovered`）、issue 五字段齐、十九个检查域各有判定与证据、零覆盖加零 issue 一律拒绝收尾——拒绝不关 run，补一次再提（§3.3.1）。没有这一条，浅跑与认真跑交出同一个结果。
+9. **每步是一次实验**：预期 + 依据 → 一个业务动作 → 独立工具回读 → 证据 → 才标 covered；新界面先整页枚举，不打包动作，不清网络与 console（§3.12）。
 
 **注入通道的选择**（模式卡怎么到模型）：走 `KernelTurn.contexts` → `editorNote`，与用户消息拼成同一段 `text`（`lib/kernel/thincoder/thincoder_kernel.dart:674-678`），并随 `UserMessageItem.contexts` 进 transcript（`lib/kernel/thincoder/thincoder_kernel.dart:684-688`）。
 
@@ -60,16 +66,19 @@
 
 **对齐**：模式选择沿用同一套 `KernelChoice`（同一个选择器控件、同一种可切可退的形态）；`btest` 的宿主工具沿用 `HostTool` + `group` 注册（`lib/browser/browser_tools.dart:110-112`）。
 
-**偏离**（三处，均带理由）：
+**偏离**（五处，均带理由）：
 
 1. **`btest` 不进内核 mode 列表**，而是宿主在同一个选择器里追加一个宿主项。理由：内核只接受 `plan` / `normal`（`lib/kernel/thincoder/thincoder_kernel.dart:463-467` 的 `_applyStartMode`），第三个值要么被内核丢掉、要么得改外仓；改外仓还会动 ACP `mode` 的语义。
 2. **注入走 turn contexts 不走 MCP instructions**。理由：instructions 是 initialize 时一次性、全局的（见 §2.1），做不到"按会话切模式注入一次"。
 3. **已投递的模式卡不删除**（transcript 是历史事实，删卡等于改历史，且会话恢复会重放）。改为退出后的下一个回合投出一行中和语使其失效；重进按计数差判——中和行已投出 ⇒ 重投一张新卡，中和行随重进丢弃 ⇒ 不重投（KD-18）。验收判据仍是「切回 normal 后不残留」（§3.1 · §6 F1），替代判据的等价理由见 KD-10。
+4. **收尾从「warning + 照常关」改成门**（§3.3.1）。理由：现有实现把缺项写成 warning 再无条件 `state.end()`（`lib/browser/btest/btest_run_end.dart:45-235` 组装 warning、`:236` 无条件关闭），零覆盖也照样 closed——这正是用户「深度和广度不尽人意」的机械成因（KD-31）。
+5. **子代理只 `explore`，卡里给五字段模板**（§3.13）。理由：工程模式下 `plan` 被拒（`thincoder/thincoder-core/agent-tools/subagent.mjs:253-258`），卡里留兜底等于留一条必失败的路（KD-33）。
 
 ### 2.3 公开资料调查（survey-evidence）
 
 - 本仓：`docs/design/`（含 chat-streaming / distribution / forge-accounts / host-tool-channel / ide-git / session-governance / thincoder-adapter）、`docs/requirements/`、`lib/browser/**`、`lib/kernel/thincoder/**` 已读；无既有"浏览器业务测试模式"章节，本档是板块首篇。
 - 项目清单 `PROJECT-MANIFEST.json` 的 `index.publicRepos` 为空 ⇒ 无声明外源可查。
+- 内核仓在盘（`thincoder/thincoder-core/`，本批实读）：`agent-tools/spawn-gates.mjs:129-151` 的任务书门（五字段缺 / 空白 / 非字符串即拒，`missing` · `must be a string` · `blank` 三类逐项点名）本批实读；`agent-tools/subagent.mjs:253-258` 的工程模式 `plan` 排除由父侧实读（设计位未重读该段，见 §10 第 15 条）。
 - 业务仓侧（不在本仓文档域内）：`v2-booking` 的设计档带编号小节（形如 `## N.M <标题>`），`docs/audits/` 下有现成冒烟清单（51 KB）。两处由主 agent 实读（2026-10-22），设计位未再读；引用形实例见 §3.4。
 - 用户家目录草稿 `~/.thincoder/skills/browser-biz-test/SKILL.md`（76 行）只作提示词输入参考，不是本仓的规范面。
 - 外网公开资料：本批未取用——机制全部落在本仓既有通道（turn contexts / HostTool / KernelChoice / 文件工具）上，没有新协议或新 API 需要外部核对。
@@ -102,9 +111,9 @@
 - **判定的时刻**：以上对账都发生在**回合的上下文装配时**，以那一刻的宿主状态为准；切换发生在回合进行中 ⇒ 本回合按装配时的状态跑完，下一回合生效。两次回合之间宿主可以先关再开，那个窗口里模型不做决策，下一次装配必然把它对齐。
 - **中和行与状态读数（退出判据）**：两个标记互不包含 ⇒ 读数干净：**`D ≥ 1` ⇒ 模型侧在模式内；`D = 0` ⇒ 模型侧已退出**；健康态只有 0 / 1 两个读数（≥ 2 = 重复投卡，读数当场点出来），任意次开→关→再开之后仍成立。
 - **长会话漂移兜底（判据，不靠记忆）**：没有活动 run 的浏览器动作一律拒绝（§3.3）；`btest_run_start` 的返回尾部带一行"先读返回项 2 的绝对路径，再开始"。这一行是**每次 run 一行**，不是模式卡重复；若用户要求连这一行也不要，见 §10 上抛项 1。
-- **卡的内容边界**：角色、九条稳定性纪律（`[D1]`–`[D9]`；`[D7]` = 操作真实：入口一次、文字定位、逐字键入、读不推进流程；`[D9]` = 人工接管，逐字句见 §3.11）、七条判定口径（`[J1]`–`[J7]`）、需求 §7 的 19 类问题域各一条检查动作（`[P01]`–`[P19]`）+ 一条权重顺序（`[P20]`）、三条硬纪律（`[H1]`–`[H3]`）、两个开关的选项名 ↔ run 取值映射（`深度` = `chain` / `广度` = `surface` / `只读` = `readonly` / `允许写` = `write`）、
-  差异处置四步、报告口径、禁止项、跑前必读。
-- 卡正文 6946 字符（2026-10-23 `[D8]` 换句后实测；`[D9]` 再加入一行，字符数按 `BtestCard.text.length` 复测），落 `lib/browser/btest/btest_card.dart`（版本化、可 diff），不写进用户家目录。标签是 F2 第二条判据的机械锚点（§6）。
+- **卡的内容边界**：角色、十条稳定性纪律（`[D1]`–`[D10]`；`[D7]` = 操作真实：入口一次、文字定位、逐字键入、读不推进流程；`[D9]` = 人工接管，逐字句见 §3.11；`[D10]` = 每步是一次实验，逐字句见 §3.12）、七条判定口径（`[J1]`–`[J7]`）、需求 §7 的 19 类问题域各一条检查动作（`[P01]`–`[P19]`）+ 一条权重顺序（`[P20]`）、三条硬纪律（`[H1]`–`[H3]`）、两个开关的选项名 ↔ run 取值映射（`深度` = `chain` / `广度` = `surface` / `只读` = `readonly` / `允许写` = `write`）、**子代理任务书模板五字段（§3.13）**、
+  差异处置四步、报告口径（含十九域判定块）、禁止项、跑前必读。
+- 卡正文 8042 字符（2026-10-27 实测 `BtestCard.text.length`；旧记 6946 / 7993 已不成立），本批加 `[D10]` 与子代理模板约 +1900 ⇒ 实施后按 `BtestCard.text.length` 复测并把该数改成本档的唯一读数。落 `lib/browser/btest/btest_card.dart`（版本化、可 diff），不写进用户家目录。标签是 F2 第二条判据的机械锚点（§6，标签数 39 → 40）。
 - **`[D8]` / `[P20]` 与报告口径要落的内容（清单；正文在 `btest_card.dart`）**：
   - `[D8]` 遍历纪律：`chain` =「只要有下一步就走下一步，先问这里还能往哪走，能走就走，走不动记一条断点（门控 / 无权限 / 数据不足 / 没有下一步）再回头找别的路」；`surface` =「把一个界面的每个东西摸完——每个页签、每个按钮、每个表单、每个筛选、列表滚到底——然后走到下一个界面继续，按界面逐个覆盖，直到本轮声明的范围走完；范围内没摸到的界面 / 分支记进 `uncovered`」；提交类动作之后必查刷新丢失 / 金额勾稽 / 重复提交。
   - `[P20]` 权重顺序：读 run 返回的权重表；`surface` 按条数降序摸，`已修` 的类排末尾仍摸一次；只追加「已修 / 已复现」标记，不删类目、不改条数。
@@ -156,17 +165,18 @@
 |---|---|---|
 | `runId` | string | 本 run |
 | `coveredCases` | string[] | 本轮实际覆盖的 case ID（与 run_start 索引对账） |
-| `issues` | object[] | 每条：`caseId` / `step` / `symptom` / `evidence{kind,readout}` / `severity` / `pre` / `expectRef` / `detour`（可空；绕道而来的问题行必填，值 = §3.6.2 的 `detour` 原文） |
+| `issues` | object[] | 每条：`caseId` / `step` / `symptom` / `evidence{kind,readout}` / `severity` / `pre` / `expectRef` / `detour`（可空；绕道而来的问题行必填，值 = §3.6.2 的 `detour` 原文）。**前六项是收尾门的判据**（§3.3.1 R2），缺一即拒绝收尾 |
+| `domains` | object[] | **十九条齐**（`P01`–`P19`，与卡上 `[P0n]` 同一套标签）：每条 `domain` / `verdict`（`pass` / `fail` / `blocked` / `notApplicable`）/ `evidence`（一句可复读的读数；`notApplicable` 也要写为什么）/ `caseId`（`fail` 时必填，指向 `issues[]` 的同一 case）。报告首块由它逐行生成（§3.8），收尾门 R3 / R5 判它（§3.3.1） |
 | `blockers` | object[] | 每条：`step` / `reason`（被 btest 拒绝的动作与规则原文进 `reason`） |
 | `unconfirmedDiffs` | object[] | 每条：`kind`（`diff` = 两次结果不一致；`pending` = `expectFrom` 弱 / 无来源、待用户判定）/ `caseId` / `step` / `symptom` / `evidence{kind,readout}`（`pending`）/ `runs`（`diff`）/ `expectRef` |
-| `uncovered` | object[] | 每条：`branch` / `why`（`surface` 轮 = **本轮范围内没摸到的界面 / 分支**，不是单个控件；一个界面摸完走到下一个，直到范围走完） |
+| `uncovered` | object[] | 每条：`branch` / `why`（`surface` 轮 = **本轮范围内没摸到的界面 / 分支**，不是单个控件；一个界面摸完走到下一个，直到范围走完）；涉及**声明的 case** 时另带 `caseId`——R4 的双向覆盖对账按它认（§3.3.1） |
 | `chainBreaks` | object[] | 每条：`path`（一路怎么走过来的）/ `at`（走到哪一步走不动）/ `reason`（`门控` / `无权限` / `数据不足` / `没有下一步`）/ `verified`（断点前已验什么）/ `cause`（**可空**：一句结论 + 一处 `file:line` 或文档节，由 run 内派出的只读子代理给出，§3.9；缺省 = 没派 / 未查明 / **答案迟到**（run 已结束、结论进收尾消息，§3.9））；`traversal: chain` 时必带（可为空数组） |
 | `noVisibleText` | object[] | 每条：`step` / `element`（按可见文字 / label / 角色找不到可点目标、只能靠 `ref`·`selector` 兜底的那一步）；检查表 4-③ 数的就是它 |
 
 返回收尾检查表（**五项，全是机械读数**，不看模型措辞）：
 
 1. **预期文件写回**：`expectFile` 当前 hash ≠ run_start 基线 ⇒ `written`；相等 ⇒ `not written`；基线 `absent` 且现在存在 ⇒ `created`。
-2. **尾注与断点键存在性**：`blockers` / `unconfirmedDiffs` / `uncovered` 三个键都在（可为空数组，但键必须在）；`traversal: chain` 时 `chainBreaks` 键也在，每条 `path` / `at` / `reason` / `verified` 非空且 `reason` 取四值之一；`cause` 可缺省，出现时须为非空字符串（**只验形状，内容真不真由走查**，§3.9）；缺键 / 缺字段 / 取值非法 ⇒ 点名。
+2. **尾注与断点键存在性**：`blockers` / `unconfirmedDiffs` / `uncovered` 三个键都在（可为空数组，但键必须在）；`domains` 另按 §3.3.1 R3 判（十九条齐 + verdict + evidence）；`traversal: chain` 时 `chainBreaks` 键也在，每条 `path` / `at` / `reason` / `verified` 非空且 `reason` 取四值之一；`cause` 可缺省，出现时须为非空字符串（**只验形状，内容真不真由走查**，§3.9）；缺键 / 缺字段 / 取值非法 ⇒ 点名。
 3. **覆盖对账**：`coveredCases` 里每个 ID 都在 run_start 索引中；`issues[].caseId` 与 `expectRef` 都非空且能指到索引里的 case；`unconfirmedDiffs[]` 每条 `caseId` 非空、`kind` 取 `diff` / `pending`。
 4. **操作真实性读数**（宿主自己数，落 run 状态——新增 `lib/browser/btest/btest_mode.dart`，run 结束归零）：
    - ① **入口动作数** = 1，且首次 url = `startUrl`；0 ⇒ `入口=0`（本轮不是从声明的起点进入）；≥2 的已被拒，**被拒入口次数单列**并进报告头读数（§3.8）。
@@ -175,7 +185,23 @@
    - ④ **绕道对账**：`detours[]` 条数 = `issues[].detour` 非空条数；不等 ⇒ 点名差额。
 5. **权重表**：`<qaRoot>/weights.md` 在盘且八个类目齐；文件不存在 ⇒ 宿主首建、来源 `file`、不 warning；读不出 / 写不出 ⇒ `built-in` + warning；缺类目 ⇒ 点名缺的类（「不得删类目」的机械读数）；`已修：<类>` 标记行按 §3.9 逐字匹配，匹配不上 ⇒ 一行 warning 点名该标记行（不阻断）。
 
-缺项返回 `warning` 行，不阻断结束——该行同时写进报告头，用户看得见。
+缺项返回 `warning` 行，不阻断结束——该行同时写进报告头，用户看得见。**唯一的例外是收尾门（§3.3.1）：五条不满足即拒绝收尾，不返回检查表。**
+
+#### 3.3.1 收尾门：五条不满足即拒绝收尾（需求 §8-F7）
+
+| # | 条件 | 拒绝时点名 |
+|---|---|---|
+| R1 空轮 | `coveredCases` 为空 ∧ `issues` 为空 | 两条一起点名——「零覆盖 + 零 issue」不是一个能交的报告 |
+| R2 issue 五字段 | 每条 `issues[]` 的 `step` / `symptom` / `evidence{kind,readout}` / `severity` / `pre` 非空（`caseId` / `expectRef` 既有判据不变） | `issues[i].<字段>` 逐条 |
+| R3 域判定表 | `domains` 十九条齐、`verdict` ∈ 四值、`evidence` 非空（`notApplicable` 也要一句为什么）、无重复域、无未知域 | 缺哪个域 / 哪条 verdict 非法 / 哪条 evidence 空 |
+| R4 覆盖对账（双向） | 索引里每个 case 出现在 `coveredCases`，**或**被一条 `uncovered[]` 按 `caseId` 点名（`why` 非空）；`coveredCases` 只含索引里的 ID（既有方向） | 逐个点名没交代的 case ID |
+| R5 fail 有据 | 任何 `verdict: fail` 的域，其 `caseId` 必须能在 `issues[]` 里找到同一 case 的行 | 哪个域说 fail 却没有对应问题行 |
+
+- **拒绝 = 不关 run**：不调 `state.end()`，抛 `BrowserError`，`runId` 照旧有效——补载荷后原样重提 `btest_run_end`；不重开 run、不重跑业务线。
+- **一次列全**：五条的命中项合并成一份清单一次抛出（不逐条往返），一轮补一次就够。
+- **零 issue 何时合法**：R1 挡住空轮，R3 要求十九域每条都有判定与证据，R5 挡住「域说 fail、问题表空着」。三条同时成立 ⇒ 零 issue 只可能来自一次「每个域都摸过、都有读数」的 run。
+- **warning 面不变**：入口读数、evaluate / replay 拒绝计数、绕道与无可见文字对账、权重表缺类、`expectFile: not written` 仍是 warning 行（进报告头），不阻断——它们不改变「报告能不能答」。
+- **判据落点**：五条全在 `btest_run_end` 内（`lib/browser/btest/btest_run_end.dart`），纯判据函数落 `lib/browser/btest/btest_policy.dart`（十九域常量 + verdict 枚举 + 解析）；新档 `test/browser/btest_run_end_test.dart` 逐条覆盖（§7 #49–#56）。
 
 **顺序钉死**：AI 必须**先完成预期文件写回，再调 `btest_run_end`**；`btest_run_end` 只校验与收尾，不替 AI 写文件。反过来（先 run_end 再写回）会让检查表第 1 项恒为 `not written`，机械读数退化成常量告警（§3.4 · 用例 #2）。
 
@@ -186,7 +212,9 @@
 位置：**独立 QA 仓**（普通目录，不是 git 仓），不写业务仓。**一个工作区只有一个 QA 根**——同一会话工作区下，业务仓是直接子目录还是嵌套几层，都解析到同一个 `<会话工作区根>/qa`。
 
 **工作区根从哪取**：`HostToolCall.cwd`（`lib/host_tools/host_tools.dart:14-24`，注释即「agent 的工作目录（其项目路径，workspace 所见）」）。
+
 btest 所在的 thincoder 路径**会填这个值**（2026-10-23 实读）：`lib/kernel/thincoder/thincoder_kernel.dart:353` 发放 grant（`HostMcpServer.issue(_sessionId ?? '', _cwd)`），`:231` 取值 `_cwd = _context.cwd ?? _context.resume?.cwd ?? '.'`。
+
 `lib/host_tools/host_mcp_server.dart:186` 构造调用（`HostToolCall(cwd: grant.cwd, sessionId: grant.sessionId)`）；`issue` 把入参 `cwd` 存进 `_Grant`（`host_mcp_server.dart:112`）。
 ACP 分支同理由 `grant.cwd` 填入；Claude Code 控制通道由 `_cwd` 填入（`lib/kernel/claude_code/claude_code_kernel.dart:1766-1767`）。⇒ 分支 2 / 3 可达。
 
@@ -419,7 +447,9 @@ btest 下 `browser_evaluate` 只有一种合法用途：**读**。三条判据�
 **与操作真实性判据的先后**：§3.6.2 / §3.6.3 的判据是**前置拒绝**，在放行判据之前跑——host 在白名单、env 不是 prod，第二次入口动作照样被拒。放行只回答「这个动作能不能自动放行」，不回答「这个动作改写没改写操作路径」。
 
 **两组判据的物理落点（唯一坐标）**：都落在浏览器工具的 `run` 包装——`lib/browser/browser_tools.dart:115-130` 的闭包是 `register()` 给每个浏览器工具套的那一个（`:96-98` 逐个构造），拿得到 `tool.name` 与结构化 `input`。
+
 闸口写在闭包最前，先于 `:117` 的 `tabId is! int` 早退（否则 `browser_tabs` / `browser_open` 这类不带 tabId 的工具会绕过，`lib/browser/browser_tools.dart:210-231` / `:232-244`）。
+
 `btest_run_start` / `btest_run_end` 自身豁免本闸（它们的判据是会话 `on` / 规则 A / 无 run 前置），其余浏览器工具一律过闸。
 MCP 的 `tools/call`（`lib/host_tools/host_tools.dart:194-243`）只把 name + arguments 原样转给 `tool.run`，是**分发面**，不承载判据——本批不改该档，§4 因此无此行。
 
@@ -510,14 +540,10 @@ traversal=surface · mode=write · 操作真实性：入口=1（navigate=1 · op
 - **任务书**：业务仓 `repoRoot` 绝对路径 + 断点现场（`path` / `at` / `reason`），要求一句结论 + 一处 `file:line`（或文档节）。
 - **产出落哪**：写进该断点的 `cause`（可空字段，§3.3）；**`reason` 仍是四值枚举**（门控 / 无权限 / 数据不足 / 没有下一步）——子代理只回答「为什么」，不改 `reason` / `at` / `verified`，也不改任何判定。
 - **上限 = 一次 run 最多 3 次**：每个断点都是一次独立子代理运行（各自读仓、各自出结论），不设上限会让一轮堆出几十个子代理、把研判成本与注意力耗在同一轮的断点上。第 4 个及以后的断点不派，`cause = 未查明（达到本轮研判上限）`，run 照常继续。
-- **不可用降级**：`explore` 未装配 ⇒ 试 `plan`（同为只读角色，`subagent-spawn.mjs:248` 同判）；两者都不可用或 spawn 失败 ⇒ `cause = 未查明（<原因>）`，run 不因此重开、不停。`cause` 缺省也合法——它是可空字段，不是新闸门。
+- **不可用降级**：`explore` 未装配或 spawn 失败 ⇒ `cause = 未查明（<原因>）`（**不试 `plan`**：工程模式下它被内核拒，§3.13）；run 不因此重开、不停。`cause` 缺省也合法——它是可空字段，不是新闸门。派发的五字段任务书见 §3.13。
 - **边界**：子代理不碰浏览器工具（MCP 工具硬编码非只读，§3.10 实读），不改预期文件、不写报告、不改判定；结论真不真宿主判不了，属走查面（见下表）。
 
-**卡 `[D8]` 的替换句（逐字，实施照抄）**：替换 `[D8]` 里以 `A chain break may be sent to a read-only subagent` 开头的那一句（卡文本在 `lib/browser/btest/btest_card.dart:39`，同一句以 `reason stays one of the four.` 结尾；其后自 `At most 3 per run` 起的部分——上限 / 降级 / 不进 F8 三项——保留不动），新句为：
-
-```text
-A chain break may be sent to a read-only subagent (explore, else plan): the moment a break is recorded, send one and keep walking — never wait for its answer; it reads the repository and answers why in one line plus one file:line. An answer that arrives before the run ends goes into that break's cause; an answer that arrives after the run has ended goes into your closing message — do not reopen the run or block on it, and a late answer simply leaves cause absent. reason stays one of the four.
-```
+- **卡 `[D8]` 里子代理那半句**：角色与模板以 §3.13 为唯一来源（只 `explore`）；`[D8]` 其余部分（断点四字段 / 上限 3 次 / 迟到答案进收尾消息 / 带 `cause` 的断点不进 F8）照旧，卡文本本身即实施来源（`lib/browser/btest/btest_card.dart:39`）。
 
 **`surface`：把一个界面的每个东西摸完，再走到下一个界面继续，直到本轮声明的范围走完**。功能面 = 页签 / 按钮 / 表单 / 筛选 / 列表底；不设「只在一个页面」的上限（用户 2026-10-23 03:59 原话：「广度测试并不局限与某一页面，只是这个界面探索完了，再往后走」，需求 F7.2）。
 
@@ -597,7 +623,7 @@ A chain break may be sent to a read-only subagent (explore, else plan): the mome
      `role` 的枚举里就有 `explore`（同档 `:241` 的 `ROLES` 集合同判）；只读过滤在 `thincoder-core/agent-tools/subagent-spawn.mjs:248-250`（`explore` / `plan` 走只读子集），权限固定拒绝询问（同档 `:266-267`）。
    - **派发入口是模型侧的工具调用**，不是 BaoCode 宿主的 API：`subagent` 工具由内核装配，BaoCode 只展示子代理卡片（`lib/chat/widgets/agent_step.dart:19`）。任务书写入 `repoRoot` 绝对路径 + 本轮预期文件路径作为 `knownFacts`，子代理用读档类工具直读。
    - **代价两条**：① 子代理拿不到浏览器工具（MCP 工具硬编码非只读，见批档 §4 的实读）⇒ 它只能读盘给倾向，不能自己开页面复核——这正是 F8 要的形态（研判要的是另一遍读盘，不是再跑一遍）；② 宿主不校验它派没派，证据 = 报告「建议」列有没有逐条回填（走查）。
-   - `explore` 未装配时可用 `plan` 替代（同为只读角色，`subagent-spawn.mjs:248` 同判）；两者都不可用 ⇒ 按本节末段写 `待研判 · <原因>`。
+   - `explore` 未装配或 spawn 失败 ⇒ 按本节末段写 `待研判 · <原因>`（**不试 `plan`**，§3.13）；派发用 §3.13 的五字段模板，答案在下一回合到达（要它就先结束本回合）。
 2. 任务书逐条列出待确认项（caseId / 步骤 / 现象 / 证据 / `expectFrom` 原文），要求每项一条：
    - **倾向**：`可能正常` / `可能有问题` / `建议你定`；
    - **理由**：业务仓的 `file:line` 或设计档的某一节；
@@ -671,18 +697,70 @@ run 的「暂停位」`none found`：`BtestState` 只有 `run` 一个字段（`b
 
 **取值语种（写死，勿按英文改回）**：本行是英文说明；`uncovered[].why` 的取值就是报告里的原字符串 `需人工上传，本轮未执行`，按项目既有中文口径——与 `[D8]` 的 `未查明（<原因>）` 同形（取值本身不加引号），并与 §6 F12 / §7 #47 的走查读数逐字同文；卡与测试按本行照抄。
 
-## 4. 受影响文件清单（现行数 = 2026-10-23 实测，`Get-Content` 口径 = 行尾换行符计数、末行计入；新档预算与 500 门处置见本节「新档行数预算」；增量 = 「SPLIT-5 拆 run 生命周期 + SPLIT-6 抽状态行开关 + F11 持久化」（提交 `662a94d4`，`git show --stat 662a94d4` 可复核）+ `[D8]` 换句同步（提交 `29500e19`）+ 500 门处置拆出 `BtestSettings`（提交 `e9da0798`），均已完成；`—` = 本批不动）
+### 3.12 每步是一次实验，不是一次观察（需求 §8-F8）
+
+**四拍顺序（写死）**：① 动手前写下**本步预期 + 依据**（预期文件某条 case 的那一行，或 `expectFrom` 的强 / 中来源；没有依据 ⇒ 本步只能产出「待确认」，`[J1]`）；② 只做**一个业务动作**；
+
+③ 用**独立工具**回读（`browser_snapshot` / `browser_network` / `browser_inspect` / `browser_console`——不是那个动作自己的返回）；④ 记下证据（方法 + 路径 + 状态 + 字段值 / console 原文 / 前后值）**之后**才允许把该 case 标进 `coveredCases`。
+
+**为什么这四拍能治「广度深度不尽人意」**：一次打包多个动作时，第一个失败会把后面全部截断（`[D5]` 要求继续），结果是「一个动作失败、其余未执行」被写成「走了这么多步」；而「回读用另一个工具」把「点了就是成功了」换成一次独立读数。
+
+**三条硬约束**：
+
+- **新界面先枚举整页**：`browser_snapshot` 带 `scope: "page"`（枚举值 `screen` / `page`，`lib/browser/browser_actions.dart:64-66`，`:74` 读该参数），枚举出的面才是本界面的覆盖面（`surface` 轮的「摸完」以它为准，§3.9）。
+- **不跨检查点打包动作**：一个检查点一次动作，回读之后再走下一步。
+- **网络与 console 不清**：`browser_network` / `browser_console` 的任何清除动作一律不用——清掉就把最终复验要的证据删了；读的时候只看增量。
+
+**宿主判到哪一层**（照 §3.6.1 的口径，不假装硬闸）：
+
+| 项 | 宿主能判吗 | 落点 |
+|---|---|---|
+| 「本步预期 + 依据」写了没有 | 判不了（文本） | 卡 `[D10]` · 报告步骤列 · 走查 |
+| 动作与回读的先后 | 半能判（调用序列可读，但不是判据面） | 走查（`browser_history`） |
+| 标 covered 的 case 有没有交代 | 能判（R4 双向覆盖对账） | §3.3.1 R4 |
+| 是否清过网络 / console | 判不了 | 卡 `[D10]` · 走查 |
+
+**卡 `[D10]` 的逐字句**（加在 `[D9]` 之后，与 `[D1]`–`[D9]` 同形）：
+
+```text
+[D10] Every step is an experiment, not an observation: before you act write this step's expected result and where it comes from; then do exactly one business action; then read the result back with an independent tool (browser_snapshot / browser_network / browser_inspect / browser_console — never the action's own return); only then record the evidence and mark the case covered. On a new screen, first enumerate the whole page with browser_snapshot scope "page". Never pack several actions into one check point — the first failure truncates the rest and you lose the step that broke. Never clear the network log or the console: clearing deletes the evidence the final re-check needs.
+```
+
+### 3.13 子 agent 的调用契约（需求 §8-F9）
+
+**一条事实先行**：卡今天两处写「`explore`，否则 `plan`」（`[D8]` 与 §3.10 第 1 步），而工程模式下 `plan` 被内核拒（`thincoder/thincoder-core/agent-tools/subagent.mjs:253-258`，父侧实读），且子代理工具面**没有浏览器工具**（MCP 工具标 `readonly:false` 被只读过滤，§3.10 已实读）。⇒ 卡里的 `plan` 兜底是一条必失败的路，本批删掉；子代理只用于**读盘**。
+
+**派发形态（写死，两种用途共用）**：`subagent` · `action: "spawn"` · `role: "explore"`，五个任务书字段**全给且非空**——`goal` / `knownFacts` / `scope` / `acceptance` / `reportFormat`。缺一、空白或非字符串 ⇒ 内核直接拒（`thincoder/thincoder-core/agent-tools/spawn-gates.mjs:129-151`：`missing` · `must be a string` · `blank` 三类逐项点名，本批实读）。
+
+**卡里给的模板（逐字；实施照抄进 `btest_card.dart`）**：
+
+```text
+[Subagent] A read-only subagent (subagent · action "spawn" · role "explore") reads the repository for you. It has no browser tools — never ask it to open a page, click or type. A spawn is refused unless all five task-book fields are non-empty strings, so always give exactly this shape:
+goal: <the one question it must answer>
+knownFacts: <absolute repoRoot; the expect file's absolute path; what this run already saw>
+scope: <which files / docs to read; what not to touch — it writes nothing and never operates the browser>
+acceptance: <what a usable answer holds: a one-line conclusion plus one file:line or one design-doc section>
+reportFormat: <one line per item: conclusion · file:line · what it means for the finding>
+There is no fallback role: any role but explore is refused in an engineering-mode session. A chain break is sent the moment it is recorded and you keep walking; the post-run review is different — when you need that answer, end the turn and let it arrive as the next message, never assume it is already in this turn.
+```
+
+**两种用途各自的不变量**（分工不变）：断点查明 = 派出即走、不等答案、run 内回来写 `cause`、run 后回来进收尾消息（§3.9）；待确认研判 = run 之后派、必须等回流才回填「建议」列（§3.10）。**共同边界**：子代理不改判定、不改 `reason`、不写预期文件、不写报告。
+
+**判据（机检 / 走查各一半）**：卡里五个字段名各出现、`plan` 不再作为兜底出现（`btest_card_test`）；派发真的带了五个非空值、答案回来之前「建议」列没被填上（走查）。
+
+## 4. 受影响文件清单（现行数 = 2026-10-27 实测，`Get-Content` 口径 = 行尾换行符计数、末行计入；新档预算与 500 门处置见本节「新档行数预算」；增量 = 「SPLIT-5 拆 run 生命周期 + SPLIT-6 抽状态行开关 + F11 持久化」（提交 `662a94d4`，`git show --stat 662a94d4` 可复核）+ `[D8]` 换句同步（提交 `29500e19`）+ 500 门处置拆出 `BtestSettings`（提交 `e9da0798`），均已完成；`—` = 本批不动）
 
 | 文件 | 现行数 | 增量（已完成；拆分 + F11 见提交 `662a94d4`，`[D8]` 见提交 `29500e19`） | 说明 |
 |---|---|---|---|
 | `lib/browser/btest/btest_mode.dart` | 425 | 拆 + F11（已完成） | 实测 425 ≤ 500（500 门处置已落地，提交 `e9da0798`，缝表见本节「新档行数预算」）；模式状态（`BtestState`，`:18`）、注册与转发、闸；设置键的读写与 `BtestSettings` 在 `btest_settings.dart`（主档 `:14` 的 `part` 指令引入）；按 SPLIT-5 拆出 run 生命周期（已完成，两档，拆法见本节末「run 生命周期的拆法」）；F11：`BtestSettings` 加三个键（`onKey` / `traversalKey` / `modeKey`）与读写助手（缺省回落、非法值当缺失）；三键的**初值构造**落 `BtestState.fromSettings`（读三键、缺省回落、非法值当缺失、读不写），**写回**落 `BtestState` 的三个 setter（`set on` / `set traversal` / `set write`，显式闭包、失败不阻断，§9.1）；F9 的两开关字段与 `chainBreaks[].cause` 形状校验已落 |
 | `lib/browser/btest/btest_settings.dart` | 134 | 拆 + F11（已完成） | `BtestSettings` 整类（七个键常量、测试注入 `values`（`:32`）、七个 getter、`_read` / `put` / `hostsOf` / `listOf` / `_hostOf`）；首行 `part of 'btest_mode.dart';`，同一库；500 门处置落地（提交 `e9da0798`） |
 | `lib/browser/btest/btest_run_state.dart` | 393 | ≤ +380 | run 状态（`BtestEntry` / `BtestRun` / 动作计数 / `truthLine`）+ `recordAllowed` / `recordDenied`（以 extension 落本档，调用点不变）+ `btest_run_start` 的返回项组装（§3.3）；**只搬不改行为** |
-| `lib/browser/btest/btest_run_end.dart` | 309 | ≤ +315 | `btest_run_end` 的收尾检查表五项（§3.3）+ 载荷助手（`_diffKinds` / `_chainBreaks` / `_text` / `_short`）；**只搬不改行为** |
+| `lib/browser/btest/btest_run_end.dart` | 309 | +≈120（收尾门五条 → ≈429，≤500） | `btest_run_end` 的收尾检查表五项（§3.3）+ 载荷助手（`_diffKinds` / `_chainBreaks` / `_text` / `_short`）；**本批：warning 面不动，`:236` 的无条件 `state.end()` 改成「五条全过才关」，拒绝时一次列全所有命中项（§3.3.1）** |
+| `test/browser/btest_run_end_test.dart` | 0（新档） | ≈300（≤500） | 收尾门 #49–#56 逐条：空轮 / 五字段 / 十九域 / 双向覆盖 / fail 有据 / 拒绝不关 run / 补后重提通过；**随批删**（单测是变更时反馈回路） |
 | `lib/browser/btest/btest_status_switches.dart` | 154 | ≤ +140 | 状态行的行文本 + 两个开关（从 `composer.dart` 抽出 `_buildBtestStatus` 与 `_btestSwitch`），对外一个 `BtestStatusLine`；F9 已实现的行为原样搬，显示口径按 §9.1 |
 | `lib/browser/btest/btest_weights.dart` | 293 | — | 默认八类（条数 + 检查点）、`<qaRoot>/weights.md` 的路径 / 首建 / 解析 / 类目齐全读数、`已修` 排末尾、标记行逐字匹配（F7.1 已落，本批不动） |
-| `lib/browser/btest/btest_policy.dart` | 417 | — | `BtestTraversal` / `BtestFace` 与 `parse`；入口 / evaluate / 只读面 / 生产闸的判据纯函数（本批不动，开关只改取值来源） |
-| `lib/browser/btest/btest_card.dart` | 131 | +2 行 · 正文 +1047 字符（6946 → 7993；`[D9]` 一行，含三条禁令） | `[D1]`–`[D9]` / `[J1]`–`[J7]` / `[P01]`–`[P20]` / `[H1]`–`[H3]`；报告口径与两列 |
+| `lib/browser/btest/btest_policy.dart` | 417 | +≈40（→ ≈457，≤500） | `BtestTraversal` / `BtestFace` 与 `parse`；入口 / evaluate / 只读面 / 生产闸的判据纯函数；**本批加：十九域常量 `btestDomains` + `BtestVerdict`（四值）与解析——卡上 `[P0n]` 标签与载荷 `domain` 同一个词表** |
+| `lib/browser/btest/btest_card.dart` | 131 | +≈2 行 · 正文 ≈ +1900 字符（8042 → ≈9,900；实施后实测） | `[D1]`–`[D10]` / `[J1]`–`[J7]` / `[P01]`–`[P20]` / `[H1]`–`[H3]`；新增 `[D10]`（§3.12 逐字）与子代理任务书模板（§3.13 逐字）；`[D8]` 与报告口径删 `plan` 兜底、加十九域判定块 |
 | `lib/browser/btest/btest_expect_file.dart` | 270 | — | 预期文件：路径派生（§3.4 四分支）、case 索引 + hash 基线、写回校验、人改检测（本批不动） |
 | `lib/browser/browser_tools.dart` | 786 | — | 工具 `run` 包装的 btest 闸；`btest_run_start` / `btest_run_end` 注册；`browser_navigate.detour`、`browser_evaluate.readOnly` |
 | `lib/kernel/thincoder/thincoder_kernel.dart` | 480 | — | 权限应答处接 btest 放行判据；回合上下文里挂模式卡 |
@@ -696,7 +774,7 @@ run 的「暂停位」`none found`：`BtestState` 只有 `run` 一个字段（`b
 | `lib/l10n/app_localizations_en.dart` | 11085 | 派生 | 生成物，不手改 |
 | `lib/l10n/app_localizations_zh.dart` | 10490 | 派生 | 生成物，不手改 |
 | `test/browser/btest_policy_test.dart` | 971 | 已落：#41 / #42 / #43 / #44 / #45 / #47（计入现值 971）；合计上限 ≤ +45 | 已落 = F9 的 #35 / #36 / #39 + F10 的 #41（`cause` 形状）/ #42（第 4 个断点照常收尾）+ F11 的 #43（三键写回 → 重开会话读回）/ #44（键缺失 / 非法值 ⇒ 缺省，读不写）/ #45（切回 normal ⇒ `btest.on` 删键）；**#47 已落**（`:947-969`；F12 情形 B 的 `uncovered[]` 载荷形状断言，§7 #47 的测试落点）；上限 ≤ +45 覆盖上述全部 |
-| `test/browser/btest_card_test.dart` | 276 | +82（194 → 276；`[D9]` 逐字锚点，含三条禁令；标签计数 38 → 39） | 卡内标签计数与报告列 |
+| `test/browser/btest_card_test.dart` | 276 | +≈45（→ ≈321） | 卡内标签计数与报告列；**本批：标签 39 → 40（`[D10]`）、子代理模板五字段名各出现、`plan` 兜底缺席、十九域判定块在报告口径里** |
 | `test/browser/btest_weights_test.dart` | 183 | — | 权重表首建 / 缺失 / 删类目 / 标记漂名 |
 | `test/chat/composer_btest_status_test.dart` | 217 | ≤ +15 | #37（期望改为「重启读回三键」）/ #38 / #40；本批加一条「`btest.mode` 缺键 ⇒ 状态行显示解析后的 `btest.readonly` 值」 |
 | `test/browser/btest_expect_file_test.dart` | 617 | — | 预期文件用例（F3.2 已落，本批不动） |
@@ -760,6 +838,7 @@ run 的「暂停位」`none found`：`BtestState` 只有 `run` 一个字段（`b
 **新增实现只落 `lib/browser/btest/*`**（mode / settings / run_state / run_end / status_switches / policy / card / expect-file / weights 九个文件）；四个大档里只出现"调用点 + 一个钩子"，不搬已有逻辑（本批唯一的搬运是本表列出的两处拆分）、不改已有签名。
 
 **F10 增量（断点查明）**：`btest_mode.dart` 的检查 2 对 `chainBreaks[].cause` 只加「可缺省 + 出现须非空」的形状校验（≤ +10）；`btest_card.dart` 的 `[D8]` 一句断点可派只读子代理（≤ +3 行；替换后的句子实测 497 字符，比上一版多 288 字符）；`test/browser/btest_policy_test.dart` 加 #41 / #42（该档的总增量与拆分见 §4 文件表该行，不在此处另立上限）；
+
 `test/browser/btest_card_test.dart` 随 `[D8]` 换句同步（+25 行，提交 `29500e19`）。
 
 **登记**：SPLIT-1…6 = 拆分登记项；SPLIT-5 / SPLIT-6 本批落地，SPLIT-1…4 不在本批落地；`btest_mode.dart` 的 500 门处置缝（`BtestSettings` → `btest_settings.dart`）已落地（提交 `e9da0798`）。台账写权不在设计位，所以本批只在档内登记并在回执点名，由主编排方落台账行（挂本批 #149 的后续批）。
@@ -799,6 +878,10 @@ run 的「暂停位」`none found`：`BtestState` 只有 `run` 一个字段（`b
 | KD-28 | 规则 A 判优先级**定值后**的 `mode`（缺省解析完成再判）：`env: prod` ∧ 定值 = `write` ⇒ 拒绝起 run，不论 write 来自参数还是开关 | 只判字面参数：`env: prod` + 省掉 `mode` + 写开关 = `允许写` 能起一个 `mode=write` 的 run，与「起 run 即拒」的不变量相反（评审 #36 🔴）；数据面虽由规则 B 兜住，判据本身仍可被省参数绕过 |
 | KD-29 | `chain` 断点查明：只在断点处派只读子代理（`explore`，退 `plan`）、**派出后不等回答**继续走，一次 run 最多 3 次；结论在 run 内回来 ⇒ 写 `chainBreaks[].cause`（可空），run 已结束 ⇒ 进收尾消息（不重开）；`reason` 四值枚举不变 | ① 每步派：一条业务线几十步，每步一个子代理会把一轮堆成几十个，稀释研判、白花成本；② 宿主 API 派：模型的 `subagent` 工具本来就是模型侧装配（§3.10 实读），宿主另开一条不经模型的派发路径 = 两套派发语义；③ 子代理改 `reason` / 判定：判定权在用户（F3.1 / F8 同一条线）；④ 不设上限：断点多的业务线同样会堆出几十个子代理，结论也收不完；⑤ 断点既派查明又进 F8：同一件事两次派单 |
 | KD-30 | 模式与两个开关跨重启：三个全局键 `btest.on`（bool）/ `btest.traversal`（`chain` / `surface`）/ `btest.mode`（`readonly` / `write`），与既有四个 `btest.*` 键同处 `BtestSettings`；会话打开时读成 `BtestState` 初值，每次改值写回自己的键；写失败只 `debugPrint`、不阻断 UI；键缺失 / 值非法 ⇒ 回落缺省 | ① 会话设置 map（`kernelContext.settings`）：只随会话走，新建会话仍是默认，写入要动工作区真相源（台账 #153 的结论）；② 单一个 `btest` 对象键：三个值塞进一个键，改一个要整组重写、缺省解析耦合，读不出「哪个值缺」；③ 写失败弹错 / 回滚界面：设置写失败（文件被占用 / 不解析）不该吞掉用户刚做的操作——界面保持已改值，下一会话读到旧值即可（与 `browser_page.dart` 既有写回同口径）；④ 非法值自动改写成缺省：悄悄改写没人能看出被改过，读时回落 + 不写回，让文件保持用户原样 |
+| KD-31 | 收尾从「warning + 照常关」改成**门**（§3.3.1）：五条不满足即拒，一次列全所有命中项；**拒绝不关 run**，补载荷后原样重提 | ① 继续全 warning（现状：零覆盖也 closed，浅跑与认真跑同一结果——用户原话指向的正是这一条）；② 直接失败关 run：用户拿到「跑不了」而不是「缺什么」，一轮白跑；③ 只要求 `coveredCases` 非空：填一个 case 就能过，门形同虚设 |
+| KD-32 | 十九域的判定与证据进 **`btest_run_end` 载荷**（`domains[]`），报告首块由载荷生成 | ① 只在报告正文写自然语（如「筛选验过了」）：宿主判不了，回到纯走查，且「证据在哪」无法对账；② 把域判定并入 `issues[]`：pass 不是问题，混进问题表会污染问题计数与严重度 |
+| KD-33 | 子代理**只 `explore`**、五字段模板逐字进卡、需结果就结束回合（§3.13） | ① 保留 `plan` 兜底：工程模式下必被拒（`subagent.mjs:253-258`），等于教模型走一条死路；② 让宿主代派：两套派发语义（KD-29 已否）；③ 只写「给五字段」不写模板：字段名与内容形态靠模型猜，缺一即拒的代价落回用户 |
+| KD-34 | 每步实验的四拍顺序写进卡 `[D10]`，宿主不硬判 | ① 宿主逐步校验「本步预期」：那是 RunTrace 级（动作账 + 证据 ID），本批已定另案；② 只靠 `[J1]`–`[J7]`：它们判「这一步的结论对不对」，不约束「先写预期再动手」的顺序，而顺序才是要治的那个病 |
 
 ## 6. 验收对照（回指需求 F1–F12 · F2.1 · F3.1 · F3.2 · §5 验收 1–7）
 
@@ -820,6 +903,9 @@ run 的「暂停位」`none found`：`BtestState` 只有 `run` 一个字段（`b
 | F10 断点查明 | §3.9（断点派只读子代理 · 异步派发）· §3.3（`chainBreaks[].cause`）· §3.10（与 F8 的分工） | ① `chain` 轮**上限内（≤3 次）**的每个断点都当场派一个只读子代理且**不等回答**（① 管前三个，第 4 个起看 ②，两格不互斥）；回答在 run 内到达 ⇒ 该条带 `cause`（一句结论 + `file:line` 或文档节），`reason` 仍是四值之一（§7 #41）；② 同一条 run 第 4 个及以后的断点不派，`cause = 未查明（达到本轮研判上限）`，run 正常收尾（§7 #42）；③ `explore` / `plan` 都不可用 ⇒ `cause = 未查明（<原因>）`，报告照发（走查）；④ `chainBreaks[]` 的条目（含带 `cause` 的）不出现在 `unconfirmedDiffs[]` 与报告的「建议」列里（§3.10）——读数 = 两个键的条目逐条对照 + 报告表逐行核对，不是「看它带没带 `cause`」；⑤ 派发方式 = 异步：断点当下派出，同一步之后的动作不等待它（走查：会话记录里 `subagent` 调用当下返回、其后的动作先于回答发生）；回答在 run 结束后到达 ⇒ 结论进收尾消息、run 不重开（走查：收尾消息 + 报告「链断点」块）；`cause` 可缺省——迟到的回答不破坏 §3.3 字段形 |
 | F11 模式与两个开关跨重启 | §9.1（持久化）· §3.1 · §3.3（初值） | ① 写回：点烧瓶 / 点「深度」/ 点「允许写」后 `settings.json` 的 `btest.on` = `true`、`btest.traversal` = `chain`、`btest.mode` = `write`（§7 #43）；② 重开会话读回：状态行 = `btest · 待开始 · 深度 · 允许写`，起 run 不带参数 ⇒ 返回项 1 与报告首行都是 `traversal=chain` / `mode=write`（#43）；③ 键缺失 / 值非法 ⇒ 回落 关 / `广度` / 写开关未点选（取值时解析 `btest.readonly`，§9.1「写初始」），不报错、不阻断、不改写键（#44）；④ 读取不写：只开一次会话不点任何开关 ⇒ 三个键不出现（#44）；⑤ 写失败不阻断 UI：`settings.update` 抛错 ⇒ 只一条 `debugPrint`，界面与本会话照常（走查；与 `browser_page.dart` 同口径，§9.1）；⑥ 退出删键：切回 normal ⇒ `btest.on` 键被删（写 `null`）⇒ 关掉会话重开 = 关，不读回旧的 `true`（#45） |
 | F12 人工接管点 | §3.11 · §3.2（`[D9]`） | **情形 A（点名单独测）**：界面停在上传那步 + 出现「请你在这里选文件上传…」一句，本回合结束（该句后无工具调用）；用户回「好了」⇒ 同一 `runId` 继续（后续调用不报「no active run」，`btest_run_end` 的 `runId` = run_start 返回的那个），读附件列表 + 单据快照，报告该步骤带用户提供的文件说明；`chainBreaks` 不含该步（§7 #46）。**情形 B（流程中遇到）**：不停，后续步骤照常走完（走查：该步后仍有工具调用）；报告 `uncovered[]` 一条点名该步骤（`why` = `需人工上传，本轮未执行`），不进 `chainBreaks`、不占 F10 的 3 次上限（§7 #47）。**共同（三条禁令各一条读数，与 §3.11 逐条对应）**：① 无附件提交动作——该步骤的调用记录里没有 `browser_upload`、没有带 `file` 参数的调用、也没有目标为 `input[type=file]` 的点击（走查工具调用参数；写轮 `browser_upload` 本就被策略闸放行，这一项只能看调用记录）；② 无临时文件——`.thincoder/tmp` 无新档、`%TEMP%` 无本批文件；③ 无接口绕道——`browser_request` 的 `replay` 放行 = 0（§3.3 检查表 4-② 的计数） |
+| §8-F7 收尾是门 | §3.3.1 · §3.3（`domains` / `uncovered[].caseId`）· §3.8 | ① 零覆盖 + 零 issue ⇒ `btest_run_end` 抛错、run 未关（`state.run` 仍在）、文本点名两条（#50）；② issue 缺 `step` / `symptom` / `evidence` / `severity` / `pre` 任一项 ⇒ 拒并点名 `issues[i].<字段>`（#51）；③ `domains` 缺域 / verdict 非法 / evidence 空 ⇒ 拒、一次列全（#52）；④ 索引 case 未 covered ∧ 未进 `uncovered` ⇒ 拒并点名该 ID（#53）；⑤ 域 = fail 但 issues 空 ⇒ 拒（#54）；⑥ 补全后重提 ⇒ 关 run、检查表五项照旧（#56）；⑦ 报告首块十九行（域 · 判定 · 证据）能回答「每个适用域是 pass / fail / blocked / notApplicable、证据在哪」（走查，需求 §8 末段） |
+| §8-F8 每步是实验 | §3.12 · §3.2（`[D10]`） | 卡文本含 `[D10]` 且只一次（`btest_card_test`）；走查：报告步骤列每步带「预期 + 依据」与独立回读读数；新界面首步调 `browser_snapshot` 带 `scope: "page"`（`lib/browser/browser_actions.dart:64-66`）；调用记录里无「一个检查点多个动作」，无网络 / console 清除动作 |
+| §8-F9 子代理契约 | §3.13 · §3.2（模板）· §3.9 · §3.10 | ① 卡里 `goal` / `knownFacts` / `scope` / `acceptance` / `reportFormat` 五个词各出现，`plan` 不再作为兜底出现（`btest_card_test`）；② 走查：`subagent` 调用带齐五个非空值、`role` 恒为 `explore`；③ 研判答案回来之前「建议」列空着（不把「结果已在当前回合可用」当前提） |
 | 验收 2（证据可复核） | §3.8 | 任取一条问题，按「证据」列能在页面上重读出同一读数 |
 | 验收 3（预期来自盘上且带出处） | §3.4 · §3.8 | 每条「预期不符」的「预期出处」列非空、级别 ∈ {强, 中}、引用能落到档 + 节 / 冒烟清单行 / issue 号；`expectFrom` 指向代码现状或为 `无权威来源` 的 case 不出现在「预期不符」行里（§7 #16） |
 | 验收 4（来源可追溯） | §3.5 | 每条 case 的 `origin` 能在 `git -C <repoRoot> log` 里找到，或明确写 `无（存量）` |
@@ -881,6 +967,14 @@ run 的「暂停位」`none found`：`BtestState` 只有 `run` 一个字段（`b
 | 46 | 正常 | 情形 A：用户说「单独测试上传功能」→ agent 把界面带到上传那步、停手说一句，结束本回合；用户在同一会话回「好了」→ 读附件列表 + 单据快照后继续 | 同一 `runId` 继续（`btest_run_end` 的 `runId` = run_start 返回的那个）；`chainBreaks` 不含该步；报告该步骤行带用户提供的文件说明；§6 F12 共同三条读数全过（无附件提交动作 / 无临时文件 / 无接口绕道） | 走查（对话记录 + 报告） |
 | 47 | 边界 | 情形 B：整条流程走到上传步骤，用户没点名 | **不停**：后续步骤照常走完；报告 `uncovered[]` 一条（`branch` = 该上传步骤，`why` = `需人工上传，本轮未执行`）；不进 `chainBreaks`、不占研判上限；三条禁令读数全过（不点 file input、不调 `browser_upload`、不带 `file` 参数 / 不造文件 / 不调接口） | `btest_policy_test`（`uncovered` 载荷形状）+ 走查 |
 | 48 | 错误 | 情形 A 停手后，用户切出 btest 再切回，然后回「好了」 | run 已随切出作废（`lib/chat/chat_session.dart:144`）：浏览器调用报「no active run」；agent 说明接管点不跨 run，重起 run 后重新走到该步骤；不静默续用旧 `runId` | 走查 |
+| 49 | 正常 | 收尾载荷：索引 3 个 case 全在 `coveredCases`、`issues` 空、`domains` 十九条全 `pass` / `notApplicable` 且每条带一句证据 | 收尾成功：检查表五项照旧返回，`expectFile` 读数不变；报告首块十九行可逐行对上 | `btest_run_end_test` |
+| 50 | 错误 | `coveredCases` = `[]` ∧ `issues` = `[]`（其余键都在） | **拒绝收尾**（`BrowserError`）：文本同时点名「零覆盖」与「零 issue」；run 未关（随后一次合法载荷能用**同一个 `runId`** 收尾） | `btest_run_end_test` |
+| 51 | 错误 | 一条 issue 缺 `pre`、另一条缺 `step` 与 `severity` | 拒绝收尾：一次列出 `issues[1].pre` / `issues[2].step` / `issues[2].severity` 三处（不逐条往返） | `btest_run_end_test` |
+| 52 | 错误 | `domains` 只有 18 条（缺 `P07`）、某条 `verdict = ok`、另一条 `evidence` 为空白 | 拒绝收尾：点名缺 `P07` / verdict 非法 / evidence 空，三条同一份清单 | `btest_run_end_test` |
+| 53 | 错误 | 索引有 CASE-003，`coveredCases` 无它，`uncovered` 也没有它的 `caseId` | 拒绝收尾并点名 `CASE-003`；补一条 `uncovered{caseId: CASE-003, why: 缺账号}` 后重提 ⇒ 通过 | `btest_run_end_test` |
+| 54 | 错误 | `P04` 判 `fail` 但 `issues` = `[]` | 拒绝收尾：点名 `P04` 说 fail 却没有对应问题行（R5） | `btest_run_end_test` |
+| 55 | 边界 | 某域 `blocked` + `evidence` = 「无第二个角色账号，本轮未验」；`issues` = `[]`；其余域 pass | 收尾成功（blocked 是诚实的读数，不是浅跑）；报告首块该行判定 = `blocked` | `btest_run_end_test` |
+| 56 | 边界 | 先被 R2 拒绝一次 → 补齐 issue 字段与 `domains` → 用同一 `runId` 重提 | 第二次通过；`runId` 不变、run 未重开、检查表五项正常返回（拒绝不消耗 run） | `btest_run_end_test` |
 
 ## 8. 边界（本批不做）
 
@@ -896,11 +990,15 @@ run 的「暂停位」`none found`：`BtestState` 只有 `run` 一个字段（`b
 - 业务线不做成下拉控件（仍由用户句子说，理由见 §9.1）；三个 `btest.*` 持久化键（F11）的写入口只有切模式与两个状态行开关，设置页不为它们新增控件（§4 `browser_page.dart` 本批不动）。
 - 待确认项的研判不在 run 内做（§3.10），也不由子代理改判定。
 - 断点查明只回答问题、不操作浏览器、不改 `reason` / 判定；`cause` 内容真不真由走查（宿主只验形状，§3.9）。
+- 不做 RunTrace 动作账与证据 ID · 不做网络 / console 的增量游标 · 不做角色与数据 fixture 层 · 不做种子缺陷基准（衡量召回率的验收）——四项另案，本批不动。
+- 子 agent 只有 `explore` 一条路：不提供 `plan` 兜底（工程模式下必被拒，§3.13），也不由宿主代派。
+- 收尾门只判**载荷能不能回答**（五条），不判读数真不真：域判定与证据是否属实仍由走查（§3.3.1）。
 
 ## 9. UI / 交互决定（全部落地，无 open）
 
 | 面 | 决定 |
 |---|---|
+| 本批 | **无 UI 变更**：收尾门、`[D10]`、子代理模板都不进界面（状态行 / 设置页 / 报告版式照旧；报告多一块十九行域判定，仍是正文表格） |
 | 模式入口 | composer 内核模式选择旁追加 `btest`，与 plan 同形；文案固定为 `btest`（不翻译） |
 | 状态行 | btest 开启时 composer 顶部显示 `btest · <业务线> · <遍历> · <写> · run <id>`；无 run 时显示 `btest · 待开始 · <遍历> · <写>`；行右侧是两个弹出选择（§9.1）；切回 normal 整行消失 |
 | 拒绝展示 | 以步骤失败卡出现，正文含动作、host、规则与「设置 → 浏览器 → btest」入口 |
@@ -920,9 +1018,11 @@ run 的「暂停位」`none found`：`BtestState` 只有 `run` 一个字段（`b
 两个**紧凑的弹出选择**（当前值 + 下拉箭头，点开二选一），不用按钮组——状态行很矮，两个按钮组会把它撑高。
 
 **既有件三问（实读 2026-10-23）**：`existing: lib/chat/composer/composer_picker.dart:33` · name: `ComposerPicker` · consumers: `lib/chat/composer/composer.dart:2081`（内核选项）/ `:2091`（模式选项）/ `:2105`（权限选项），三处均以 `options` / `selected` / `onSelected` 三件套调用（2026-10-23 06:58 实读）。
+
 形态 = 当前值 + 点开二选一 ⇒ **复用 `ComposerPicker`**，不新造控件；本仓 `lib/**` 里没有 `PopupMenuButton` / `DropdownButton` 的实例（2026-10-23 grep：零命中），所以也不存在「既有 Flutter 菜单控件」这条替代路。
 
 **两个遍历标签的三问（2026-10-23 06:58 实读）**：`existing: lib/l10n/app_zh.arb:2925-2926` · name: `btestTraversalDepth`（`深度`）/ `btestTraversalBreadth`（`广度`）。
+
 consumers: 状态行的两个 `ComposerPicker`（今日在 `lib/chat/composer/composer.dart:1969` / `:1975` 消费，本批随控件搬进 `btest_status_switches.dart`）。
 写侧的两个选项复用既有 `btestFaceReadonly` / `btestFaceWrite`（`:1995` / `:2002` 消费）；四个标签都已落盘，本批不新建键。
 
@@ -981,7 +1081,9 @@ consumers: 状态行的两个 `ComposerPicker`（今日在 `lib/chat/composer/co
 3. **unverified**：`HostMcpServer` 是否按会话暴露工具列表（决定 btest 工具会不会对普通会话可见）；实施前实读 `lib/host_tools/host_mcp_server.dart`。当前设计按"全局注册 + 会话级判据"处理，普通会话调用会被拒。
 4. **已核实（2026-10-23 实读）`HostToolCall.cwd` 的 thincoder 来源链**：`lib/kernel/thincoder/thincoder_kernel.dart:353` 发放 grant（`HostMcpServer.issue(_sessionId ?? '', _cwd)`）
    → `:231` `_cwd = _context.cwd ?? _context.resume?.cwd ?? '.'` → `lib/host_tools/host_mcp_server.dart:186` 构造 `HostToolCall(cwd: grant.cwd, …)`。
+
    结论：btest 路径会填 `cwd`，分支 2 / 3 可达；链尾 `'.'`（任何非绝对路径同理）⇒ 判「工作区根不可得」，落分支 4 并在返回项 2 的「降级原因」里点名（§3.4「链尾是 `'.'`」），不静默退成兜底。
+
    `HostToolCall` 的另外两处构造不改 `cwd` 来源：`lib/host_tools/host_tools.dart:218` 把入参 `call.cwd` 原样转给 `tool.run`；`lib/kernel/claude_code/claude_code_kernel.dart:1766` 是控制通道构造（`cwd: _cwd`）。
 5. **unverified**：业务仓 `v2-booking` 的 dev 域名与生产域名清单，由用户在设置页填；设计不写死域名。
 6. **[上抛·知会] 拆分登记 SPLIT-1…6**（§4）：设计位无台账写权，登记行由主编排方落（挂 #149 的后续批）。SPLIT-5 / SPLIT-6 本批落地，SPLIT-1…4 留登记。
@@ -992,3 +1094,6 @@ consumers: 状态行的两个 `ComposerPicker`（今日在 `lib/chat/composer/co
 11. **设计已定：权重表的两条补充语义**——「`已修` 的类排到生效序末尾（仍摸一次）」与「AI 只追加标记、不改条数」。**理由**：不把已修类排末尾，权重表的排序就退化成「永远先查修好的地方」，与「别忽略没修的地方」相反；允许 AI 改条数，历史密度就不再是可复核的读数（KD-24）。**代价**：`已修` 标记是人的判断，写错一个类名就会让该类的降级失效——所以按 §3.9 逐字匹配 + 匹配不上打一行 warning 点名，让漂移看得见。
 12. **设计已定：报告两列**——「判定」（`预期不符` / `待确认`）与「建议」（run 之后研判回填），以及 `unconfirmedDiffs[].kind` 的两值（`diff` / `pending`）（KD-26）。**理由**：判定是「算不算缺陷」、建议是「倾向怎么判」，两者混在一格时用户看不出哪一格是锚点；`kind` 两值让载荷与三尾注一一对应。**代价**：报告表宽 13 列（含行号），窄屏要横向滚；`待确认` 行的建议在研判回来之前是空档（写 `待研判 · <原因>`，§3.10）。
 13. **已裁定（2026-10-23 06:55，主 agent）：SPLIT-5 到期，本批先拆后加**。`btest_mode.dart` 实测 1131 行（2026-10-23 06:58 复核），已越过登记的 1100 触发线。本批第一步按 SPLIT-5 抽 run 生命周期（两档，拆法见 §4），第二步才落 F11 的三个键（拆后 ≤ +40）。>800 不设例外通道。
+14. **[上抛·待裁] 需求档的编号撞车**：`docs/requirements/browser-biz-test.md` §3 已有 F7（遍历策略）/ F8（待确认研判）/ F9（两个开关），§8 又新開 F7（收尾门）/ F8（每步实验）/ F9（子代理契约）——同一个编号两个机制。本档一律写 `§8-F7` / `§8-F8` / `§8-F9` 限定引用，不改需求档（写权不在设计位）。**倾向：把 §8 三条重编为 F13 / F14 / F15**（或另起一组编号）；改完本档只换标签，语义不动。
+15. **unverified：`subagent.mjs:253-258` 的工程模式 `plan` 排除**——坐标由父侧实读（批档 §1），设计位未重读该段；本档的相关结论（不提供 `plan` 兜底）在两个分支下都成立：即使 `plan` 可用，`explore` 已经足够且只读边界更窄；若该段实际不同，卡里少一条兜底也不损失能力。
+16. **已定：本批不加集成用例**——验收口径是走查（需求 §8 末段），而本仓没有 `test/RTM.md`（集成索引不存在）。收口报告按 `0 / 50–100` 报并挂台账行（父侧），本档不新造一个只为一个改动的用例。
