@@ -4432,7 +4432,7 @@ Future<bool> rename(AgentThread thread, String title,
 
 - **最近先例**：`docs/design/thincoder-adapter.md` §5.2 的最小接线点集与 §28.3 的能力探针。对齐点是「宿主只留接线、能力按接口探测」；偏离点是不再使用 `docs/design/structure-splits.md` §4.4 的 `part` 私有访问形态，因为拆文件并未形成模块隔离。
 - **survey 证据**：`PROJECT-MANIFEST.json` 的 `index.publicRepos` 为空；已核 `docs/requirements/thincoder-adapter.md` §4 / §7、`docs/requirements/browser-biz-test.md` §3 / §5、`docs/requirements/host-tool-channel.md` §3 / §5、`docs/design/thincoder-adapter.md` §5.2 / §12 / §28、`docs/design/structure-splits.md` §4.4、`test/RTM.md`。没有其它公开文档源。
-- **现状依据**：`lib/chat/chat_session.dart:100` 的类只实现 `ChatFeed`；八个 `lib/chat/session/*.dart:1` 仍声明 `part of`。上游构造、事件、挂载、切内核、发送与释放路径见同档 `:101-174`、`:377-421`、`:1114-1150`、`:1253-1264`。
+- **现状依据**：`lib/chat/chat_session.dart:69` 的 `ChatSession` 实现 `ChatFeed` / `MarksTurns` / `ChatSessionOverlayHost`；`lib/chat/session/*.dart` 八档均为独立 library，`part of` 0 处。上游的构造、事件、挂载、切内核、发送与释放路径按符号读同档，行号随上游改动漂移，不作判据。
 
 **契约名的三问答复（本轮实读）**
 
@@ -4505,7 +4505,7 @@ abstract interface class ChatSessionOverlay {
 | `setKernel` | `onKernelChanging` 开计时；`cacheKernel` 决定旧内核是否保留；`restoreKernel` 可取回同 descriptor 缓存；切后 `onKernelChanged` 清 turn 状态并重绑 btest | `lib/chat/chat_session.dart:412-421`；启动约束 `lib/chat/session/mode_state.dart:65-88` |
 | 切内核后的挂载 | 若 `_views > 0`，上游统一执行新内核 `prepare()` 与 `_startReview()`，再通知 | `lib/chat/session/mode_state.dart:79-85` 给出了不执行时新内核不启动的可复现路径 |
 | `send` | 恢复 `editorContext = true` 参数；按能力与设置取 editor；构造 `KernelTurn` 后交 `beforeSend`，再交内核 | `lib/chat/chat_session.dart:1114-1150`；`lib/kernel/kernel_types.dart:584-613`；`lib/chat/editor_context_setting.dart:11-17` |
-| `itemCount/itemAt` | transcript 后插入 `overlay.items`，最后才是 live status；`addNotice` 追加并通知 | `lib/chat/chat_session.dart:706-735`；`lib/chat/session/transcript_proxy.dart:81-108`；调用点 `lib/chat/panels/revert_dialog.dart:65-70` |
+| `itemCount/itemAt` | transcript 后插入 `overlay.items`，最后才是 live status；`addNotice` 追加并通知 | `lib/chat/chat_session.dart:746`（`itemCount`）/ `:750`（`itemAt`）/ `:932`（`addNotice`）；`lib/chat/session/transcript_proxy.dart:20`（`cutsAtMessage`）/ `:36`（`markTurnOf`），该档 94 行；调用点 `lib/chat/panels/revert_dialog.dart:65-70` |
 | `dispose` | 先 `onDispose` 清缓存与 btest 绑定，再执行既有释放 | `lib/chat/chat_session.dart:1252-1264`；`lib/browser/btest/btest_mode.dart:177-195` |
 | 回退投影 | `revertTurn` 由宿主在 `_pendingEdits` 上实现；`canPlanRevert` / `plansReverts` / `revertPlan` / `applyRevert` 由独立 helper 读 `host.agentKernel` | `lib/chat/chat_session.dart:995-1002`；`lib/chat/session/file_edits.dart:98-124` |
 
@@ -4531,7 +4531,7 @@ abstract interface class ChatSessionOverlay {
 
 模块名的三问答复（本轮实读）：
 
-- `BaocodeSessionOverlay`：`none found` —— 本轮 `grep -rn "BaocodeSessionOverlay" lib test` 零命中。`existing but unusable` = `lib/chat/session/**` 八个 `part of` 档：warm / turn marks / notices / btest 的状态与算法都在，但形态是寄生体，不能被独立 import。
+- `BaocodeSessionOverlay`：`none found` —— 本轮 `grep -rn "BaocodeSessionOverlay" lib test` 零命中。`existing but unusable`（定名当天）= `lib/chat/session/**` 当时是八个 `part of` 寄生档：warm / turn marks / notices / btest 的状态与算法都在，形态却不能被独立 import；R1 已把这些算法改成独立 library，名字留给契约——契约要定的是宿主与 overlay 的分工，不是复用某个既有类型。
 - `lib/chat/session/overlay.dart`：`none found` —— 该路径不在盘（本轮实读；该目录八档为 file_edits / file_paths / kernel_proxy / lifecycle / mode_state / send_contexts / session_commands / transcript_proxy）。⇒ 新建，不覆盖任何既有文件。
 - `lib/browser/btest/btest_tool_gate.dart`：`existing but unusable` —— 判据在 `lib/browser/btest/btest_mode.dart:209` 的 `BtestGate`，`check`（`:223-256`）的签名已收 `HostToolCall`；不可直接用的部分 = `hosts` / `targeted` 的推导要读浏览器 tab 状态，而该状态在 `browser_tools.dart` 父库内，通用 `HostTools` 面不得出现这一特判（§29.4 ③）。
 

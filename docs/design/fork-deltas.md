@@ -51,6 +51,8 @@
 | `lib/settings/pages/thincoder_models_page.dart` | thincoder 模型配置页 | 功能 | 设置页导航与 CLI 配置文件 | 自有页面；共享导航接缝另计 |
 | `lib/settings/pages/general_page.dart` | thincoder 设置组（`:442-457`，接线点 ⑦）+ 设置 → 通用的 `chat.editorContext` 一行开关（接线点 ⑪） | 功能 | 设置页 `SettingsGroup` / `ThincoderPathSetting`；`EditorContextSetting` | 净增 ≤93 行（≤81 + ≤12） |
 | `lib/settings/app_settings.dart`、`settings/settings_dialog.dart` | thincoder 设置入口 | 功能 | `SettingsSection.thincoderModels` | 合计净增 ≤50 行 |
+| `lib/chat/composer/composer_picker.dart` | `startCollapsed` 参数与 `_collapseNewGroups`（新到的分组也收起，选中那组除外） | 功能 | `ComposerPicker.startCollapsed`；收起集合仍留在 picker 内 | 净增 ≤25 行 |
+| `lib/chat/composer/session_model_picker.dart` | thincoder 会话默认收起 + 底部管理入口指向 thincoder 模型页 | 内核适配 | `ComposerPicker.startCollapsed`；`SettingsSection.thincoderModels` | 净增 ≤20 行 |
 
 ## 4 本批冻结的共享文件
 
@@ -58,7 +60,6 @@
 
 - `lib/ide/git/ide_scm_view.dart`；SCM「获取」语义仍待 #181 裁定。
 - `lib/ide/ide_editor.dart`、`lib/ide/ide_workbench.dart`、`lib/workbench.dart`。
-- `lib/chat/composer/composer_picker.dart`、`session_model_picker.dart`。
 - `lib/chat/composer/composer.dart`、`composer_editing.dart`。后者已有命令源门，仅由 R1 恢复其调用的 getter。
 - `lib/chat/composer/composer_view.dart`、`lib/browser/btest/btest_status_switches.dart`。两者只由 session 契约恢复而编译，不改 UI。
 - `lib/browser/browser_actions.dart`、`browser_debug_tools.dart`。两者已是 `HostTool` 形态，只修父库。

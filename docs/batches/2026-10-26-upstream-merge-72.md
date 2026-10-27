@@ -160,8 +160,25 @@
 **处置（本批不做，另立小批）**：属产品代码 + 需解冻 `docs/design/fork-deltas.md` §4 的 picker 冻结，故不入 R1/R2。已入台账，待本批收口后按小批走（设计补 seam 行 + 评审 + 实施）。
 **R1 报告口径**：两处保持红，不由实施轮改测试迁就。
 
+### picker 接缝：已实施，待设计补登记（2026-10-26 21:45）
+
+**用户裁定 A（21:36 逐字）**：「好，保留上游的结构，对，底部不藏，这样拉代码合并更方便了A」
+⇒ ① 保留上游 `footers` 列表结构（不回退 `footer` 单值）② thincoder 会话**加回收起** ③ footer **不藏**，改为指向 `SettingsSection.thincoderModels`。
+
+**已落代码（提交 `95346b78`，父侧直改，轻量通道）**：
+- `lib/chat/composer/composer_picker.dart`：新增 `startCollapsed` 参数（默认 false）+ `_seenGroups` + `_collapseNewGroups()`，在 `initState` 与 `didUpdateWidget` 调用 —— 上游结构不动，只加一个可关的初始化行为。
+- `lib/chat/composer/session_model_picker.dart`：`startCollapsed: session.kernel.id == 'thincoder'`；footer 按内核分流 —— thincoder → `SettingsSection.thincoderModels`（文案复用 `l10n.settingsSectionThincoderModels`），其余 → `SettingsSection.models`。
+- `test/kernel_ui_test.dart`：该用例前提变了，改为断言「thincoder 有 footer 且点到 thincoderModels；Claude 点到 models」。
+**验证**：`flutter analyze --no-pub` **0 error**（含 test/）；`kernel_ui` + `model_picker` + `composer_btest_status` **+57 全过**。此前 test/ 的那 1 error（`startCollapsed` 未定义）随之消失。
+
+**本轮设计任务（eng-designer）**：
+1. `docs/design/fork-deltas.md` §3 补两行：`composer_picker.dart`（`startCollapsed` 初始化收起，类型=功能，接缝=`ComposerPicker` 参数，预算 ≤+15 行）· `session_model_picker.dart`（thincoder 的 footer 目标分派 + `startCollapsed`，类型=功能，接缝=`ComposerPicker.footers`，预算 ≤+12 行）。
+2. 同档 §4：把这两个档从「保持上游实现」的冻结里移出（它们现在带自有块），措辞改成「已登记，见 §3」。
+3. `docs/design/thincoder-adapter.md` §29.4 / §29.9 中「不改上游 picker 布局」的表述与本裁定对齐（改为：结构保持上游，仅两处登记接缝）。
+4. 不动代码、不动测试；改完自跑 `doc_check(gate)` 须 PASS。
+
 ## §2 批次任务与设计（eng-designer）
-**状态行**：设计完成（评审 7 条与轮次 2 两项已修；实施后修轮再订正文档四处（见本节末表），R1 / R2 的条目、落点与判据未变）
+**状态行**：设计完成（追加轮：picker 接缝登记两行 + §29 三处状态订正已落（见本节末两段））
 <§2 模板占位：本批条目（覆盖） / 设计档落点 / 机制设计 / 受影响文件与测试覆盖 / 验收对照 / 关键决策 / 上抛项>
 
 ### 本批条目与同源设计
@@ -212,6 +229,33 @@
 - 同表另一处引 `lib/chat/session/transcript_proxy.dart:81-108`，而该档现 93 行、那一段是 turn 裁剪代码。
 - §29.1「现状依据」写「八个 session 档仍声明 `part of`」——按 §5 的实跑读数，R1 已清零。
 - 三处同源：设计期快照与实施后现值的差，需一次覆盖 §29 的坐标与状态复核轮统一订正；本修轮不扩面。
+
+### 追加轮：picker 接缝登记与 §29 状态复核（eng-designer，2026-10-26）
+
+依据 = 本档 §1（21:08 用户裁定「保留 fork 的 picker 行为」）、实现提交 `95346b78`，以及本节上表「本修轮刻意未改」列的 §29 三项快照。本轮只动两份设计档与本段，不改代码、不改 R1 / R2 的条目与判据。
+
+| 条目 | 覆盖需求 | 完成判据 |
+|---|---|---|
+| B6 picker 行为接缝登记 | 本档 §1 21:08 已定决定；`docs/requirements/thincoder-adapter.md` §4 E1/E2 | 登记表 §3 有 picker 两行（块 / 类型 / 接缝 / 预算），§4 不再冻结这两个档；两处 picker 行为各有归属接缝 |
+
+**落地（实读坐标）**
+
+- `docs/design/fork-deltas.md` §3 增两行：`lib/chat/composer/composer_picker.dart`（`startCollapsed` + `_collapseNewGroups`，类型 功能，净增 ≤25）· `lib/chat/composer/session_model_picker.dart`（thincoder 默认收起 + 底部入口指向 thincoder 模型页，类型 内核适配，净增 ≤20）。实测增量为 +20 与 +24/−7，均在预算内。
+- 同档 §4 删去 picker 两档的冻结行；SCM 冻结行保留（#181 未裁定）。
+- `docs/design/thincoder-adapter.md` 三处设计期快照改为现状读数：§29.1 现状依据改指 `lib/chat/chat_session.dart:69` 与「session 八档独立 library」；§29.2 接缝表改指 `:746`（`itemCount`）/ `:750`（`itemAt`）/ `:932`（`addNotice`）与 `lib/chat/session/transcript_proxy.dart:20`（`cutsAtMessage`）/ `:36`（`markTurnOf`）；§29.3 的 `existing but unusable` 一句限定为定名当天，并写明 R1 已把算法改成独立 library、名字留给契约。
+
+**与实现的一处差别（据实登记）**：#183 原记「thincoder 隐藏模型菜单 footer」，实交为**保留 footer、把目标改成 thincoder 模型页**（`session_model_picker.dart` 的 thincoder 分支，标签 `settingsSectionThincoderModels`）。登记表按实交登记；若要回「隐藏」，先改设计再改代码。
+
+**验收（改动面）**
+
+- 代码面（不由本轮回合执行，供父侧核）：`flutter analyze --no-pub lib/chat/composer`；`flutter test --no-pub test/kernel_ui_test.dart test/chat/model_picker_test.dart`。`startCollapsed` 现已是 `ComposerPicker` 的构造参数，`test/chat/model_picker_test.dart:61` 的编译错误前提不再成立。
+- 文档面：`doc_check(mode:"gate")` 对两份设计档 PASS。
+
+**不在本轮**：不改代码；不裁定 #181；§6 记的约 29 条未定性失败仍归父侧与 #181 / #183；`docs/design/fork-deltas.md` §4 其余冻结档不动。
+
+**[上抛·待裁]** picker 这一轮目前没有独立批档（本档 §1 21:08 记的是「另立小批」），其实施与设计登记都落在他批档名下。若要独立成批，需主 agent 建批档（eng-designer 无 create 权限）；本段只能记在本批 §2。
+
+**数字订正（同段）**：picker 两档实测按 `git show --numstat 95346b78` = `composer_picker.dart` +20 / −0 · `session_model_picker.dart` +17 / −7；上文「+20 与 +24/−7」的第二个数写成改动总数，净增实为 17。预算 ≤25 / ≤20 均有余量。
 
 ## §3 设计评审（评审子代理）
 
