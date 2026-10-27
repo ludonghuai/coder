@@ -27,7 +27,6 @@ import '../../window/window_settings.dart';
 import '../../workspace/main_window.dart';
 import '../shell_command_actions.dart';
 import '../user_settings.dart';
-import 'git_settings.dart';
 import 'settings_dropdown.dart';
 import 'settings_widgets.dart';
 
@@ -484,7 +483,6 @@ class GeneralSettingsPage extends StatelessWidget {
                 ),
               ],
             ),
-            GitSettingsGroup(settings: settings),
             if (ShellCommand.supported)
               const SettingsCard(children: [_ShellCommandSetting()]),
             if (ContextMenu.supported)
