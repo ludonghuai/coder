@@ -22,8 +22,9 @@
 | `lib/diagnostics/**` | 帧、stall、hang 与诊断包 | 功能 | 应用启动与设置诊断入口 | 自有 |
 | `lib/platform/process_host.dart`、`process_host_io.dart`、`process_host_stub.dart` | 非窗口线程进程创建 | 修 bug | `ThincoderProcess` 与诊断测试 | 自有 |
 | `lib/chat/session/**` | ChatSession overlay 与独立 helper | 内核适配 | `chat_session_overlay.dart` | 自有 |
-| `lib/chat/chat_session_overlay.dart` | 通用 overlay host 与生命周期契约 | 内核适配 | `ChatSession` 构造及生命周期钩 | 自有 |
+| `lib/chat/chat_session_overlay.dart` | choice 数据、通用 overlay host 与完整生命周期 / 状态投影契约 | 内核适配 | `ChatSession` 构造及生命周期钩 | 自有 |
 | `lib/host_tools/host_tools.dart` | 跨内核宿主工具注册与调用通道 | 功能 | `HostTool` / `HostToolCall` / MCP | 自有 |
+| `lib/chat/editor_context.dart` | editor context 数据形与提示词渲染 | 内核适配 | overlay 发送与 `KernelTurn.contexts` | 自有 |
 | `test/kernel/thincoder*_test.dart`、`test/diagnostics/**` | 自有内核与诊断断言 | 功能 | 对应独立模块 | 自有 |
 | `test/ide/git/scm_fetch_button_test.dart`、`git_autofetch_test.dart` | 自有 SCM 断言，独立于上游测试 | 功能 | SCM 公共入口；#181 未裁定 | 自有 |
 | `test/RTM.md`、`test/integration/**` | 本仓业务集成索引与用例 | 功能 | 用户入口与业务可观察结果 | 自有；50–100 行用例窗 |
@@ -34,7 +35,7 @@
 |---|---|---|---|---|
 | `lib/chat/chat_session.dart` | overlay 装配、host 投影、生命周期钩、缺失能力投影 | 内核适配 | `docs/design/thincoder-adapter.md` §29.2 | 净增 ≤180 行 |
 | `lib/chat/chat_feed.dart` | `MarksTurns` 只读接口 | 内核适配 | `ChatSession.turns` 与 folds | 净增 ≤16 行 |
-| `lib/chat/chat_models.dart` | `TurnMark`、`NoticeItem` 与 editor context 数据形 | 内核适配 | overlay / `KernelTurn.contexts` | 每类 ≤30 行 |
+| `lib/chat/chat_models.dart` | `TurnMark`、`NoticeItem` 与 `editor_context.dart` re-export | 内核适配 | overlay / `KernelTurn.contexts` | 每类 ≤30 行 |
 | `lib/chat/composer/composer_editing.dart` | `hasCommandSource` 命令源门 | 内核适配 | `ChatSession.hasCommandSource` | 净增 ≤12 行 |
 | `lib/chat/composer/composer_view.dart` | btest 缓存键与状态行挂点 | 功能 | `ChatSession` 的 btest 七成员 | 净增 ≤24 行 |
 | `lib/browser/browser_tools.dart` | `HostTools` 注册包装、数字归一、description schema、btest gate、tab watch/blocked/acting | 功能 | `HostTool` / `HostTools` / `HostToolCall`；btest 经独立模块 | 净增 ≤150 行 |
@@ -67,3 +68,18 @@
 4. 运行 `flutter analyze --no-pub`，把错误按登记模块归因；不得以整档回退消除冲突。
 5. 重跑各模块定向测试；l10n 由源档重产；SCM 只跑对应独立断言。
 6. 新出现的共享文件改动若没有行，停止实施并先登记。
+
+## 6 本批断点覆盖对照
+
+390-error 是批档 §1 的父侧基线，本轮未重跑。下表按该基线点名的断点面核对登记归属；实施后以 §29.5 的实跑结果证明闭合，不把静态对照当作 analyze 通过。
+
+| 断点面 | 登记位置 | 重接轮与处置 |
+|---|---|---|
+| `lib/chat/session/**` 八档与 `chat_session.dart` 宿主接缝 | 第 2 节 session glob / overlay 契约；第 3 节 `chat_session.dart` | R1 改为独立 library；两档重复 helper 删除，其余只留自有语义 |
+| `composer_view.dart`、`composer_editing.dart`、`btest_status_switches.dart` 与其它 session 消费方 | 第 2 节 btest glob；第 3 节 composer / session 接缝 | R1 恢复既有公共契约，消费方零改动；第 4 节继续冻结 UI |
+| `browser_tools.dart` | 第 3 节 browser_tools 行 | R2 只修父库 import、注册与调用包装 |
+| `browser_actions.dart`、`browser_debug_tools.dart` | 第 4 节冻结行；经 browser_tools 父库装配 | R2 零改动；不得为消错回退或另写一套工具实现 |
+| `lib/browser/btest/**`（含新增 gate） | 第 2 节 btest glob | 状态由 R1 overlay 持有；R2 只新增 `btest_tool_gate.dart`，其余档不改 |
+| 基线的测试侧断点 | 第 2 节自有测试登记；第 4 节上游测试冻结 | R1 / R2 用设计 §29.5 点名测试验证；不改上游 SCM 与 side-panel 测试 |
+
+表外若出现新的产品文件改动，无论是否属于 390-error 列表，都先停止并回设计登记。

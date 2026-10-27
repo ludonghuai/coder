@@ -27,7 +27,7 @@
 
 **阻塞项（用户裁定前不得动 SCM 面）**：#181「获取 = fetch + merge」（2026-10-19 用户定）与上游 Fetch/Pull 分开的取舍。已入台账（条件触发），待裁。
 
-**下一步（用户醒来后按序）**：① 裁定 #181 → ② 派 eng-designer 写 §2 任务书 + `fork-deltas.md` 框架 → ③ 用户发设计评审 → ④ 批准 → ⑤ 实施轮派 kimi（`kimi-code:k3.1-pro`；429 则降级 flash 并在此记录）。
+**下一步（用户醒来后按序）**：① 裁定 #181 → ② 派 eng-designer 写 §2 任务书 + `docs/design/fork-deltas.md` 框架 → ③ 用户发设计评审 → ④ 批准 → ⑤ 实施轮派 kimi（`kimi-code:k3.1-pro`；429 则降级 flash 并在此记录）。
 
 ### 合并已落地于分支，现在要的是重接设计（主 agent，2026-10-26 18:35 起，19:15 更新）
 
@@ -74,11 +74,69 @@
 - `docs/design/thincoder-adapter.md` —— 已修改（适配层设计面，增量待核）。
 - **§2 仍为空** ⇒ 续作必须补齐 §2 任务书。
 
-**续作要求**：① 复核 `fork-deltas.md` 是否覆盖了 390 error 涉及的每个断点（`lib/chat/session/**` 7 档 · `lib/browser/**` 3 档 · `composer_view.dart` · `lib/browser/btest/**`）；② 写出 overlay 接口的具体形状（ChatSession 暴露什么 · 我们注入什么 · 谁持有状态）；③ 补齐 §2 任务书，按轮次切分、每轮 ≤15 档、写明落点与验收命令。
+**续作要求**：① 复核 `docs/design/fork-deltas.md` 是否覆盖了 390 error 涉及的每个断点（`lib/chat/session/**` 7 档 · `lib/browser/**` 3 档 · `composer_view.dart` · `lib/browser/btest/**`）；② 写出 overlay 接口的具体形状（ChatSession 暴露什么 · 我们注入什么 · 谁持有状态）；③ 补齐 §2 任务书，按轮次切分、每轮 ≤15 档、写明落点与验收命令。
+
+### 设计续作 2（主 agent，2026-10-26 20:35）— kimi 配额耗尽，降级 flash
+
+**降级事实（明写，不静默）**：kimi 三个 key（`kimi-code` / `-2` / `-3`）在同一 5 小时窗口内全部 429，eng-designer #2 于 20:33 中断。按用户 08:40 规则「关键时刻用 kimi，其余 flash」，设计收尾轮降级 **`deepseek:deepseek-flash`**。
+
+**已落盘**：设计主体 = `docs/design/thincoder-adapter.md` §29（29.1–29.9 完整：接口契约 `ChatSessionOverlayHost`/`ChatSessionOverlay`、模块归属、R1 12 档 / R2 6 档、验收命令、决策记录、用例表、RTM 4-1）。`docs/design/fork-deltas.md` 已写。
+**未落盘**：批档 §2 任务书；文档门 40 处超长段落（kimi 已清 4 条，剩余 40 条的 `file:line` 已由父侧 `doc_check` 取到）。
+
+**本轮授权（有界）**：只做两件事 —— ① 按 §1 先前五条边界，对 40 处段落做**机械换行**（只拆不改字，不碰 §29，跳过表格/代码块）；② 通过后按 §29.5 写 §2，只引用不复制。不得改设计语义、不得动代码。
+
+### 状态订正（主 agent，2026-10-26 20:40）
+
+前文两处已过时，此处订正（前文保留作为当时记录）：
+
+- 「§2 仍为空 ⇒ 续作必须补齐」/「未落盘：批档 §2 任务书」 —— **已落盘**：§2 现有 B1–B5 五条、R1（12 档）/ R2（6 档）两轮、禁改范围与上抛，状态行「设计完成」。
+- 「文档门 40 处超长段落」 —— **已清零**：40 段机械拆分（只多换行、未改字、§29 未动），`doc_check` 交付门 **PASS**（2 档 0 命中）。
+
+**设计面就绪结论（父侧核验）**：设计主体 = `docs/design/thincoder-adapter.md` §29.1–29.9（接口契约 `ChatSessionOverlayHost`/`ChatSessionOverlay` · 模块归属表 · R1/R2 落点与验收命令 · 决策记录 · 用例表 · RTM 4-1）；登记表 = `docs/design/fork-deltas.md`；任务书 = 本档 §2。三者互相对上：§2 的 12 档与 6 档逐档指向 §29.5，未复制行数表。
+
+**下一节点**：用户发设计评审（`advisor type=design`，`documents` = 上述两档，`batchDoc` = 本档）。
+
+### 披露：父侧在本档做了 6 行纯路径修正（2026-10-26 20:42）
+
+`doc_check` 交付门首跑 **REFUSED（锚 7 条）**：本档内 §1/§2 多处写了裸名 `fork-deltas.md` / `thincoder-adapter.md`，门要求指针可解析（裸名不跨目录解析）。父侧对 6 行做了**只补目录前缀**的修正（`docs/design/…`），**未改任何语义、未改 §2 的条目/轮次/判据**。复跑 **PASS（0 命中，3 档全清）**。
+
+**这是父侧笔触到 §2 的一次，据实登记**：动的是指针写法，不是设计内容；若后续评审认为 §2 行文需改，仍由 eng-designer 修订。
 
 ## §2 批次任务与设计（eng-designer）
-**状态行**：（eng-designer 写入时更新）
+**状态行**：设计完成（设计续作轮：清 40 处长段落 + §2 任务书复核）
 <§2 模板占位：本批条目（覆盖） / 设计档落点 / 机制设计 / 受影响文件与测试覆盖 / 验收对照 / 关键决策 / 上抛项>
+
+### 本批条目与同源设计
+
+本批把已合入的上游与自有能力重新接合，不回退共享上游文件。需求条目、设计验收与下表同源；权威设计为 `docs/design/thincoder-adapter.md` §29，共享文件登记为 `docs/design/fork-deltas.md`。
+
+| 条目 | 覆盖需求 | 执行轮 | 完成判据 |
+|---|---|---|---|
+| B1 上游共存边界 | `docs/requirements/thincoder-adapter.md` §4 E1/E2、§7 A10 | R1 | session 自有档均可独立 import；私有宿主成员访问与 `part of '../chat_session.dart'` 清零；所有共享档接缝均登记 |
+| B2 既有会话能力恢复 | 同档 F25/F26 与 §5 图片、编辑上下文映射 | R1 | 改名、命令源、图片与 editor context 的既有定向测试恢复；无能力内核不伪造上下文或回退入口 |
+| B3 btest 同会话状态 | `docs/requirements/browser-biz-test.md` §3 F1/F2/F9/F11、§5 第 1 / 7 项 | R1 + R2 | composer、发送提示与浏览器工具门读同一 overlay 状态；开关、run 与持久化行为不回退 |
+| B4 浏览器宿主工具重接 | `docs/requirements/host-tool-channel.md` §3 F1/F2/F3、§5 A1/A2/A3 | R2 | 浏览器与 btest 工具经 `HostTools` 注册；schema、数字归一、目标 host 与拒绝门保持；通用 HostTools 无 browser 特判 |
+| B5 业务集成回溯 | `test/RTM.md` 既有 1-1 / 2-1 / 3-1 与新增 4-1 | R2 + 父侧收口 | 既有行业务断言不改；4-1 从 composer mode picker 进入并断言跨组件业务结果 |
+
+### 执行轮、落点与禁改
+
+- **R1 = ChatSession overlay，12 个改动档**。逐档 `file:line` 落点、现行行数、delta 与定向验收命令见设计 §29.5 R1；接口形状与调用顺序见 §29.2，状态 owner 见 §29.3。禁改 SCM、browser、composer 产品文件、上游 picker 与外仓；`composer_view.dart` / `btest_status_switches.dart` 只能由 session 契约恢复，不改 UI。
+- **R2 = browser 宿主工具重接，6 个改动档**，须在 R1 完成后实施。逐档落点与验收命令见设计 §29.5 R2；注册与 gate 顺序见 §29.4。禁改 `HostTools` 通用语义、`browser_actions.dart`、`browser_debug_tools.dart`、宿主 MCP 暴露规则、Claude 审批路径与 SCM。
+- 两轮都不新增配置项或 UI 入口；两轮合计的完整受影响面也不得分拆出第三个实施轮。每轮的测试只跑该轮改动面；全量 analyze 与集成套件由父侧收口运行。
+
+### 明确不在本批
+
+- `ide_scm_view.dart` 及其它 SCM 产品语义；#181「获取 = fetch + merge」仍待用户裁定，本批只保留接缝，不预判 Fetch/Pull。
+- 被覆盖的旧共享档恢复、上游 picker 布局、外仓改动、上游测试改写、通用 HostTools 语义改动。
+- 不为消除行数而再拆上游 `ChatSession` 类；共享文件只受 `docs/design/fork-deltas.md` 的净增预算与登记接缝约束。
+
+### 关键决策与上抛
+
+- 采用每会话组合 overlay：上游持有 transcript、活动内核、review 与视图计数；自有模块只经公开 host 与生命周期钩接入。理由与被否方案见设计 §29.1 / §29.6。
+- 共享文件改动的唯一登记面是 `docs/design/fork-deltas.md`；实施遇到表外改动必须停下，先回设计登记，不得直接加接线。
+- **[上抛·待裁]** #181 不在本批裁定；若实施需要改变 SCM 获取语义，立即停止该部分并回主 agent。
+- 验证边界：本轮是设计续作，未重新运行 390-error 基线；该基线来自批档 §1 父侧实跑。R1/R2 的实施验收以设计 §29.5 的命令与实跑结果为准。
+
 ## §3 设计评审（评审子代理）
 ## §4 用户批准（主 agent）
 ## §5 实施记录（eng-coder）
