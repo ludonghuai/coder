@@ -20,6 +20,8 @@ BaoCode 的 git 子进程自动跟随 Settings → Network 解析出的系统代
 
 **先例来源声明**：`docs/design/` 其余四档（chat-streaming / forge-accounts / host-tool-channel / thincoder-adapter）都没有「git 子进程环境」的同形章节；本节的实现坐标是唯一先例来源。
 
+**本节写的都是现态**：代理面（环境注入、超时档、设置键）早已落地，本批（删自动获取簇）对它零改动。本批动到哪些档，只看 §5 一张表。
+
 | 面 | 先例 | 照抄的形 |
 |---|---|---|
 | 系统代理读取 | `lib/network/network_proxy_io.dart:228-256`（`readSystemProxy`：Windows `reg.exe`）；`lib/network/proxy_settings.dart:457-513`（`ProxyEnable` / `ProxyServer` / `ProxyOverride`） | 直接复用，不重写 WinINET / macOS `scutil` 读取 |
@@ -32,7 +34,7 @@ BaoCode 的 git 子进程自动跟随 Settings → Network 解析出的系统代
 
 1. **代理走环境变量，不走 `-c http.proxy`**。`ProxyRoute.environment` 已是 app 与 Claude Code 共用的口径（`lib/network/network_proxy_io.dart:134-135`）；`-c` 会把代理（可能带凭据）写进进程命令行。
    代价：git 自己的 `http.proxy` 配置优先于环境变量（`Documentation/config/http.adoc` 逐字：`http.proxy` overrides `http_proxy`/`https_proxy`/`all_proxy` 环境变量）——用户显式配的 gitconfig 保持优先。
-2. **网络命令超时 300 秒，其余 60 秒**。`runGit` 原为 60 秒固定超时；大仓 / 慢代理下一次 fetch 可能超过 60 秒，被杀了就永远成功不了。按命令名放宽（`gitTimeoutFor`），本地与远端 host 同时受益。`merge` 也列放宽档：它不联网，但大量写工作树，被 60 秒杀掉会留下半合并（`MERGE_HEAD` / 冲突标记），收拾代价高于一次慢合并。
+2. **网络命令超时 300 秒，其余 60 秒**（现态）。落在 `packages/bao_remote/lib/src/git/git_runner.dart:40-76`：`gitLocalTimeout` 60 秒、`gitRemoteTimeout` 300 秒，`gitTimeoutFor(arguments)` 取 argv 里第一个非全局项选档（`-c` / `-C` 的值跳过）。理由：大仓 / 慢代理下一次 fetch 可能超过 60 秒，被杀了就永远成功不了；本地与远端 host 同时受益。`merge` 也列放宽档：它不联网，但大量写工作树，被 60 秒杀掉会留下半合并（`MERGE_HEAD` / 冲突标记），收拾代价高于一次慢合并。
 
 ### 2.3 公开资料调查（survey-evidence）
 
@@ -76,7 +78,7 @@ Git 面**不新增键**，也不读自己的键：
 
 ### 3.4 代理继承契约
 
-- **注入点**：`packages/bao_remote/lib/src/git/git_runner.dart` 的 `setGitProcessEnvironment(Map<String, String> Function()? value)`；`runGit` 与 `_runLimited` 都用 `gitProcessEnvironmentMap()` 作 `environment`。`null` = 不注入（远端 host 的 server 进程即如此）。
+- **注入点**（现态，本批零改动）：`packages/bao_remote/lib/src/git/git_runner.dart` 的 `setGitProcessEnvironment(Map<String, String> Function()? value)`；`runGit` 与 `_runLimited` 都用 `gitProcessEnvironmentMap()` 作 `environment`。`null` = 不注入（远端 host 的 server 进程即如此）。
 - **变量**：直接返回 `ProxyRoute.environment` 的键（`HTTP_PROXY` / `http_proxy` / `HTTPS_PROXY` / `https_proxy` / `NO_PROXY` / `no_proxy`，`ALL_PROXY` 两种拼写在 `off` 时清空）。值域：
   - `http.proxyMode = system`：系统代理（WinINET / macOS `scutil`）；系统无代理时回退 app 进程的环境变量；两者都无 ⇒ 空 map（让 git 继承父环境）。
   - `http.proxyMode = manual`：`http.proxy` 的 URL（`ProxyServer.url`，含 userinfo）。
@@ -89,7 +91,7 @@ Git 面**不新增键**，也不读自己的键：
 
 ## 4. 仓库扫描的失败面（侧栏 Sources）
 
-侧栏按 `git.autoRepositoryDetection` 找项目文件夹下的仓库（`lib/ide/git/repository_scan.dart`）。
+侧栏按 `git.autoRepositoryDetection` 找项目文件夹下的仓库（`lib/ide/git/repository_scan.dart`）。这一面是现态，本批不动；实现在 `lib/workbench.dart:3763-3819`（`_scanWarned` 所在的那组方法）。
 
 - 扫描失败时记一条 `appEvent('sidePanel', 'repository scan failed: …')`；本轮面板不列仓库，30 秒后自动重试，不是永久放弃。
 - 同一位置只提示一次 warning（键 `scmScanFailed`：「暂时无法扫描这里的仓库，稍后自动重试。」/ "Can't look for repositories here right now; trying again shortly."）；一次成功即清提示标记（`_scanWarned`）。
@@ -97,22 +99,22 @@ Git 面**不新增键**，也不读自己的键：
 
 ## 5. 受影响文件清单（本批）
 
-行数 = 2026-10-27 换行数实测（`\n` 计数，本档编制时在盘读数）。
+行数 = 2026-10-27 实测（`\n` 计数，等价 `wc -l`：末行换行不另算一行）。
 
 | # | 坐标（实测） | 改动 | 预算后 |
 |---|---|---|---|
-| ① | `lib/ide/git/git_autofetch.dart`（301） | 整档删除：设置解析 / `decideAutoPull` / 失败分类 / issue 模型 | 0 |
-| ② | `lib/ide/git/git_autofetch_engine.dart`（411） | 整档删除：`IdeGitAutoFetch`（定时器 / 触发面 / 并发池 / 去重通知） | 0 |
-| ③ | `lib/ide/git/git_pull.dart`（53） | 整档删除：`IdeGitPullMode` / `IdeGitPullOutcome` / `IdeGitPullVeto` / `ideGitPullIssue` | 0 |
-| ④ | `lib/settings/pages/git_settings.dart`（113） | 整档删除：三个假控件（两个开关 + 周期下拉） | 0 |
-| ⑤ | `lib/settings/pages/general_page.dart`（845） | 删 `:487`（`GitSettingsGroup` 挂载）与该 import | ~843 |
-| ⑥ | `lib/ide/git/git_repository.dart`（1008） | 删 `lastFetchAt`（`:86-89`）· `autoFetchIssue`（`:91-99`）· `_markFetched`（`:101-106`）及其三处调用（`sync` / `fetch` / `pull`）· `clock` 字段与构造参数（只为 `lastFetchAt` 存在）· `pullFromUpstream`（`:688-747`）· `fastForward`（`:749-755`）· 两个 import（`:20` / `:22`）；`_enqueue` / `_operate` 回退成上游 `Future<void>` 形态（§1 条 3） | ~904 |
-| ⑦ | `lib/ide/git/git_service.dart`（1705） | 删 `fastForward`（`:788`）· `merging`（`:806`）· `abortMerge`（`:817`）· `changedPaths`（`:825`）——消费者只有被删的那条拉取链 | ~1655 |
-| ⑧ | `lib/l10n/app_en.arb`（9171）/ `app_zh.arb`（3406） | 删 20 键及其 `@` 元数据：`scmFetchAndPullAll`、`scmFetchAndPull`、`scmBehindCommits`、`generalSettingsGit`、`generalSettingsGitAutofetch`(+Description)、`generalSettingsGitAutoPull`(+Description)、`generalSettingsGitAutofetchPeriod`、`gitPeriodMinutes`、`gitLastFetched`、`gitAutoFetchDirty` / `Diverged` / `Limit` / `Buffered` / `FilesMore` / `Network` / `Proxy` / `Auth` / `Conflict` / `Other` | ~9100 / ~3375 |
-| ⑨ | `lib/l10n/app_localizations.dart`（20506）/ `_en.dart`（12580）/ `_zh.dart`（11914） | `flutter gen-l10n` 重新生成（不手改） | 生成物 |
-| ⑩ | `test/ide/git/git_autofetch_test.dart`（1105）· `test/ide/git/git_pull_real_test.dart`（363） | 被测对象删除 ⇒ 同批删 | 0 |
-| ⑪ | `docs/requirements/ide-git.md`（45） | **主 agent 写**：删 autofetch / 获取 / ↓N 三节（§2.1、§2.2、§2.4–§2.8；§3 对应边界条；§4.1–§4.3、§4.5–§4.8），保留系统代理面（§2.3、§3 代理条、§4.4、§5）；标题与 §1 模块目标改为代理面 | 待主 agent 落 |
-| ⑫ | `docs/design/ide-git.md`（627） | 本档：按删除后的现态重写（只留系统代理与仓库扫描两面） | 本档 |
+| ① | `lib/ide/git/git_autofetch.dart`（300） | 整档删除：设置解析 / `decideAutoPull` / 失败分类 / issue 模型 | 0 |
+| ② | `lib/ide/git/git_autofetch_engine.dart`（410） | 整档删除：`IdeGitAutoFetch`（定时器 / 触发面 / 并发池 / 去重通知） | 0 |
+| ③ | `lib/ide/git/git_pull.dart`（52） | 整档删除：`IdeGitPullMode` / `IdeGitPullOutcome` / `IdeGitPullVeto` / `ideGitPullIssue` | 0 |
+| ④ | `lib/settings/pages/git_settings.dart`（112） | 整档删除：三个假控件（两个开关 + 周期下拉） | 0 |
+| ⑤ | `lib/settings/pages/general_page.dart`（844） | 删 `:487`（`GitSettingsGroup` 挂载）与该 import | ~842 |
+| ⑥ | `lib/ide/git/git_repository.dart`（1007） | 删 `lastFetchAt`（`:86-89`）· `autoFetchIssue`（`:91-99`）· `_markFetched`（`:101-106`）及其三处调用（`sync` / `fetch` / `pull`）· `clock` 字段与构造参数（只为 `lastFetchAt` 存在）· `pullFromUpstream`（`:688-747`）· `fastForward`（`:749-755`）· 两个 import（`:20` / `:22`）；`_enqueue` / `_operate` 回退成上游 `Future<void>` 形态——两者现为 `Future<…>` 泛型，只为承载 `pullFromUpstream` 的返回值；拉取链删掉后没有返回值可带，签名回上游 | ~903 |
+| ⑦ | `lib/ide/git/git_service.dart`（1704） | 删 `fastForward`（`:788`）· `merging`（`:806`）· `abortMerge`（`:817`）· `changedPaths`（`:825`）——消费者只有被删的那条拉取链 | ~1654 |
+| ⑧ | `lib/l10n/app_en.arb`（9170）/ `app_zh.arb`（3405） | 删 21 键（两档同名）及其 `@` 元数据（`@` 块在 en 模板档）：`scmFetchAndPullAll` · `scmFetchAndPull` · `scmBehindCommits` · `generalSettingsGit` · `generalSettingsGitAutofetch` · `generalSettingsGitAutofetchDescription` · `generalSettingsGitAutoPull` · `generalSettingsGitAutoPullDescription` · `generalSettingsGitAutofetchPeriod` · `gitPeriodMinutes` · `gitLastFetched` · `gitAutoFetchDirty` · `gitAutoFetchDiverged` · `gitAutoFetchLimit` · `gitAutoFetchBuffered` · `gitAutoFetchFilesMore` · `gitAutoFetchNetwork` · `gitAutoFetchProxy` · `gitAutoFetchAuth` · `gitAutoFetchConflict` · `gitAutoFetchOther`（实测坐标 en `:8893-9049` / zh `:3349-3381`） | ~9099 / ~3374 |
+| ⑨ | `lib/l10n/app_localizations.dart`（20505）/ `_en.dart`（12579）/ `_zh.dart`（11913） | `flutter gen-l10n` 重新生成（不手改） | 生成物 |
+| ⑩ | `test/ide/git/git_autofetch_test.dart`（1104）· `test/ide/git/git_pull_real_test.dart`（362） | 被测对象删除 ⇒ 同批删 | 0 |
+| ⑪ | `docs/requirements/ide-git.md`（29） | 已按删除后的现态改写（本批内由主 agent 完成）：标题「Git 系统代理（ide-git）需求」，§2 只留代理继承与复用既有设置两条，§4 两条验收 | 29（无残项） |
+| ⑫ | `docs/design/ide-git.md`（214） | 本档：按删除后的现态重写（只留系统代理与仓库扫描两面） | 本档 |
 
 删除面判据 = **无消费者**（本批编制时 grep 读数，按 `lib/**/*.dart` 全量）：
 
@@ -122,13 +124,13 @@ Git 面**不新增键**，也不读自己的键：
 
 ### 5.1 体积档的缝与触发（>500 / >800）
 
-`lib/l10n/*.arb` 是本地化资源、`app_localizations*.dart` 是生成物，不属源码行数档；`test/**` 不属源码行数档（单测随批删）。
+`lib/l10n/*.arb` 是本地化资源、`app_localizations*.dart` 是 `flutter gen-l10n` 的生成物（权威是生成器，手改会被下次生成覆盖）——两者不属源码行数档，行数档判的是人能自由重排的源码；`test/**` 不属源码行数档（单测随批删）。
 
 | 档（编制时 → 实施后） | 档位 | 本批碰法 | 缝（拆出点） | 触发 |
 |---|---|---|---|---|
-| `lib/ide/git/git_service.dart`（1705 → ~1655） | >800 | 只删 4 个方法 | 历史 / 图查询命令段 ⇒ `git_history_service.dart` | 存量债：下次碰历史命令段 |
-| `lib/ide/git/git_repository.dart`（1008 → ~904） | >800 | 删状态字段与拉取核心；回退两个泛型 | 图加载段（`loadMoreGraph` / `_reloadGraph` / `_loadGraph`）⇒ `git_repository_graph.dart` | 存量债：下次碰图段 |
-| `lib/settings/pages/general_page.dart`（845 → ~843） | >800 | 只删 2 行 | IDE 设置分组段 ⇒ `ide_settings_group.dart` | 存量债：下次碰 IDE 设置分组，或文件 >900 行 |
+| `lib/ide/git/git_service.dart`（1704 → ~1654） | >800 | 只删 4 个方法 | 历史 / 图查询命令段 ⇒ `git_history_service.dart` | 存量债：下次碰历史命令段 |
+| `lib/ide/git/git_repository.dart`（1007 → ~903） | >800 | 删状态字段与拉取核心；回退两个泛型 | 图加载段（`loadMoreGraph` / `_reloadGraph` / `_loadGraph`）⇒ `git_repository_graph.dart` | 存量债：下次碰图段 |
+| `lib/settings/pages/general_page.dart`（844 → ~842） | >800 | 只删 2 行 | IDE 设置分组段 ⇒ `ide_settings_group.dart` | 存量债：下次碰 IDE 设置分组，或文件 >900 行 |
 
 `git_repository.dart` 删完仍 >800：拆图段是独立一轮的事，本批不拆（拆了会把一次删除跨两个文件，评审面变大）。
 
@@ -144,21 +146,22 @@ Git 面**不新增键**，也不读自己的键：
 | D6 | 用户 settings.json 里的 `git.autofetch` 等三键不动、不迁移 | 未读键无害；删用户数据超出本批权限。被否：启动时清洗（写用户配置文件，风险大于收益） |
 | D7 | 需求档 / 设计档删失效三节，系统代理面保留 | 失效表达式删除、不留尸体；代理是本档现在唯一的机制。被否：保留章节加「已废弃」标注 |
 | D8 | 每删一组单独提交 | 单笔可回退（A 引擎 / B 控件 + 挂载 / C 仓库侧 / D 测试档 / E l10n / F 文档），任何一组出问题只回退那一笔 |
+| D9 | `git_service.dart` / `git_repository.dart` / `general_page.dart` 删后仍 >800 行，本批不拆 | 拆会把一次删除跨两个档，评审面变大；三档是存量债，缝与触发点见 §5.1。被否：本批顺手拆图段 / 历史命令段（把删除批与结构批混成一笔，回退粒度也糊了） |
 
 ## 7. 验收对照（回指本批 §2 条目）
 
-| 条目 | 设计落点 | 判据（机检） |
-|---|---|---|
-| §2-1 A 组（引擎与设置档） | §5 ①②③④ | `lib/ide/git/git_autofetch.dart`、`git_autofetch_engine.dart`、`git_pull.dart`、`lib/settings/pages/git_settings.dart` 四个路径在盘上不存在；`flutter analyze` 零 error（无未解析 import） |
-| §2-2 B 组（假控件） | §5 ⑤ | `grep -n "GitSettingsGroup" lib/` 零命中；`general_page.dart` 无该 import；设置 → General 打开后 Items 里没有 Git 分组 |
-| §2-3 C 组（仓库侧残留） | §5 ⑥⑦ | `grep -nE "lastFetchAt|autoFetchIssue|pullFromUpstream|ideGitPull" lib/` 零命中；`grep -n "service.fastForward\|service.merging\|service.abortMerge\|service.changedPaths" lib/` 零命中；`git_repository.dart` 的 `_enqueue` / `_operate` 签名回到 `Future<void>`（`_enqueue({bool background})` / `_operate(Future<void> Function())`） |
-| §2-4 D 组（测试档） | §5 ⑩ | 两个测试档路径不存在；`flutter analyze` 不报「没找到被 import 的档」 |
-| §2-5 E 组（l10n） | §5 ⑧⑨ | 两个 `arb` 与三个生成档里 `grep -c "gitAutoFetch\|gitLastFetched\|gitPeriodMinutes\|generalSettingsGit\|scmFetchAndPull\|scmBehindCommits"` = 0；`flutter gen-l10n` 退出 0 |
-| §2-6 F 组（文档） | §5 ⑪⑫ | 需求档改写后 `grep -ci autofetch` = 0 且无「获取 / 拉取」节；本档 `grep -n autofetch` 的每一行只属三类（删除清单 §5 ①②⑩⑪ · 旧设置键名 §3.2 §6-D6 §7 §8-B1 · 上游键说明 §2.3），无机制描述行；`doc_check(mode:"gate")` 首行 PASS |
-| §2-7 保留面不动 | §3.4；§4 | `git_repository.dart` 的 `scheduleMicrotask(_notify)` 空仓修复仍在（`_loadGraph` 内）；`setGitProcessEnvironment` / `gitProcessEnvironmentMap()` 与 `ProxyRoute.environment` 的变量集未改；`ide_scm_view.dart` / `ide_git_log_view.dart` / `ide_git_commit_panel.dart` 零改动（`git diff --stat` 里不出现） |
-| §2-8 用户旧设置不炸 | §3.2 | settings.json 写入 `{"git.autofetch": false}` 后启动，设置页与 SCM 面正常，无异常日志 |
+| 条目 | 设计落点 | 机检 | 走查 |
+|---|---|---|---|
+| §2-1 A 组（引擎与设置档） | §5 ①②③④ | `lib/ide/git/git_autofetch.dart`、`git_autofetch_engine.dart`、`git_pull.dart`、`lib/settings/pages/git_settings.dart` 四个路径在盘上不存在；`flutter analyze` 零 error（无未解析 import） | — |
+| §2-2 B 组（假控件） | §5 ⑤ | `grep -n "GitSettingsGroup" lib/` 零命中；`general_page.dart` 无该 import | 设置 → General 打开后 Items 里没有 Git 分组 |
+| §2-3 C 组（仓库侧残留） | §5 ⑥⑦ | `grep -nE "lastFetchAt|autoFetchIssue|pullFromUpstream|ideGitPull" lib/` 零命中；`grep -n "service.fastForward\|service.merging\|service.abortMerge\|service.changedPaths" lib/` 零命中；`git_repository.dart` 的 `_enqueue` / `_operate` 签名回到 `Future<void>`（`_enqueue({bool background})` / `_operate(Future<void> Function())`） | — |
+| §2-4 D 组（测试档） | §5 ⑩ | 两个测试档路径不存在；`flutter analyze` 不报「没找到被 import 的档」 | — |
+| §2-5 E 组（l10n） | §5 ⑧⑨ | 两个 `arb` 与三个生成档里 `grep -c "gitAutoFetch\|gitLastFetched\|gitPeriodMinutes\|generalSettingsGit\|scmFetchAndPull\|scmBehindCommits"` = 0；`flutter gen-l10n` 退出 0 | — |
+| §2-6 F 组（文档） | §5 ⑪⑫ | 需求档规范面（§1–§5）`grep -ci autofetch` = 0 且无「获取 / 拉取」节（出处行在档头，不属规范面）；本档 `grep -ni autofetch` 的每一行都属三类之一——删除清单（§5 ①②⑥⑧⑩⑪ 与表后判据）· 旧设置键名（§3.2 / §6-D6 / §7 / §8-B1·E2）· 上游键说明（§2.3），无一行把 autofetch 写成活机制；`doc_check(mode:"gate")` 首行 PASS | — |
+| §2-7 保留面不动 | §3.4；§4 | `git_repository.dart` 的 `scheduleMicrotask(_notify)` 空仓修复仍在（`_loadGraph` 内）；`setGitProcessEnvironment` / `gitProcessEnvironmentMap()` 与 `ProxyRoute.environment` 的变量集未改；`ide_scm_view.dart` / `ide_git_log_view.dart` / `ide_git_commit_panel.dart` 零改动（`git diff --stat` 里不出现） | — |
+| §2-8 用户旧设置不炸 | §3.2 | — | settings.json 写入 `{"git.autofetch": false}` 后启动，设置页与 SCM 面正常，无异常日志 |
 
-**实施与收口的运行检查**：`flutter analyze`（全仓，零 error）+ `flutter test test/ide/git/`（本仓 git 面剩下的单测，绿的才收）。本批自己的两个测试档随批删，不留可执行产物。
+**实施与收口的运行检查**：`flutter analyze`（全仓，零 error）+ `flutter test test/ide/git/`（删后目录内 41 个测试档 + 夹具 `fake_git.dart`，绿的才收）。本批自己的两个测试档随批删，不留可执行产物。
 
 ## 8. 用例表（正常 / 边界 / 错误）
 
@@ -184,7 +187,7 @@ Git 面**不新增键**，也不读自己的键：
 - **业务场景**：本批不产生。
 ⇒ 对 `test/RTM.md` 的 delta = **零行**（不改写、不删、不加）。
 
-`test/RTM.md` 已查（编制时全文检索 `git` / `fetch` / 拉取 / 获取 / `scm` / 仓库，零命中）⇒ git 面没有既有行，delta 确为零行。
+`test/RTM.md` 已逐行核对（修轮实读）：66 行、四个业务故事各一条用例（1-1 切会话 / 2-1 失焦 / 3-1 大会话流式 / 4-1 btest），档内记规模窗 4 / 50–100（`test/RTM.md:9`）；对全档检索 `git|scm|fetch|获取|仓库|拉取`（不区分大小写）零命中 ⇒ git 面没有既有行：既没有本批会破的行，也没有冗余行可删。
 
 ## 10. 边界（本批不做）
 
@@ -201,7 +204,6 @@ Git 面**不新增键**，也不读自己的键：
 |---|---|---|
 | U1 | `test/ide/git/` 下其余测试档是否引用了被删符号（本轮只核了两个待删档与 fake 夹具的表面用法） | 实施首轮 `flutter analyze` + `flutter test test/ide/git/`：报未解析符号 ⇒ 该档随即修正（引用删除面），失败原因写进实施记录 |
 | U2 | `_enqueue` / `_operate` 回退成 `Future<void>` 后，是否还有调用点依赖返回值 | 实施首轮把两个方法的泛型去掉后 `flutter analyze`：报错 ⇒ 保留该调用点的泛型并记录（不走第二条路径） |
-| U3 | `test/RTM.md` 的 git 面行集 | 打开该档逐行核对（§9） |
 
 ## 11. UI / 交互决定（全部落地，无 open）
 
