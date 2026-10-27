@@ -12340,17 +12340,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'Can\'t look for repositories here right now; trying again shortly.';
 
   @override
-  String get scmFetchAndPullAll => 'Fetch and Pull All Repositories';
-
-  @override
-  String get scmFetchAndPull => 'Fetch and pull remote commits';
-
-  @override
-  String scmBehindCommits(int count) {
-    return '$count remote commits to pull';
-  }
-
-  @override
   String modelsSwitchPending(String model) {
     return 'Switches to $model when this turn ends';
   }
@@ -12395,81 +12384,6 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get agentWriteRefusedUnsaved =>
       'The file has unsaved changes in the editor; the write was not applied.';
-
-  @override
-  String get generalSettingsGit => 'Git';
-
-  @override
-  String get generalSettingsGitAutofetch =>
-      'Fetch Remote Updates Automatically';
-
-  @override
-  String get generalSettingsGitAutofetchDescription =>
-      'Every 3 minutes, and once when the window comes back to the front: fetches every repository of the workspace.';
-
-  @override
-  String get generalSettingsGitAutoPull => 'Pull Automatically';
-
-  @override
-  String get generalSettingsGitAutoPullDescription =>
-      'Only when the working tree is clean, the branch can fast-forward, and no unsaved buffer covers the files the remote changed; otherwise the number of remote commits alone shows.';
-
-  @override
-  String get generalSettingsGitAutofetchPeriod => 'Fetch Period';
-
-  @override
-  String gitPeriodMinutes(String minutes) {
-    return '$minutes min';
-  }
-
-  @override
-  String gitLastFetched(String time) {
-    return 'Last fetched: $time';
-  }
-
-  @override
-  String get gitAutoFetchDirty => 'Not pulled: there are uncommitted changes';
-
-  @override
-  String get gitAutoFetchDiverged =>
-      'Not pulled: the branch and its upstream have both changed';
-
-  @override
-  String get gitAutoFetchLimit =>
-      'Not pulled: there are more changes than are checked';
-
-  @override
-  String gitAutoFetchBuffered(String repository, String files) {
-    return '$repository: not pulled, unsaved changes in $files';
-  }
-
-  @override
-  String gitAutoFetchFilesMore(String files) {
-    return '$files and more';
-  }
-
-  @override
-  String get gitAutoFetchNetwork =>
-      'The network is not available: retrying automatically';
-
-  @override
-  String get gitAutoFetchProxy =>
-      'The proxy is not available: retrying automatically';
-
-  @override
-  String gitAutoFetchAuth(String repository) {
-    return '$repository: sign-in is needed to fetch';
-  }
-
-  @override
-  String gitAutoFetchConflict(String repository) {
-    return '$repository: cannot be pulled without your attention';
-  }
-
-  @override
-  String gitAutoFetchOther(String repository) {
-    return '$repository: the automatic fetch failed';
-  }
 
   @override
   String get renameTitleRequired => 'A title is required';

@@ -11682,17 +11682,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get scmScanFailed => '暂时无法扫描这里的仓库，稍后自动重试。';
 
   @override
-  String get scmFetchAndPullAll => '获取并拉取所有仓库';
-
-  @override
-  String get scmFetchAndPull => '获取并拉取远端提交';
-
-  @override
-  String scmBehindCommits(int count) {
-    return '$count 个远端提交待拉取';
-  }
-
-  @override
   String modelsSwitchPending(String model) {
     return '回合结束后切换到 $model';
   }
@@ -11735,76 +11724,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get agentWriteRefusedUnsaved => '文件在编辑器中存在未保存的修改；写入未应用。';
-
-  @override
-  String get generalSettingsGit => 'Git';
-
-  @override
-  String get generalSettingsGitAutofetch => '自动获取远端更新';
-
-  @override
-  String get generalSettingsGitAutofetchDescription =>
-      '每 3 分钟、回到前台时补一次，覆盖工作区所有仓库。';
-
-  @override
-  String get generalSettingsGitAutoPull => '自动拉取';
-
-  @override
-  String get generalSettingsGitAutoPullDescription =>
-      '仅在工作树干净、可快进、且没有未保存的缓冲盖住远端改动的文件时拉取；否则只显示远端提交数。';
-
-  @override
-  String get generalSettingsGitAutofetchPeriod => '获取周期';
-
-  @override
-  String gitPeriodMinutes(String minutes) {
-    return '$minutes 分钟';
-  }
-
-  @override
-  String gitLastFetched(String time) {
-    return '上次成功：$time';
-  }
-
-  @override
-  String get gitAutoFetchDirty => '有未提交的改动，未自动拉取';
-
-  @override
-  String get gitAutoFetchDiverged => '分支与上游都已改动，未自动拉取';
-
-  @override
-  String get gitAutoFetchLimit => '改动比读取的多，未自动拉取';
-
-  @override
-  String gitAutoFetchBuffered(String repository, String files) {
-    return '$repository：有未保存的改动，未自动拉取：$files';
-  }
-
-  @override
-  String gitAutoFetchFilesMore(String files) {
-    return '$files 等';
-  }
-
-  @override
-  String get gitAutoFetchNetwork => '网络不可用，自动重试中';
-
-  @override
-  String get gitAutoFetchProxy => '代理不可用，自动重试中';
-
-  @override
-  String gitAutoFetchAuth(String repository) {
-    return '$repository：获取需要登录';
-  }
-
-  @override
-  String gitAutoFetchConflict(String repository) {
-    return '$repository：需要你处理后才能拉取';
-  }
-
-  @override
-  String gitAutoFetchOther(String repository) {
-    return '$repository：自动获取失败';
-  }
 
   @override
   String get renameTitleRequired => '请填写标题';

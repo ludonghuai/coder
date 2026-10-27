@@ -8890,23 +8890,6 @@
   "@scmScanFailed": {
     "description": "A warning when the project's subfolders could not be scanned for repositories; the panel would otherwise say there is none."
   },
-  "scmFetchAndPullAll": "Fetch and Pull All Repositories",
-  "@scmFetchAndPullAll": {
-    "description": "The workspace menu's Fetch: fetches every repository and merges its upstream."
-  },
-  "scmFetchAndPull": "Fetch and pull remote commits",
-  "@scmFetchAndPull": {
-    "description": "The Get action's tooltip: it fetches the branch's upstream and merges it in."
-  },
-  "scmBehindCommits": "{count} remote commits to pull",
-  "@scmBehindCommits": {
-    "description": "The ↓N badge's tooltip in a repository's header: the commits its upstream has that it does not.",
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
   "modelsSwitchPending": "Switches to {model} when this turn ends",
   "@modelsSwitchPending": {
     "placeholders": {
@@ -8962,98 +8945,6 @@
   "agentWriteRefusedUnsaved": "The file has unsaved changes in the editor; the write was not applied.",
   "@agentWriteRefusedUnsaved": {
     "description": "Said in the conversation, and returned to the agent, when a write was refused because the editor has unsaved changes."
-  },
-  "generalSettingsGit": "Git",
-  "generalSettingsGitAutofetch": "Fetch Remote Updates Automatically",
-  "generalSettingsGitAutofetchDescription": "Every 3 minutes, and once when the window comes back to the front: fetches every repository of the workspace.",
-  "generalSettingsGitAutoPull": "Pull Automatically",
-  "generalSettingsGitAutoPullDescription": "Only when the working tree is clean, the branch can fast-forward, and no unsaved buffer covers the files the remote changed; otherwise the number of remote commits alone shows.",
-  "generalSettingsGitAutofetchPeriod": "Fetch Period",
-  "gitPeriodMinutes": "{minutes} min",
-  "@gitPeriodMinutes": {
-    "description": "The fetch period's choice in Settings: how many minutes.",
-    "placeholders": {
-      "minutes": {
-        "type": "String"
-      }
-    }
-  },
-  "gitLastFetched": "Last fetched: {time}",
-  "@gitLastFetched": {
-    "description": "In the branch's tooltip: when the remote's commits last came in.",
-    "placeholders": {
-      "time": {
-        "type": "String"
-      }
-    }
-  },
-  "gitAutoFetchDirty": "Not pulled: there are uncommitted changes",
-  "@gitAutoFetchDirty": {
-    "description": "The automatic fetch's tooltip: the working tree has changes, so nothing was pulled."
-  },
-  "gitAutoFetchDiverged": "Not pulled: the branch and its upstream have both changed",
-  "@gitAutoFetchDiverged": {
-    "description": "The automatic fetch's tooltip: the branch and its upstream diverged, so nothing was pulled."
-  },
-  "gitAutoFetchLimit": "Not pulled: there are more changes than are checked",
-  "@gitAutoFetchLimit": {
-    "description": "The automatic fetch's tooltip: the status has more changes than are read, so nothing was pulled."
-  },
-  "gitAutoFetchBuffered": "{repository}: not pulled, unsaved changes in {files}",
-  "@gitAutoFetchBuffered": {
-    "description": "The automatic fetch's notification and tooltip: files the remote changed have unsaved changes in the editor.",
-    "placeholders": {
-      "repository": {
-        "type": "String"
-      },
-      "files": {
-        "type": "String"
-      }
-    }
-  },
-  "gitAutoFetchFilesMore": "{files} and more",
-  "@gitAutoFetchFilesMore": {
-    "description": "After the first three files an issue names: there are more.",
-    "placeholders": {
-      "files": {
-        "type": "String"
-      }
-    }
-  },
-  "gitAutoFetchNetwork": "The network is not available: retrying automatically",
-  "@gitAutoFetchNetwork": {
-    "description": "The automatic fetch's tooltip after a network failure, which is not notified."
-  },
-  "gitAutoFetchProxy": "The proxy is not available: retrying automatically",
-  "@gitAutoFetchProxy": {
-    "description": "The automatic fetch's tooltip after a proxy failure, which is not notified."
-  },
-  "gitAutoFetchAuth": "{repository}: sign-in is needed to fetch",
-  "@gitAutoFetchAuth": {
-    "description": "The automatic fetch's notification: Git wants a sign-in the app cannot give.",
-    "placeholders": {
-      "repository": {
-        "type": "String"
-      }
-    }
-  },
-  "gitAutoFetchConflict": "{repository}: cannot be pulled without your attention",
-  "@gitAutoFetchConflict": {
-    "description": "The automatic fetch's notification: Git refused to fast-forward, for the user to look at.",
-    "placeholders": {
-      "repository": {
-        "type": "String"
-      }
-    }
-  },
-  "gitAutoFetchOther": "{repository}: the automatic fetch failed",
-  "@gitAutoFetchOther": {
-    "description": "The automatic fetch's tooltip for a failure that is not one of the known kinds.",
-    "placeholders": {
-      "repository": {
-        "type": "String"
-      }
-    }
   },
   "renameTitleRequired": "A title is required",
   "@renameTitleRequired": {

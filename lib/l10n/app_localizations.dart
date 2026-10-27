@@ -20133,24 +20133,6 @@ abstract class AppLocalizations {
   /// **'Can\'t look for repositories here right now; trying again shortly.'**
   String get scmScanFailed;
 
-  /// The workspace menu's Fetch: fetches every repository and merges its upstream.
-  ///
-  /// In en, this message translates to:
-  /// **'Fetch and Pull All Repositories'**
-  String get scmFetchAndPullAll;
-
-  /// The Get action's tooltip: it fetches the branch's upstream and merges it in.
-  ///
-  /// In en, this message translates to:
-  /// **'Fetch and pull remote commits'**
-  String get scmFetchAndPull;
-
-  /// The ↓N badge's tooltip in a repository's header: the commits its upstream has that it does not.
-  ///
-  /// In en, this message translates to:
-  /// **'{count} remote commits to pull'**
-  String scmBehindCommits(int count);
-
   /// No description provided for @modelsSwitchPending.
   ///
   /// In en, this message translates to:
@@ -20222,114 +20204,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The file has unsaved changes in the editor; the write was not applied.'**
   String get agentWriteRefusedUnsaved;
-
-  /// No description provided for @generalSettingsGit.
-  ///
-  /// In en, this message translates to:
-  /// **'Git'**
-  String get generalSettingsGit;
-
-  /// No description provided for @generalSettingsGitAutofetch.
-  ///
-  /// In en, this message translates to:
-  /// **'Fetch Remote Updates Automatically'**
-  String get generalSettingsGitAutofetch;
-
-  /// No description provided for @generalSettingsGitAutofetchDescription.
-  ///
-  /// In en, this message translates to:
-  /// **'Every 3 minutes, and once when the window comes back to the front: fetches every repository of the workspace.'**
-  String get generalSettingsGitAutofetchDescription;
-
-  /// No description provided for @generalSettingsGitAutoPull.
-  ///
-  /// In en, this message translates to:
-  /// **'Pull Automatically'**
-  String get generalSettingsGitAutoPull;
-
-  /// No description provided for @generalSettingsGitAutoPullDescription.
-  ///
-  /// In en, this message translates to:
-  /// **'Only when the working tree is clean, the branch can fast-forward, and no unsaved buffer covers the files the remote changed; otherwise the number of remote commits alone shows.'**
-  String get generalSettingsGitAutoPullDescription;
-
-  /// No description provided for @generalSettingsGitAutofetchPeriod.
-  ///
-  /// In en, this message translates to:
-  /// **'Fetch Period'**
-  String get generalSettingsGitAutofetchPeriod;
-
-  /// The fetch period's choice in Settings: how many minutes.
-  ///
-  /// In en, this message translates to:
-  /// **'{minutes} min'**
-  String gitPeriodMinutes(String minutes);
-
-  /// In the branch's tooltip: when the remote's commits last came in.
-  ///
-  /// In en, this message translates to:
-  /// **'Last fetched: {time}'**
-  String gitLastFetched(String time);
-
-  /// The automatic fetch's tooltip: the working tree has changes, so nothing was pulled.
-  ///
-  /// In en, this message translates to:
-  /// **'Not pulled: there are uncommitted changes'**
-  String get gitAutoFetchDirty;
-
-  /// The automatic fetch's tooltip: the branch and its upstream diverged, so nothing was pulled.
-  ///
-  /// In en, this message translates to:
-  /// **'Not pulled: the branch and its upstream have both changed'**
-  String get gitAutoFetchDiverged;
-
-  /// The automatic fetch's tooltip: the status has more changes than are read, so nothing was pulled.
-  ///
-  /// In en, this message translates to:
-  /// **'Not pulled: there are more changes than are checked'**
-  String get gitAutoFetchLimit;
-
-  /// The automatic fetch's notification and tooltip: files the remote changed have unsaved changes in the editor.
-  ///
-  /// In en, this message translates to:
-  /// **'{repository}: not pulled, unsaved changes in {files}'**
-  String gitAutoFetchBuffered(String repository, String files);
-
-  /// After the first three files an issue names: there are more.
-  ///
-  /// In en, this message translates to:
-  /// **'{files} and more'**
-  String gitAutoFetchFilesMore(String files);
-
-  /// The automatic fetch's tooltip after a network failure, which is not notified.
-  ///
-  /// In en, this message translates to:
-  /// **'The network is not available: retrying automatically'**
-  String get gitAutoFetchNetwork;
-
-  /// The automatic fetch's tooltip after a proxy failure, which is not notified.
-  ///
-  /// In en, this message translates to:
-  /// **'The proxy is not available: retrying automatically'**
-  String get gitAutoFetchProxy;
-
-  /// The automatic fetch's notification: Git wants a sign-in the app cannot give.
-  ///
-  /// In en, this message translates to:
-  /// **'{repository}: sign-in is needed to fetch'**
-  String gitAutoFetchAuth(String repository);
-
-  /// The automatic fetch's notification: Git refused to fast-forward, for the user to look at.
-  ///
-  /// In en, this message translates to:
-  /// **'{repository}: cannot be pulled without your attention'**
-  String gitAutoFetchConflict(String repository);
-
-  /// The automatic fetch's tooltip for a failure that is not one of the known kinds.
-  ///
-  /// In en, this message translates to:
-  /// **'{repository}: the automatic fetch failed'**
-  String gitAutoFetchOther(String repository);
 
   /// The title field's hint when the title is empty.
   ///
