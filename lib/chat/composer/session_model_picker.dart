@@ -59,11 +59,6 @@ class SessionModelPicker extends StatelessWidget {
         selected.label,
   ].join(' · ');
 
-  /// The name of the model [id], among [options]: the id itself when the
-  /// agent no longer lists it.
-  String _nameOf(String id, List<KernelOption> options) =>
-      options.where((option) => option.id == id).firstOrNull?.label ?? id;
-
   /// Runs [pick], which switches to [option]: once confirmed, if that
   /// restarts the agent on another upstream mid-conversation.
   Future<void> _switch(
@@ -126,16 +121,11 @@ class SessionModelPicker extends StatelessWidget {
         onTap: () => unawaited(showModelWelcome(context)),
       );
     }
-    final pending = session.pendingModel;
-    final waiting = pending == null ? null : _nameOf(pending, model.options);
     return ComposerPicker(
       key: pickerKey,
       options: model.options,
       selected: model.selected,
-      label: [
-        _label(model.selected, model.options),
-        if (waiting != null) l10n.modelsSwitchPending(waiting),
-      ].join(' · '),
+      label: _label(model.selected, model.options),
       // Each its name alone, one line; its maker's logo and its upstream's
       // heading tell the rest.
       describes: false,
@@ -152,26 +142,19 @@ class SessionModelPicker extends StatelessWidget {
           ),
         ?_resumeAfterLimit(context, option.id),
       ],
-      tooltip: waiting == null
-          ? tooltip
-          : [?tooltip, l10n.modelsSwitchPending(waiting)].join(' · '),
+      tooltip: tooltip,
       menuWidth: 260,
       searchPlaceholder: l10n.modelsSearch,
-      // A long provider list opens on the one chosen; the rest wait
-      // collapsed. Claude's few groups keep their own face.
-      startCollapsed: session.kernel.id == 'thincoder',
-      footer: session.kernel.id == 'thincoder'
-          ? null
-          : switch (SettingsOpener.maybeOf(context)) {
-              final open? => (
-                label: ChannelSetup.channelBuild
-                    ? l10n.channelAccountTitle
-                    : l10n.modelsManage,
-                icon: Icons.tune_rounded,
-                onTap: () => open(SettingsSection.models),
-              ),
-              null => null,
-            },
+      footers: [
+        if (SettingsOpener.maybeOf(context) case final open?)
+          (
+            label: ChannelSetup.channelBuild
+                ? l10n.channelAccountTitle
+                : l10n.modelsManage,
+            icon: Icons.tune_rounded,
+            onTap: () => open(SettingsSection.models),
+          ),
+      ],
       tapRegionGroupId: tapRegionGroupId,
       focusNode: focusNode,
       onSelected: (option) =>

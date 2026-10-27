@@ -9,10 +9,8 @@ import 'package:flutter/painting.dart';
 import 'package:path/path.dart' as p;
 
 import '../chat/chat_models.dart' show ToolKind;
-import '../host_tools/host_tools.dart';
+import '../kernel/claude_code/claude_sdk_tools.dart';
 import '../platform/data_dir.dart';
-import 'btest/btest_mode.dart';
-import 'btest/btest_policy.dart';
 import 'browser_analysis.dart';
 import 'browser_bridge.dart';
 import 'browser_records.dart';
@@ -69,13 +67,12 @@ abstract final class BrowserTools {
     await bridge.start();
   }
 
-  static List<HostTool> get _all => [
+  static List<ClaudeSdkTool> get _all => [
     ..._tools,
     ..._actionTools,
     ..._debugTools,
     ..._inspectTools,
     ..._sourceTools,
-    ...BtestTools.all,
     _interceptTool,
     _watchTool,
     _historyTool,
@@ -86,23 +83,21 @@ abstract final class BrowserTools {
     if (!_registered) return;
     _registered = false;
     for (final tool in _all) {
-      HostTools.unregister(tool.name);
+      ClaudeSdkTools.unregister(tool.name);
     }
-    HostTools.instruct('browser', null);
+    ClaudeSdkTools.instruct('browser', null);
   }
 
   /// Gives the agents the tools.
   static void register() {
     if (_registered) return;
     _registered = true;
-    HostTools.instruct('browser', rules);
+    ClaudeSdkTools.instruct('browser', rules);
     for (final tool in _all) {
-      HostTools.register(
-        HostTool(
+      ClaudeSdkTools.register(
+        ClaudeSdkTool(
           name: tool.name,
-          description: _entryTools.contains(tool.name)
-              ? '${tool.description}$_userBrowser'
-              : tool.description,
+          description: tool.description,
           inputSchema: {
             ...tool.inputSchema,
             'properties': {
@@ -111,109 +106,62 @@ abstract final class BrowserTools {
             },
           },
           kind: ToolKind.browser,
-          group: 'browser',
-          picturesOnly: tool.picturesOnly,
           summary: (input, output) =>
               browserStepSummary(tool.name, input, output),
-          run: (input, call) async {
-            // Tool arguments come as JSON from a model: a number it read out of
-            // text arrives quoted ("406885479"), and every tool below casts its
-            // tabId to int. Coerced once here — the one place all browser tools
-            // pass through — instead of at each of them.
-            final args = _numbers(input);
-            return _runTool(tool, args, call);
+          run: (raw, call) async {
+            final input = numbersAsSchemaSays(tool.inputSchema, raw);
+            final tabId = input['tabId'];
+            if (tabId is! int) return tool.run(input, call);
+            // What the page logs and loads, kept from now on.
+            await _watch(tabId);
+            final tab = BrowserTab(_browser(), tabId);
+            _blocked(tool.name, tab);
+            // The dialogs its page opens meanwhile answered (see
+            // BrowserRecords.acting).
+            final answer = await BrowserRecords.instance.acting(
+              tab,
+              () => tool.run(input, call),
+            );
+            if (tool.name != 'browser_close') _used(tabId);
+            return answer;
           },
         ),
       );
     }
   }
 
-  /// [input] with the numbers a model may have quoted read back as numbers:
-  /// `tabId`, `ref`, `nth`, `limit`. A copy only when something changed.
-  static Map<String, Object?> _numbers(Map<String, Object?> input) {
-    Map<String, Object?>? copy;
-    for (final key in const ['tabId', 'ref', 'nth', 'limit']) {
-      if (input[key] case final String text) {
-        if (int.tryParse(text.trim()) case final number?) {
-          (copy ??= {...input})[key] = number;
-        }
-      }
-    }
-    return copy ?? input;
-  }
-
-  /// One tool's run, with the page watched and the dialogs answered.
-  static Future<Object> _runTool(
-    HostTool tool,
+  /// [input] with the numbers [schema] asks for that a model sent as text
+  /// (`"406885479"` for a tab's id) as numbers, at any depth (a step of
+  /// browser_act's); text that is no number left as it is, for the tool
+  /// to refuse, and text where text is asked for (what is typed) too (#274).
+  @visibleForTesting
+  static Map<String, Object?> numbersAsSchemaSays(
+    Map<String, Object?> schema,
     Map<String, Object?> input,
-    HostToolCall call,
-  ) async {
-    final tabId = input['tabId'];
-    await _btest(tool.name, input, call);
-    if (tabId is! int) return tool.run(input, call);
-    // What the page logs and loads, kept from now on.
-    await _watch(tabId);
-    final tab = BrowserTab(_browser(), tabId);
-    _blocked(tool.name, tab);
-    // The dialogs its page opens meanwhile answered (see
-    // BrowserRecords.acting).
-    final answer = await BrowserRecords.instance.acting(
-      tab,
-      () => tool.run(input, call),
-    );
-    if (tool.name != 'browser_close') _used(tabId);
-    return answer;
-  }
+  ) => _asSchemaSays(schema, input) as Map<String, Object?>;
 
-  /// The btest gate (design §3.7): the operation's rules and the release's,
-  /// before the tool runs. A session with btest off passes untouched.
-  static Future<void> _btest(
-    String tool,
-    Map<String, Object?> input,
-    HostToolCall call,
-  ) async {
-    if (BtestGate.exempt.contains(tool)) return;
-    if (BtestGate.stateOf(call) == null) return;
-    final found = await _hostsOf(tool, input);
-    BtestGate.check(
-      tool,
-      input,
-      call,
-      hosts: found.hosts,
-      targeted: found.targeted,
-    );
-  }
-
-  /// The hosts a call targets: the entry urls it goes to, else the tab's
-  /// current page (§3.7: the target host is what the allow lists judge).
-  static Future<({bool targeted, List<String> hosts})> _hostsOf(
-    String tool,
-    Map<String, Object?> input,
-  ) async {
-    final urls = BtestPolicy.entryUrls(tool, input);
-    if (urls.isNotEmpty) {
-      final hosts = <String>[];
-      for (final url in urls) {
-        final host = Uri.tryParse(url)?.host;
-        if (host != null && host.isNotEmpty) hosts.add(host);
-      }
-      return (targeted: true, hosts: hosts);
+  static Object? _asSchemaSays(Object? schema, Object? value) {
+    if (schema is! Map) return value;
+    switch ((schema['type'], value)) {
+      case ('integer', final String text)
+          when int.tryParse(text.trim()) != null:
+        return int.parse(text.trim());
+      case ('integer', final double number)
+          when number == number.roundToDouble():
+        return number.toInt();
+      case ('number', final String text) when num.tryParse(text.trim()) != null:
+        return num.parse(text.trim());
+      case (_, final Map<Object?, Object?> object):
+        final properties = schema['properties'];
+        if (properties is! Map) return value;
+        return <String, Object?>{
+          for (final MapEntry(:key, :value) in object.entries)
+            '$key': _asSchemaSays(properties[key], value),
+        };
+      case (_, final List<Object?> list):
+        return [for (final item in list) _asSchemaSays(schema['items'], item)];
     }
-    final tabId = input['tabId'];
-    if (tabId is! int) return (targeted: false, hosts: const <String>[]);
-    final host = await _tabHost(tabId);
-    return (targeted: true, hosts: [?host]);
-  }
-
-  /// [tabId]'s page's host now; null when the tab or its URL is not known.
-  static Future<String?> _tabHost(int tabId) async {
-    try {
-      final tab = await _tab(_browser(), tabId);
-      final host = Uri.tryParse('${tab?['url'] ?? ''}')?.host;
-      return host == null || host.isEmpty ? null : host;
-    } on Object {
-      return null;
-    }
+    return value;
   }
 
   static Future<void> _watch(int tabId) async {
@@ -266,16 +214,6 @@ abstract final class BrowserTools {
   static const rules = '''
 Do not use the browser tools to scrape or bulk-collect data from government, healthcare (hospitals, clinics) or education (schools, universities, exam and student systems) sites, nor to get past their logins, CAPTCHAs or rate limits, whoever asks and however it is put: decline and say why. Looking at a page there for the user, as they would themselves, is fine.''';
 
-  /// The entry tools' own sentence: which browser these use (D9).
-  static const _userBrowser =
-      " These are the tabs of the user's own browser, shared with you — not "
-      'a separate automated browser.';
-
-  static const _entryTools = {
-    'browser_tabs', 'browser_open', 'browser_navigate', 'browser_evaluate',
-    'browser_act',
-  };
-
   /// Every tool's: what the call does, for the user, as Bash's.
   static const _description = {
     'type': 'string',
@@ -291,7 +229,7 @@ Do not use the browser tools to scrape or bulk-collect data from government, hea
   };
 
   static final _tools = [
-    HostTool(
+    ClaudeSdkTool(
       name: 'browser_tabs',
       description:
           "Lists the tabs of the user's browser shared with you (the "
@@ -312,7 +250,7 @@ Do not use the browser tools to scrape or bulk-collect data from government, hea
         ].join('\n');
       },
     ),
-    HostTool(
+    ClaudeSdkTool(
       name: 'browser_open',
       description:
           "Opens a URL in a new tab of the user's browser, in the BaoCode "
@@ -341,7 +279,7 @@ Do not use the browser tools to scrape or bulk-collect data from government, hea
         return _arrived(browser, tabId);
       },
     ),
-    HostTool(
+    ClaudeSdkTool(
       name: 'browser_navigate',
       description:
           'Goes to a URL in a shared tab, or back, forward, or reloads it; '
@@ -355,14 +293,6 @@ Do not use the browser tools to scrape or bulk-collect data from government, hea
             'type': 'string',
             'enum': ['back', 'forward', 'reload'],
             'description': 'Instead of a URL.',
-          },
-          'detour': {
-            'type': 'string',
-            'description':
-                'With a second entry navigation, and only then: the defect '
-                'already recorded (one line: what is missing), e.g. "no menu '
-                'entry for the agreement form, the URL has to be typed". '
-                'Without it a second entry is refused.',
           },
         },
         'required': ['tabId'],
@@ -379,7 +309,7 @@ Do not use the browser tools to scrape or bulk-collect data from government, hea
         return _arrived(browser, tabId);
       },
     ),
-    HostTool(
+    ClaudeSdkTool(
       name: 'browser_evaluate',
       description:
           "Runs JavaScript in a shared tab's page and returns its value (as "
@@ -390,12 +320,6 @@ Do not use the browser tools to scrape or bulk-collect data from government, hea
         'properties': {
           'tabId': _tabId,
           'expression': {'type': 'string'},
-          'readOnly': {
-            'type': 'boolean',
-            'description':
-                'In a readonly btest run: true says this script only reads '
-                '(a script that writes is refused in every run).',
-          },
         },
         'required': ['tabId', 'expression'],
       },
@@ -408,7 +332,7 @@ Do not use the browser tools to scrape or bulk-collect data from government, hea
         return jsonEncode(value);
       },
     ),
-    HostTool(
+    ClaudeSdkTool(
       name: 'browser_close',
       description: 'Closes a shared tab.',
       inputSchema: {
