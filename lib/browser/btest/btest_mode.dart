@@ -95,6 +95,7 @@ class BtestState {
     required BtestEnv env,
     required BtestFace face,
     required BtestTraversal traversal,
+    required List<BtestScenario> scenarios,
     required String expectFile,
     required String qaRoot,
     required String commitRange,
@@ -111,6 +112,7 @@ class BtestState {
       env: env,
       face: face,
       traversal: traversal,
+      scenarios: scenarios,
       expectFile: expectFile,
       qaRoot: qaRoot,
       commitRange: commitRange,
@@ -270,9 +272,10 @@ abstract final class BtestTools {
         'surface sweeps one interface completely, then the next, until the '
         "run's scope is covered; surface is the default). The expect "
         'file is derived by the host from the line, the repository and the '
-        'QA root, and its absolute path is returned. Returns the run id and '
-        'traversal, that path, the case index, the SHA-256 (the write-back '
-        'baseline) and the weights table (path, source, effective order). '
+        'QA root, and its absolute path is returned. Declare every business '
+        'scenario this run will answer for (scenario / role / pre / branch); '
+        'the host freezes them as S1, S2… and returns them with the run id, '
+        'traversal, expect path, case index and SHA-256 write-back baseline. '
         'btest refuses every browser action until a run is started, and one '
         'run at a time.',
     inputSchema: {
@@ -280,24 +283,31 @@ abstract final class BtestTools {
       'properties': {
         'line': {
           'type': 'string',
-          'description': 'The business line, e.g. "订舱". The expect file is '
+          'description':
+              'The business line, e.g. "订舱". The expect file is '
               'named after it (<line>.md): a name, not a path.',
         },
         'repoRoot': {
           'type': 'string',
-          'description': 'The business repository\'s root, absolute; it must '
+          'description':
+              'The business repository\'s root, absolute; it must '
               'hold .git.',
         },
         'startUrl': {
           'type': 'string',
-          'description': 'The one URL this run enters by: every other page '
+          'description':
+              'The one URL this run enters by: every other page '
               'comes from a click, or a recorded detour.',
         },
-        'env': {'type': 'string', 'enum': ['dev', 'test', 'prod']},
+        'env': {
+          'type': 'string',
+          'enum': ['dev', 'test', 'prod'],
+        },
         'mode': {
           'type': 'string',
           'enum': ['readonly', 'write'],
-          'description': 'Optional: the composer\'s write switch decides '
+          'description':
+              'Optional: the composer\'s write switch decides '
               'when this is left out (read-only unless btest.readonly is '
               'off). env: prod with write is refused (rule A), implied or '
               'not.',
@@ -305,7 +315,8 @@ abstract final class BtestTools {
         'traversal': {
           'type': 'string',
           'enum': ['chain', 'surface'],
-          'description': 'Optional: chain walks down the business chain as '
+          'description':
+              'Optional: chain walks down the business chain as '
               'far as it goes (a step that cannot go on is a chainBreak, and '
               'the run looks for another way); surface sweeps this interface '
               'completely (tabs, buttons, forms, filters, the list), then '
@@ -316,8 +327,26 @@ abstract final class BtestTools {
         },
         'commitRange': {
           'type': 'string',
-          'description': 'The change range this run covers, as '
+          'description':
+              'The change range this run covers, as '
               'git log --oneline -30 gave it.',
+        },
+        'scenarios': {
+          'type': 'array',
+          'minItems': 1,
+          'description':
+              'The business scenario matrix this run must answer '
+              'for, one row per scenario × role × initial state × branch.',
+          'items': {
+            'type': 'object',
+            'properties': {
+              'scenario': {'type': 'string'},
+              'role': {'type': 'string'},
+              'pre': {'type': 'string'},
+              'branch': {'type': 'string'},
+            },
+            'required': ['scenario', 'role', 'pre', 'branch'],
+          },
         },
       },
       'required': [
@@ -326,6 +355,7 @@ abstract final class BtestTools {
         'startUrl',
         'env',
         'commitRange',
+        'scenarios',
       ],
     },
     kind: ToolKind.browser,
@@ -336,14 +366,14 @@ abstract final class BtestTools {
   static final HostTool _end = HostTool(
     name: 'btest_run_end',
     description:
-        'Closes the run: takes the report as a structured payload '
-        '(coveredCases, issues, blockers, unconfirmedDiffs, uncovered; a '
-        'chain run also sends chainBreaks, and noVisibleText backs the '
-        'fallback reading) and returns the five mechanical readings — the '
-        'expect file written back, the tail and break keys there, the '
-        'coverage reconciled, the operation authenticity line the report is '
-        'headed with, and the weights table. Write the expect file back '
-        'BEFORE calling this.',
+        'Closes the run only when its gate passes: scenarioResults answers '
+        'every frozen S-id with pass / fail / blocked / uncovered and its '
+        'evidence or why; issues carry step / symptom / evidence / severity / '
+        'pre; every start-index or same-round-new case is covered or named in '
+        'uncovered with why, and every fail scenario links to an issue. '
+        'Refusal names every missing item and keeps the run open for a retry. '
+        'The four mechanical readings and the scenario-matrix report block '
+        'are returned on success. Write the expect file back BEFORE calling.',
     inputSchema: {
       'type': 'object',
       'properties': {
@@ -351,6 +381,23 @@ abstract final class BtestTools {
         'coveredCases': {
           'type': 'array',
           'items': {'type': 'string'},
+        },
+        'scenarioResults': {
+          'type': 'array',
+          'items': {
+            'type': 'object',
+            'properties': {
+              'id': {'type': 'string'},
+              'verdict': {
+                'type': 'string',
+                'enum': ['pass', 'fail', 'blocked', 'uncovered'],
+              },
+              'evidence': {'type': 'string'},
+              'why': {'type': 'string'},
+              'caseId': {'type': 'string'},
+            },
+            'required': ['id', 'verdict'],
+          },
         },
         'issues': {
           'type': 'array',
@@ -374,12 +421,19 @@ abstract final class BtestTools {
             },
           },
         },
-        'blockers': {'type': 'array', 'items': {'type': 'object'}},
-        'unconfirmedDiffs': {'type': 'array', 'items': {'type': 'object'}},
+        'blockers': {
+          'type': 'array',
+          'items': {'type': 'object'},
+        },
+        'unconfirmedDiffs': {
+          'type': 'array',
+          'items': {'type': 'object'},
+        },
         'uncovered': {
           'type': 'array',
           'items': {'type': 'object'},
-          'description': 'What the round did not reach: on a surface run, '
+          'description':
+              'What the round did not reach: on a surface run, '
               'each interface or branch of the run\'s scope it did not sweep '
               '(not each control it skipped), as branch / why.',
         },
@@ -397,7 +451,8 @@ abstract final class BtestTools {
               'verified': {'type': 'string'},
               'cause': {
                 'type': 'string',
-                'description': 'Optional: why this step could not go on — '
+                'description':
+                    'Optional: why this step could not go on — '
                     'one line plus one file:line (or a document section), '
                     'from the read-only subagent a chain break is sent to. '
                     'Absent when none was sent; reason stays one of the four.',
@@ -416,7 +471,7 @@ abstract final class BtestTools {
           },
         },
       },
-      'required': ['runId', 'coveredCases', 'issues'],
+      'required': ['runId', 'coveredCases', 'issues', 'scenarioResults'],
     },
     kind: ToolKind.browser,
     group: 'browser',

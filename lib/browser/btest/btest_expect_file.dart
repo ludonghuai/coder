@@ -9,10 +9,15 @@ import '../../remote/remote_location.dart';
 /// A case of an expect file (design §3.4): its ID and its title, as
 /// `## CASE-BKG-001 新建订舱单并提交` gives them.
 class BtestCase {
-  const BtestCase(this.id, this.title);
+  const BtestCase(this.id, this.title, {this.origin, this.expectFrom});
 
   final String id;
   final String title;
+
+  /// Provenance fields, read for same-round additions (F16). Existing cases
+  /// are not revalidated when a run closes.
+  final String? origin;
+  final String? expectFrom;
 
   @override
   String toString() => title.isEmpty ? id : '$id $title';
@@ -173,23 +178,66 @@ class BtestExpect {
       text == null ? null : sha256.convert(utf8.encode(text)).toString();
 
   static final _caseLine = RegExp(r'^## (CASE-[A-Za-z0-9_.-]+)\s*(.*)$');
+  static final _caseField = RegExp(r'^-\s*(origin|expectFrom)\s*:\s*(.*)$');
 
   /// The `## CASE-…` headings of [text], a fenced block's left out: the
-  /// file's own examples are not its cases.
+  /// file's own examples are not its cases. Provenance lines inside each
+  /// case are read with it so close-out can validate only new additions.
   static List<BtestCase> casesOf(String text) {
     final cases = <BtestCase>[];
     var fenced = false;
+    String? id;
+    var title = '';
+    String? origin;
+    String? expectFrom;
+    void flush() {
+      if (id case final current?) {
+        cases.add(
+          BtestCase(current, title, origin: origin, expectFrom: expectFrom),
+        );
+      }
+      id = null;
+      title = '';
+      origin = null;
+      expectFrom = null;
+    }
+
     for (final line in text.split('\n')) {
       final trimmed = line.trimRight();
-      if (trimmed.trimLeft().startsWith('```')) {
+      final left = trimmed.trimLeft();
+      if (left.startsWith('```')) {
         fenced = !fenced;
         continue;
       }
       if (fenced) continue;
       final match = _caseLine.firstMatch(trimmed);
-      if (match != null) cases.add(BtestCase(match[1]!, match[2]!.trim()));
+      if (match != null) {
+        flush();
+        id = match[1]!;
+        title = match[2]!.trim();
+        continue;
+      }
+      if (id == null) continue;
+      if (left.startsWith('## ')) {
+        flush();
+        continue;
+      }
+      final field = _caseField.firstMatch(left);
+      if (field == null) continue;
+      if (field[1] == 'origin') origin = field[2]!.trim();
+      if (field[1] == 'expectFrom') expectFrom = field[2]!.trim();
     }
+    flush();
     return cases;
+  }
+
+  /// Cases added to this file since [baseline] was read at run_start (F16).
+  List<BtestCase> newCasesSince(Iterable<BtestCase> baseline) {
+    final before = {for (final one in baseline) one.id};
+    return [
+      for (final one in cases)
+        if (!before.contains(one.id)) one,
+    ];
   }
 
   /// The case index `btest_run_start` returns (§3.3, item 2).

@@ -6,7 +6,7 @@
 **集成用例的准入**：从用户入口驱动，只断言业务可观察结果；两条来路——产品真正需要的业务场景，或生产真正发生过的问题。
 机制内部的结构断言（合成层、重建计数）可作为**辅助断言**附在同一条用例里，但它不能单独成为一条集成用例。
 
-**规模窗**：50–100 条。当前 **4 / 50–100**。
+**规模窗**：50–100 条。当前 **6 / 50–100**。
 
 **真实设备读数不在本档**：帧耗时、`GPU Engine` 占用、挂起报告零新增这类读数需要真机，随设计档的验收表走，不进集成套件。
 
@@ -57,9 +57,12 @@
 | 编号 | 用例 | 组件间交互 | 断言的业务可观察结果 | 用户入口 | 回溯需求 | 用例文件 · 标题 | 状态 |
 |---|---|---|---|---|---|---|---|
 | 4-1 | 切到 btest 后提示与浏览器门读同一会话状态 | `ChatComposer` ⇄ `ChatSession` overlay ⇄ `BtestGate`：composer 的 mode picker 打开模式，发送与工具门读同一 overlay | 切到 btest 后下一 turn 的 btest card 恰一次；readonly 写调用被拒且原因可读；切回普通模式后 off 文本恰一次；工具与 composer 读到同一 run / 开关状态 | composer mode picker | F1 · F2 · F9 · F11 | `test/integration/btest_flows_test.dart` · `test('4-1 …')` | 本批新增 |
+| 5-1 | btest 收尾：载荷缺项被拒、补齐后同一 run 交出场景矩阵报告 | `ChatSession` overlay ⇄ `btest_run_end`（收尾门）⇄ 报告生成 | 第一次收尾被拒，文本逐项点名缺哪行声明的场景、哪个 issue 字段、哪个 case 没交代，run 未关；补齐后用同一 `runId` 重提并成功，报告首块逐行给出声明场景的四轴、判定、证据或原因 | btest 里跑完一条业务线后让 agent 收尾 | F13 · F14 | `test/integration/btest_flows_test.dart` · `test('5-1 …')` | 本批新增 |
+| 6-1 | btest 两个开关跨重启读回 | `settings.json` ⇄ `BtestState.fromSettings` ⇄ composer 状态行 | 点「深度」与「允许写」后重开会话，状态行保持两值，起 run 不带参数得 `traversal=chain` / `mode=write`；再点「广度」并重开，读回 `surface` | composer → 关会话 → 重开 | F9 · F11 | `test/integration/btest_flows_test.dart` · `test('6-1 …')` | 本批新增 |
 
 ## 变更记录（本批）
 
-- **新增** 4-1：btest 模式从 composer 的 mode picker 进入，断言提示与浏览器门读同一会话状态。
+- **新增** 5-1：收尾缺项被拒且不关 run，补齐后同一 run 返回声明场景矩阵。
+- **新增** 6-1：两个开关写入设置并在两次重开后读回。
 - **改写**：无。
 - **删除**：无。

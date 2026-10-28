@@ -13,7 +13,6 @@ import '../browser_bridge.dart' show BrowserError;
 import 'btest_expect_file.dart';
 import 'btest_mode.dart';
 import 'btest_policy.dart';
-import 'btest_weights.dart';
 
 /// A recorded detour (§3.6.2): which entry, where to, and the finding it was
 /// taken for.
@@ -37,6 +36,7 @@ class BtestRun {
     required this.env,
     required this.face,
     required this.traversal,
+    required this.scenarios,
     required this.expectFile,
     required this.qaRoot,
     required this.commitRange,
@@ -68,12 +68,15 @@ class BtestRun {
   /// before the next is entered.
   final BtestTraversal traversal;
 
+  /// The declared business scenario matrix, numbered and frozen at run_start
+  /// (F13); close-out answers these rows rather than a static domain list.
+  final List<BtestScenario> scenarios;
+
   /// The expect file, absolute — derived by the host (§3.4): `expectFile`
   /// is this run's name for the file, never an input.
   final String expectFile;
 
-  /// The QA root the run's files live under (§3.4): the weights table is
-  /// one per root (§3.9).
+  /// The QA root the run's expect file lives under (§3.4).
   final String qaRoot;
 
   final String commitRange;
@@ -204,8 +207,52 @@ String? btestText(Object? value) => switch (value) {
   _ => null,
 };
 
+/// Reads the declaration's four axes and assigns its stable S1… ids (F13).
+({List<BtestScenario> rows, List<String> problems}) _declaredScenarios(
+  Object? value,
+) {
+  if (value is! List || value.isEmpty) {
+    return (
+      rows: const <BtestScenario>[],
+      problems: const [
+        'scenarios must be a non-empty array of scenario / role / pre / branch',
+      ],
+    );
+  }
+  final rows = <BtestScenario>[];
+  final problems = <String>[];
+  for (final (i, one) in value.indexed) {
+    final item = one is Map
+        ? one.cast<String, Object?>()
+        : const <String, Object?>{};
+    final scenario = btestText(item['scenario']);
+    final role = btestText(item['role']);
+    final pre = btestText(item['pre']);
+    final branch = btestText(item['branch']);
+    if (one is! Map) problems.add('scenarios[${i + 1}] must be an object');
+    for (final (name, text) in [
+      ('scenario', scenario),
+      ('role', role),
+      ('pre', pre),
+      ('branch', branch),
+    ]) {
+      if (text == null) problems.add('scenarios[${i + 1}].$name is empty');
+    }
+    if (scenario != null && role != null && pre != null && branch != null) {
+      rows.add((
+        id: 'S${i + 1}',
+        scenario: scenario,
+        role: role,
+        pre: pre,
+        branch: branch,
+      ));
+    }
+  }
+  return (rows: rows, problems: problems);
+}
+
 /// `btest_run_start` (§3.3): checks the call, derives the expect file's
-/// path (§3.4), opens the run and returns the six items the model acts on.
+/// path (§3.4), opens the run and returns the five items the model acts on.
 /// The tool itself — its schema and description — stays in `btest_mode`.
 Future<Object> btestStartRun(
   Map<String, Object?> input,
@@ -273,8 +320,9 @@ Future<Object> btestStartRun(
   // what a run did before the parameter existed. An illegal value is
   // named; a surface given stays surface.
   final traversalText = btestText(input['traversal']);
-  final explicitTraversal =
-      traversalText == null ? null : BtestTraversal.parse(traversalText);
+  final explicitTraversal = traversalText == null
+      ? null
+      : BtestTraversal.parse(traversalText);
   if (traversalText != null && explicitTraversal == null) {
     throw BrowserError(
       'btest_run_start refused: traversal must be chain or surface, not '
@@ -308,6 +356,12 @@ Future<Object> btestStartRun(
       'btest_run_start refused: commitRange is required',
     );
   }
+  final declared = _declaredScenarios(input['scenarios']);
+  if (declared.problems.isNotEmpty) {
+    throw BrowserError(
+      'btest_run_start refused: ${declared.problems.join('; ')}',
+    );
+  }
   // Where the expect file goes (§3.4): the QA root's four branches, then
   // the repository's own folder under it — one workspace, one QA root.
   final qa = BtestQaRoot.resolve(
@@ -336,10 +390,6 @@ Future<Object> btestStartRun(
       'cannot be created (${error.osError?.message ?? error.message})',
     );
   }
-  // The weights table (§3.9): one per QA root, built on first sight. The
-  // run goes on with the built-in eight when it cannot be read or written
-  // — a warning, never a refusal.
-  final weights = BtestWeights.ensure(qaRoot.root);
   final BtestExpect expect;
   try {
     expect = BtestExpect.read(expectFile);
@@ -356,6 +406,7 @@ Future<Object> btestStartRun(
     env: env,
     face: face,
     traversal: traversal,
+    scenarios: declared.rows,
     expectFile: expectFile,
     qaRoot: qaRoot.root,
     commitRange: commitRange,
@@ -368,6 +419,10 @@ Future<Object> btestStartRun(
     '1. btest ${run.id} started · $line · ${env.name} · '
         'traversal=${run.traversal.name} · mode=${run.face.name} · '
         '${run.repo}',
+    '   声明场景（冻结；收尾逐行交代）:',
+    for (final row in run.scenarios)
+      '   ${row.id} · 场景=${row.scenario} · 角色=${row.role} · '
+          '初始状态=${row.pre} · 分支=${row.branch}',
     '2. expectFile（解析后的绝对路径）: $expectFile',
     '   $source$reason',
     '3. Case index (${expect.cases.length}):',
@@ -384,11 +439,7 @@ Future<Object> btestStartRun(
       ),
     ],
     '5. 纪律：先读 $expectFile（case 与 expectFrom 都从文件来），再开始；'
-        '不边走边停，收尾带 blockers / unconfirmedDiffs / uncovered，'
-        '写回之后再 btest_run_end。',
-    '6. weights（历史缺陷密度表）: ${weights.path} · '
-        '来源=${weights.source.label}',
-    '   生效序：${weights.orderLine}',
-    for (final warning in weights.warnings) 'warning: $warning',
+        '不边走边停，收尾带 scenarioResults / blockers / unconfirmedDiffs / '
+        'uncovered，写回之后再 btest_run_end。',
   ].join('\n');
 }

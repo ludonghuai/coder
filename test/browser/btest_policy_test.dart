@@ -64,6 +64,9 @@ void main() {
     env: env,
     face: face,
     traversal: traversal,
+    scenarios: const [
+      (id: 'S1', scenario: '提交订舱', role: '货代操作员', pre: '已登录', branch: '主路径'),
+    ],
     expectFile: p.join(sandbox.path, 'qa', 'repo', '订舱.md'),
     qaRoot: p.join(sandbox.path, 'qa'),
     commitRange: 'abc1234',
@@ -79,13 +82,7 @@ void main() {
     bool targeted = true,
   }) {
     try {
-      BtestGate.check(
-        tool,
-        input,
-        call,
-        hosts: hosts,
-        targeted: targeted,
-      );
+      BtestGate.check(tool, input, call, hosts: hosts, targeted: targeted);
       return null;
     } on BrowserError catch (error) {
       return error.message;
@@ -109,6 +106,9 @@ void main() {
     'env': 'test',
     'mode': 'write',
     'commitRange': 'abc1234',
+    'scenarios': const [
+      {'scenario': '提交订舱', 'role': '货代操作员', 'pre': '已登录', 'branch': '主路径'},
+    ],
     ...over,
   };
 
@@ -116,22 +116,19 @@ void main() {
     test('passes on an allowed host, and counts how it aimed (#1, #21)', () {
       start();
       expect(refusal('browser_click', {'tabId': 1, 'text': '提交'}), isNull);
-      expect(refusal('browser_click', {
-        'tabId': 1,
-        'ref': 12,
-      }), isNull);
+      expect(refusal('browser_click', {'tabId': 1, 'ref': 12}), isNull);
       expect(state.run!.wordsTargets, 1);
       expect(state.run!.fallbackTargets, 1);
     });
 
     test('a read-only run lets the reading tools through (#3)', () {
       start(face: BtestFace.readonly);
-      for (final tool in ['browser_snapshot', 'browser_network', 'browser_tabs']) {
-        expect(
-          refusal(tool, {'tabId': 1}),
-          isNull,
-          reason: '$tool only reads',
-        );
+      for (final tool in [
+        'browser_snapshot',
+        'browser_network',
+        'browser_tabs',
+      ]) {
+        expect(refusal(tool, {'tabId': 1}), isNull, reason: '$tool only reads');
       }
     });
 
@@ -145,7 +142,10 @@ void main() {
     test('evaluate in a read-only run needs readOnly: true (#4, #5)', () {
       start(face: BtestFace.readonly);
       expect(
-        refusal('browser_evaluate', {'tabId': 1, 'expression': 'document.title'}),
+        refusal('browser_evaluate', {
+          'tabId': 1,
+          'expression': 'document.title',
+        }),
         contains('readOnly: true'),
       );
       expect(
@@ -315,7 +315,10 @@ void main() {
       expect(state.run!.entries.length, 2);
       // §3.8's line: one declared entry, the detour read apart (入口=1 …
       // 绕道=1), so a legal detour is not reported as a second entry.
-      expect(state.run!.truthLine(noVisibleText: 0), contains('入口=1（navigate=1'));
+      expect(
+        state.run!.truthLine(noVisibleText: 0),
+        contains('入口=1（navigate=1'),
+      );
       expect(state.run!.truthLine(noVisibleText: 0), contains('绕道=1'));
     });
 
@@ -342,7 +345,10 @@ void main() {
     test('back, forward and reload are not entries', () {
       start();
       for (final action in ['back', 'forward', 'reload']) {
-        expect(refusal('browser_navigate', {'tabId': 1, 'action': action}), isNull);
+        expect(
+          refusal('browser_navigate', {'tabId': 1, 'action': action}),
+          isNull,
+        );
       }
       expect(state.run!.entries, isEmpty);
     });
@@ -415,7 +421,10 @@ void main() {
   group('btest_run_start (§3.3)', () {
     test('a session without btest cannot start one (#12)', () async {
       state.on = false;
-      expect(await startRefusal(startInput()), contains('not on in this session'));
+      expect(
+        await startRefusal(startInput()),
+        contains('not on in this session'),
+      );
     });
 
     test('env: prod with mode: write is refused (rule A, #13)', () async {
@@ -448,18 +457,21 @@ void main() {
       );
     });
 
-    test('returns the run, the derived path, the case index and the hash', () async {
-      final answer = '${await BtestTools.all.first.run(startInput(), call)}';
-      final file = File(p.join(sandbox.path, 'qa', 'repo', '订舱.md'));
-      expect(answer, contains('Case index (2)'));
-      expect(answer, contains('CASE-BKG-001'));
-      expect(answer, contains('新建订舱单并提交'));
-      expect(answer, contains(BtestExpect.hashOf(file.readAsStringSync())!));
-      expect(answer, contains('2. expectFile（解析后的绝对路径）: ${file.path}'));
-      expect(answer, contains('来源=工作区根'));
-      expect(answer, contains('先读 ${file.path}'));
-      expect(state.run, isNotNull);
-    });
+    test(
+      'returns the run, the derived path, the case index and the hash',
+      () async {
+        final answer = '${await BtestTools.all.first.run(startInput(), call)}';
+        final file = File(p.join(sandbox.path, 'qa', 'repo', '订舱.md'));
+        expect(answer, contains('Case index (2)'));
+        expect(answer, contains('CASE-BKG-001'));
+        expect(answer, contains('新建订舱单并提交'));
+        expect(answer, contains(BtestExpect.hashOf(file.readAsStringSync())!));
+        expect(answer, contains('2. expectFile（解析后的绝对路径）: ${file.path}'));
+        expect(answer, contains('来源=工作区根'));
+        expect(answer, contains('先读 ${file.path}'));
+        expect(state.run, isNotNull);
+      },
+    );
 
     test('a host typed as a URL is read as its host', () {
       // What someone pastes into the field: the gate compares bare hosts, so a
@@ -491,30 +503,32 @@ void main() {
     });
 
     test('chain is taken and returned (#29)', () async {
-      final answer = '${await BtestTools.all.first.run(
-        startInput({'traversal': 'chain'}),
-        call,
-      )}';
+      final answer =
+          '${await BtestTools.all.first.run(startInput({'traversal': 'chain'}), call)}';
       expect(state.run!.traversal, BtestTraversal.chain);
       expect(answer, contains('traversal=chain'));
     });
 
-    test('an illegal value is refused, naming it and both values (#32)', () async {
-      final said = await startRefusal(startInput({'traversal': 'depth'}));
-      expect(said, contains('traversal'));
-      expect(said, contains('chain'));
-      expect(said, contains('surface'));
-      expect(state.run, isNull, reason: 'no run is made');
-    });
+    test(
+      'an illegal value is refused, naming it and both values (#32)',
+      () async {
+        final said = await startRefusal(startInput({'traversal': 'depth'}));
+        expect(said, contains('traversal'));
+        expect(said, contains('chain'));
+        expect(said, contains('surface'));
+        expect(state.run, isNull, reason: 'no run is made');
+      },
+    );
 
-    test('the weights table is built and returned (§3.3, item 6, #33)', () async {
+    test('the weights table stays out of the runtime (#33, F17)', () async {
+      final table = File(p.join(sandbox.path, 'qa', 'weights.md'))
+        ..writeAsStringSync('offline audit material, not a runtime table');
+      final before = table.readAsStringSync();
       final answer = '${await BtestTools.all.first.run(startInput(), call)}';
-      final table = File(p.join(sandbox.path, 'qa', 'weights.md'));
-      expect(table.existsSync(), isTrue);
-      expect(answer, contains('6. weights（历史缺陷密度表）: ${table.path}'));
-      expect(answer, contains('来源=file'));
-      expect(answer, contains('生效序：刷新 / 数据丢失 → 报错 / 异常'));
-      expect(answer, isNot(contains('warning:')), reason: 'first build is file');
+      expect(answer, isNot(contains('weights')));
+      expect(answer, isNot(contains('权重表')));
+      expect(answer, isNot(contains('6.')));
+      expect(table.readAsStringSync(), before, reason: 'zero runtime writes');
     });
   });
 
@@ -522,10 +536,8 @@ void main() {
     test('point the run when the call says nothing (§7 #35)', () async {
       state.traversal = BtestTraversal.chain;
       state.write = false; // The write switch reads 只读.
-      final answer = '${await BtestTools.all.first.run(
-        startInput({'mode': null, 'traversal': null}),
-        call,
-      )}';
+      final answer =
+          '${await BtestTools.all.first.run(startInput({'mode': null, 'traversal': null}), call)}';
       expect(state.run!.traversal, BtestTraversal.chain);
       expect(state.run!.face, BtestFace.readonly);
       expect(answer, contains('traversal=chain'));
@@ -541,10 +553,8 @@ void main() {
     });
 
     test('a switch never picked reads the setting (§3.3, tier 3)', () async {
-      final answer = '${await BtestTools.all.first.run(
-        startInput({'mode': null, 'traversal': null}),
-        call,
-      )}';
+      final answer =
+          '${await BtestTools.all.first.run(startInput({'mode': null, 'traversal': null}), call)}';
       expect(state.run!.traversal, BtestTraversal.surface);
       expect(
         state.run!.face,
@@ -569,10 +579,8 @@ void main() {
     test('the call overrides both; the switches keep their values (§7 #36)', () async {
       state.traversal = BtestTraversal.surface;
       state.write = true; // 允许写
-      final answer = '${await BtestTools.all.first.run(
-        startInput({'traversal': 'chain', 'mode': 'readonly'}),
-        call,
-      )}';
+      final answer =
+          '${await BtestTools.all.first.run(startInput({'traversal': 'chain', 'mode': 'readonly'}), call)}';
       expect(state.run!.traversal, BtestTraversal.chain);
       expect(state.run!.face, BtestFace.readonly);
       expect(answer, contains('traversal=chain'));
@@ -591,16 +599,24 @@ void main() {
 
     test('rule A judges the resolved mode: a switch-derived write in prod (§7 #39)', () async {
       state.write = true;
-      final said = await startRefusal(startInput({'env': 'prod', 'mode': null}));
+      final said = await startRefusal(
+        startInput({'env': 'prod', 'mode': null}),
+      );
       expect(said, contains('env: prod'));
       expect(said, contains('mode: write'));
-      expect(said, contains('写开关'), reason: 'an implied write says where it came from');
+      expect(
+        said,
+        contains('写开关'),
+        reason: 'an implied write says where it came from',
+      );
       expect(state.run, isNull, reason: 'no run is made');
     });
 
     test('rule A names a setting-derived write too (§7 #39)', () async {
       BtestSettings.values![BtestSettings.readonlyKey] = false;
-      final said = await startRefusal(startInput({'env': 'prod', 'mode': null}));
+      final said = await startRefusal(
+        startInput({'env': 'prod', 'mode': null}),
+      );
       expect(said, contains('env: prod'));
       expect(said, contains('mode: write'));
       expect(said, contains('设置'));
@@ -608,10 +624,8 @@ void main() {
     });
 
     test('a prod run that resolves to readonly starts (§7 #35)', () async {
-      final answer = '${await BtestTools.all.first.run(
-        startInput({'env': 'prod', 'mode': null}),
-        call,
-      )}';
+      final answer =
+          '${await BtestTools.all.first.run(startInput({'env': 'prod', 'mode': null}), call)}';
       expect(state.run!.face, BtestFace.readonly);
       expect(answer, contains('mode=readonly'));
     });
@@ -649,47 +663,49 @@ void main() {
       expect(again.writePicked, isTrue, reason: 'btest.mode was there');
 
       // A run that says nothing takes both switches (§3.3's priority).
-      final answer = '${
-        await BtestTools.all.first.run(
-          startInput({'mode': null, 'traversal': null}),
-          call,
-        )
-      }';
+      final answer =
+          '${await BtestTools.all.first.run(startInput({'mode': null, 'traversal': null}), call)}';
       expect(again.run!.traversal, BtestTraversal.chain);
       expect(again.run!.face, BtestFace.write);
       expect(answer, contains('traversal=chain'));
       expect(answer, contains('mode=write'));
     });
 
-    test('missing or illegal keys fall back, and reading writes none (#44)', () {
-      final keys = BtestSettings.values!
-        ..remove(BtestSettings.onKey)
-        ..remove(BtestSettings.traversalKey)
-        ..remove(BtestSettings.modeKey);
-      BtestMode.reset();
-      final fresh = BtestMode.of(sandbox.path, '44')..fromSettings();
-      expect(fresh.on, isFalse);
-      expect(fresh.traversal, BtestTraversal.surface);
-      expect(fresh.write, isFalse, reason: 'btest.readonly is on');
-      expect(fresh.writePicked, isFalse);
-      expect(keys.keys, isNot(contains(BtestSettings.onKey)),
-          reason: 'opening a conversation writes none');
-      expect(keys.keys, isNot(contains(BtestSettings.traversalKey)));
-      expect(keys.keys, isNot(contains(BtestSettings.modeKey)));
+    test(
+      'missing or illegal keys fall back, and reading writes none (#44)',
+      () {
+        final keys = BtestSettings.values!
+          ..remove(BtestSettings.onKey)
+          ..remove(BtestSettings.traversalKey)
+          ..remove(BtestSettings.modeKey);
+        BtestMode.reset();
+        final fresh = BtestMode.of(sandbox.path, '44')..fromSettings();
+        expect(fresh.on, isFalse);
+        expect(fresh.traversal, BtestTraversal.surface);
+        expect(fresh.write, isFalse, reason: 'btest.readonly is on');
+        expect(fresh.writePicked, isFalse);
+        expect(
+          keys.keys,
+          isNot(contains(BtestSettings.onKey)),
+          reason: 'opening a conversation writes none',
+        );
+        expect(keys.keys, isNot(contains(BtestSettings.traversalKey)));
+        expect(keys.keys, isNot(contains(BtestSettings.modeKey)));
 
-      // Illegal values read as the key's absence, and are left as they are.
-      keys[BtestSettings.onKey] = 'yes';
-      keys[BtestSettings.traversalKey] = 'depth';
-      keys[BtestSettings.modeKey] = 'maybe';
-      final again = BtestMode.of(sandbox.path, '44b')..fromSettings();
-      expect(again.on, isFalse);
-      expect(again.traversal, BtestTraversal.surface);
-      expect(again.write, isFalse);
-      expect(again.writePicked, isFalse);
-      expect(keys[BtestSettings.onKey], 'yes', reason: 'not rewritten');
-      expect(keys[BtestSettings.traversalKey], 'depth');
-      expect(keys[BtestSettings.modeKey], 'maybe');
-    });
+        // Illegal values read as the key's absence, and are left as they are.
+        keys[BtestSettings.onKey] = 'yes';
+        keys[BtestSettings.traversalKey] = 'depth';
+        keys[BtestSettings.modeKey] = 'maybe';
+        final again = BtestMode.of(sandbox.path, '44b')..fromSettings();
+        expect(again.on, isFalse);
+        expect(again.traversal, BtestTraversal.surface);
+        expect(again.write, isFalse);
+        expect(again.writePicked, isFalse);
+        expect(keys[BtestSettings.onKey], 'yes', reason: 'not rewritten');
+        expect(keys[BtestSettings.traversalKey], 'depth');
+        expect(keys[BtestSettings.modeKey], 'maybe');
+      },
+    );
 
     test('leaving btest removes the key; a restart is off (#45)', () {
       final keys = BtestSettings.values!;
@@ -697,55 +713,64 @@ void main() {
       live.on = true;
       expect(keys[BtestSettings.onKey], isTrue);
       live.on = false;
-      expect(keys.containsKey(BtestSettings.onKey), isFalse,
-          reason: 'the key is removed, not set false');
+      expect(
+        keys.containsKey(BtestSettings.onKey),
+        isFalse,
+        reason: 'the key is removed, not set false',
+      );
       final again = BtestMode.of(sandbox.path, '45b')..fromSettings();
       expect(again.on, isFalse, reason: 'no old true is read back');
     });
 
-    test('the three keys reach settings.json itself, and a removal takes it out', () async {
-      final data = Directory.systemTemp.createTempSync('btest-keys');
-      final files = SettingsFiles(DataDirectory(data.path));
-      addTearDown(() {
-        SettingsFiles.instance = SettingsFiles(DataDirectory.current);
-        files.dispose();
-        data.deleteSync(recursive: true);
-      });
-      SettingsFiles.instance = files;
-      await files.settings.load();
-      // No injected values: the write path is the file itself (§9.1).
-      BtestSettings.values = null;
-      final live = BtestMode.of(data.path, 'f')..fromSettings();
-      live.on = true;
-      live.traversal = BtestTraversal.chain;
-      live.write = true;
-      // A read queued behind the three writes: they have landed by now.
-      await files.settings.load();
-      expect(files.settings[BtestSettings.onKey], isTrue);
-      expect(files.settings[BtestSettings.traversalKey], 'chain');
-      expect(files.settings[BtestSettings.modeKey], 'write');
+    test(
+      'the three keys reach settings.json itself, and a removal takes it out',
+      () async {
+        final data = Directory.systemTemp.createTempSync('btest-keys');
+        final files = SettingsFiles(DataDirectory(data.path));
+        addTearDown(() {
+          SettingsFiles.instance = SettingsFiles(DataDirectory.current);
+          files.dispose();
+          data.deleteSync(recursive: true);
+        });
+        SettingsFiles.instance = files;
+        await files.settings.load();
+        // No injected values: the write path is the file itself (§9.1).
+        BtestSettings.values = null;
+        final live = BtestMode.of(data.path, 'f')..fromSettings();
+        live.on = true;
+        live.traversal = BtestTraversal.chain;
+        live.write = true;
+        // A read queued behind the three writes: they have landed by now.
+        await files.settings.load();
+        expect(files.settings[BtestSettings.onKey], isTrue);
+        expect(files.settings[BtestSettings.traversalKey], 'chain');
+        expect(files.settings[BtestSettings.modeKey], 'write');
 
-      live.on = false;
-      await files.settings.load();
-      expect(
-        files.settings.values.containsKey(BtestSettings.onKey),
-        isFalse,
-        reason: 'leaving btest deletes the key',
-      );
+        live.on = false;
+        await files.settings.load();
+        expect(
+          files.settings.values.containsKey(BtestSettings.onKey),
+          isFalse,
+          reason: 'leaving btest deletes the key',
+        );
 
-      // A new state reads the file back.
-      final again = BtestMode.of(data.path, 'f2')..fromSettings();
-      expect(again.on, isFalse);
-      expect(again.traversal, BtestTraversal.chain);
-      expect(again.write, isTrue);
-    });
+        // A new state reads the file back.
+        final again = BtestMode.of(data.path, 'f2')..fromSettings();
+        expect(again.on, isFalse);
+        expect(again.traversal, BtestTraversal.chain);
+        expect(again.write, isTrue);
+      },
+    );
   });
 
   group('btest_run_end payload checks (§3.3)', () {
     Map<String, Object?> report([Map<String, Object?> over = const {}]) => {
       'runId': state.run!.id,
-      'coveredCases': const <String>[],
+      'coveredCases': const ['CASE-BKG-001', 'CASE-BKG-002'],
       'issues': const <Object?>[],
+      'scenarioResults': const [
+        {'id': 'S1', 'verdict': 'pass', 'evidence': '列表与单据快照一致'},
+      ],
       'blockers': const <Object?>[],
       'unconfirmedDiffs': const <Object?>[],
       'uncovered': const <Object?>[],
@@ -757,34 +782,28 @@ void main() {
         BtestTools.all.last.run(report(over), call);
 
     test('a chain round sends chainBreaks; empty is fine (#30)', () async {
-      await BtestTools.all.first.run(
-        startInput({'traversal': 'chain'}),
-        call,
-      );
+      await BtestTools.all.first.run(startInput({'traversal': 'chain'}), call);
       final answer = '${await end({'chainBreaks': const <Object?>[]})}';
       expect(answer, contains('chainBreaks 0 条，四字段齐'));
       expect(answer, isNot(contains('chainBreaks is missing')));
     });
 
     test('a break missing a field, or with a bad reason, is named (#30)', () async {
-      await BtestTools.all.first.run(
-        startInput({'traversal': 'chain'}),
-        call,
-      );
-      final answer = '${await end({
-        'chainBreaks': [
-          {
-            'path': '首页 → 详情',
-            'at': '审核',
-            'reason': '门控',
-            'verified': '打开了详情',
-          },
-          {'path': '首页', 'at': '提交', 'reason': '想不出', 'verified': ''},
-        ],
-      })}';
+      await BtestTools.all.first.run(startInput({'traversal': 'chain'}), call);
+      final answer =
+          '${await end({
+            'chainBreaks': [
+              {'path': '首页 → 详情', 'at': '审核', 'reason': '门控', 'verified': '打开了详情'},
+              {'path': '首页', 'at': '提交', 'reason': '想不出', 'verified': ''},
+            ],
+          })}';
       expect(answer, contains('chainBreaks[2].verified is empty'));
       expect(answer, contains('chainBreaks[2].reason "想不出"'));
-      expect(answer, isNot(contains('chainBreaks[1].')), reason: 'the first is whole');
+      expect(
+        answer,
+        isNot(contains('chainBreaks[1].')),
+        reason: 'the first is whole',
+      );
     });
 
     test('a surface round needs no chainBreaks key', () async {
@@ -798,26 +817,31 @@ void main() {
       final answer = '${await end()}';
       expect(
         answer,
-        contains('traversal=surface · mode=write · 操作真实性：入口=0'
-            '（navigate=0 · open=0 · 被拒=0）'),
+        contains(
+          'traversal=surface · mode=write · 操作真实性：入口=0'
+          '（navigate=0 · open=0 · 被拒=0）',
+        ),
       );
       expect(answer, contains('replay 放行=0/被拒=0'));
       expect(answer, contains('无可见文字=0'));
     });
 
-    test('a fallback aim without its noVisibleText line is named (4-③)', () async {
-      await BtestTools.all.first.run(startInput(), call);
-      BtestGate.check(
-        'browser_click',
-        {'tabId': 1, 'ref': 3},
-        call,
-        hosts: const [host],
-        targeted: true,
-      );
-      final answer = '${await end()}';
-      expect(answer, contains('无可见文字对账'));
-      expect(answer, contains('兜底 1 次'));
-    });
+    test(
+      'a fallback aim without its noVisibleText line is named (4-③)',
+      () async {
+        await BtestTools.all.first.run(startInput(), call);
+        BtestGate.check(
+          'browser_click',
+          {'tabId': 1, 'ref': 3},
+          call,
+          hosts: const [host],
+          targeted: true,
+        );
+        final answer = '${await end()}';
+        expect(answer, contains('无可见文字对账'));
+        expect(answer, contains('兜底 1 次'));
+      },
+    );
 
     test('replay refusals are counted apart (4-②)', () async {
       await BtestTools.all.first.run(startInput(), call);
@@ -833,88 +857,73 @@ void main() {
 
     test('two pending items keep their case and kind (#34)', () async {
       await BtestTools.all.first.run(startInput(), call);
-      final answer = '${await end({
-        'unconfirmedDiffs': [
-          {
-            'kind': 'pending',
-            'caseId': 'CASE-BKG-001',
-            'step': '点审核',
-            'symptom': '状态未变',
-            'expectRef': '弱 · docs/x.md §1',
-          },
-          {
-            'kind': 'pending',
-            'caseId': 'CASE-BKG-002',
-            'step': '点保存',
-            'symptom': '列表未刷新',
-            'expectRef': '无权威来源',
-          },
-        ],
-      })}';
+      final answer =
+          '${await end({
+            'unconfirmedDiffs': [
+              {'kind': 'pending', 'caseId': 'CASE-BKG-001', 'step': '点审核', 'symptom': '状态未变', 'expectRef': '弱 · docs/x.md §1'},
+              {'kind': 'pending', 'caseId': 'CASE-BKG-002', 'step': '点保存', 'symptom': '列表未刷新', 'expectRef': '无权威来源'},
+            ],
+          })}';
       expect(answer, contains('unconfirmedDiffs 2 条，caseId 与 kind 都在'));
       expect(answer, isNot(contains('kind must be')));
     });
 
     test('a diff with an unknown kind is named', () async {
       await BtestTools.all.first.run(startInput(), call);
-      final answer = '${await end({
-        'unconfirmedDiffs': [
-          {'kind': 'maybe', 'caseId': 'CASE-BKG-001'},
-        ],
-      })}';
+      final answer =
+          '${await end({
+            'unconfirmedDiffs': [
+              {'kind': 'maybe', 'caseId': 'CASE-BKG-001'},
+            ],
+          })}';
       expect(answer, contains('kind must be diff or pending'));
     });
 
-    test('a payload field of the wrong type is named, not thrown', () async {
+    test('a payload field of the wrong type is named by the gate', () async {
       await BtestTools.all.first.run(startInput(), call);
-      final answer = '${await end({'issues': 'nope'})}';
-      expect(answer, contains('issues is not a list'));
+      try {
+        await end({'issues': 'nope'});
+        fail('a non-list issues payload must be refused');
+      } on BrowserError catch (error) {
+        expect(error.message, contains('R2 issues must be a list'));
+      }
+      expect(state.run, isNotNull, reason: 'a refusal keeps the run open');
     });
 
     test('a break with its cause keeps its shape; reason still four (§7 #41)', () async {
       await BtestTools.all.first.run(startInput({'traversal': 'chain'}), call);
-      final answer = '${await end({
-        'chainBreaks': [
-          {
-            'path': '首页 → 订舱详情',
-            'at': '点编辑',
-            'reason': '无权限',
-            'verified': '详情页打开了',
-            'cause': '详情页编辑入口被角色权限挡住 · repo/lib/booking/detail.dart:88',
-          },
-        ],
-      })}';
+      final answer =
+          '${await end({
+            'chainBreaks': [
+              {'path': '首页 → 订舱详情', 'at': '点编辑', 'reason': '无权限', 'verified': '详情页打开了', 'cause': '详情页编辑入口被角色权限挡住 · repo/lib/booking/detail.dart:88'},
+            ],
+          })}';
       expect(answer, contains('chainBreaks 1 条，四字段齐'));
       expect(answer, isNot(contains('cause is empty')));
       expect(answer, isNot(contains('cause must be')));
-      expect(answer, isNot(contains('.reason "')), reason: 'reason is unchanged');
+      expect(
+        answer,
+        isNot(contains('.reason "')),
+        reason: 'reason is unchanged',
+      );
     });
 
     test('a cause that stands must say something; left out is fine (§7 #41)', () async {
       await BtestTools.all.first.run(startInput({'traversal': 'chain'}), call);
-      final without = '${await end({
-        'chainBreaks': [
-          {
-            'path': '首页',
-            'at': '列表底',
-            'reason': '没有下一步',
-            'verified': '翻到最后一页',
-          },
-        ],
-      })}';
+      final without =
+          '${await end({
+            'chainBreaks': [
+              {'path': '首页', 'at': '列表底', 'reason': '没有下一步', 'verified': '翻到最后一页'},
+            ],
+          })}';
       expect(without, contains('chainBreaks 1 条，四字段齐'));
       await BtestTools.all.first.run(startInput({'traversal': 'chain'}), call);
-      final blank = '${await end({
-        'chainBreaks': [
-          {
-            'path': '首页',
-            'at': '审核',
-            'reason': '门控',
-            'verified': '打开了列表',
-            'cause': '   ',
-          },
-        ],
-      })}';
+      final blank =
+          '${await end({
+            'chainBreaks': [
+              {'path': '首页', 'at': '审核', 'reason': '门控', 'verified': '打开了列表', 'cause': '   '},
+            ],
+          })}';
       expect(blank, contains('chainBreaks[1].cause is empty'));
     });
 
@@ -924,21 +933,18 @@ void main() {
       // shape only) — btest_card_test holds the card to it. Here the host is
       // held to what it can judge: four breaks, causes shaped, run closes.
       await BtestTools.all.first.run(startInput({'traversal': 'chain'}), call);
-      Map<String, Object?> breakAt(String at, String reason, [String? cause]) => {
-        'path': '首页 → 详情 → $at',
-        'at': at,
-        'reason': reason,
-        'verified': '上一步打开了 $at',
-        'cause': ?cause,
-      };
-      final answer = '${await end({
-        'chainBreaks': [
-          breakAt('审核', '门控', '审核页在 dev 未开放 · repo/lib/booking/audit.dart:41'),
-          breakAt('放单', '无权限', '放单入口只给调度员 · repo/lib/booking/release.dart:88'),
-          breakAt('导出', '数据不足', '详情缺柜号，导出不渲染 · repo/lib/booking/export.dart:12'),
-          breakAt('签收', '没有下一步', '未查明（达到本轮研判上限）'),
-        ],
-      })}';
+      Map<String, Object?> breakAt(String at, String reason, [String? cause]) =>
+          {
+            'path': '首页 → 详情 → $at',
+            'at': at,
+            'reason': reason,
+            'verified': '上一步打开了 $at',
+            'cause': ?cause,
+          };
+      final answer =
+          '${await end({
+            'chainBreaks': [breakAt('审核', '门控', '审核页在 dev 未开放 · repo/lib/booking/audit.dart:41'), breakAt('放单', '无权限', '放单入口只给调度员 · repo/lib/booking/release.dart:88'), breakAt('导出', '数据不足', '详情缺柜号，导出不渲染 · repo/lib/booking/export.dart:12'), breakAt('签收', '没有下一步', '未查明（达到本轮研判上限）')],
+          })}';
       expect(answer, contains('chainBreaks 4 条，四字段齐'));
       expect(answer, isNot(contains('cause is empty')));
       expect(state.run, isNull, reason: 'the run closes as usual');
@@ -950,14 +956,12 @@ void main() {
       // branch and the step's why, the key reads as present (no missing-key
       // warning), it is not a chain break, and the run closes as usual.
       await BtestTools.all.first.run(startInput(), call);
-      final answer = '${await end({
-        'uncovered': const <Object?>[
-          {
-            'branch': '订舱详情 → 附件上传',
-            'why': '需人工上传，本轮未执行',
-          },
-        ],
-      })}';
+      final answer =
+          '${await end({
+            'uncovered': const <Object?>[
+              {'branch': '订舱详情 → 附件上传', 'why': '需人工上传，本轮未执行'},
+            ],
+          })}';
       expect(answer, contains('blockers / unconfirmedDiffs / uncovered 都在'));
       expect(answer, isNot(contains('the payload lacks')));
       expect(

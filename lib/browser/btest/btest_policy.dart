@@ -48,6 +48,90 @@ enum BtestTraversal {
 /// or by a ref / selector where there are none.
 enum BtestTarget { words, fallback }
 
+/// One declared business scenario, numbered and frozen when the run starts.
+typedef BtestScenario = ({
+  String id,
+  String scenario,
+  String role,
+  String pre,
+  String branch,
+});
+
+/// The verdict one declared scenario receives at close-out (§3.3.1 R3).
+enum BtestVerdict {
+  pass,
+  fail,
+  blocked,
+  uncovered;
+
+  static BtestVerdict? parse(String? value) => switch (value?.trim()) {
+    'pass' => BtestVerdict.pass,
+    'fail' => BtestVerdict.fail,
+    'blocked' => BtestVerdict.blocked,
+    'uncovered' => BtestVerdict.uncovered,
+    _ => null,
+  };
+
+  bool get needsEvidence =>
+      this == BtestVerdict.pass || this == BtestVerdict.fail;
+
+  bool get needsWhy =>
+      this == BtestVerdict.blocked || this == BtestVerdict.uncovered;
+}
+
+/// One parsed scenario-result row; invalid parts stay null for a full error list.
+typedef BtestScenarioResult = ({
+  String? id,
+  BtestVerdict? verdict,
+  String? evidence,
+  String? why,
+  String? caseId,
+});
+
+/// Parse a scenario-result row; identity and fail links are checked by the run gate.
+({BtestScenarioResult row, List<String> problems}) btestScenarioResult(
+  Object? value,
+  int index,
+) {
+  final item = value is Map
+      ? value.cast<String, Object?>()
+      : const <String, Object?>{};
+  String? text(Object? raw) => switch (raw) {
+    final String text when text.trim().isNotEmpty => text.trim(),
+    _ => null,
+  };
+
+  final id = text(item['id']);
+  final verdictText = text(item['verdict']);
+  final verdict = BtestVerdict.parse(verdictText);
+  final evidence = text(item['evidence']);
+  final why = text(item['why']);
+  final caseId = text(item['caseId']);
+  final problems = <String>[
+    if (value is! Map) 'scenarioResults[$index] must be an object',
+    if (id == null) 'scenarioResults[$index].id is empty',
+    if (verdict == null)
+      'scenarioResults[$index].verdict must be pass / fail / blocked / '
+          'uncovered, not "${verdictText ?? ''}"',
+    if (verdict?.needsEvidence ?? false)
+      if (evidence == null) 'scenarioResults[$index].evidence is empty',
+    if (verdict?.needsWhy ?? false)
+      if (why == null) 'scenarioResults[$index].why is empty',
+    if (verdict == BtestVerdict.fail && caseId == null)
+      'scenarioResults[$index].caseId is empty for a fail row',
+  ];
+  return (
+    row: (
+      id: id,
+      verdict: verdict,
+      evidence: evidence,
+      why: why,
+      caseId: caseId,
+    ),
+    problems: problems,
+  );
+}
+
 /// One call's verdict: allowed, or refused with the text the agent reads.
 class BtestDecision {
   const BtestDecision.allow({this.entry, this.target})
@@ -164,12 +248,14 @@ abstract final class BtestPolicy {
       },
   ];
 
-  static BtestTarget? _aim(Map<String, Object?> step, {required Object? words}) {
+  static BtestTarget? _aim(
+    Map<String, Object?> step, {
+    required Object? words,
+  }) {
     if (words is String && words.trim().isNotEmpty) return BtestTarget.words;
     final ref = step['ref'];
     final selector = step['selector'];
-    if (ref is int ||
-        (selector is String && selector.trim().isNotEmpty)) {
+    if (ref is int || (selector is String && selector.trim().isNotEmpty)) {
       return BtestTarget.fallback;
     }
     return null;
@@ -214,8 +300,7 @@ abstract final class BtestPolicy {
 
   /// Whether a call [hosts] stands for enters [startUrl] (§3.6.2: compared
   /// without a trailing slash).
-  static bool sameUrl(String a, String b) =>
-      _trimUrl(a) == _trimUrl(b);
+  static bool sameUrl(String a, String b) => _trimUrl(a) == _trimUrl(b);
 
   static String _trimUrl(String url) =>
       url.trim().replaceFirst(RegExp(r'/+$'), '');
@@ -252,7 +337,7 @@ abstract final class BtestPolicy {
           tool,
           host,
           'the steps of a file cannot be judged — pass them inline in '
-              'btest',
+          'btest',
         ),
       );
     }
@@ -278,11 +363,7 @@ abstract final class BtestPolicy {
       final form = writeFormOf('${input['expression'] ?? ''}');
       if (form != null) {
         return BtestDecision.deny(
-          _deny(
-            tool,
-            host,
-            'btest may not write values from a script ($form)',
-          ),
+          _deny(tool, host, 'btest may not write values from a script ($form)'),
           evaluateWrite: true,
           target: target,
         );
@@ -294,11 +375,7 @@ abstract final class BtestPolicy {
       if (entries == 0) {
         if (!sameUrl(entry, startUrl)) {
           return BtestDecision.deny(
-            _deny(
-              tool,
-              host,
-              "the entry must be the run's startUrl $startUrl",
-            ),
+            _deny(tool, host, "the entry must be the run's startUrl $startUrl"),
             entry: entry,
             entryDenied: true,
           );
@@ -309,8 +386,8 @@ abstract final class BtestPolicy {
             tool,
             host,
             'record the defect first, then take the detour — a second entry '
-                'needs browser_navigate with detour "one line: what is '
-                'missing"',
+            'needs browser_navigate with detour "one line: what is '
+            'missing"',
           ),
           entry: entry,
           entryDenied: true,
@@ -329,8 +406,12 @@ abstract final class BtestPolicy {
     // §3.7, release 3 — a host the user allowed; unknown hosts refuse too.
     if (targeted && hosts.isEmpty) {
       return BtestDecision.deny(
-        _deny(tool, null, 'the target host is unknown (the tab shows no '
-            'http(s) page)'),
+        _deny(
+          tool,
+          null,
+          'the target host is unknown (the tab shows no '
+          'http(s) page)',
+        ),
       );
     }
     for (final one in hosts) {
@@ -386,7 +467,7 @@ abstract final class BtestPolicy {
               tool,
               one,
               'rule B: this is a production host — env and prodHosts '
-                  'conflict, and the stricter one decides',
+              'conflict, and the stricter one decides',
             ),
             target: target,
           );
@@ -399,7 +480,8 @@ abstract final class BtestPolicy {
 
   /// Rule A's refusal (design §3.7): [`env: prod`] and [`mode: write`] never
   /// start a run — the boundary is the authorization's, not a domain's.
-  static const ruleA = 'btest_run_start refused: env: prod with mode: write '
+  static const ruleA =
+      'btest_run_start refused: env: prod with mode: write '
       '— btest does not write in production (rule A); start it read-only, '
       'or on dev/test';
 

@@ -73,6 +73,9 @@ void main() {
       env: BtestEnv.test,
       face: face,
       traversal: traversal,
+      scenarios: const [
+        (id: 'S1', scenario: '提交航次', role: '调度员', pre: '已登录', branch: '主路径'),
+      ],
       expectFile: 'D:/qa/v2-timecharter/航次.md',
       qaRoot: 'D:/qa',
       commitRange: 'abc1234',
@@ -106,8 +109,11 @@ void main() {
     await openSwitch(tester, 'btest-write-switch');
     await pick(tester, 'write');
     expect(find.text('btest · not started · chain · write'), findsOne);
-    expect(BtestSettings.values![BtestSettings.onKey], isTrue,
-        reason: 'the flask wrote btest.on');
+    expect(
+      BtestSettings.values![BtestSettings.onKey],
+      isTrue,
+      reason: 'the flask wrote btest.on',
+    );
     expect(BtestSettings.values![BtestSettings.traversalKey], 'chain');
     expect(BtestSettings.values![BtestSettings.modeKey], 'write');
 
@@ -156,8 +162,11 @@ void main() {
 
     session.setBtest(false);
     await tester.pump();
-    expect(find.textContaining('btest ·'), findsNothing,
-        reason: 'the line goes with the mode');
+    expect(
+      find.textContaining('btest ·'),
+      findsNothing,
+      reason: 'the line goes with the mode',
+    );
     expect(
       BtestSettings.values!.containsKey(BtestSettings.onKey),
       isFalse,

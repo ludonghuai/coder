@@ -1,5 +1,5 @@
-/// Closing a run (design §3.3): `btest_run_end`'s five checks and the
-/// payload helpers they read with. Split out of `btest_mode.dart` by
+/// Closing a run (design §3.3): `btest_run_end`'s five gate rules, four
+/// checks and the payload helpers they read with. Split out of `btest_mode.dart` by
 /// SPLIT-5 — the tool's schema and description stay there, the checks and
 /// their readings live here.
 library;
@@ -12,12 +12,9 @@ import 'btest_expect_file.dart';
 import 'btest_mode.dart';
 import 'btest_policy.dart';
 import 'btest_run_state.dart' show BtestRun, btestText;
-import 'btest_weights.dart';
 
-/// `btest_run_end` (§3.3): checks the payload against the run — the expect
-/// file written back, the tail and break keys, the coverage, what the run
-/// counted, the weights table — closes the run and hands back the readings
-/// the report is headed with.
+/// `btest_run_end` (§3.3): refuses an incomplete report without closing the
+/// run; otherwise returns the four checks and the declared scenario matrix.
 Future<Object> btestEndRun(
   Map<String, Object?> input,
   HostToolCall call,
@@ -44,13 +41,16 @@ Future<Object> btestEndRun(
 
   final checks = <String>[];
   final warnings = <String>[];
+  final gate = <String>[];
 
-  // 1. The expect file, against the baseline run_start took.
+  // 1. The expect file, against the baseline run_start took. Its current
+  // cases also widen the legal domain to same-round additions (F16).
   var write = BtestWrite.notWritten;
   var unreadable = false;
+  BtestExpect? current;
   try {
-    final now = BtestExpect.read(run.expectFile);
-    write = BtestExpect.statusOf(baseline: run.baseline, now: now);
+    current = BtestExpect.read(run.expectFile);
+    write = BtestExpect.statusOf(baseline: run.baseline, now: current);
   } on FileSystemException catch (error) {
     unreadable = true;
     warnings.add(
@@ -86,8 +86,19 @@ Future<Object> btestEndRun(
   }
   warnings.addAll(chain.problems);
 
-  // 3. The coverage, against the index run_start returned.
-  final index = {for (final one in run.cases) one.id};
+  // 3. Coverage: run_start's index plus cases written during this run.
+  final newCases = current?.newCasesSince(run.cases) ?? const <BtestCase>[];
+  final index = {
+    for (final one in [...run.cases, ...newCases]) one.id,
+  };
+  for (final one in newCases) {
+    if (btestText(one.origin) == null) {
+      gate.add('R4 new case ${one.id} lacks origin');
+    }
+    if (btestText(one.expectFrom) == null) {
+      gate.add('R4 new case ${one.id} lacks expectFrom');
+    }
+  }
   final coveredInput = input['coveredCases'];
   final covered = [
     if (coveredInput is List)
@@ -106,15 +117,23 @@ Future<Object> btestEndRun(
   final issues = [
     if (issuesInput is List)
       for (final issue in issuesInput)
-        if (issue is Map) issue.cast<String, Object?>(),
+        if (issue is Map)
+          issue.cast<String, Object?>()
+        else
+          const <String, Object?>{},
   ];
+  gate.addAll(_issueProblems(issues));
   final unpointed = <String>[];
   for (final (i, issue) in issues.indexed) {
     final caseId = btestText(issue['caseId']);
     if (caseId == null) {
       unpointed.add('issues[${i + 1}].caseId is empty');
+      gate.add('R4 issues[${i + 1}].caseId is empty');
     } else if (!index.contains(caseId)) {
       unpointed.add('issues[${i + 1}].caseId "$caseId" is not in the index');
+      gate.add(
+        'R4 issues[${i + 1}].caseId "$caseId" is outside the legal case domain',
+      );
     }
     if (btestText(issue['expectRef']) == null) {
       unpointed.add('issues[${i + 1}].expectRef is empty');
@@ -143,7 +162,7 @@ Future<Object> btestEndRun(
   }
   checks.add(
     '3. 覆盖对账：coveredCases ${covered.length - outside.length}/'
-    '${covered.length} 在索引；issues ${issues.length} 条，'
+    '${covered.length} 在合法域；issues ${issues.length} 条，'
     '${unpointed.isEmpty ? 'caseId 与 expectRef 都在' : '${unpointed.length} 处不合格'}；'
     'unconfirmedDiffs ${diffs.length} 条，'
     '${unconfirmed.isEmpty ? 'caseId 与 kind 都在' : '${unconfirmed.length} 处不合格'}',
@@ -153,21 +172,94 @@ Future<Object> btestEndRun(
       'coveredCases is not a list — the field is required (an empty array '
       'is fine)',
     );
+    gate.add('R4 coveredCases must be a list');
+  }
+  if (issuesInput is! List) {
+    gate.add('R2 issues must be a list');
+  }
+  if (coveredInput is List &&
+      covered.isEmpty &&
+      issuesInput is List &&
+      issues.isEmpty) {
+    gate.add('R1 空轮：零覆盖 + 零 issue 不是一个能交的报告');
   }
   if (outside.isNotEmpty) {
     warnings.add(
       'coveredCases: ${outside.join(', ')} not in the run\'s case index',
     );
+    gate.add(
+      'R4 coveredCases outside the legal case domain: ${outside.join(', ')}',
+    );
   }
   warnings.addAll(unpointed);
   warnings.addAll(unconfirmed);
+
+  final uncoveredInput = input['uncovered'];
+  final uncoveredRows = [
+    if (uncoveredInput is List)
+      for (final one in uncoveredInput)
+        if (one is Map) one.cast<String, Object?>(),
+  ];
+  for (final id in index) {
+    final explained = uncoveredRows.any(
+      (one) => one['caseId'] == id && btestText(one['why']) != null,
+    );
+    if (!covered.contains(id) && !explained) {
+      gate.add('R4 case $id is neither covered nor uncovered with a why');
+    }
+  }
+
+  // R3: every frozen declaration is answered exactly once, with a valid
+  // verdict and its required evidence / reason.
+  final resultRows = <BtestScenarioResult>[];
+  final resultsInput = input['scenarioResults'];
+  if (resultsInput is! List) {
+    gate.add('R3 scenarioResults must be a list');
+  } else {
+    for (final (i, one) in resultsInput.indexed) {
+      final parsed = btestScenarioResult(one, i + 1);
+      resultRows.add(parsed.row);
+      gate.addAll([for (final problem in parsed.problems) 'R3 $problem']);
+    }
+  }
+  final declaredScenarios = {for (final row in run.scenarios) row.id: row};
+  final seen = <String>{};
+  for (final (i, row) in resultRows.indexed) {
+    final id = row.id;
+    if (id == null) continue;
+    if (!declaredScenarios.containsKey(id)) {
+      gate.add('R3 scenarioResults[${i + 1}].id "$id" is unknown');
+    }
+    if (!seen.add(id)) {
+      gate.add('R3 scenarioResults[${i + 1}].id "$id" is duplicated');
+    }
+  }
+  for (final id in declaredScenarios.keys) {
+    if (!seen.contains(id)) {
+      gate.add('R3 scenarioResults lacks declared scenario $id');
+    }
+  }
+
+  // R5: a fail is a finding, never a zero-issue pass by another name.
+  final issueCases = [for (final issue in issues) btestText(issue['caseId'])];
+  for (final (i, row) in resultRows.indexed) {
+    if (row.verdict == BtestVerdict.fail &&
+        (row.caseId == null || !issueCases.contains(row.caseId))) {
+      gate.add(
+        'R5 scenarioResults[${i + 1}] (${row.id ?? '?'}) is fail but no '
+        'issues row names caseId ${row.caseId ?? ''}',
+      );
+    }
+  }
 
   // 4. What the run itself counted. 入口 is the declared entry alone; a
   // detour is a legal entry and is read apart (§3.8).
   final declared = run.declared;
   if (declared.isEmpty) {
-    warnings.add('入口=0 — the run did not enter by its startUrl '
-        '(${run.startUrl})');
+    warnings.add(
+      '入口=0 — the run did not enter by its startUrl '
+      '(${run.startUrl})',
+    );
   } else if (!BtestPolicy.sameUrl(declared.first.url, run.startUrl)) {
     warnings.add(
       '入口=${declared.first.url} is not the run\'s startUrl '
@@ -200,7 +292,8 @@ Future<Object> btestEndRun(
   // noVisibleText[] and the report's 无可见文字 rows must both read.
   final noVisibleInput = input['noVisibleText'];
   final noVisible = [
-    if (noVisibleInput is List) for (final one in noVisibleInput) one,
+    if (noVisibleInput is List)
+      for (final one in noVisibleInput) one,
   ];
   if (run.fallbackTargets != noVisible.length) {
     warnings.add(
@@ -211,32 +304,27 @@ Future<Object> btestEndRun(
   }
   checks.add('4. ${run.truthLine(noVisibleText: noVisible.length)}');
 
-  // 5. The weights table (§3.9): on disk with its eight classes, and every
-  // `已修` marker naming a class the table holds.
-  final weights = BtestWeights.check(run.qaRoot);
-  final String weightText;
-  if (weights.problem case final problem?) {
-    weightText = problem;
-  } else if (weights.missing.isNotEmpty) {
-    weightText = '缺类目 ${weights.missing.join(' / ')}（类目不得删）';
-  } else {
-    weightText = '${BtestWeights.pathOf(run.qaRoot)} 在盘，八类齐';
-  }
-  checks.add('5. 权重表：$weightText');
-  if (weights.problem case final problem?) {
-    warnings.add('权重表：$problem');
-  }
-  if (weights.missing.isNotEmpty) {
-    warnings.add(
-      '权重表缺类目 ${weights.missing.join(' / ')} — 类目不得删（§3.9）',
+  if (gate.isNotEmpty) {
+    throw BrowserError(
+      'btest_run_end refused; ${run.id} stays open — ${gate.length} item(s):\n'
+      '- ${gate.join('\n- ')}',
     );
   }
-  warnings.addAll(weights.warnings);
 
+  final resultsById = {
+    for (final row in resultRows)
+      if (row.id != null) row.id!: row,
+  };
   state.end();
   return [
     'btest ${run.id} closed.',
-    '收尾检查表（五项机械读数；第 4 项即报告头一行）：',
+    '报告首块（声明场景矩阵）：',
+    '| id | 场景 | 角色 | 初始状态 | 分支 | 判定 | 证据 / 原因 |',
+    '|---|---|---|---|---|---|---|',
+    for (final scenario in run.scenarios)
+      _scenarioReportRow(scenario, resultsById[scenario.id]!, issues),
+    '',
+    '收尾检查表（四项机械读数；第 4 项即报告头一行）：',
     ...checks,
     if (warnings.isNotEmpty) ...[
       '',
@@ -246,6 +334,54 @@ Future<Object> btestEndRun(
     '报告头：${run.truthLine(noVisibleText: noVisible.length)}',
   ].join('\n');
 }
+
+/// R2: every issue is independently reproducible and readable (§3.3.1).
+List<String> _issueProblems(List<Map<String, Object?>> issues) {
+  final problems = <String>[];
+  for (final (i, issue) in issues.indexed) {
+    for (final field in const ['step', 'symptom', 'severity', 'pre']) {
+      if (btestText(issue[field]) == null) {
+        problems.add('R2 issues[${i + 1}].$field is empty');
+      }
+    }
+    final evidence = issue['evidence'];
+    if (evidence is! Map) {
+      problems.add('R2 issues[${i + 1}].evidence is empty');
+    } else {
+      for (final field in const ['kind', 'readout']) {
+        if (btestText(evidence[field]) == null) {
+          problems.add('R2 issues[${i + 1}].evidence.$field is empty');
+        }
+      }
+    }
+  }
+  return problems;
+}
+
+String _scenarioReportRow(
+  BtestScenario scenario,
+  BtestScenarioResult result,
+  List<Map<String, Object?>> issues,
+) {
+  final verdict = result.verdict!;
+  final issueAt = issues.indexWhere(
+    (issue) =>
+        result.caseId != null && btestText(issue['caseId']) == result.caseId,
+  );
+  final problem = verdict == BtestVerdict.fail && issueAt >= 0
+      ? ' · 问题行 #${issueAt + 1}'
+      : '';
+  final readout = verdict.needsWhy ? result.why : result.evidence;
+  return '| ${_reportCell(scenario.id)} | '
+      '${_reportCell(scenario.scenario)} | ${_reportCell(scenario.role)} | '
+      '${_reportCell(scenario.pre)} | ${_reportCell(scenario.branch)} | '
+      '${_reportCell(verdict.name)} | ${_reportCell(readout)}$problem |';
+}
+
+/// One Markdown-table cell: user-supplied delimiters and line breaks must not
+/// change the report's row structure.
+String _reportCell(String? value) =>
+    (value ?? '').replaceAll(RegExp(r'\r\n|\r|\n'), ' ').replaceAll('|', r'\|');
 
 /// The kinds an `unconfirmedDiffs` entry may take (§3.3, check 3): a diff
 /// between runs, or a rule the user still has to rule on.
@@ -300,7 +436,8 @@ const _diffKinds = {'diff', 'pending'};
     }
   }
   return (
-    text: '；chainBreaks ${value.length} 条'
+    text:
+        '；chainBreaks ${value.length} 条'
         '${problems.isEmpty ? '，四字段齐' : '，${problems.length} 处不合格'}',
     problems: problems,
   );
