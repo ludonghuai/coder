@@ -77,53 +77,6 @@ void _showPromptOf(ChatComposerState state, int step) {
   }
 }
 
-/// The text as the model is given it to polish (see [composerPolishText]).
-ComposerPolishText _polishTextOf(ChatComposerState state) => composerPolishText(state._controller.text);
-
-/// Has the auxiliary model polish the text, its tags, images, code and
-/// links kept as they are; put in its place as one change (⌘Z takes it
-/// back), unless the text changed meanwhile. Why not, in a notification.
-Future<void> _polishOf(ChatComposerState state) async {
-  if (state._polishing) return;
-  final asked = state._polishText();
-  if (!asked.hasWords) return;
-  final before = state._controller.text;
-  final notifications = IdeNotificationsScope.maybeOf(state.context);
-  final l10n = state.context.l10n;
-  state._setState(() => state._polishing = true);
-  try {
-    final String polished;
-    try {
-      polished = await polishComposerText(
-        asked,
-        model: state.widget.session.selected(KernelChoiceKind.model),
-        location: state.widget.session.kernelContext.cwd,
-      );
-    } on ComposerPolishException catch (error) {
-      notifications?.notify(
-        IdeSeverity.error,
-        l10n.composerPolishFailed(error.message ?? l10n.stashAiNoAnswer),
-      );
-      return;
-    }
-    if (!state.mounted || state._controller.text != before) return;
-    // One change of its own to undo: not merged with what was typed just
-    // before it, nor with what is typed next.
-    state._controller
-      ..breakUndo()
-      ..replace(
-        0,
-        state._controller.length,
-        polished,
-        selection: TextSelection.collapsed(offset: polished.length),
-      )
-      ..breakUndo();
-    state._focusNode.requestFocus();
-  } finally {
-    if (state.mounted) state._setState(() => state._polishing = false);
-  }
-}
-
 ComposerMessage _buildMessageOf(ChatComposerState state) {
   final text = StringBuffer();
   final mentions = <String>[];

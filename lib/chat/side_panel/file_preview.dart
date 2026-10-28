@@ -28,7 +28,6 @@ import '../../ide/markdown/markdown_preview.dart';
 import '../../l10n/l10n.dart';
 import '../../platform/app_platform.dart';
 import '../../theme/app_theme.dart';
-import '../../theme/code_font.dart';
 import '../../theme/codicons.dart';
 import '../../theme/material_file_icons.dart';
 import '../../theme/workbench_theme.dart' show themeColors;
@@ -43,6 +42,7 @@ import 'file_edit.dart';
 import 'file_link.dart';
 import 'file_open.dart';
 import 'line_diff.dart';
+import '../../base/safe_selection_indexes.dart';
 
 /// A file in the side panel: its text in the IDE's editor, to edit, search
 /// and save (Cmd+S, Ctrl+S), the lines asked for marked and scrolled to,
@@ -666,24 +666,21 @@ class _FilePreviewState extends State<FilePreview> {
         if (_edit case final edit?) return _editing(edit);
         final range = _request.range;
         final gutter = _gutter(context, lines.length);
-        return CodeTextScale(
-          child: _Lines(
-            key: ValueKey(('text', _request.path)),
-            count: lines.length,
-            lineHeight: _lineHeight(context),
-            reveal: widget.reveal,
-            target: range == null ? null : range.start - 1,
-            width: _widthOf(context, lines, () => lines) + gutter + 20,
-            onCopy: (first, last, text) => _copied(first + 1, last + 1, text),
-            row: (context, i, sideways) => _LineRow(
-              number: i + 1,
-              text: lines[i],
-              colors: _colors.elementAtOrNull(i),
-              gutter: gutter,
-              sideways: sideways,
-              marked:
-                  range != null && i + 1 >= range.start && i + 1 <= range.end,
-            ),
+        return _Lines(
+          key: ValueKey(('text', _request.path)),
+          count: lines.length,
+          lineHeight: _lineHeight(context),
+          reveal: widget.reveal,
+          target: range == null ? null : range.start - 1,
+          width: _widthOf(context, lines, () => lines) + gutter + 20,
+          onCopy: (first, last, text) => _copied(first + 1, last + 1, text),
+          row: (context, i, sideways) => _LineRow(
+            number: i + 1,
+            text: lines[i],
+            colors: _colors.elementAtOrNull(i),
+            gutter: gutter,
+            sideways: sideways,
+            marked: range != null && i + 1 >= range.start && i + 1 <= range.end,
           ),
         );
     }
@@ -817,7 +814,7 @@ class _FilePreviewState extends State<FilePreview> {
       AppFonts.codeStyle(12).copyWith(height: 1.5);
 
   static TextScaler _codeScaler(BuildContext context) =>
-      SystemTextScale.maybeOf(context) ?? MediaQuery.textScalerOf(context);
+      MediaQuery.textScalerOf(context);
 
   /// The actual height of one source line, including the configured scaler.
   static double _lineHeight(BuildContext context) {
@@ -1049,7 +1046,8 @@ class _LinesState extends State<_Lines> {
 /// The selection of [_Lines]: what is selected of each row, one to a line
 /// (each row's text is a selection of its own, which the list would run
 /// together), and which rows, told as it is copied.
-class _LinesSelection extends StaticSelectionContainerDelegate {
+class _LinesSelection extends StaticSelectionContainerDelegate
+    with SafeSelectionIndexes {
   _LinesSelection(this.onCopy);
 
   final void Function(int first, int last, String text) onCopy;
@@ -1111,7 +1109,8 @@ class _SelectableRowState extends State<_SelectableRow> {
       SelectionContainer(delegate: _selection, child: widget.child);
 }
 
-class _RowSelection extends StaticSelectionContainerDelegate {
+class _RowSelection extends StaticSelectionContainerDelegate
+    with SafeSelectionIndexes {
   _RowSelection(this.row);
 
   _SelectableRow row;

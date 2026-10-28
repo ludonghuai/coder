@@ -466,10 +466,3 @@ void _handleEditorChangedOf(ChatComposerState state) {
   state._hasContent = hasContent;
   if (state._shownOfText() != state._shownBuilt) state._setState(() {});
 }
-
-typedef _ShownOfText = ({
-  Object menu,
-  Map<int, ImageAttachment> pool,
-  bool canSend,
-  bool polishable,
-});

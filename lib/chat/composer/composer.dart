@@ -463,9 +463,54 @@ class ChatComposerState extends State<ChatComposer>
 
   // --- Polish --------------------------------------------------------------
 
-  ComposerPolishText _polishText() => _polishTextOf(this);
+  /// The text as the model is given it to polish (see [composerPolishText]).
+  ComposerPolishText _polishText() => composerPolishText(_controller.text);
 
-  Future<void> _polish() => _polishOf(this);
+  /// Has the auxiliary model polish the text into a clearer, more specific
+  /// prompt (Enhance prompt), its tags, images, code and links kept as they
+  /// are, the agent's last turn told to know what it answers; put in its place as one change (⌘Z takes it back), unless the
+  /// text changed meanwhile. Why not, in a notification.
+  Future<void> _polish() async {
+    if (_polishing) return;
+    final asked = _polishText();
+    if (!asked.hasWords) return;
+    final before = _controller.text;
+    final notifications = IdeNotificationsScope.maybeOf(context);
+    final l10n = context.l10n;
+    setState(() => _polishing = true);
+    try {
+      final String polished;
+      try {
+        polished = await polishComposerText(
+          asked,
+          reply: widget.session.lastTurnReply,
+          model: widget.session.selected(KernelChoiceKind.model),
+          location: widget.session.kernelContext.cwd,
+        );
+      } on ComposerPolishException catch (error) {
+        notifications?.notify(
+          IdeSeverity.error,
+          l10n.composerPolishFailed(error.message ?? l10n.stashAiNoAnswer),
+        );
+        return;
+      }
+      if (!mounted || _controller.text != before) return;
+      // One change of its own to undo: not merged with what was typed just
+      // before it, nor with what is typed next.
+      _controller
+        ..breakUndo()
+        ..replace(
+          0,
+          _controller.length,
+          polished,
+          selection: TextSelection.collapsed(offset: polished.length),
+        )
+        ..breakUndo();
+      _focusNode.requestFocus();
+    } finally {
+      if (mounted) setState(() => _polishing = false);
+    }
+  }
 
   // --- Submit --------------------------------------------------------------
 
@@ -554,3 +599,234 @@ class ChatComposerState extends State<ChatComposer>
 
   Widget _buildToolbar() => _buildToolbarOf(this);
 }
+
+/// Polish, Enhance prompt as it says (see [ChatComposerState._polish]): a
+/// sparkle, spinning while the model answers; faint with no words to polish.
+class _PolishButton extends StatelessWidget {
+  const _PolishButton({
+    required this.busy,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final bool busy;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final colors = themeColors;
+    final active = enabled && !busy;
+    final icon = Icon(
+      busy ? Codicons.loading : Codicons.sparkle,
+      size: 14,
+      color: enabled ? colors['icon.foreground'] : AppColors.textFaint,
+    );
+    return IdeHover(
+      message: busy ? l10n.composerPolishing : l10n.composerPolishHint,
+      child: HoverBuilder(
+        cursor: active ? SystemMouseCursors.click : SystemMouseCursors.basic,
+        builder: (context, hovered) => GestureDetector(
+          // Keeps the editor's focus.
+          onTapDown: (_) {},
+          onTap: active ? onTap : null,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 120),
+            width: 23,
+            height: 22,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: active && hovered
+                  ? colors['toolbar.hoverBackground']
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(5),
+            ),
+            child: busy ? IdeSpinning(icon) : icon,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ContextRing extends StatelessWidget {
+  const _ContextRing({
+    required this.fraction,
+    required this.active,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final double fraction;
+  final bool active;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = themeColors;
+    return IdeHover(
+      message: tooltip,
+      child: HoverBuilder(
+        cursor: SystemMouseCursors.click,
+        builder: (context, hovered) => GestureDetector(
+          onTap: onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 120),
+            width: 23,
+            height: 22,
+            // The ring keeps its square: the box is taller than it.
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: active
+                  ? colors['toolbar.activeBackground']
+                  : hovered
+                  ? colors['toolbar.hoverBackground']
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(5),
+            ),
+            child: SizedBox.square(
+              dimension: 13,
+              child: TweenAnimationBuilder<double>(
+                tween: Tween(end: fraction),
+                duration: const Duration(milliseconds: 400),
+                builder: (context, value, _) => CustomPaint(
+                  painter: _RingPainter(
+                    value,
+                    track: colors['disabledForeground'],
+                    arc: colors['icon.foreground'],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// As upstream's context usage widget: the track `disabledForeground`, the
+/// arc `icon.foreground`.
+class _RingPainter extends CustomPainter {
+  _RingPainter(this.fraction, {required this.track, required this.arc});
+
+  final double fraction;
+  final Color track;
+  final Color arc;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final stroke = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round;
+    canvas.drawArc(
+      rect.deflate(1),
+      0,
+      math.pi * 2,
+      false,
+      stroke..color = track,
+    );
+    canvas.drawArc(
+      rect.deflate(1),
+      -math.pi / 2,
+      math.pi * 2 * fraction.clamp(0, 1),
+      false,
+      stroke..color = arc,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_RingPainter oldDelegate) =>
+      oldDelegate.fraction != fraction ||
+      oldDelegate.track != track ||
+      oldDelegate.arc != arc;
+}
+
+class _SendButton extends StatelessWidget {
+  const _SendButton({
+    required this.streaming,
+    required this.enabled,
+    required this.onSend,
+    required this.onStop,
+  });
+
+  final bool streaming;
+  final bool enabled;
+  final VoidCallback onSend;
+  final VoidCallback onStop;
+
+  @override
+  Widget build(BuildContext context) {
+    final active = streaming || enabled;
+    final colors = themeColors;
+    // As upstream's submit button: the primary button's colors; disabled,
+    // none but the disabled icon.
+    final foreground = colors['button.foreground'];
+    // With the keys that do the same, as the keybindings have them.
+    const input = {ChatContextKeys.inChatInput: true};
+    return IdeHover(
+      message: streaming
+          ? ChatKeys.titleWithKey(
+              context.l10n.composerStop,
+              ChatCommandIds.cancel,
+              {...input, ChatContextKeys.requestInProgress: true},
+            )
+          : ChatKeys.titleWithKey(
+              context.l10n.cmdChatSubmit,
+              ChatCommandIds.submit,
+              input,
+            ),
+      child: HoverBuilder(
+        cursor: active ? SystemMouseCursors.click : SystemMouseCursors.basic,
+        builder: (context, hovered) => GestureDetector(
+          onTap: streaming ? onStop : (enabled ? onSend : null),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            width: 24,
+            height: 24,
+            decoration: BoxDecoration(
+              color: !active
+                  ? Colors.transparent
+                  : hovered
+                  ? colors['button.hoverBackground']
+                  : colors['button.background'],
+              shape: BoxShape.circle,
+            ),
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 150),
+              transitionBuilder: (child, animation) =>
+                  ScaleTransition(scale: animation, child: child),
+              child: streaming
+                  ? Container(
+                      key: const ValueKey('stop'),
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: foreground,
+                        borderRadius: BorderRadius.circular(1.5),
+                      ),
+                    )
+                  : Icon(
+                      key: const ValueKey('send'),
+                      Icons.arrow_upward_rounded,
+                      size: 15,
+                      color: active ? foreground : AppColors.textFaint,
+                    ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+typedef _ShownOfText = ({
+  Object menu,
+  Map<int, ImageAttachment> pool,
+  bool canSend,
+  bool polishable,
+});

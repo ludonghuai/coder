@@ -10,6 +10,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:super_sliver_list/super_sliver_list.dart';
 
+import '../base/safe_selection_indexes.dart';
 import '../base/smooth_scroll.dart';
 import '../diagnostics/frame_watch.dart';
 import '../ide/ide_find_widget.dart';
@@ -589,6 +590,9 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
 
   /// Where a drag on the list's text began, to check what it selected.
   Offset? _dragFrom;
+
+  /// A press on the list's text is held, the history focused by it.
+  bool _pressFocused = false;
   bool _isPointerInside = false;
   bool _shownAtBottom = true;
 
@@ -608,6 +612,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
     plainTextOf: _plainTextOf,
     itemCount: () => _feed.itemCount,
     onDragEdge: _autoScrollToward,
+    pressHeld: () => _pressFocused && !_selectionFocusNode.hasFocus,
   );
   bool _reselectScheduled = false;
   Timer? _reselectTimer;
@@ -674,8 +679,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
     WindowVisible.changed.addListener(_onVisibleChanged);
     UserMessageStyle.current.addListener(_handleStyleChanged);
     // Its size, for a slow frame's line in the event log.
-    FrameWatch.notes[this] = () =>
-        '${_feed.itemCount} items${_feed.isStreaming ? ', streaming' : ''}';
+    FrameWatch.notes[this] = _frameNote;
     _wasLive = _feed.isStreaming;
     _prependedSeen = _session?.prependedCount ?? 0;
     _refold();
@@ -683,6 +687,32 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
     _watchTail();
     _resumeEditing();
     _goBack();
+  }
+
+  /// What a slow frame's line says of it: its items, and what only a live
+  /// session holds (subagents' tasks at work, their own conversations).
+  String _frameNote() {
+    var subagents = 0;
+    void count(List<ChatItem> children) {
+      subagents += children.length;
+      for (final child in children) {
+        if (child is AgentItem) count(child.children);
+      }
+    }
+
+    for (var index = 0; index < _feed.itemCount; index++) {
+      if (_feed.itemAt(index) case AgentItem(:final children)) count(children);
+    }
+    final running = [
+      for (final task in _session?.tasks ?? const [])
+        if (task.status == CommandStatus.running) task,
+    ].length;
+    return [
+      '${_feed.itemCount} items',
+      if (_feed.isStreaming) 'streaming',
+      if (running > 0) '$running tasks running',
+      if (subagents > 0) '$subagents in subagents',
+    ].join(', ');
   }
 
   /// The row shown first, as last scrolled to while not at the end (see
@@ -1015,6 +1045,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
     if (_feed.editing case (:final index, :final draft)) {
       _feed.editing = (index: index + count, draft: draft);
     }
+    _selectionDelegate.shiftItems(count);
   }
 
   /// [count] rows are put before the others, not laid out yet: the list
@@ -1305,6 +1336,13 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
     } else {
       _selectionFocusNode.requestFocus();
     }
+    _pressFocused = false;
+    if (_dragFrom != null) {
+      // Once the focus has moved (in a microtask).
+      scheduleMicrotask(() {
+        _pressFocused = _dragFrom != null && _selectionFocusNode.hasFocus;
+      });
+    }
     // Shift+click extends the selection (desktop only, as in Flutter).
     final desktop = switch (defaultTargetPlatform) {
       TargetPlatform.macOS ||
@@ -1335,6 +1373,14 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
       });
     }
     if (_pointersDown <= 0) {
+      // Its focus taken while held: back, for the keys to copy what it
+      // selected.
+      if (_pressFocused &&
+          !_selectionFocusNode.hasFocus &&
+          _selectionDelegate.value.status == SelectionStatus.uncollapsed) {
+        _selectionFocusNode.requestFocus();
+      }
+      _pressFocused = false;
       _scrub(false);
       _autoScroller?.stopAutoScroll();
       _selectionDelegate
@@ -3098,7 +3144,8 @@ class _ItemRegistrar implements SelectionRegistrar, SelectionEndHolder {
 ///
 /// It also does what the list's own selection handling would: auto-scroll a
 /// drag held at an edge, and follow a drag while wheel-scrolling.
-class _ChatSelectionDelegate extends StaticSelectionContainerDelegate {
+class _ChatSelectionDelegate extends StaticSelectionContainerDelegate
+    with SafeSelectionIndexes {
   _ChatSelectionDelegate({
     required this.locate,
     required this.resolve,
@@ -3106,6 +3153,7 @@ class _ChatSelectionDelegate extends StaticSelectionContainerDelegate {
     required this.plainTextOf,
     required this.itemCount,
     required this.onDragEdge,
+    required this.pressHeld,
   });
 
   final _ItemPoint? Function(Offset globalPosition) locate;
@@ -3118,6 +3166,12 @@ class _ChatSelectionDelegate extends StaticSelectionContainerDelegate {
   final String Function(int index) plainTextOf;
   final int Function() itemCount;
   final void Function(Offset globalPosition) onDragEdge;
+
+  /// A press on the text is held, and the focus it gave the history taken
+  /// since (a question's panel coming up, the composer built again): that
+  /// does not clear the selection, as [SelectableRegion] would — a drag
+  /// then went on with its end alone and selected nothing.
+  final bool Function() pressHeld;
 
   /// A Shift+click is in progress: it moves the end and keeps the start.
   bool extending = false;
@@ -3227,6 +3281,8 @@ class _ChatSelectionDelegate extends StaticSelectionContainerDelegate {
       case ClearSelectionEvent() ||
               SelectionEdgeUpdateEvent(type: SelectionEventType.startEdgeUpdate)
           when extending && _start != null:
+        return SelectionResult.none;
+      case ClearSelectionEvent() when pressHeld():
         return SelectionResult.none;
       case ClearSelectionEvent():
         _start = _end = null;
@@ -3447,6 +3503,25 @@ class _ChatSelectionDelegate extends StaticSelectionContainerDelegate {
   }
 
   void endDrag() => _dragEnd = null;
+
+  /// [count] items came in before all the others (earlier history): the
+  /// selection's ends are in the items [count] on.
+  void shiftItems(int count) {
+    _SelectionEdge? shifted(_SelectionEdge? edge) => edge == null
+        ? null
+        : (
+            point: (index: edge.point.index + count, local: edge.point.local),
+            granularity: edge.granularity,
+          );
+    _start = shifted(_start);
+    _end = shifted(_end);
+    final text = {
+      for (final MapEntry(:key, :value) in _endText.entries) key + count: value,
+    };
+    _endText
+      ..clear()
+      ..addAll(text);
+  }
 
   // --- Copy ----------------------------------------------------------------
 

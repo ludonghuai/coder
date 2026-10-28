@@ -453,6 +453,9 @@
   "cmdToggleSidebar": "Toggle Primary Side Bar Visibility",
   "cmdToggleChat": "Toggle Chat",
   "cmdToggleFullScreen": "Toggle Full Screen",
+  "cmdZoomIn": "Zoom In",
+  "cmdZoomOut": "Zoom Out",
+  "cmdZoomReset": "Reset Zoom",
   "cmdToggleWordWrap": "Toggle Word Wrap",
   "menuWordWrap": "Word Wrap",
   "cmdTogglePanel": "Toggle Panel Visibility",
@@ -4654,8 +4657,19 @@
       }
     }
   },
+  "modelsAccountDisabled": "Disabled",
   "modelsAccountLimited": "Out of quota",
   "modelsAccountQuotaUnknown": "Quota not known yet",
+  "modelsQuotaShortWindow": "Short window",
+  "modelsQuotaLongWindow": "Long window",
+  "modelsQuotaLastUpdated": "Last updated {time}",
+  "@modelsQuotaLastUpdated": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
   "modelsQuotaWeek": "Weekly",
   "modelsQuotaHours": "{count}h",
   "@modelsQuotaHours": {
@@ -4681,6 +4695,55 @@
       }
     }
   },
+  "modelsQuotaRemaining": "{percent}% left",
+  "@modelsQuotaRemaining": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "quotaBarWindowLeft": "{window} {percent}% left",
+  "@quotaBarWindowLeft": {
+    "placeholders": {
+      "window": {
+        "type": "String"
+      },
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "quotaBarAvailable": "{count}/{total} available",
+  "@quotaBarAvailable": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "quotaBarAllOut": "All accounts out of quota · back {time}",
+  "@quotaBarAllOut": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "quotaBarBackAt": "Out of quota · back {time}",
+  "@quotaBarBackAt": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "quotaBarNone": "No account can be used",
+  "quotaBarThisChat": "This chat",
+  "quotaBarRefresh": "Refresh Quota",
   "modelsQuotaResetsIn": "resets in {time}",
   "@modelsQuotaResetsIn": {
     "placeholders": {
@@ -5357,7 +5420,7 @@
     }
   },
   "appearanceSettingsCodeSize": "Code Size",
-  "appearanceSettingsCodeSizeDescription": "The size of code in the IDE editor and the side panel's file and changes views. Code in the chat follows the interface size; the terminal has its own size.",
+  "appearanceSettingsCodeSizeDescription": "The size of code in the IDE editor and the side panel's file and changes views at 100% interface size; zooming the interface scales it in proportion. Code in the chat follows the interface size; the terminal has its own size.",
   "appearanceSettingsCodeSizeLabel": "Code size: {size}",
   "@appearanceSettingsCodeSizeLabel": {
     "placeholders": {
@@ -5371,7 +5434,7 @@
   "appearanceSettingsWordWrap": "Word Wrap",
   "appearanceSettingsWordWrapDescription": "Wraps long lines at the editor's width, in every editor. An editor's context menu and the Command Palette (Toggle Word Wrap) switch it too. Files of more than 5,000 lines are not wrapped.",
   "appearanceSettingsUiScale": "Interface Size",
-  "appearanceSettingsUiScaleDescription": "Zooms the whole interface (its text, icons and spacing), code in the chat, and terminal text while the terminal size follows it. Code in the IDE editor and side panel files and changes keeps its own size.",
+  "appearanceSettingsUiScaleDescription": "Zooms the whole interface (its text, icons and spacing) and the code in it, and terminal text while the terminal size follows it. Code in the editor zooms from its code size.",
   "appearanceSettingsUiScaleLabel": "Interface size: {percent}%",
   "@appearanceSettingsUiScaleLabel": {
     "placeholders": {
@@ -5467,6 +5530,10 @@
         "type": "String"
       }
     }
+  },
+  "remoteFolderRefresh": "Read the folders again",
+  "@remoteFolderRefresh": {
+    "description": "The button at the right of the quick pick browsing a remote host's folders: it lists the folder again, e.g. one made in a terminal since."
   },
   "remoteOpenThisFolder": "Open This Folder",
   "remoteParentFolder": "Parent Folder",
@@ -6440,10 +6507,10 @@
   "stashPolish": "Polish",
   "stashPolishing": "Polishing…",
   "stashPolishHint": "Has AI make the selection clearer, in your words, without adding structure",
-  "composerPolish": "Polish",
-  "composerPolishing": "Polishing…",
-  "composerPolishHint": "Polish: the auxiliary model makes the message clearer, in your words; pictures, files, code and links stay as they are; Undo takes it back",
-  "composerPolishFailed": "Could not polish: {error}",
+  "composerPolish": "Enhance prompt",
+  "composerPolishing": "Enhancing…",
+  "composerPolishHint": "Enhance prompt: the auxiliary model makes the message a clearer, more specific prompt for the agent, filling in what you left vague; pictures, files, code and links stay as they are; Undo takes it back",
+  "composerPolishFailed": "Could not enhance the prompt: {error}",
   "@composerPolishFailed": {
     "placeholders": {
       "error": {
@@ -6451,8 +6518,8 @@
       }
     }
   },
-  "generalSettingsComposerPolish": "Polish button",
-  "generalSettingsComposerPolishDescription": "A button in the message box that has the auxiliary model make what you wrote clearer before you send it",
+  "generalSettingsComposerPolish": "Enhance Prompt button",
+  "generalSettingsComposerPolishDescription": "A button in the message box that has the auxiliary model make what you wrote a clearer, more specific prompt before you send it",
   "generalSettingsLiveTurnStats": "Live Speed and Time",
   "generalSettingsLiveTurnStatsDescription": "While the agent works, a line under the reply with how long the turn has taken, how fast the model writes and the tokens so far, changing as it goes. The figures under a finished turn always show.",
   "usageLimitScheduled": "Usage limit reached · continues automatically after it resets at {time}",
