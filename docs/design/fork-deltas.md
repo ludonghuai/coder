@@ -67,6 +67,9 @@
 | `lib/workbench.dart` | 命令面板的会话命令源（`_paletteActions` 里窗口命令 ∪ 焦点会话的 `ChatKeys.commandsOf`，Rename Agent 一项在 `:1316`）；侧栏仓库扫描的失败面（机制见 `ide-git.md` §4.7） | 修 bug | `ChatKeys.targetsOf` / `ChatKeys.commandsOf`；`_sidePanelFolderRepositories` 的扫描 async 块 | 面板 ≤10 行 · 扫描 ≤59 行 |
 | `lib/ide/ide_workbench.dart` | chord 第二键的窗口门（`_holdsKeys` `:3344-3357`：本窗口持有主焦点且本路由当前才吃键；`_onChordKey` 守卫 `:3375-3380` 与 5 秒检查器 `:3397` 共用） | 修 bug | 上游按键服务的 `_onChordKey` / `_onLateKey` 钩 | 净增 ≤22 行（实测 21） |
 | `lib/ide/ide_editor.dart` | 控制器为空时的空渲染（三处 `SizedBox.expand`：`_surface` `:2638-2641` · diff 原侧 `:2757-2758` · build 的 native 分支 `:2890`） | 修 bug | `_nativeController` / `IdeOriginalDiff.controller` | 净增 ≤7 行 |
+| `lib/chat/chat_history_view.dart` | 窗口可见性门：自有 `window_visible.dart` 的 import 与档内 8 处 `WindowVisible` 用法（窗口不可见时按可见性跳过重建） | 修 bug | `WindowVisible.changed` 订阅；集成面见 `test/RTM.md` 2-1 行 | 净增 ≤1 行（import） |
+| `lib/kernel/claude_code/claude_code_kernel.dart` | 宿主工具通道：自有 `host_tools.dart` 的 import 与档内 10 处类型使用（`HostTool` 5 · `HostTools` 3 · `HostToolCall` 2） | 内核适配 | `HostTools` 注册表；`HostTool` / `HostToolCall` 别名 | 净增 ≤1 行（import） |
+| `lib/update/version.dart`、`pubspec.yaml` | 版本钉住行 `1.7.2+19`：补丁号高于上游，防止已发版用户自降级；两档必须同值 | 修 bug | `test/update/version_test.dart` 校验两档同值 | 每档净增 0 |
 
 **恢复的上游 import 与自有 re-export 档重复**：`lib/browser/browser_tools.dart:13` 与 `lib/images/image_tools.dart:13` 各带一条 `unnecessary_import` info（自有 `host_tools.dart` 的 re-export 覆盖同样四个符号）。这两行是上游行，删掉即重建常驻 fork 差异，**禁随 lint 清扫删除**。
 
@@ -188,7 +191,7 @@
 | 三处真值逐行读回（不许只跑合成用例） | 三行原样在盘：`browser_actions.dart:105` = `picturesOnly: true,` · `browser_tools.dart:117` = `group: 'browser',` 且 `:118` = `picturesOnly: tool.picturesOnly,` · `image_tools.dart:67` = `group: 'images',`。理由：`test/host_tools/host_mcp_server_test.dart:11-24` 的 `_tool()` 自造带两字段的工具，不经过这三处真实注册路径，宽面误删后测试仍绿 |
 | 自有档与测试档继续用别名（不清零） | 九档之外 `HostToolCall` 命中 32 处（8 个自有 `lib/` 档 13 处 + 10 个测试档 19 处）、`HostTool(` 12 处（自有 `btest_mode.dart:264/336` 2 处 · `claude_code_translator.dart:962` 对象模式 1 处 · 测试档 9 处）逐字不变 |
 | 自有档零改动（`lib/host_tools/host_tools.dart` 除外） | 本批允许改动的自有档只有 `lib/host_tools/host_tools.dart`（注册表所在：移出 4 个声明 + 加 typedef 与 re-export）；判据 = `git status --porcelain` 与 {`lib/browser/btest/**`, `lib/host_tools/host_mcp_server.dart`, `lib/kernel/thincoder/**`, `test/**`} 交集为空 |
-| 编译与测试 | ① `flutter analyze --no-pub` 的 **error 数 = 0**（读命令尾行；与测试失败数不同量纲，分开判）；② `flutter test test/host_tools test/browser test/kernel/thincoder_kernel_test.dart test/platform` 全绿；③ 全量 `flutter test --no-pub` 收尾行 **失败数 ≤ 128 且通过数 ≥ 7107** —— 取自父侧 2026-10-26 全量实跑（333 s）的 `+7107 ~31 -128`（`+` 通过 / `~` 跳过 / `-` 失败） |
+| 编译与测试 | ① `flutter analyze --no-pub` 的 **error 数 = 0**（读命令尾行；与测试失败数不同量纲，分开判）；② `flutter test test/host_tools test/browser test/kernel/thincoder_kernel_test.dart test/platform` 全绿。全量跑是发布门，读数在批次收口行报告，不作本表验收判据 |
 
 ### 7.6 用例表
 

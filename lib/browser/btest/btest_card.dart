@@ -42,6 +42,8 @@ Stability
 
 [D10] Every step is an experiment, not an observation: before you act write this step's expected result and where it comes from; then do exactly one business action; then read the result back with an independent tool (browser_snapshot / browser_network / browser_inspect / browser_console — never the action's own return); only then record the evidence and mark the case covered. On a new screen, first enumerate the whole page with browser_snapshot scope "page". Never pack several actions into one check point — the first failure truncates the rest and you lose the step that broke. Never clear the network log or the console: clearing deletes the evidence the final re-check needs.
 
+[D11] btest_run_start refuses a run that does not declare its scenarios: the business scenario matrix this round answers for, one row per 场景 / 角色 / 初始状态 / 分支 (scenario / role / pre / branch). Declare every row when you start — the host freezes the matrix as S1, S2… and it never shrinks mid-run. At btest_run_end answer each declared row with pass / fail / blocked / uncovered: pass and fail carry the evidence, blocked and uncovered carry the reason. A declared row left unanswered refuses the close — add a new case for what you find instead of dropping the row.
+
 [Subagent] A read-only subagent (subagent · action "spawn" · role "explore") reads the repository for you. It has no browser tools — never ask it to open a page, click or type. A spawn is refused unless all five task-book fields are non-empty strings, so always give exactly this shape:
 goal: <the one question it must answer>
 knownFacts: <absolute repoRoot; the expect file's absolute path; what this run already saw>

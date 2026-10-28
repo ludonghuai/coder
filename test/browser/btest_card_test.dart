@@ -21,7 +21,7 @@ void main() {
     });
 
     test('holds every label the content check lists', () {
-      for (var i = 1; i <= 10; i++) {
+      for (var i = 1; i <= 11; i++) {
         expect(BtestCard.text, contains('[D$i]'));
       }
       for (var i = 1; i <= 7; i++) {
@@ -37,16 +37,37 @@ void main() {
       for (var i = 1; i <= 3; i++) {
         expect(BtestCard.text, contains('[H$i]'));
       }
-      // The label form above is what the card reads: D1 … D10, J1 … J7.
+      // The label form above is what the card reads: D1 … D11, J1 … J7.
       expect(BtestCard.text, contains('[D10]'));
+      expect(BtestCard.text, contains('[D11]'));
       expect(BtestCard.text, isNot(contains('[P20]')));
-      // 39 labels in all, each exactly once: +D10 and −P20 (§6 F2 ②).
+      // 40 labels in all, each exactly once: +D10, +D11 and −P20 (§6 F2 ②).
       final labels = RegExp(r'\[(?:D\d\d?|J\d|P\d\d|H\d)\]')
           .allMatches(BtestCard.text)
           .map((m) => m[0])
           .toList();
-      expect(labels, hasLength(39));
-      expect(labels.toSet(), hasLength(39));
+      expect(labels, hasLength(40));
+      expect(labels.toSet(), hasLength(40));
+    });
+
+    test('the run declaration is a discipline on the card (F13)', () {
+      expect(BtestCard.countIn(BtestCard.text, '[D11]'), 1);
+      expect(
+        BtestCard.text,
+        contains('refuses a run that does not declare its scenarios'),
+      );
+      expect(BtestCard.text, contains('scenario / role / pre / branch'));
+      expect(BtestCard.text, contains('freezes the matrix as S1, S2'));
+      expect(BtestCard.text, contains('pass / fail / blocked / uncovered'));
+      expect(BtestCard.text, contains('pass and fail carry the evidence'));
+      expect(
+        BtestCard.text,
+        contains('blocked and uncovered carry the reason'),
+      );
+      expect(
+        BtestCard.text,
+        contains('A declared row left unanswered refuses the close'),
+      );
     });
 
     test('carries the experiment and the five-field subagent contract '

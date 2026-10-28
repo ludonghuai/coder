@@ -305,6 +305,14 @@ void main() {
       'env': 'test',
       'mode': 'write',
       'commitRange': 'abc1234',
+      'scenarios': const [
+        {
+          'scenario': '提交订舱',
+          'role': '货代操作员',
+          'pre': '已登录',
+          'branch': '主路径',
+        },
+      ],
       ...over,
     };
 
@@ -481,6 +489,14 @@ void main() {
         'env': 'test',
         'mode': 'write',
         'commitRange': 'abc1234',
+        'scenarios': const [
+          {
+            'scenario': '提交订舱',
+            'role': '货代操作员',
+            'pre': '已登录',
+            'branch': '主路径',
+          },
+        ],
       }, call);
       return const {};
     }
@@ -492,6 +508,9 @@ void main() {
       'runId': state.run!.id,
       'coveredCases': const ['CASE-BKG-001'],
       'issues': issues,
+      'scenarioResults': const [
+        {'id': 'S1', 'verdict': 'pass', 'evidence': '提交后列表首行出现新单'},
+      ],
       'blockers': const [],
       'unconfirmedDiffs': const [],
       'uncovered': const [],
@@ -519,13 +538,16 @@ void main() {
                 'caseId': 'CASE-BKG-001',
                 'step': '点提交',
                 'symptom': '列表无新单',
+                'evidence': {'kind': 'field', 'readout': '列表首行未出现新单'},
+                'severity': '高',
+                'pre': '已登录；无草稿',
                 'expectRef': '强 · docs/vibe-coding.md §3.1',
               },
             ],
           ), call)}';
       expect(answer, contains('expectFile: written'));
       expect(answer, contains('尾注与断点键：blockers / unconfirmedDiffs / uncovered 都在'));
-      expect(answer, contains('coveredCases 1/1 在索引'));
+      expect(answer, contains('覆盖对账：coveredCases 1/1 在合法域'));
       expect(answer, contains('入口=1'));
       expect(answer, contains('操作真实性：'));
       expect(answer, isNot(contains('warning:')), reason: 'nothing missing');
@@ -547,15 +569,32 @@ void main() {
       expect(answer, contains('缺 uncovered'));
     });
 
-    test('a case outside the index is named', () async {
+    test('a case outside the index refuses the close, naming the case', () async {
       await begin();
-      final answer = '${await BtestTools.all.last.run(report(
+      String? said;
+      try {
+        await BtestTools.all.last.run(
+          report(
             issues: [
-              {'caseId': 'CASE-NOPE-9', 'expectRef': ''},
+              {
+                'caseId': 'CASE-NOPE-9',
+                'step': '点提交',
+                'symptom': '列表无新单',
+                'evidence': {'kind': 'field', 'readout': '列表首行未出现新单'},
+                'severity': '高',
+                'pre': '已登录；无草稿',
+                'expectRef': '强 · docs/vibe-coding.md §3.1',
+              },
             ],
-          ), call)}';
-      expect(answer, contains('not in the index'));
-      expect(answer, contains('expectRef is empty'));
+          ),
+          call,
+        );
+      } on BrowserError catch (error) {
+        said = error.message;
+      }
+      expect(said, contains('CASE-NOPE-9'));
+      expect(said, contains('outside the legal case domain'));
+      expect(state.run, isNotNull, reason: 'a refusal never closes the run');
     });
 
     test('a detour in the run without its report line is counted out (§3.3 4-④)', () async {
