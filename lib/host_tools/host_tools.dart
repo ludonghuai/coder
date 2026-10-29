@@ -12,7 +12,12 @@ import 'dart:async';
 import '../kernel/claude_code/claude_sdk_tools.dart';
 
 export '../kernel/claude_code/claude_sdk_tools.dart'
-    show ClaudeSdkTool, ClaudeSdkCall, claudeSdkImage, claudeSdkText;
+    show
+        ClaudeSdkTool,
+        ClaudeSdkCall,
+        claudeSdkImage,
+        claudeSdkText,
+        ClaudeSdkGate;
 
 typedef HostTool = ClaudeSdkTool;
 typedef HostToolCall = ClaudeSdkCall;
@@ -58,6 +63,21 @@ abstract final class HostTools {
       ? _instructions.remove(feature)
       : _instructions[feature] = text;
 
+  /// Which tools, by name, an agent working in a folder is offered, and
+  /// which features' instructions it is told (see [ClaudeSdkGate]); all of
+  /// them when null.
+  static ClaudeSdkGate? gate;
+
+  /// Whether [tool] is offered an agent working in [cwd]: the gate's say,
+  /// or every tool's when there is none.
+  static bool offersTool(String cwd, String tool) =>
+      gate?.offersTool(cwd, tool) ?? true;
+
+  /// Whether what [feature] tells of its tools is told an agent working in
+  /// [cwd]: the gate's say, or all of it when there is none.
+  static bool tellsFeature(String cwd, String feature) =>
+      gate?.tellsFeature(cwd, feature) ?? true;
+
   /// The tool an agent calls [name] (`mcp__baocode__<name>`), if one of
   /// this server's.
   static HostTool? called(String name) {
@@ -79,6 +99,13 @@ abstract final class HostTools {
   /// The servers to launch Claude Code with: this one, if it has tools.
   static List<String> get servers => any ? const [server] : const [];
 
+  /// The servers to launch an agent working in [cwd] with: this one, if it
+  /// offers that agent a tool.
+  static List<String> serversFor(String cwd) =>
+      _tools.keys.any((name) => offersTool(cwd, name))
+      ? const [server]
+      : const [];
+
   /// The answer to [message] (JSON-RPC) for the server.
   static Future<Map<String, Object?>> handle(
     Map<String, Object?> message,
@@ -93,27 +120,35 @@ abstract final class HostTools {
     };
     switch (message['method']) {
       case 'initialize':
+        final told = [
+          for (final MapEntry(key: feature, value: text)
+              in _instructions.entries)
+            if (tellsFeature(call.cwd, feature)) text,
+        ];
         return result({
           'protocolVersion': params['protocolVersion'] ?? '2024-11-05',
           'capabilities': {'tools': <String, Object?>{}},
           'serverInfo': {'name': server, 'version': '1.0.0'},
-          if (_instructions.isNotEmpty)
-            'instructions': _instructions.values.join('\n\n'),
+          if (told.isNotEmpty) 'instructions': told.join('\n\n'),
         });
       case 'tools/list':
         return result({
           'tools': [
             for (final tool in _tools.values)
-              {
-                'name': tool.name,
-                'description': tool.description,
-                'inputSchema': tool.inputSchema,
-                if (tool.alwaysLoad) '_meta': {'anthropic/alwaysLoad': true},
-              },
+              if (offersTool(call.cwd, tool.name))
+                {
+                  'name': tool.name,
+                  'description': tool.description,
+                  'inputSchema': tool.inputSchema,
+                  if (tool.alwaysLoad) '_meta': {'anthropic/alwaysLoad': true},
+                },
           ],
         });
       case 'tools/call':
-        final tool = _tools[params['name']];
+        final tool = switch (params['name']) {
+          final String name when offersTool(call.cwd, name) => _tools[name],
+          _ => null,
+        };
         final input =
             (params['arguments'] as Map?)?.cast<String, Object?>() ?? {};
         if (tool == null) {

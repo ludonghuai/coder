@@ -45,7 +45,6 @@ import 'panels/context_usage_panel.dart';
 import 'panels/goal_panel.dart';
 import 'panels/queue_panel.dart';
 import 'panels/revert_dialog.dart';
-import 'panels/todo_panel.dart';
 import 'side_panel/file_link.dart';
 import 'side_panel/file_open.dart';
 import 'stop_confirmation.dart';
@@ -1084,11 +1083,6 @@ class _ChatScreenState extends State<ChatScreen>
             ),
             _ => null,
           },
-        ),
-        _PanelSlot(
-          child: TodoPanel.hasContent(_session.todos)
-              ? TodoPanel(todos: _session.todos)
-              : null,
         ),
         // Last over the composer: what is sent next.
         _PanelSlot(

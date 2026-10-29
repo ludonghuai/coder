@@ -63,6 +63,7 @@ class ClaudeLaunch {
     this.instructions,
     this.models = const [],
     this.sdkServers = const [],
+    this.tools,
     this.promptSuggestions = true,
   });
 
@@ -79,6 +80,12 @@ class ClaudeLaunch {
   /// The app's own MCP servers (see host_tools.dart), their tools
   /// allowed without asking: they only do what the app does.
   final List<String> sdkServers;
+
+  /// The only built-in tools it has (`--tools`; none for an empty list),
+  /// [sdkServers]' tools aside; all when null. Set, [sdkServers] are its
+  /// only MCP servers too (`--strict-mcp-config`): not the user's own,
+  /// configured for Claude Code.
+  final List<String>? tools;
 
   /// Folders it works in besides [cwd] (a multi-folder workspace's): each
   /// an `--add-dir`, their `CLAUDE.md` read as [cwd]'s is.
@@ -170,6 +177,8 @@ class ClaudeLaunch {
     readable: readable,
     instructions: instructions,
     models: models,
+    sdkServers: sdkServers,
+    tools: tools,
     promptSuggestions: promptSuggestions,
   );
 
@@ -282,6 +291,11 @@ class ClaudeLaunch {
       jsonEncode(settings),
     ],
     if (!persist) '--no-session-persistence',
+    if (tools case final tools?) ...[
+      '--tools',
+      tools.join(','),
+      '--strict-mcp-config',
+    ],
     if (sdkServers.isNotEmpty) ...[
       '--mcp-config',
       jsonEncode({

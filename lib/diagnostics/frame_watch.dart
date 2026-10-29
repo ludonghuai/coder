@@ -176,11 +176,15 @@ class FrameWatch {
     final on = WidgetsBinding.instance.semanticsEnabled;
     appEvent('semantics', on ? 'on' : 'off');
   }
+
+  /// This class's face for [frameWatchState]: the hang watchdog's report as a
+  /// hang ends (`hang_watch.dart`), reading the same one definition.
+  static String describeState() => frameWatchState();
 }
 
 /// The trees' sizes, the conversations shown, memory, the app's state: the
 /// end of `[slow]`'s line, and of `[stall]`'s (one definition, so the two
-/// read side by side).
+/// read side by side), and a hang's as it ends (`hang_watch.dart`).
 String frameWatchState() {
   final binding = WidgetsBinding.instance;
   var objects = 0, nodes = 0;

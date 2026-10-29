@@ -241,7 +241,7 @@ abstract final class HostMcpServer {
         if (result is Map) {
           final tools = <Map>[];
           for (final tool in result['tools'] as List? ?? const []) {
-            if (tool is! Map || !_offered(tool['name'])) continue;
+            if (tool is! Map || !_offered(tool['name'], call.cwd)) continue;
             final name = '${tool['name']}';
             _given[name] = HostTools.lookup(name)?.group ?? '';
             tools.add(tool);
@@ -256,10 +256,13 @@ abstract final class HostMcpServer {
         };
         if (name is! String) return _invalidParams(id);
         final tool = HostTools.lookup(name);
-        if (tool != null && !_offered(name)) {
+        if (tool != null && !_offered(name, call.cwd)) {
+          // The gate's say is not a setting's: a tool this folder is not
+          // offered is not there, as far as its caller goes.
+          final refused = !HostTools.offersTool(call.cwd, name);
           return _isError(
             id,
-            tool.picturesOnly || tool.group != 'browser'
+            refused || tool.picturesOnly || tool.group != 'browser'
                 ? 'No tool $name.'
                 : off,
           );
@@ -276,11 +279,15 @@ abstract final class HostMcpServer {
     }
   }
 
-  /// Whether [name] is one the endpoint offers: in an exposed group, and
-  /// not a tool whose answer is pictures alone.
-  static bool _offered(Object? name) =>
+  /// Whether [name] is one the endpoint offers an agent working in [cwd]: in
+  /// an exposed group, not a tool whose answer is pictures alone, and
+  /// offered there by the gate.
+  static bool _offered(Object? name, String cwd) =>
       switch (name is String ? HostTools.lookup(name) : null) {
-        final tool? => !tool.picturesOnly && exposedGroups.contains(tool.group),
+        final tool? =>
+          !tool.picturesOnly &&
+              exposedGroups.contains(tool.group) &&
+              HostTools.offersTool(cwd, tool.name),
         null => false,
       };
 

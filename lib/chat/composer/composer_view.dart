@@ -332,6 +332,8 @@ Widget _buildMarkdownEditorOf(ChatComposerState state, BuildContext context) {
       }.replaceAll(RegExp(r'[\x00-\x1f]+'), ' '),
       onKey: state._handleKey,
       onPaste: state._paste,
+      onPasteCopy: (markdown) =>
+          renumberPastes(markdown, from: state._nextPastedNumber()),
       style: MarkdownEditorStyle(
         text: base,
         selection: AppColors.textSelection,

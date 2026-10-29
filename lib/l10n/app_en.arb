@@ -1326,6 +1326,25 @@
   "toolAgent": "Agent",
   "toolUpdatingTodos": "Updating todos",
   "toolUpdatedTodos": "Updated todos",
+  "todoCount": "Todos {done}/{total}",
+  "@todoCount": {
+    "placeholders": {
+      "done": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "todoAllDone": "All done",
+  "todoNone": "List empty",
+  "todoAdded": "Added todo",
+  "todoStarted": "Started todo",
+  "todoCompleted": "Completed todo",
+  "todoRemoved": "Removed todo",
+  "todoUpdated": "Updated todo",
+  "todoChecked": "Checked todos",
   "toolSending": "Saying",
   "toolSent": "Said",
   "toolAsking": "Asking",
@@ -2038,17 +2057,6 @@
   "mcpNoLog": "It wrote nothing.",
   "mcpSignInHint": "Sign in from a chat's MCP servers panel, or with /mcp.",
   "mcpProbeNote": "Started and greeted with MCP's initialize, as `claude mcp list` checks it.",
-  "todoCount": "Todos {done}/{total}",
-  "@todoCount": {
-    "placeholders": {
-      "done": {
-        "type": "int"
-      },
-      "total": {
-        "type": "int"
-      }
-    }
-  },
   "queuedMessages": "{count, plural, =1{1 queued} other{{count} queued}} · sent when the agent is done",
   "@queuedMessages": {
     "placeholders": {
@@ -5199,7 +5207,7 @@
     "description": "Update mode: never checks."
   },
   "diagnosticsTitle": "Diagnostic Logs",
-  "diagnosticsDescription": "Send BaoCode's error logs and the crash reports the system kept of it to its developers to help track down a problem. Nothing is sent until you upload.",
+  "diagnosticsDescription": "Send BaoCode's error logs and the crash and hang reports the system kept of it to its developers to help track down a problem. Nothing is sent until you upload.",
   "diagnosticsUpload": "Upload…",
   "diagnosticsDialogTitle": "Upload Diagnostic Logs",
   "diagnosticsNotePlaceholder": "Note (optional): what went wrong, and how to make it happen again",
@@ -7884,6 +7892,8 @@
     }
   },
   "gitLogInNoBranch": "No branch has this commit.",
+  "gitLogInBranches": "In {count, plural, =1{1 branch} other{{count} branches}}",
+  "@gitLogInBranches": {"placeholders": {"count": {"type": "int"}}},
   "gitLogList": "List",
   "gitLogTree": "Tree",
   "gitLogFilterFiles": "Filter files (* and ? match any)",
@@ -7943,6 +7953,9 @@
     }
   },
   "gitLogCopyHash": "Copy the full hash",
+  "gitLogCopyRefNames": "Copy Branch or Tag Name",
+  "gitLogCopyName": "Copy '{name}'",
+  "@gitLogCopyName": {"placeholders": {"name": {"type": "String"}}},
   "gitLogLoading": "Loading history…",
   "gitLogWorktree": "Worktree",
   "gitLogWorktreeOf": "Worktree: {path}",

@@ -10,22 +10,48 @@ abstract final class ChatCodec {
   /// on demand, and a build's log would weigh on every update.
   static const maxOutput = 64 * 1024;
 
+  // --- Bots ------------------------------------------------------------------
+
+  /// The tag the app's messages to a bot are wrapped in: what happened to
+  /// the user's agents, for it to tell of. Not the user's words: shown as
+  /// a note.
+  static const botEventTag = 'bao-event';
+
+  /// The bot's tool that shows one of the user's agents in its chat (its
+  /// input's `chat`), as a card that opens it.
+  static const botCardTool = 'bot_show_chat';
+
+  /// What the app told a bot in [item], if it is such a note.
+  static String? botEvent(UserMessageItem item) {
+    final text = item.text.trim();
+    const open = '<$botEventTag>', close = '</$botEventTag>';
+    if (!text.startsWith(open) || !text.endsWith(close)) return null;
+    return text.substring(open.length, text.length - close.length).trim();
+  }
+
+  /// The agent [item] shows as a card, if it is the bot's tool that does.
+  static String? botCard(ToolCallItem item) => switch (item) {
+    ToolCallItem(tool: botCardTool, :final input) => switch (input['chat']) {
+      final String chat when chat.isNotEmpty => chat,
+      _ => null,
+    },
+    _ => null,
+  };
+
   static Map<String, Object?> encode(ChatItem item) => switch (item) {
     UserMessageItem() => {
       't': 'user',
       'text': item.text,
       if (item.queued) 'queued': true,
-      if (item.images.isNotEmpty)
-        'images': [
-          for (final image in item.images)
-            {
-              'data': base64.encode(image.bytes),
-              'type': image.mediaType,
-              'name': ?image.name,
-              'n': ?image.number,
-            },
-        ],
+      if (item.images.isNotEmpty) 'images': _images(item.images),
       'worked': ?item.worked?.inMilliseconds,
+      if (item.usage case final usage?)
+        'usage': {
+          'in': ?usage.inputTokens,
+          'out': ?usage.outputTokens,
+          'speed': ?usage.tokensPerSecond,
+          'cost': ?usage.costUsd,
+        },
     },
     AssistantTextItem() => {'t': 'text', 'text': item.text},
     ThinkingItem() => {
@@ -46,6 +72,28 @@ abstract final class ChatCodec {
       'status': item.status.name,
       'output': ?_head(item.output),
       'tool': ?item.tool,
+      'card': ?botCard(item),
+      // What a browser's call does, for its line to say.
+      if (item.kind == ToolKind.browser)
+        'browse': {
+          'action': ?(item.input['action'] as String?),
+          if (item.input['url'] != null) 'url': true,
+        },
+      // The pictures it returned (an image model's, a file read), but for
+      // a failed call's.
+      if (item.images.isNotEmpty && item.status != ToolStatus.failed)
+        'images': _images(item.images),
+      // Pictures under way: how many, and of what shape, for their places
+      // to show as big as they will be; once its input has come.
+      if (item.kind == ToolKind.image && item.input.containsKey('prompt'))
+        'making': {
+          'count': switch (item.input['count']) {
+            final num count => count.toInt().clamp(1, 4),
+            _ => 1,
+          },
+          'size': ?(item.input['size'] as String?),
+          'aspect': ?(item.input['aspect_ratio'] as String?),
+        },
     },
     AgentItem() => {
       't': 'agent',
@@ -102,6 +150,10 @@ abstract final class ChatCodec {
       'label': item.label,
       if (item.whimsical) 'whimsical': true,
       if (!item.visible) 'visible': false,
+      // For the phone's line of figures under it, as the footer's here.
+      'startedAt': ?item.startedAt?.millisecondsSinceEpoch,
+      'tokens': ?item.output?.tokens,
+      'speed': ?item.output?.tokensPerSecond,
     },
   };
 
@@ -126,20 +178,17 @@ abstract final class ChatCodec {
       'user' => UserMessageItem(
         text: text('text'),
         queued: json['queued'] == true,
-        images: [
-          for (final image in (json['images'] as List?) ?? const [])
-            if (image case {
-              'data': final String data,
-              'type': final String type,
-            })
-              ImageAttachment(
-                bytes: base64.decode(data),
-                mediaType: type,
-                name: image['name'] as String?,
-                number: (image['n'] as num?)?.toInt(),
-              ),
-        ],
+        images: _decodeImages(json['images']),
         worked: duration('worked'),
+        usage: switch (json['usage']) {
+          final Map<String, Object?> usage => TurnUsage(
+            inputTokens: (usage['in'] as num?)?.toInt(),
+            outputTokens: (usage['out'] as num?)?.toInt(),
+            tokensPerSecond: (usage['speed'] as num?)?.toDouble(),
+            costUsd: (usage['cost'] as num?)?.toDouble(),
+          ),
+          _ => null,
+        },
       ),
       'text' => AssistantTextItem(text('text')),
       'thinking' => ThinkingItem(
@@ -158,6 +207,21 @@ abstract final class ChatCodec {
         status: named(ToolStatus.values, 'status', ToolStatus.succeeded),
         output: optional('output'),
         tool: optional('tool'),
+        images: _decodeImages(json['images']),
+        input: switch ((json['making'], json['browse'], json['card'])) {
+          (_, _, final String card) => {'chat': card},
+          (final Map<String, Object?> making, _, _) => {
+            'prompt': '',
+            'count': ?making['count'],
+            'size': ?making['size'],
+            'aspect_ratio': ?making['aspect'],
+          },
+          (_, final Map<String, Object?> browse, _) => {
+            'action': ?browse['action'],
+            if (browse['url'] == true) 'url': '',
+          },
+          _ => const {},
+        },
       ),
       'agent' => AgentItem(
         description: text('description'),
@@ -216,10 +280,39 @@ abstract final class ChatCodec {
         text('label'),
         whimsical: json['whimsical'] == true,
         visible: json['visible'] != false,
+        startedAt: time('startedAt'),
+        output: switch (json['tokens']) {
+          final num tokens => TurnOutput(
+            tokens: tokens.toInt(),
+            tokensPerSecond: (json['speed'] as num?)?.toDouble(),
+          ),
+          _ => null,
+        },
       ),
       _ => null,
     };
   }
+
+  static List<Map<String, Object?>> _images(List<ImageAttachment> images) => [
+    for (final image in images)
+      {
+        'data': base64.encode(image.bytes),
+        'type': image.mediaType,
+        'name': ?image.name,
+        'n': ?image.number,
+      },
+  ];
+
+  static List<ImageAttachment> _decodeImages(Object? json) => [
+    for (final image in (json as List?) ?? const [])
+      if (image case {'data': final String data, 'type': final String type})
+        ImageAttachment(
+          bytes: base64.decode(data),
+          mediaType: type,
+          name: image['name'] as String?,
+          number: (image['n'] as num?)?.toInt(),
+        ),
+  ];
 
   static String? _head(String? text) => text == null || text.length <= maxOutput
       ? text

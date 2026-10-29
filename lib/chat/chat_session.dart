@@ -972,8 +972,6 @@ class ChatSession extends ChangeNotifier
 
   void setBtestWrite(bool value) => _overlay.setBtestWrite(value);
 
-  List<TodoEntry> get todos => _transcript.todos;
-
   /// The goal the agent works toward (`/goal`), if any: just met, it is
   /// still here, met, until [dismissGoal].
   KernelGoal? get goal => switch (_transcript.goal) {

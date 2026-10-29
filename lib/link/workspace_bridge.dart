@@ -5,6 +5,8 @@ import 'dart:math' as math;
 import 'package:bao_link/bao_link.dart';
 import 'package:path/path.dart' as p;
 
+import '../bots/bot.dart';
+import '../bots/bots.dart';
 import '../chat/chat_models.dart';
 import '../chat/chat_session.dart';
 import '../chat/composer/composer_files.dart' show fileReferenceText;
@@ -40,6 +42,7 @@ class WorkspaceBridge {
     this.branchOf,
     this.filesOf = hostFilesOf,
     this.customizations,
+    this.bots,
     this.throttle = const Duration(milliseconds: 150),
   });
 
@@ -58,6 +61,9 @@ class WorkspaceBridge {
   /// Claude Code's customizations on this machine; none told without.
   final CustomizationStore? customizations;
 
+  /// The user's bots; none told without.
+  final Bots? bots;
+
   /// How often a phone hears of changes at most: a turn's text streams in
   /// many more times than that.
   final Duration throttle;
@@ -73,6 +79,7 @@ class WorkspaceBridge {
   /// Starts telling the phone of changes; what it asks goes to [handle].
   void start() {
     workspace.addListener(_stateChanged);
+    bots?.addListener(_stateChanged);
     unawaited(peer.done.then((_) => dispose()));
   }
 
@@ -80,6 +87,7 @@ class WorkspaceBridge {
     if (_disposed) return;
     _disposed = true;
     workspace.removeListener(_stateChanged);
+    bots?.removeListener(_stateChanged);
     _stateTimer?.cancel();
     for (final follow in _follows.values) {
       follow.dispose();
@@ -173,8 +181,50 @@ class WorkspaceBridge {
                 : null,
           ),
       ],
+      bots: [
+        if (bots case final bots?)
+          for (final bot in bots.bots) _linkBot(bots, bot),
+      ],
     );
   }
+
+  LinkBot _linkBot(Bots bots, Bot bot) {
+    final thread = bots.threadOf(bot);
+    final session = thread == null ? null : idOf(thread);
+    // Read as it comes, while the phone follows it.
+    if (session != null && _follows.containsKey(session)) bots.seen(bot);
+    return LinkBot(
+      id: bot.id,
+      name: bot.name,
+      avatar: bot.avatar,
+      gender: bot.gender,
+      signature: bot.signature,
+      identity: bot.identity,
+      style: bot.style,
+      abilities: bot.abilities,
+      proactive: bot.proactive,
+      model: bots.modelOf(bot),
+      assistant: bot.assistant,
+      session: session,
+      status: thread?.status == ThreadStatus.running
+          ? BotStatus.typing
+          : BotStatus.idle,
+      unread: bots.unread(bot),
+      last: bots.lastLine(bot),
+      updatedAt: thread?.updatedAt,
+    );
+  }
+
+  Bots _bots() =>
+      bots ??
+      (throw const LinkRemoteException(LinkErrors.unsupported, 'No bots'));
+
+  Bot _bot(Object? id) =>
+      switch (id) {
+        final String id => _bots().byId(id),
+        _ => null,
+      } ??
+      (throw LinkRemoteException(LinkErrors.notFound, 'No bot $id'));
 
   void _stateChanged() {
     if (_disposed || _stateTimer != null) return;
@@ -200,6 +250,9 @@ class WorkspaceBridge {
       case LinkMethods.open:
         final thread = _thread(params['session']);
         final id = idOf(thread);
+        if (bots?.botAt(thread.project.path) case final bot?) {
+          bots!.seen(bot);
+        }
         _follows.remove(id)?.dispose();
         final follow = _follows[id] = _Follow(
           id: id,
@@ -228,7 +281,10 @@ class WorkspaceBridge {
         final text = (params['text'] as String? ?? '').trim();
         if (text.isEmpty && _images(params['images']).isEmpty) return null;
         final AgentThread thread;
-        if (params['session'] case final Object id) {
+        if (params['bot'] case final Object id) {
+          // Its conversation, whichever it is now.
+          thread = _bots().threadFor(_bot(id));
+        } else if (params['session'] case final Object id) {
           thread = _thread(id);
         } else if (params['project'] case final String path) {
           thread = workspace.startAgent(_project(path));
@@ -301,11 +357,24 @@ class WorkspaceBridge {
         session.startPlan(workspace.l10n().planStartMessage);
         return null;
       case LinkMethods.choose:
-        _choose(
-          _thread(params['session']).session,
-          params['kind'] as String? ?? '',
-          params['option'] as String? ?? '',
-        );
+        final thread = _thread(params['session']);
+        final kind = params['kind'] as String? ?? '';
+        final option = params['option'] as String? ?? '';
+        final bot = bots?.botAt(thread.project.path);
+        // A bot's agent asks nothing and works as one: only its model,
+        // and how it thinks, are the user's to pick.
+        if (bot != null && (kind == 'mode' || kind == 'permission')) {
+          throw const LinkRemoteException(
+            LinkErrors.unsupported,
+            'A bot works as it does',
+          );
+        }
+        _choose(thread.session, kind, option);
+        if (bot != null && kind == 'model') {
+          if (thread.session.models?.selected.id case final model?) {
+            bots!.setModel(bot, model);
+          }
+        }
         return null;
       case LinkMethods.rename:
         workspace.rename(
@@ -390,6 +459,41 @@ class WorkspaceBridge {
         return {
           'session': idOf(workspace.startAgent(_project(params['project']))),
         };
+      case LinkMethods.saveBot:
+        final bots = _bots();
+        final saved = bots.save(
+          id: params['bot'] as String?,
+          name: params['name'] as String? ?? '',
+          avatar: params['avatar'] as String?,
+          gender: params['gender'] as String? ?? '',
+          signature: params['signature'] as String? ?? '',
+          identity: params['identity'] as String? ?? '',
+          style: params['style'] as String? ?? '',
+          abilities: {
+            for (final name in (params['abilities'] as List?) ?? const [])
+              ?BotAbility.values.asNameMap()[name],
+          },
+          proactive: switch (params['proactive']) {
+            final Map<String, Object?> json => BotProactive.fromJson(json),
+            _ => const BotProactive(),
+          },
+        );
+        return {'bot': _linkBot(bots, saved).toJson()};
+      case LinkMethods.deleteBot:
+        final bot = _bot(params['bot']);
+        if (bot.assistant) {
+          throw const LinkRemoteException(
+            LinkErrors.unsupported,
+            'The assistant stays',
+          );
+        }
+        _bots().delete(bot.id);
+        return null;
+      case LinkMethods.botMemory:
+        return {'text': _bots().memory(_bot(params['bot']))};
+      case LinkMethods.setBotMemory:
+        _bots().setMemory(_bot(params['bot']), params['text'] as String? ?? '');
+        return null;
       case LinkMethods.icon:
         final id = params['id'];
         final image = id is String ? workspace.icons[id] : null;
@@ -843,8 +947,10 @@ class _Follow {
     final earlier = window == null
         ? null
         : _from > 0 || session.hasEarlierHistory || session.loadingEarlier;
+    final goal = _goal(session.goal);
     final restText = jsonEncode([
       earlier,
+      goal,
       session.isStreaming,
       interaction,
       [for (final choice in choices) choice.toJson()],
@@ -878,8 +984,23 @@ class _Follow {
       changes: changes,
       tasks: tasks,
       earlier: earlier,
+      goal: goal,
     );
   }
+
+  /// [goal] as the phone reads it (see [LinkSessionUpdate.goal]).
+  static Map<String, Object?>? _goal(KernelGoal? goal) => switch (goal) {
+    null => null,
+    final goal => {
+      'condition': goal.condition,
+      'state': goal.state.name,
+      if (goal.checks > 0) 'checks': goal.checks,
+      'reason': ?goal.lastReason,
+      'setAt': ?goal.setAt?.millisecondsSinceEpoch,
+      'duration': ?goal.duration?.inMilliseconds,
+      'tokens': ?goal.tokens,
+    },
+  };
 
   /// Moves [_from] along with the items put before the session's first
   /// (the phone's own first is still the same one).

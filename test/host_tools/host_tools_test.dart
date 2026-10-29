@@ -3,6 +3,22 @@ import 'dart:async';
 import 'package:baocode/host_tools/host_tools.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+/// Which (folder, tool) pairs are offered, and which (folder, feature) pairs
+/// are told (see [ClaudeSdkGate]).
+final class _Gate implements ClaudeSdkGate {
+  _Gate(this.offered, {this.told = const {}});
+
+  final Set<(String, String)> offered;
+  final Set<(String, String)> told;
+
+  @override
+  bool offersTool(String cwd, String tool) => offered.contains((cwd, tool));
+
+  @override
+  bool tellsFeature(String cwd, String feature) =>
+      told.contains((cwd, feature));
+}
+
 /// A tool that answers [answer], in [group] when one is given.
 HostTool _tool(String name, {String group = '', Object answer = 'ok'}) =>
     HostTool(
@@ -311,5 +327,62 @@ void main() {
 
     expect(HostTools.lookup('browser_open'), same(browser));
     expect(HostTools.lookup('nope'), isNull);
+  });
+
+  test('the gate: a folder is offered its tools alone, and told its features', () async {
+    final browser = _tool('browser_open', group: 'browser');
+    final images = _tool('generate_image', group: 'images');
+    for (final tool in [browser, images]) {
+      HostTools.register(tool);
+    }
+    HostTools.instruct('browser', 'Browse.');
+    HostTools.instruct('images', 'Draw.');
+    // One tool in `/p`, one feature told there (see [ClaudeSdkGate]).
+    HostTools.gate = _Gate({('/p', 'browser_open')}, told: {('/p', 'browser')});
+    addTearDown(() {
+      HostTools.gate = null;
+      HostTools.instruct('browser', null);
+      HostTools.instruct('images', null);
+    });
+
+    expect(HostTools.offersTool('/p', 'browser_open'), isTrue);
+    expect(HostTools.offersTool('/p', 'generate_image'), isFalse);
+    expect(HostTools.offersTool('/elsewhere', 'browser_open'), isFalse);
+    expect(HostTools.tellsFeature('/p', 'browser'), isTrue);
+    expect(HostTools.tellsFeature('/p', 'images'), isFalse);
+
+    expect(HostTools.serversFor('/p'), ['baocode']);
+    expect(HostTools.serversFor('/nowhere'), isEmpty);
+
+    final list = await HostTools.handle({
+      'jsonrpc': '2.0',
+      'id': 1,
+      'method': 'tools/list',
+    }, call);
+    expect([
+      for (final tool in (list['result'] as Map)['tools'] as List)
+        (tool as Map)['name'],
+    ], ['browser_open']);
+
+    final told = await HostTools.handle({
+      'jsonrpc': '2.0',
+      'id': 2,
+      'method': 'initialize',
+    }, call);
+    expect((told['result'] as Map)['instructions'], 'Browse.');
+
+    // Refused, and said so as a tool this folder does not have.
+    final refused = await HostTools.handle({
+      'jsonrpc': '2.0',
+      'id': 3,
+      'method': 'tools/call',
+      'params': {
+        'name': 'generate_image',
+        'arguments': <String, Object?>{},
+      },
+    }, call);
+    final result = refused['result'] as Map;
+    expect(result['isError'], isTrue);
+    expect(((result['content'] as List).single as Map)['text'], 'No tool generate_image.');
   });
 }

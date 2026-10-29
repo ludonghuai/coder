@@ -89,3 +89,13 @@ Map<String, Object?> claudeSdkText(String text) => {
   'type': 'text',
   'text': text,
 };
+
+/// Which of the app's tools an agent is offered, by the folder it works in:
+/// a bot's are its own, its abilities'; a project's agent has none of
+/// them.
+abstract interface class ClaudeSdkGate {
+  bool offersTool(String cwd, String tool);
+
+  /// Whether what [feature] tells of its tools is told there.
+  bool tellsFeature(String cwd, String feature);
+}

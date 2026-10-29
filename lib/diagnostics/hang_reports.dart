@@ -1,8 +1,33 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
+import '../platform/app_platform.dart';
 import '../platform/event_log.dart';
+
+/// The app's own side's channel for the logs (`windows/runner/
+/// log_folder.h`): where they are, told once the app runs.
+const _logsChannel = MethodChannel('baocode/logs');
+
+/// Tells the app's own side where the logs [folder] are (`setFolder`): its
+/// own logs go there too (Windows' window.log, the hang reports in `hangs/`),
+/// and the Windows app keeps it for what it writes before Dart runs.
+///
+/// Windows alone: the macOS side's hang callback that upstream's
+/// `hang_watch.dart` adds is not installed (this batch's U1); a hang there is
+/// read from the reports' folder instead, by [HangReports].
+Future<void> shareLogsFolder(String folder) async {
+  if (!AppPlatform.isWindows) return;
+  try {
+    await _logsChannel.invokeMethod<void>('setFolder', folder);
+  } on MissingPluginException {
+    // A host without the channel.
+  } on PlatformException catch (error) {
+    debugPrint('logs.setFolder: $error');
+  }
+}
 
 /// The folder the window's hang watchdog writes its reports to
 /// (`windows/runner/hang_watchdog.h`): [logsDir]'s `hangs`. One definition —

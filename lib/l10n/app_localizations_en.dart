@@ -2323,6 +2323,35 @@ class AppLocalizationsEn extends AppLocalizations {
   String get toolUpdatedTodos => 'Updated todos';
 
   @override
+  String todoCount(int done, int total) {
+    return 'Todos $done/$total';
+  }
+
+  @override
+  String get todoAllDone => 'All done';
+
+  @override
+  String get todoNone => 'List empty';
+
+  @override
+  String get todoAdded => 'Added todo';
+
+  @override
+  String get todoStarted => 'Started todo';
+
+  @override
+  String get todoCompleted => 'Completed todo';
+
+  @override
+  String get todoRemoved => 'Removed todo';
+
+  @override
+  String get todoUpdated => 'Updated todo';
+
+  @override
+  String get todoChecked => 'Checked todos';
+
+  @override
   String get toolSending => 'Saying';
 
   @override
@@ -3117,11 +3146,6 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get mcpProbeNote =>
       'Started and greeted with MCP\'s initialize, as `claude mcp list` checks it.';
-
-  @override
-  String todoCount(int done, int total) {
-    return 'Todos $done/$total';
-  }
 
   @override
   String queuedMessages(int count) {
@@ -7255,7 +7279,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get diagnosticsDescription =>
-      'Send BaoCode\'s error logs and the crash reports the system kept of it to its developers to help track down a problem. Nothing is sent until you upload.';
+      'Send BaoCode\'s error logs and the crash and hang reports the system kept of it to its developers to help track down a problem. Nothing is sent until you upload.';
 
   @override
   String get diagnosticsUpload => 'Upload…';
@@ -11027,6 +11051,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get gitLogInNoBranch => 'No branch has this commit.';
 
   @override
+  String gitLogInBranches(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count branches',
+      one: '1 branch',
+    );
+    return 'In $_temp0';
+  }
+
+  @override
   String get gitLogList => 'List';
 
   @override
@@ -11109,6 +11144,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get gitLogCopyHash => 'Copy the full hash';
+
+  @override
+  String get gitLogCopyRefNames => 'Copy Branch or Tag Name';
+
+  @override
+  String gitLogCopyName(String name) {
+    return 'Copy \'$name\'';
+  }
 
   @override
   String get gitLogLoading => 'Loading history…';
