@@ -19,6 +19,7 @@ class UserMessageItem extends ChatItem {
     this.contexts = const [],
     this.worked,
     this.usage,
+    this.sentAt,
   });
 
   final String text;
@@ -28,6 +29,9 @@ class UserMessageItem extends ChatItem {
 
   /// The editor's context sent with it: shown as the message's chips.
   final List<EditorContext> contexts;
+
+  /// When it was sent, where known: a chat app's times between messages.
+  final DateTime? sentAt;
 
   /// Sent while the agent was busy: waits for its turn, and can be taken
   /// back until then.
@@ -48,6 +52,7 @@ class UserMessageItem extends ChatItem {
         contexts: contexts,
         worked: worked ?? this.worked,
         usage: usage ?? this.usage,
+        sentAt: sentAt,
       );
 }
 

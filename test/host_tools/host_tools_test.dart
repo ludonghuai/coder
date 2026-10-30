@@ -3,8 +3,8 @@ import 'dart:async';
 import 'package:baocode/host_tools/host_tools.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// Which (folder, tool) pairs are offered, and which (folder, feature) pairs
-/// are told (see [ClaudeSdkGate]).
+/// Which (folder, tool) pairs are offered, which (folder, feature) pairs are
+/// told, and that a tool there may wait on the user (see [ClaudeSdkGate]).
 final class _Gate implements ClaudeSdkGate {
   _Gate(this.offered, {this.told = const {}});
 
@@ -17,6 +17,10 @@ final class _Gate implements ClaudeSdkGate {
   @override
   bool tellsFeature(String cwd, String feature) =>
       told.contains((cwd, feature));
+
+  /// Always: these tests say nothing of who is asked.
+  @override
+  bool asksUser(String cwd) => true;
 }
 
 /// A tool that answers [answer], in [group] when one is given.

@@ -112,34 +112,99 @@ void main() {
             as UserMessageItem;
     expect(prompt.usage?.totalTokens, 15);
     expect(prompt.usage?.costUsd, 0.5);
+    final sent = DateTime(2026, 10, 29, 14, 5);
+    expect(
+      (ChatCodec.decode(
+                jsonDecode(
+                  jsonEncode(
+                    ChatCodec.encode(UserMessageItem(text: 'hi', sentAt: sent)),
+                  ),
+                ),
+              )!
+              as UserMessageItem)
+          .sentAt,
+      sent,
+    );
   });
 
   group('a bot\'s', () {
-    test('cards go to the phone with the agent they open', () {
-      final card = roundTrip(
+    test('pictures from the web go as they were sent', () {
+      final url = roundTrip(
         const ToolCallItem(
           kind: ToolKind.other,
-          tool: ChatCodec.botCardTool,
-          target: 'Fix the tests',
-          input: {'chat': 's-1'},
+          tool: ChatCodec.botImageTool,
+          target: 'x',
+          input: {'url': 'https://example.com/a.png'},
         ),
       );
-      expect(ChatCodec.botCard(card), 's-1');
-      expect(card.tool, ChatCodec.botCardTool);
-      // Another tool's input is not a card's.
-      expect(
-        ChatCodec.botCard(
-          roundTrip(
-            const ToolCallItem(
-              kind: ToolKind.other,
-              tool: 'bot_read_chat',
-              target: 'x',
-              input: {'chat': 's-1'},
-            ),
+      expect(ChatCodec.botImageUrl(url), 'https://example.com/a.png');
+      // Not one that failed, nor what is no web address.
+      for (final item in [
+        const ToolCallItem(
+          kind: ToolKind.other,
+          tool: ChatCodec.botImageTool,
+          target: 'x',
+          status: ToolStatus.failed,
+          input: {'url': 'https://example.com/a.png'},
+        ),
+        const ToolCallItem(
+          kind: ToolKind.other,
+          tool: ChatCodec.botImageTool,
+          target: 'x',
+          input: {'url': 'file:///etc/passwd'},
+        ),
+      ]) {
+        expect(ChatCodec.botImageUrl(roundTrip(item)), isNull);
+      }
+    });
+
+    test('its messages are its reply\'s bot_say tags, once closed', () {
+      final said = ChatCodec.decode(
+        ChatCodec.encode(
+          const AssistantTextItem(
+            'notes <bot_say>哇 终于</bot_say>\n<bot_say> </bot_say>'
+            '<bot_say>是 relay\n断线那个吗</bot_say> more <bot_say>还在',
           ),
         ),
-        isNull,
       );
+      expect(ChatCodec.botSays((said as AssistantTextItem).text), [
+        '哇 终于',
+        '是 relay\n断线那个吗',
+      ]);
+      expect(ChatCodec.botSays('Notes to itself.'), isEmpty);
+      expect(ChatCodec.botSent(said), isFalse);
+    });
+
+    test('its narration, in order among its messages; not one of them', () {
+      const text =
+          '<bot_narrate>她揉了揉眼睛</bot_narrate>\n<bot_say>在呢</bot_say>'
+          '<bot_narrate>把手机凑近了些</bot_say><bot_say>怎么啦</bot_say>'
+          '<bot_narrate>还';
+      expect(ChatCodec.botParts(text), [
+        (ChatCodec.botNarrateTag, '她揉了揉眼睛'),
+        (ChatCodec.botSayTag, '在呢'),
+        (ChatCodec.botSayTag, '怎么啦'),
+      ]);
+      expect(ChatCodec.botSays(text), ['在呢', '怎么啦']);
+    });
+
+    test('the agents it shows, by their ids, among its messages', () {
+      const text =
+          '<bot_say>就一个在跑</bot_say>\n<bot_show_chat> s-1 </bot_show_chat>'
+          '<bot_say>好了叫你</bot_say><bot_show_chat>s-2';
+      expect(ChatCodec.botParts(text), [
+        (ChatCodec.botSayTag, '就一个在跑'),
+        (ChatCodec.botCardTag, 's-1'),
+        (ChatCodec.botSayTag, '好了叫你'),
+      ]);
+      expect(ChatCodec.botSays(text), ['就一个在跑', '好了叫你']);
+    });
+
+    test('the user\'s sticker is told by its text', () {
+      expect(ChatCodec.sticker(ChatCodec.stickerText('love')), 'love');
+      expect(ChatCodec.sticker('[Sticker: love]\n[Image #3]'), 'love');
+      expect(ChatCodec.sticker('I [Sticker: love] it'), isNull);
+      expect(ChatCodec.sticker('hi'), isNull);
     });
 
     test('notes from the app are told from the user\'s words', () {
@@ -155,6 +220,22 @@ void main() {
         '</${ChatCodec.botEventTag}>',
       );
       expect(ChatCodec.botEvent(note), '- failed: "Build" in monad');
+      // With a picture, referred to after it.
+      expect(
+        ChatCodec.botEvent(
+          user(
+            '<${ChatCodec.botEventTag}>\nnew picture\n</${ChatCodec.botEventTag}>\n[Image #2]',
+          ),
+        ),
+        'new picture',
+      );
+      // Taken up with the user's: theirs, without it.
+      expect(
+        ChatCodec.withoutBotEvents(
+          '<${ChatCodec.botEventTag}>\nx\n</${ChatCodec.botEventTag}>\n你好',
+        ),
+        '你好',
+      );
       expect(ChatCodec.botEvent(user('hi <${ChatCodec.botEventTag}>')), isNull);
     });
   });

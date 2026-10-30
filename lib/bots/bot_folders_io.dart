@@ -1,6 +1,5 @@
 import 'dart:io';
-
-import 'package:path/path.dart' as p;
+import 'dart:typed_data';
 
 import '../platform/data_dir.dart';
 import 'bot_folders.dart';
@@ -9,7 +8,19 @@ class DataBotFolders implements BotFolders {
   @override
   String? get root => DataDirectory.current.botsDir;
 
-  static String _memory(String folder) => p.join(folder, 'MEMORY.md');
+  @override
+  List<String> folders() {
+    final root = this.root;
+    if (root == null) return const [];
+    try {
+      return [
+        for (final entry in Directory(root).listSync())
+          if (entry is Directory) entry.path,
+      ]..sort();
+    } on FileSystemException {
+      return const [];
+    }
+  }
 
   @override
   void make(String folder) {
@@ -30,26 +41,31 @@ class DataBotFolders implements BotFolders {
   }
 
   @override
-  String readMemory(String folder) {
+  Uint8List? readFile(String path) {
     try {
-      return File(_memory(folder)).readAsStringSync();
+      return File(path).readAsBytesSync();
     } on FileSystemException {
-      return '';
+      return null;
     }
   }
 
   @override
-  void writeMemory(String folder, String text) {
+  void writeFile(String path, Uint8List bytes) {
     try {
-      make(folder);
-      final file = File(_memory(folder));
-      if (text.trim().isEmpty) {
-        if (file.existsSync()) file.deleteSync();
-      } else {
-        file.writeAsStringSync(text);
-      }
+      final file = File(path);
+      file.parent.createSync(recursive: true);
+      file.writeAsBytesSync(bytes, flush: true);
     } on FileSystemException {
       // Left as it was.
+    }
+  }
+
+  @override
+  void deleteFile(String path) {
+    try {
+      File(path).deleteSync();
+    } on FileSystemException {
+      // Gone already.
     }
   }
 }

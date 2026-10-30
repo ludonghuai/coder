@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'bot_folders.dart';
 
 /// None on the web.
@@ -12,8 +14,14 @@ class DataBotFolders implements BotFolders {
   void delete(String folder) {}
 
   @override
-  String readMemory(String folder) => '';
+  List<String> folders() => const [];
 
   @override
-  void writeMemory(String folder, String text) {}
+  Uint8List? readFile(String path) => null;
+
+  @override
+  void writeFile(String path, Uint8List bytes) {}
+
+  @override
+  void deleteFile(String path) {}
 }

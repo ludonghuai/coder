@@ -98,4 +98,8 @@ abstract interface class ClaudeSdkGate {
 
   /// Whether what [feature] tells of its tools is told there.
   bool tellsFeature(String cwd, String feature);
+
+  /// Whether a tool called there may wait on the user at the computer (to
+  /// pick a model, say): not where there is none to.
+  bool asksUser(String cwd);
 }

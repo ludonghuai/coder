@@ -206,9 +206,7 @@ class WorkspaceBridge {
       model: bots.modelOf(bot),
       assistant: bot.assistant,
       session: session,
-      status: thread?.status == ThreadStatus.running
-          ? BotStatus.typing
-          : BotStatus.idle,
+      status: bots.typing(bot) ? BotStatus.typing : BotStatus.idle,
       unread: bots.unread(bot),
       last: bots.lastLine(bot),
       updatedAt: thread?.updatedAt,
@@ -282,7 +280,9 @@ class WorkspaceBridge {
         if (text.isEmpty && _images(params['images']).isEmpty) return null;
         final AgentThread thread;
         if (params['bot'] case final Object id) {
-          // Its conversation, whichever it is now.
+          // Its conversation, whichever it is now: the last run's, once
+          // listed, not another started.
+          if (workspace.loading) await workspace.loaded;
           thread = _bots().threadFor(_bot(id));
         } else if (params['session'] case final Object id) {
           thread = _thread(id);
@@ -477,8 +477,15 @@ class WorkspaceBridge {
             final Map<String, Object?> json => BotProactive.fromJson(json),
             _ => const BotProactive(),
           },
+          avatarImage: _avatarImage(params['avatarImage']),
         );
         return {'bot': _linkBot(bots, saved).toJson()};
+      case LinkMethods.botAvatar:
+        final image = _bots().avatarImage(_bot(params['bot']));
+        if (image == null) {
+          throw const LinkRemoteException(LinkErrors.notFound, 'No picture');
+        }
+        return {'type': image.type, 'data': base64Encode(image.bytes)};
       case LinkMethods.deleteBot:
         final bot = _bot(params['bot']);
         if (bot.assistant) {
@@ -489,10 +496,35 @@ class WorkspaceBridge {
         }
         _bots().delete(bot.id);
         return null;
+      case LinkMethods.clearBotChat:
+        _bots().clearChat(_bot(params['bot']));
+        return null;
       case LinkMethods.botMemory:
-        return {'text': _bots().memory(_bot(params['bot']))};
+        final bot = _bot(params['bot']);
+        return {'text': _bots().memory(bot), 'self': _bots().selfNotes(bot)};
       case LinkMethods.setBotMemory:
         _bots().setMemory(_bot(params['bot']), params['text'] as String? ?? '');
+        return null;
+      case LinkMethods.setBotSelf:
+        _bots().setSelfNotes(
+          _bot(params['bot']),
+          params['text'] as String? ?? '',
+          restart: true,
+        );
+        return null;
+      case LinkMethods.setMe:
+        String text(String key) => switch (params[key]) {
+          final String value => value.trim(),
+          _ => '',
+        };
+        _bots().setMe(
+          BotUser(
+            name: text('name'),
+            gender: text('gender'),
+            signature: text('signature'),
+          ),
+          _avatarImage(params['picture']),
+        );
         return null;
       case LinkMethods.icon:
         final id = params['id'];
@@ -600,6 +632,21 @@ class WorkspaceBridge {
           when _imageTypes.contains(type))
         ?_image(data, type, image['name'] as String?),
   ];
+
+  /// A bot's new picture, as [LinkMethods.saveBot] sends it; none for
+  /// none, `bad` for what is not one.
+  static BotAvatarImage? _avatarImage(Object? json) {
+    if (json == null) return null;
+    if (json case {'data': final String data, 'type': final String type}
+        when _imageTypes.contains(type)) {
+      if (_image(data, type, null) case final image?
+          when image.bytes.isNotEmpty &&
+              image.bytes.length <= LinkLimits.avatar) {
+        return (bytes: image.bytes, type: type);
+      }
+    }
+    throw const LinkRemoteException('bad', 'Not a picture, or too large');
+  }
 
   static ImageAttachment? _image(String data, String type, String? name) {
     try {

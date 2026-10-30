@@ -300,9 +300,10 @@ abstract final class ImageTools {
     if (find(ModelProviders.current.imageModel) case final model?) {
       return model;
     }
-    // Without its id (an older Claude Code), its step cannot ask.
+    // Without its id (an older Claude Code), its step cannot ask; nor is
+    // there anyone to, for a bot's.
     final id = call.toolUseId;
-    if (id == null) return models.first;
+    if (id == null || !HostTools.asksUser(call.cwd)) return models.first;
     final picked = await ImagePicks.instance.ask(id, cancelled: call.cancelled);
     if (picked == null) {
       throw const ImageToolError(

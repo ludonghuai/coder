@@ -78,6 +78,10 @@ abstract final class HostTools {
   static bool tellsFeature(String cwd, String feature) =>
       gate?.tellsFeature(cwd, feature) ?? true;
 
+  /// Whether a tool called by an agent working in [cwd] may wait on the user
+  /// at the computer: the gate's say, or it may when there is none.
+  static bool asksUser(String cwd) => gate?.asksUser(cwd) ?? true;
+
   /// The tool an agent calls [name] (`mcp__baocode__<name>`), if one of
   /// this server's.
   static HostTool? called(String name) {

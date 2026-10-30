@@ -86,11 +86,17 @@ class ChatSession extends ChangeNotifier
       history: historyCount > 0 ? MockConversation.itemAt : null,
       changes: changes,
       usage: usage ?? (historyCount > 0 ? MockConversation.usage : null),
+      queuedInPlace: _queuedInPlace,
     );
     // Made for this host: the overlay reads it only through the contract.
     _overlay = overlay ?? BaocodeSessionOverlay(this);
     _connect(kernel ?? this.kernels.first);
   }
+
+  /// Whether its messages sent while the agent works show where they
+  /// were sent ([KernelWorkspace.queuedInPlace]).
+  bool get _queuedInPlace =>
+      kernelContext.workspace?.call()?.queuedInPlace ?? false;
 
   /// Kernels this session may switch to before its first message.
   final List<KernelDescriptor> kernels;
@@ -427,6 +433,7 @@ class ChatSession extends ChangeNotifier
     if (!_overlay.cacheKernel(_kernel)) _kernel.dispose();
     _transcript = Transcript(
       changes: [for (final edit in _transcript.edits) edit.change],
+      queuedInPlace: _queuedInPlace,
     );
     _connect(descriptor);
     _overlay.onKernelChanged(this);
