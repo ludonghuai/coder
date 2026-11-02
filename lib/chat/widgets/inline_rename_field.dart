@@ -81,6 +81,7 @@ class _InlineRenameFieldState extends State<InlineRenameField> {
   bool _summaryFailed = false;
 
   bool get _hasList => widget.suggestions.isNotEmpty;
+
   @override
   void initState() {
     super.initState();

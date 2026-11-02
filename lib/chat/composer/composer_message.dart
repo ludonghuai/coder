@@ -143,12 +143,15 @@ bool _showsStopOf(ChatComposerState state) =>
 void _submitOf(ChatComposerState state) {
   // Empty while a turn runs, messages queued behind it: the first of them
   // taken up now, as its Send Now.
-  if (state.widget.onSubmit == null && state.widget.session.isStreaming && !state._canSend) {
+  if (state.widget.onSubmit == null &&
+      state.widget.session.isStreaming &&
+      !state._canSend) {
     if (state.widget.session.queued.firstOrNull case (final id, _)) {
       state.widget.session.sendQueuedNow(id);
     }
     return;
   }
+
   if (state._showsStop) return;
   final message = state._buildMessage();
   if (message.text.isEmpty && message.images.isEmpty) return;
