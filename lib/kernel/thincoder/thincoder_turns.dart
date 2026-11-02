@@ -274,6 +274,38 @@ void sendQueuedNowOf(ThincoderKernel owner, String turnId) {
   }
 }
 
+/// Puts the waiting message [turnId] at [index] among those waiting, the
+/// next first: the ones before it wait for it.
+void moveQueuedOf(ThincoderKernel owner, String turnId, int index) {
+  final order = [?owner._next, ...owner._queue];
+  final at = order.indexWhere((turn) => turn.id == turnId);
+  if (at < 0) return;
+  final turn = order.removeAt(at);
+  order.insert(index.clamp(0, order.length), turn);
+  owner._next = order.isEmpty ? null : order.first;
+  owner._queue
+    ..clear()
+    ..addAll(order.skip(1));
+  // The panel lists them in this order: each taken off and given again, as
+  // it was queued.
+  for (final queued in order) {
+    owner.emit(ItemRemoved(owner.nextSeq, queued.id));
+  }
+  for (final queued in order) {
+    owner.emit(
+      ItemUpserted(
+        owner.nextSeq,
+        queued.id,
+        UserMessageItem(
+          text: queued.text,
+          images: queued.images,
+          queued: true,
+        ),
+      ),
+    );
+  }
+}
+
 /// No turn under way, none reported, and a live connection to ask (§3.5).
 bool canRevertNowOf(ThincoderKernel owner) =>
     owner._turn == null && owner._pendingAuto == null && owner._running;

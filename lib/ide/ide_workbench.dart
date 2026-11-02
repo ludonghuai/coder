@@ -21,9 +21,10 @@ import '../extensions/ui/extensions_model.dart';
 import '../extensions/ui/extensions_view.dart';
 import '../extensions/ui/vsix_drop.dart';
 import '../platform/data_dir.dart';
-import '../chat/composer/composer_files.dart' show ComposerFile;
+import '../chat/composer/composer_files.dart' show CodeReference, ComposerFile;
 import '../chat/composer/file_drop.dart';
 import '../chat/open_editor.dart';
+import '../keybindings/chat_keybindings.dart' show ChatCommandIds;
 import '../keybindings/default_keybindings.dart'
     show commandCatalog, openSettingsCommandId;
 import '../keybindings/key_chord.dart';
@@ -130,6 +131,7 @@ import 'terminal/terminal_panel.dart';
 import 'terminal/terminal_tasks.dart';
 import 'terminal/terminal_profile_service.dart';
 import 'terminal/terminal_profiles.dart';
+import 'terminal/terminal_hosts.dart';
 import 'terminal/terminal_service.dart';
 
 part 'ide_workbench_extensions.dart';
@@ -144,6 +146,7 @@ class IdeWorkbench extends StatefulWidget {
     required this.visible,
     required this.chat,
     this.onAddToChat,
+    this.onAddCodeToChat,
     this.onAskInChat,
     required this.onBack,
     this.backLabel,
@@ -164,6 +167,8 @@ class IdeWorkbench extends StatefulWidget {
     this.onPinnedChanged,
     this.terminalBackend = const TerminalBackend(),
     this.terminalTasks,
+    this.terminals,
+    this.terminalHosts,
     this.colorThemes,
     this.recentFolders = const [],
     this.onOpenRecent,
@@ -212,6 +217,11 @@ class IdeWorkbench extends StatefulWidget {
   /// Puts files and folders in [chat]'s composer (Source Control's Add to
   /// Chat); none offered when null.
   final ValueChanged<List<ComposerFile>>? onAddToChat;
+
+  /// Puts lines of code in [chat]'s composer, after what is typed there
+  /// (Add Selection to Chat), and the keyboard in it; with none, only the
+  /// keyboard. None offered when null.
+  final ValueChanged<List<CodeReference>>? onAddCodeToChat;
 
   /// Puts a request in [chat]'s composer, to be sent once looked over
   /// (Ask AI about a commit, changes, a conflict); none offered when null.
@@ -272,6 +282,13 @@ class IdeWorkbench extends StatefulWidget {
   /// The background commands of the agent in its chat, listed with the
   /// terminals (see [IdeWorkbenchState.showTerminalTask]).
   final TerminalTasks? terminalTasks;
+
+  /// The project's terminals where the chat has them too, the same in
+  /// both (kept by the chat, not disposed here); else the IDE's own, on
+  /// [terminalBackend]. [terminalHosts] has where each shows, the IDE's
+  /// panel one of the places.
+  final TerminalService? terminals;
+  final TerminalHosts? terminalHosts;
 
   /// The color themes Preferences: Color Theme (⌘K ⌘T) picks from; the
   /// command is disabled without them.
@@ -601,6 +618,9 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
 
   /// The panel's terminals; none where they cannot run (the web).
   TerminalService? _terminals;
+
+  /// Whether [_terminals] are the IDE's own, not the chat's.
+  bool _ownsTerminals = true;
   List<StreamSubscription<Object?>> _terminalRequests = const [];
   IdeReferences? _references;
 
@@ -1136,11 +1156,15 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
     widget.agentEdits?.open = _openAgentChange;
     widget.settings?.addListener(_settingsChanged);
     widget.remote?.addListener(_remoteChanged);
-    if (widget.terminalBackend.supported) {
-      final terminals = _terminals = TerminalService(
-        root: widget.workspace.root,
-        backend: widget.terminalBackend,
-      )..addListener(_terminalsChanged);
+    if (widget.terminals != null || widget.terminalBackend.supported) {
+      _ownsTerminals = widget.terminals == null;
+      final terminals = _terminals =
+          (widget.terminals ??
+                TerminalService(
+                  root: widget.workspace.root,
+                  backend: widget.terminalBackend,
+                ))
+            ..addListener(_terminalsChanged);
       // An extension's `Terminal.show()` and `hide()`.
       _terminalRequests = [
         terminals.onDidRequestShow.listen((preserveFocus) {
@@ -1159,7 +1183,6 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
     _search.keptChanges.addListener(_keepViewSoon);
     _favoriteBranches.addListener(_keepViewSoon);
     _changelists.addListener(_keepViewSoon);
-    widget.agentEdits?.addListener(_assignTurns);
     _attach();
     _lifecycle = AppLifecycleListener(
       onResume: () => unawaited(_git?.refresh()),
@@ -1247,8 +1270,10 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
     _git = workspace.git?..addListener(_gitChanged);
     _gitChanged();
     // New terminals start in the project (a workspace's first folder);
-    // those running stay where they are.
-    _terminals?.root = workspace.roots.firstOrNull ?? workspace.root;
+    // those running stay where they are. The chat's start where it says.
+    if (_ownsTerminals) {
+      _terminals?.root = workspace.roots.firstOrNull ?? workspace.root;
+    }
     _attachDebug();
   }
 
@@ -1327,7 +1352,9 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
     if (workspace.isMultiRoot) {
       _explorer.roots = workspace.roots;
       _fileIndex.roots = workspace.roots;
-      _terminals?.root = workspace.roots.firstOrNull ?? workspace.root;
+      if (_ownsTerminals) {
+        _terminals?.root = workspace.roots.firstOrNull ?? workspace.root;
+      }
     }
     final git = workspace.git;
     if (identical(git, _git)) return;
@@ -1518,8 +1545,6 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
         oldWidget.agentEdits?.open = null;
       }
       widget.agentEdits?.open = _openAgentChange;
-      oldWidget.agentEdits?.removeListener(_assignTurns);
-      widget.agentEdits?.addListener(_assignTurns);
     }
     if (!identical(oldWidget.commands, widget.commands)) {
       _registerCommandKeybindings();
@@ -1551,7 +1576,6 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
     if (widget.agentEdits?.open == _openAgentChange) {
       widget.agentEdits?.open = null;
     }
-    widget.agentEdits?.removeListener(_assignTurns);
     FocusManager.instance.removeEarlyKeyEventHandler(_onChordKey);
     FocusManager.instance.removeLateKeyEventHandler(_onLateKey);
     KeybindingService.instance.removeListener(_keybindingsChanged);
@@ -1578,9 +1602,8 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
     for (final subscription in _terminalRequests) {
       unawaited(subscription.cancel());
     }
-    _terminals
-      ?..removeListener(_terminalsChanged)
-      ..dispose();
+    _terminals?.removeListener(_terminalsChanged);
+    if (_ownsTerminals) _terminals?.dispose();
     _panelFocus.dispose();
     _problemsList.dispose();
     _referencesList.dispose();
@@ -2032,6 +2055,7 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
     IdeGitResource resource, {
     bool head = false,
     bool focusEditor = false,
+    List<IdeGitResource>? among,
   }) async {
     final git = _git;
     final state = git?.state;
@@ -2039,9 +2063,11 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
       _leaveGitLog();
       return _openChange(resource, head: head, focusEditor: focusEditor);
     }
-    final resources = [
-      for (final group in IdeGitGroup.values) ...state.group(group),
-    ];
+    // As Source Control lists them: its arrows and file menu step through
+    // them in that order.
+    final resources =
+        among ??
+        [for (final group in IdeGitGroup.values) ...state.group(group)];
     final l10n = context.l10n;
     final files = widget.workspace.files;
     _scm.log.showDiff(
@@ -2063,7 +2089,7 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
           ),
         // The keys go on walking the changes.
       ],
-      resources.indexOf(resource),
+      resources.indexWhere((change) => change.path == resource.path),
       focus: false,
     );
   }
@@ -2079,27 +2105,6 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
         if (turn.path == path) turn.turn: turn.request,
     };
     return IdeDiffAgentMarks(edit.base, turns.values.toList());
-  }
-
-  /// The agents' changes in a changelist of the turn that made them, named
-  /// after what it was asked (the start of its first line).
-  void _assignTurns() {
-    final edits = widget.agentEdits;
-    if (edits == null || !mounted) return;
-    final turns = <String, ({String request, List<String> paths})>{};
-    for (final edit in edits.turnEdits) {
-      turns
-          .putIfAbsent(edit.turn, () => (request: edit.request, paths: []))
-          .paths
-          .add(edit.path);
-    }
-    final l10n = context.l10n;
-    for (final MapEntry(key: turn, value: (:request, :paths))
-        in turns.entries) {
-      final line = request.trim().split('\n').first.trim();
-      final title = line.length > 40 ? '${line.substring(0, 40)}…' : line;
-      _changelists.assignTurn(turn, l10n.gitChangelistTurn(title), paths);
-    }
   }
 
   /// What was edited in a diff in the Git log's place: into the file's
@@ -2844,6 +2849,14 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
   }
 
   void _toggleChat() => _layout.toggleChat();
+
+  /// The editor's lines selected in the chat's composer, the chat shown
+  /// and the keyboard in it (as Cursor's ⌘L).
+  void _addSelectionToChat() {
+    final code = _editor?.selectedCode() ?? const <CodeReference>[];
+    if (!_chatShown) _toggleChat();
+    widget.onAddCodeToChat?.call(code);
+  }
 
   /// [text] in the chat's composer, the chat shown.
   void _askInChat(String text) {
@@ -3653,6 +3666,13 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
         category: 'View',
         label: 'Toggle Chat',
         run: _toggleChat,
+      ),
+      IdeCommand(
+        id: ChatCommandIds.attachSelection,
+        category: 'Chat',
+        label: 'Add Selection to Chat',
+        enabled: widget.onAddCodeToChat != null && _editor != null,
+        run: _addSelectionToChat,
       ),
       // VS Code's ⌘J toggles the panel; here it is the chat's.
       IdeCommand(
@@ -5127,6 +5147,9 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
                         onOpenLink: _openTerminalLink,
                         shouldSkipShell: _terminalSkipsShell,
                         resolveKey: _terminalFindKey,
+                        hosts: widget.terminalHosts,
+                        place: this,
+                        shown: widget.visible,
                       ),
                       null => null,
                     },

@@ -97,6 +97,7 @@ class ChatComposer extends StatefulWidget {
     this.initialText,
     this.initialImages = const [],
     this.onSubmit,
+    this.onIntercept,
     this.onCancel,
     this.tapRegionGroupId,
     this.draft,
@@ -115,6 +116,10 @@ class ChatComposer extends StatefulWidget {
   /// Images to start from (the message being edited had them).
   final List<ImageAttachment> initialImages;
   final ValueChanged<ComposerMessage>? onSubmit;
+
+  /// Takes a message the app handles itself, never the agent's (a side
+  /// question, say): true when it was, and what is typed is gone.
+  final bool Function(ComposerMessage message)? onIntercept;
   final VoidCallback? onCancel;
 
   /// Group of a [TapRegion] around this composer: its menus, which open in
@@ -321,6 +326,8 @@ class ChatComposerState extends State<ChatComposer>
   void _handleFocusChanged() => _handleFocusChangedOf(this);
 
   void _takeDraftFiles() => _takeDraftFilesOf(this);
+
+  void _takeDraftCode() => _takeDraftCodeOf(this);
 
   void _takeDraftMessage() => _takeDraftMessageOf(this);
 

@@ -15,27 +15,32 @@ import 'browser/browser_bridge.dart';
 import 'browser/browser_tools.dart';
 import 'browser/browser_welcome.dart';
 import 'images/image_tools.dart';
+import 'usage/usage_tools.dart';
 import 'channel/channel_setup.dart';
 import 'channel/channel_gate.dart';
 import 'channel/channel_setup_welcome.dart';
+import 'chat/aside_layers.dart';
 import 'chat/chat_keys.dart';
 import 'chat/chat_models.dart' show FileChange, FileChangeKind;
 import 'chat/chat_screen.dart';
-import 'chat/chat_session.dart' show ChatSession;
-import 'chat/composer/composer_files.dart' show ComposerFile;
+import 'chat/chat_session.dart' show ChatSession, ComposerMessage;
+import 'chat/composer/composer_files.dart' show CodeReference, ComposerFile;
 import 'chat/composer/composer_mock_data.dart' show Suggestion;
 import 'chat/composer/file_drop.dart';
 import 'chat/composer/file_mentions.dart';
 import 'chat/open_editor.dart';
 import 'chat/panels/interaction_panel.dart';
 import 'chat/side_panel/file_open.dart';
+import 'chat/side_panel/file_preview.dart' show FilePreview;
 import 'chat/side_panel/side_panel_controller.dart';
 import 'chat/side_panel/side_panel_view.dart';
 import 'chat/side_panel/web_page_opener.dart';
+import 'chat/widgets/hover_scroll_text.dart';
 import 'customize/customization_store.dart';
 import 'customize/customizations.dart';
 import 'customize/customize_view.dart';
 import 'extensions/theme_extensions.dart';
+import 'ide/editor_minimap_setting.dart';
 import 'ide/editor_word_wrap.dart';
 import 'ide/git/git_model.dart' show ideWorktreeOf;
 import 'ide/git/git_repository.dart';
@@ -76,13 +81,11 @@ import 'ide/lsp/packs/lsp_settings_template.dart';
 import 'ide/terminal/links/terminal_links.dart';
 import 'ide/terminal/terminal_instance.dart';
 import 'ide/terminal/terminal_panel.dart' show terminalCommandsToSkipShell;
-import 'ide/terminal/terminal_tasks.dart';
 import 'keybindings/chat_keybindings.dart';
 import 'keybindings/default_keybindings.dart';
 import 'keybindings/key_chord.dart';
 import 'keybindings/keybinding_service.dart';
 import 'keybindings/window_keybindings.dart';
-import 'kernel/kernel_types.dart' show KernelTask;
 import 'l10n/command_titles.dart';
 import 'l10n/l10n.dart';
 import 'notifications/attention_host.dart';
@@ -131,11 +134,15 @@ import 'stash/stash_thread_view.dart' show sidebarStashes;
 import 'stash/stash_view.dart';
 import 'stash/stash_welcome.dart' show showStashWelcome;
 import 'workspace/agent_work_path.dart';
+import 'workspace/aside_card.dart';
 import 'workspace/chat_branch_bar.dart';
 import 'workspace/chat_quota_bar.dart';
 import 'workspace/chat_drag.dart';
+import 'workspace/chat_grid.dart' show PaneSide;
 import 'workspace/chat_grid_view.dart';
+import 'workspace/pane_tabs.dart';
 import 'workspace/chat_terminal.dart';
+import 'workspace/terminal_deck.dart';
 import 'workspace/editor_launcher.dart' show openExternal;
 import 'workspace/ssh_server_edit.dart';
 import 'workspace/new_chat_folder_bar.dart';
@@ -586,6 +593,8 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
       unawaited(BrowserTools.start());
       // Pictures, for agents, while an image model is turned on.
       ImageTools.start();
+      // The calls kept and the models' prices, for agents.
+      UsageTools.start();
       OpenRequests.listen((paths) => unawaited(_openPaths(paths)));
       _workspace.addListener(_syncRecentMenu);
       _syncRecentMenu();
@@ -981,6 +990,9 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
         ChatCommandIds.focusNextPane: () => _focusPaneBy(1),
         ChatCommandIds.focusPreviousPane: () => _focusPaneBy(-1),
       },
+      ..._paneArrowCommands(current),
+      ChatCommandIds.togglePaneTabs: () =>
+          _workspace.paneTabs = !_workspace.paneTabs,
       ChatCommandIds.searchAgents: _searchAgents,
       ChatCommandIds.search: () => unawaited(_openPalette()),
       if (widget.customizations != null) _customizeCommand: _showCustomize,
@@ -1191,6 +1203,36 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
         ? (step > 0 ? 0 : threads.length - 1)
         : (at + step) % threads.length;
     _openAgent(threads[next]);
+  }
+
+  /// The panes beside [current] each way, and its tabs: only those there
+  /// are to go to.
+  Map<String, VoidCallback> _paneArrowCommands(AgentThread? current) {
+    final grid = _workspace.grid;
+    if (current == null || !grid.contains(current)) return const {};
+    final tabs = grid.tabs(current);
+    return {
+      for (final (side, command) in [
+        (PaneSide.left, ChatCommandIds.focusPaneLeft),
+        (PaneSide.right, ChatCommandIds.focusPaneRight),
+        (PaneSide.top, ChatCommandIds.focusPaneUp),
+        (PaneSide.bottom, ChatCommandIds.focusPaneDown),
+      ])
+        if (grid.neighbor(current, side) case final next?)
+          command: () => _openAgent(next),
+      if (tabs.length > 1) ...{
+        ChatCommandIds.nextPaneTab: () => _openPaneTab(current, tabs, 1),
+        ChatCommandIds.previousPaneTab: () => _openPaneTab(current, tabs, -1),
+      },
+    };
+  }
+
+  /// The tab [step] away from [current] among [tabs], round from the end.
+  void _openPaneTab(AgentThread current, List<AgentThread> tabs, int step) {
+    final at = tabs.indexOf(current);
+    final next = tabs[((at < 0 ? 0 : at) + step) % tabs.length];
+    _workspace.raiseCovered(current, next);
+    _focusChat(next);
   }
 
   /// The pane [step] away from the focused one, row by row, round.
@@ -1427,6 +1469,7 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
       ?action(ChatCommandIds.focusNextPane, Codicons.arrowRight),
       ?action(ChatCommandIds.focusPreviousPane, Codicons.arrowLeft),
       ?action(ChatCommandIds.closePane, Codicons.close),
+      ?action(ChatCommandIds.togglePaneTabs, Codicons.layers),
     ];
   }
 
@@ -2028,6 +2071,7 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
           ),
           command(toggleAutoSaveCommandId, _toggleAutoSave),
           command(EditorWordWrap.commandId, EditorWordWrap.toggle),
+          command(EditorMinimap.commandId, EditorMinimap.toggle),
           for (final MapEntry(key: id, value: run) in _windowCommands().entries)
             command(id, run),
           if (folder != _noFolder) ...[
@@ -2367,6 +2411,19 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
 
   void _newIdeChat(String folder) => _focusChat(_workspace.newIdeChat(folder));
 
+  /// [code] after what is typed in [folder]'s chat (a new one, if it has
+  /// none), the keyboard there: the IDE's Add Selection to Chat. Without a
+  /// folder, the chat of the file's in front, if one shows.
+  void _addCodeToIdeChat(String folder, List<CodeReference> code) {
+    final chatFolder = folder == _noFolder ? _looseChatFolder.value : folder;
+    if (chatFolder == null) return;
+    if (_ideHistory.value == chatFolder) _ideHistory.value = null;
+    final thread =
+        _workspace.ideChat(chatFolder) ?? _workspace.newIdeChat(chatFolder);
+    thread.session.draft.insertCode(code);
+    _focusChat(thread);
+  }
+
   /// Closes [folder]'s chat tab shown; the keyboard goes to the one shown
   /// next, so ⌘W goes on closing them.
   void _closeIdeChat(String folder) {
@@ -2397,9 +2454,15 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
     final choice = await showIdeDialog(
       context,
       message: l10n.sidebarDeleteAgentTitle,
-      detail: thread.kernel.catalog == null
-          ? l10n.sidebarDeleteAgentMessage(title)
-          : l10n.sidebarDeleteAgentMessageKernel(title, thread.kernel.label),
+      detail: [
+        thread.kernel.catalog == null
+            ? l10n.sidebarDeleteAgentMessage(title)
+            : l10n.sidebarDeleteAgentMessageKernel(title, thread.kernel.label),
+        // Its asides go with it.
+        if (_workspace.asidesOf(thread).length case final asides
+            when asides > 0)
+          l10n.sidebarDeleteAsidesToo(asides),
+      ].join(' '),
       buttons: [l10n.commonDelete],
       type: IdeDialogType.warning,
     );
@@ -2728,7 +2791,7 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
             pane: thread,
             showsTerminals: _terminals != null,
           ),
-          thread.project.path,
+          thread,
         ),
         showToggle: showToggle,
       );
@@ -2814,9 +2877,12 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
             ),
             // Its chat's background commands, with its terminals.
             terminalTasks: switch (_workspace.ideChat(path)) {
-              final thread? => _SessionTerminalTasks(thread.session),
+              final thread? => SessionTerminalTasks(thread.session),
               null => null,
             },
+            // The project's terminals, the chat's: the same in both.
+            terminals: path == _noFolder ? null : _terminals?.terminalsOf(path),
+            terminalHosts: _terminals?.hosts,
             remote: switch (ProjectHost.of(path)) {
               final SshHost host => SshStatusIndicator(
                 host,
@@ -2845,6 +2911,7 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
                       ?.session
                       .draft
                       .insertFiles(files),
+            onAddCodeToChat: (code) => _addCodeToIdeChat(path, code),
             onAskInChat: _workspace.ideChat(path) == null
                 ? null
                 : (text) => _workspace
@@ -3591,8 +3658,10 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
     ChatCommandIds.toggleSidePanel: _toggleSidePanel,
     ChatCommandIds.toggleSidePanelPosition: () =>
         _sidePanel.atLeft = !_sidePanel.atLeft,
-    if (_sidePanel.hasFocus)
+    if (_sidePanel.hasFocus) ...{
       ChatCommandIds.sidePanelCloseTab: _closeSidePanelTab,
+      ChatCommandIds.attachSelection: _addSidePanelSelectionToChat,
+    },
     for (final section in alwaysShownSections)
       section.command!: () => _showSidePanelSection(section),
   };
@@ -3602,6 +3671,18 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
   FocusNode _sidePanelFocusOf(AgentThread thread) => _panesSidePanels
       ? _sidePanel.focusNodeOf(thread.session)
       : _sidePanel.focusNode;
+
+  /// Add Selection to Chat, from the side panel: the lines selected in its
+  /// file shown after what is typed in the agent's input, the keyboard
+  /// there; with none, only the keyboard (Focus Chat Input).
+  void _addSidePanelSelectionToChat() {
+    final thread = _agentThread ?? _workspace.current;
+    if (thread == null) return;
+    thread.session.draft.insertCode(
+      FilePreview.selectedAt(FocusManager.instance.primaryFocus?.context),
+    );
+    _focusChat(thread);
+  }
 
   /// Close Tab, from the side panel; the focus stays there, for the next.
   void _closeSidePanelTab() {
@@ -3707,6 +3788,7 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
     AgentThread thread, {
     double titleBarInset = 0,
     Widget? leading,
+    bool windowTitleBar = true,
   }) {
     final location = thread.project.path;
     final multi = _workspace.workspaceAt(location);
@@ -3719,6 +3801,7 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
           thread,
           titleBarInset: titleBarInset,
           leading: leading,
+          windowTitleBar: windowTitleBar,
         ),
       );
     }
@@ -3726,6 +3809,7 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
       thread,
       titleBarInset: titleBarInset,
       leading: leading,
+      windowTitleBar: windowTitleBar,
     );
   }
 
@@ -3733,12 +3817,14 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
     AgentThread thread, {
     double titleBarInset = 0,
     Widget? leading,
+    bool windowTitleBar = true,
   }) => ListenableBuilder(
     listenable: _worktreeSignals(thread),
     builder: (context, _) => _sidePanelViewOf(
       thread,
       titleBarInset: titleBarInset,
       leading: leading,
+      windowTitleBar: windowTitleBar,
     ),
   );
 
@@ -3746,6 +3832,7 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
     AgentThread thread, {
     double titleBarInset = 0,
     Widget? leading,
+    bool windowTitleBar = true,
   }) {
     final (:files, :paths) = _projectFiles(thread);
     final location = thread.project.path;
@@ -3780,7 +3867,8 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
                 insertSpaces: insertSpaces,
               ),
       git: _shownGit(thread),
-      terminals: _terminals?.sidePanelTerminals(thread.project.path),
+      terminals: _terminals?.terminalsOf(thread.project.path),
+      terminalHosts: _terminals?.hosts,
       terminalSkipShell: chatTerminalSkipShell,
       onOpenTerminalLink: _openTerminalLink,
       // Claude Haiku where the project is, as the IDE's Source Control.
@@ -3812,6 +3900,7 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
           : (folder) => _workspace.removeWorkspaceFolder(multi, folder),
       titleBarInset: titleBarInset,
       leading: leading,
+      windowTitleBar: windowTitleBar,
     );
   }
 
@@ -4204,15 +4293,18 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
 
   /// [child] with [root]'s terminal panel under it (see
   /// [ChatTerminalArea]): in a pane, its own project's, at its width.
-  Widget _withTerminal(Widget child, String root) => switch (_terminals) {
-    final terminals? => ChatTerminalArea(
-      terminals: terminals,
-      root: root,
-      onOpenLink: _openTerminalLink,
-      child: child,
-    ),
-    null => child,
-  };
+  Widget _withTerminal(Widget child, AgentThread thread) =>
+      switch (_terminals) {
+        final terminals? => ChatTerminalArea(
+          terminals: terminals,
+          root: thread.project.path,
+          tasks: SessionTerminalTasks(thread.session),
+          files: _projectFiles(thread).files,
+          onOpenLink: _openTerminalLink,
+          child: child,
+        ),
+        null => child,
+      };
 
   Widget _buildGrid({required bool showToggle}) {
     if (_stashing) {
@@ -4243,7 +4335,7 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
           place: place,
           showsTerminals: showsTerminals,
         );
-        return showsTerminals ? _withTerminal(chat, thread.project.path) : chat;
+        return showsTerminals ? _withTerminal(chat, thread) : chat;
       },
       // Those not focused in the sidebar's color, set apart.
       paneBackground: (thread) => identical(thread, _workspace.current)
@@ -4336,6 +4428,139 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
     }
   }
 
+  /// [pane] and the conversations under it, as tabs in the order they came
+  /// to it (see [PaneTabs]): a click shows one in the pane, its close
+  /// button closes it; its menu closes others too.
+  Widget _paneTabStrip(AgentThread pane) {
+    final l10n = context.l10n;
+    final tabs = _workspace.grid.tabs(pane);
+    void close(AgentThread tab) => identical(tab, pane)
+        ? _workspace.closePane(pane)
+        : _workspace.closeCovered(pane, tab);
+    return KeepPaneFocus(
+      child: PaneTabs(
+        tabs: tabs,
+        shown: pane,
+        onSelect: (tab) {
+          if (!identical(tab, pane)) _workspace.raiseCovered(pane, tab);
+          _focusChat(tab);
+        },
+        onClose: close,
+        onMenu: (tab, position) => unawaited(
+          showIdeMenu(
+            context,
+            position: position,
+            entries: [
+              IdeMenuAction(l10n.tabClose, onSelected: () => close(tab)),
+              IdeMenuAction(
+                l10n.tabCloseOthers,
+                onSelected: () {
+                  // The one kept shown first, the others then taken from
+                  // under it: closing the pane shown first would bring up
+                  // another in its place, out of [pane]'s reach.
+                  if (!identical(tab, pane)) {
+                    _workspace.raiseCovered(pane, tab);
+                  }
+                  for (final other in tabs) {
+                    if (!identical(other, tab)) {
+                      _workspace.closeCovered(tab, other);
+                    }
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// The conversations under [thread]'s pane ([under], the next to show
+  /// again last), as a layers button with their count: its menu lists them,
+  /// the next first, and shows the one picked in the pane.
+  Widget _coveredButton(AgentThread thread, List<AgentThread> under) {
+    final l10n = context.l10n;
+    return Builder(
+      builder: (context) => Stack(
+        clipBehavior: Clip.none,
+        children: [
+          SidebarIconButton(
+            icon: Codicons.layers,
+            tooltip: l10n.workspaceCovered(under.length),
+            size: 22,
+            onTap: () {
+              final box = context.findRenderObject()! as RenderBox;
+              unawaited(
+                showIdeMenu(
+                  context,
+                  anchor: box.localToGlobal(Offset.zero) & box.size,
+                  alignRight: true,
+                  entries: [
+                    for (final covered in under.reversed)
+                      IdeMenuAction(
+                        covered.localizedTitle(l10n),
+                        onSelected: () =>
+                            _workspace.raiseCovered(thread, covered),
+                      ),
+                    const IdeMenuSeparator(),
+                    // Turned off where it was turned on.
+                    IdeMenuAction(
+                      l10n.workspacePaneTabs,
+                      checked: _workspace.paneTabs,
+                      onSelected: () =>
+                          _workspace.paneTabs = !_workspace.paneTabs,
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+          Positioned(
+            right: 1,
+            bottom: 0,
+            child: IgnorePointer(
+              child: Text(
+                '${under.length}',
+                style: TextStyle(
+                  color: AppColors.textMuted,
+                  fontSize: 9,
+                  height: 1,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// What a pane's title bar says after its title: its project, and, on
+  /// another computer, that computer's name; scrolled to the rest while
+  /// hovered, as the title is.
+  Widget _paneSubtitle(AgentThread thread) {
+    final project = thread.project;
+    final host = project.host;
+    final color = AppColors.textFaint;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          host == null ? Codicons.folder : Codicons.remote,
+          size: 12,
+          color: color,
+        ),
+        const SizedBox(width: 4),
+        Flexible(
+          child: HoverScrollText(
+            _workspace.projectLabel(project),
+            style: TextStyle(color: color, fontSize: 11.5),
+          ),
+        ),
+      ],
+    );
+  }
+
   /// A pane that is the whole of the conversations.
   static const ChatPanePlace _whole = (
     topLeft: true,
@@ -4358,6 +4583,7 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
     ChatPanePlace place = _whole,
     OpenEditor? Function()? openEditor,
     bool showsTerminals = false,
+    bool layered = true,
   }) {
     final thread = pane ?? _workspace.current;
     // Windows keeps the toggle and the pin in its header (see
@@ -4407,13 +4633,20 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
     // terminal and the side panel as its panel and chat, then the pin, then
     // the way to the other layout at the end, so each is where it was after
     // a switch.
+    final under = _workspace.grid.under(thread);
     final tools = [
       if (!place.alone) ...[
+        if (under.isNotEmpty) _coveredButton(thread, under),
         // With Close Pane's keys, which close the focused pane: as each of
-        // upstream's tabs titles its close button with Close's.
+        // upstream's tabs titles its close button with Close's. Over
+        // another, it says which shows again.
         SidebarIconButton(
           icon: Codicons.close,
-          tooltip: context.l10n.workspaceClosePane,
+          tooltip: under.isEmpty
+              ? context.l10n.workspaceClosePane
+              : context.l10n.workspaceCloseBackTo(
+                  under.last.localizedTitle(context.l10n),
+                ),
           command: ChatCommandIds.closePane,
           onTap: () => _workspace.closePane(thread),
         ),
@@ -4463,6 +4696,13 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
         title: thread.localizedTitle(context.l10n),
         autofocus: thread.session.itemCount == 0,
         onRename: (title) => _workspace.rename(thread, title),
+        onSummarizeTitle: () => _workspace.summarizeTitle(thread),
+        // Those under it as tabs in place of its title, where they show so.
+        titleTabs: !embedded && _workspace.paneTabs && under.isNotEmpty
+            ? _paneTabStrip(thread)
+            : null,
+        // Side by side, which project each is, and which computer.
+        subtitle: place.alone ? null : _paneSubtitle(thread),
         titleDragBuilder: draggable
             ? (title) => MouseRegion(
                 cursor: SystemMouseCursors.grab,
@@ -4502,6 +4742,7 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
             : (task) => _sidePanel.openTerminal(thread.session, task.id),
         colorizeCode: _colorizeCode,
         colorizeCodeBlock: _colorizeCodeBlock,
+        codeSyntax: _codeSyntax,
         // Where a new agent is to work: the IDE's chat works in the IDE's
         // project, and a kept session where it was.
         start: embedded || thread.record != null
@@ -4528,10 +4769,126 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
             ? null
             : (name) => _commandFileOf(thread, name),
         openEditor: openEditor ?? () => _sidePanelEditor(thread),
+        onSideQuestion: (question) => _askBeside(thread, question),
+        asideAt: _asideCards(thread, embedded: embedded),
+        back: switch (_workspace.parentOf(thread)) {
+          final parent? => (
+            label: parent.localizedTitle(context.l10n),
+            onBack: () => _showAside(parent, embedded: embedded),
+          ),
+          null => null,
+        },
       ),
     );
-    if (place.alone || embedded) return chat;
-    return _paneSidePanel(thread, chat);
+    if (!layered) return chat;
+    final shown = _withAsides(
+      thread,
+      chat,
+      (other) => _buildChat(
+        showToggle: showToggle,
+        embedded: embedded,
+        pane: other,
+        place: place,
+        openEditor: openEditor,
+        showsTerminals: showsTerminals,
+        layered: false,
+      ),
+    );
+    if (place.alone || embedded) return shown;
+    return _paneSidePanel(thread, shown, top: place.top);
+  }
+
+  // --- Asides (/btw) -------------------------------------------------------
+
+  /// `/btw` [question] in [thread]: asked in a conversation beside it,
+  /// which its card there opens; asked of [thread] itself while it has
+  /// nothing to copy.
+  void _askBeside(AgentThread thread, ComposerMessage question) {
+    if (!_workspace.canAskBeside(thread)) {
+      thread.session.send(question);
+      return;
+    }
+    unawaited(_workspace.askBeside(thread, question));
+  }
+
+  /// Shows [thread], an aside or the one it was asked beside, in place of
+  /// the other: in the IDE's chat, in its tab.
+  void _showAside(AgentThread thread, {required bool embedded}) {
+    if (embedded) {
+      _openIdeChat(thread.project.path, thread);
+    } else {
+      _workspace.select(thread);
+    }
+  }
+
+  /// The cards of the conversations asked beside [thread], after the item
+  /// of [thread]'s each was copied up to; none without any.
+  Widget? Function(String itemId)? _asideCards(
+    AgentThread thread, {
+    required bool embedded,
+  }) {
+    final at = _workspace.asidesAt(thread);
+    if (at.isEmpty) return null;
+    return (id) => switch (at[id]) {
+      final asides? => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final (i, aside) in asides.indexed)
+            Padding(
+              padding: EdgeInsets.only(top: i == 0 ? 0 : 6),
+              child: AsideCard(
+                key: ObjectKey(aside),
+                workspace: _workspace,
+                aside: aside,
+                onOpen: () => _showAside(aside, embedded: embedded),
+              ),
+            ),
+        ],
+      ),
+      null => null,
+    };
+  }
+
+  /// What each family of conversations (one and its asides) showed last,
+  /// by the one asked beside: told apart, the other comes in or goes.
+  final Expando<AgentThread> _asideShown = Expando();
+
+  /// [chat], [thread]'s, over the one it was asked beside, as a subagent's
+  /// is over its session's (see [AsideLayers]), [chatOf] building that
+  /// one's: coming in from it, shown just before. Or, [thread] one asked
+  /// beside, its aside shown just before going back. Not where the other
+  /// shows elsewhere (another pane): no conversation is built twice.
+  Widget _withAsides(
+    AgentThread thread,
+    Widget chat,
+    Widget Function(AgentThread other) chatOf,
+  ) {
+    final parent = _workspace.parentOf(thread);
+    final root = parent ?? thread;
+    final before = _asideShown[root];
+    _asideShown[root] = thread;
+    final switched =
+        before != null &&
+        !identical(before, thread) &&
+        _workspace.threads.contains(before);
+    bool free(AgentThread other) => !_workspace.grid.contains(other);
+    if (parent != null) {
+      if (!free(parent)) return chat;
+      return AsideLayers(
+        key: ObjectKey(thread),
+        under: chatOf(parent),
+        over: chat,
+        entering: switched,
+      );
+    }
+    final leaving = switched && free(before) ? before : null;
+    // Wrapped once it has asides, so the leaving one can go over it.
+    if (leaving == null && _workspace.asidesOf(thread).isEmpty) return chat;
+    return AsideLayers(
+      key: ObjectKey(thread),
+      under: chat,
+      leaving: leaving == null ? null : chatOf(leaving),
+    );
   }
 
   /// [chat], a pane among others, with a side panel of its own, of its
@@ -4539,14 +4896,17 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
   /// over it where the pane has not the room. While it is hidden, its rail
   /// over the pane's top right (left, the panel at the left), under its
   /// title bar.
-  Widget _paneSidePanel(AgentThread thread, Widget chat) => AgentSidePanelArea(
-    panel: _sidePanel,
-    conversation: thread.session,
-    hidden: _sidePanelHidden,
-    rail: _railFor(thread),
-    builder: (context) => _buildSidePanel(thread),
-    child: chat,
-  );
+  ///
+  /// [top]: the pane is along the window's top, and so is the panel's bar.
+  Widget _paneSidePanel(AgentThread thread, Widget chat, {required bool top}) =>
+      AgentSidePanelArea(
+        panel: _sidePanel,
+        conversation: thread.session,
+        hidden: _sidePanelHidden,
+        rail: _railFor(thread),
+        builder: (context) => _buildSidePanel(thread, windowTitleBar: top),
+        child: chat,
+      );
 
   /// The file in front on the side panel, while it shows [thread]'s: on
   /// the files page, where it is edited (its cursor and selection with
@@ -4573,6 +4933,7 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
         null => null,
       },
       SidePanelSection.terminal ||
+      SidePanelSection.usage ||
       SidePanelSection.browser ||
       SidePanelSection.plan => null,
     };
@@ -4850,6 +5211,9 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
   TextMateSyntax get _chatSyntax =>
       _chatCode ??= TextMateSyntax(themes: WorkbenchThemeService.instance);
 
+  // A method's, the same each build (see [CodeCitationScope.syntax]).
+  TextMateSyntax _codeSyntax() => _chatSyntax;
+
   Future<List<List<TextSpan>>?> _colorizeCode(String path, String code) async {
     final syntax = _chatSyntax;
     final language = await syntax.languageIdForPath(path);
@@ -5022,40 +5386,4 @@ class _EmptyWorkspace extends StatelessWidget {
       ],
     );
   }
-}
-
-/// A chat's background commands, for its IDE's TERMINAL tab.
-class _SessionTerminalTasks implements TerminalTasks {
-  const _SessionTerminalTasks(this.session);
-
-  final ChatSession session;
-
-  @override
-  List<KernelTask> get tasks => session.terminalTasks;
-
-  @override
-  String? commandOf(KernelTask task) => session.commandOf(task.toolUseId);
-
-  @override
-  void stop(KernelTask task) => session.stopTask(task);
-
-  @override
-  void clear(Iterable<KernelTask> tasks) => session.clearTasks(tasks);
-
-  @override
-  String get root => session.root ?? '';
-
-  @override
-  void addListener(VoidCallback listener) => session.addListener(listener);
-
-  @override
-  void removeListener(VoidCallback listener) =>
-      session.removeListener(listener);
-
-  @override
-  bool operator ==(Object other) =>
-      other is _SessionTerminalTasks && identical(other.session, session);
-
-  @override
-  int get hashCode => identityHashCode(session);
 }

@@ -16,6 +16,7 @@ void _initStateOf(ChatComposerState state) {
     if (!state.mounted) return;
     state._focusNode.requestFocus();
     state._takeDraftFiles();
+    state._takeDraftCode();
     state._takeDraftMessage();
   });
 }

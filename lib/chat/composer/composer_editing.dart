@@ -361,6 +361,18 @@ void _insertTagsOf(ChatComposerState state, List<ComposerEmbed> tags, {int? at})
   state._focusNode.requestFocus();
 }
 
+/// The lines of code put in the draft from outside (see
+/// [ComposerDraft.insertCode]): tags of them after what is typed, as the
+/// IDE's lines pasted are.
+void _takeDraftCodeOf(ChatComposerState state) {
+  final code = state.widget.draft?.takeCode() ?? const <CodeReference>[];
+  final root = state.widget.session.root;
+  state._insertTags([
+    for (final lines in code)
+      ComposerCodeEmbed.of(lines.withPath(displayPath(lines.path, root))),
+  ], at: state._controller.length);
+}
+
 bool _canSendOf(ChatComposerState state) => state._hasContent || state._images.isNotEmpty;
 
 /// Whether [offset] of [text] is inside an atom (after its opening mark,

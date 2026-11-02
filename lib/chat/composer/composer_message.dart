@@ -152,6 +152,14 @@ void _submitOf(ChatComposerState state) {
   if (state._showsStop) return;
   final message = state._buildMessage();
   if (message.text.isEmpty && message.images.isEmpty) return;
+  if (state.widget.onIntercept case final intercept? when intercept(message)) {
+    state._pool = {};
+    state._controller.clear();
+    state._leaveHistory();
+    state._saveDraft();
+    state._dismissedTrigger = null;
+    return;
+  }
   if (state.widget.onSubmit case final onSubmit?) {
     onSubmit(message);
     return;
@@ -233,6 +241,7 @@ void _saveDraftOf(ChatComposerState state) {
 void _handleDraftChangedOf(ChatComposerState state) {
   final draft = state.widget.draft;
   if (draft != null && draft.pendingFiles.isNotEmpty) state._takeDraftFiles();
+  if (draft != null && draft.pendingCode.isNotEmpty) state._takeDraftCode();
   if (draft?.pendingMessage != null) state._takeDraftMessage();
   if (draft == null || identical(draft.savedBy, state) || !draft.saved) {
     return;

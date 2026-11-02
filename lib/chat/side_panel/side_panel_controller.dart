@@ -33,6 +33,10 @@ class SidePanelTab {
   /// the lines asked for once more.
   int reveal = 0;
 
+  /// Where its changes were scrolled, for them to show there again when
+  /// it is in front once more; none once it is asked for again.
+  Offset? diffScroll;
+
   /// Its file's text as edited, once read: kept while the tab is open (see
   /// [AgentSidePanel.keepEdit]); none for changes.
   SidePanelFileEdit? edit;
@@ -61,8 +65,9 @@ class SidePanelTab {
 /// at the right: the project's files, the agent's changes, its background
 /// commands; and the plan the agent wrote, alone, while there is one.
 /// The browser's page is there once a browser of the user's has connected
-/// (see lib/browser/browser_bridge.dart).
-enum SidePanelSection { files, changes, terminal, browser, plan }
+/// (see lib/browser/browser_bridge.dart). The usage page: what the
+/// conversation took of its upstream (see lib/usage/).
+enum SidePanelSection { files, changes, terminal, usage, browser, plan }
 
 /// The pages there whether or not there is anything on them: not the
 /// plan's, there only once the agent wrote one.
@@ -70,6 +75,7 @@ const alwaysShownSections = [
   SidePanelSection.files,
   SidePanelSection.changes,
   SidePanelSection.terminal,
+  SidePanelSection.usage,
 ];
 
 /// Each conversation keeps its page, and the tabs open on each.
@@ -96,16 +102,17 @@ class SidePanelTabs {
   final List<SidePanelTab> diffs = [];
   SidePanelTab? activeDiff;
 
-  /// What is open on the terminal page: terminals (their instances) and
-  /// background commands' output (their ids).
-  final List<Object> terminals = [];
+  /// What the terminal page shows: a terminal (its instance), or a
+  /// background command's output (its id); none: its first terminal.
   Object? terminal;
 
   /// The tab in front on the page shown; none on the terminal page.
   SidePanelTab? get current => switch (section) {
     SidePanelSection.files => active,
     SidePanelSection.changes => activeDiff,
-    SidePanelSection.terminal || SidePanelSection.browser => null,
+    SidePanelSection.terminal ||
+    SidePanelSection.usage ||
+    SidePanelSection.browser => null,
     SidePanelSection.plan => plan,
   };
 }
@@ -432,33 +439,11 @@ class AgentSidePanel extends ChangeNotifier {
     _showFor(conversation);
   }
 
-  /// Shows [id] in its tab: a terminal (its instance), or a background
-  /// command's output (its id).
+  /// Shows [id] on the terminal page: a terminal (its instance), or a
+  /// background command's output (its id).
   void openTerminal(Object conversation, Object id) {
-    final tabs = tabsOf(conversation);
-    if (!tabs.terminals.contains(id)) {
-      tabs.terminals.add(id);
-      while (tabs.terminals.length > maxTabs) {
-        tabs.terminals.removeAt(0);
-      }
-    }
-    tabs.terminal = id;
+    tabsOf(conversation).terminal = id;
     showSection(conversation, SidePanelSection.terminal);
-  }
-
-  /// Closes the tab of [id]; selects the one after it, else before it,
-  /// else none.
-  void closeTerminal(Object conversation, Object id) {
-    final tabs = tabsOf(conversation);
-    final index = tabs.terminals.indexOf(id);
-    if (index < 0) return;
-    tabs.terminals.removeAt(index);
-    if (tabs.terminal == id) {
-      tabs.terminal = tabs.terminals.isEmpty
-          ? null
-          : tabs.terminals[index.clamp(0, tabs.terminals.length - 1)];
-    }
-    notifyListeners();
   }
 
   /// Whether it changed.
@@ -521,6 +506,15 @@ class AgentSidePanel extends ChangeNotifier {
     if (request.plan) return _openPlan(conversation, tabs, request);
     if (listAway && !request.diff) _listAway = true;
     final list = request.diff ? tabs.diffs : tabs.files;
+    if (request.diff) {
+      // One change at a time, as the log shows them: the one before goes,
+      // but for edits not saved.
+      list.removeWhere((tab) {
+        final other = tab.path != request.path && !tab.dirty;
+        if (other) tab._dropEdit(highlights);
+        return other;
+      });
+    }
     var tab = list.where((tab) => tab.path == request.path).firstOrNull;
     if (tab == null) {
       tab = SidePanelTab(request);
@@ -545,7 +539,8 @@ class AgentSidePanel extends ChangeNotifier {
       if (!request.preview) tab._preview = false;
       tab
         ..request = request
-        ..reveal += 1;
+        ..reveal += 1
+        ..diffScroll = null;
     }
     if (request.diff) {
       tabs
@@ -705,11 +700,10 @@ class AgentSidePanel extends ChangeNotifier {
           SidePanelSection.changes ||
           SidePanelSection.plan:
         if (tabs.current case final tab?) return close(conversation, tab);
-      case SidePanelSection.terminal:
-        if (tabs.terminal case final id?) {
-          return closeTerminal(conversation, id);
-        }
-      case SidePanelSection.browser:
+      // Its tabs are the terminals themselves, killed by their own Close.
+      case SidePanelSection.terminal ||
+          SidePanelSection.usage ||
+          SidePanelSection.browser:
         break;
     }
     hide();

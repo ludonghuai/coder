@@ -333,6 +333,9 @@ class ThincoderKernel
   @override
   void sendQueuedNow(String turnId) => sendQueuedNowOf(this, turnId);
 
+  @override
+  void moveQueued(String turnId, int index) => moveQueuedOf(this, turnId, index);
+
   // --- Renaming and reverting ---------------------------------------------------
 
   // A revert can start now: see thincoder_turns.dart.

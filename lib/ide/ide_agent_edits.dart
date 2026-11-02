@@ -14,7 +14,7 @@ import 'package:bao_editor/monaco/vs/editor/common/diff/range_mapping.dart';
 import '../chat/chat_models.dart' show FileChangeKind;
 import '../chat/chat_session.dart';
 import '../chat/panels/revert_dialog.dart';
-import '../chat/review/change_reviews.dart';
+import '../chat/review/change_review.dart';
 import '../l10n/l10n.dart';
 import '../theme/app_theme.dart';
 import '../theme/codicons.dart';
@@ -41,11 +41,11 @@ class IdeAgentEdit {
   }
 
   final ChatSession session;
-  final ChangeReviews _review;
+  final ChangeReview _review;
   final String path;
 
   /// Which text it is held against, anew as part of it is kept (see
-  /// [ChangeReviews.baseOf]); empty for a file the agent created.
+  /// [ChangeReview.baseOf]); empty for a file the agent created.
   final String base;
 
   /// The text it is held against.
@@ -90,7 +90,7 @@ class IdeAgentEdits extends ChangeNotifier {
   List<ChatSession> _sessions = const [];
 
   /// The reviews listened to, by session: one opens after its session.
-  final Map<ChatSession, ChangeReviews?> _reviews = {};
+  final Map<ChatSession, ChangeReview?> _reviews = {};
   bool _disposed = false;
 
   List<ChatSession> get sessions => _sessions;
@@ -605,6 +605,9 @@ class IdeAgentDiff {
       style: style,
       textScaler: textScaler,
       originalStyledLines: styledLines,
+      // Whole lines, as the conversation's diffs are: the characters'
+      // marks over them are too busy in the text being edited.
+      highlight: DiffHighlight.lines,
     );
   }
 
@@ -682,10 +685,8 @@ class IdeAgentHunkActions extends StatelessWidget {
     LineRangeMapping change,
   ) {
     final after = change.modified.endLineNumberExclusive;
-    if (after <= text.lineCount) {
-      return view.caretRectAt(text.lineStarts[after - 1])?.top;
-    }
-    return view.caretRectAt(text.text.length)?.bottom;
+    if (after <= text.lineCount) return view.lineRectAt(after)?.top;
+    return view.lineRectAt(text.lineCount)?.bottom;
   }
 }
 

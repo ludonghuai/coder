@@ -210,11 +210,9 @@ void main() {
       'after:KernelInfoChanged:false/true',
     ]);
 
-    // Not shown: the rename and the review's own event reach no hook.
+    // Not shown: the rename reaches no hook.
     overlay.calls.clear();
-    kernel
-      ..emit(SessionRenamed(3, 'Other'))
-      ..emit(FilesMayHaveChanged(4));
+    kernel.emit(SessionRenamed(3, 'Other'));
     expect(overlay.calls, isEmpty);
 
     // A stale event changes nothing, so neither hook's answer says it did.
