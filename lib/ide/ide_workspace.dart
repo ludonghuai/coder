@@ -559,6 +559,13 @@ class IdeWorkspace extends ChangeNotifier
   /// as well (see [IdeLayout]).
   final IdeLayout layout = IdeLayout();
 
+  /// Whether Go Back and Go Forward have somewhere to go, for the title
+  /// bar's arrows beside its search, the window's header's as well.
+  final ValueNotifier<({bool back, bool forward})> navigation = ValueNotifier((
+    back: false,
+    forward: false,
+  ));
+
   /// The workbench's notifications.
   final IdeNotifications notifications = IdeNotifications();
 
@@ -1338,6 +1345,7 @@ class IdeWorkspace extends ChangeNotifier
     _disposed = true;
     openWorkspaces.remove(this);
     _changesTimer?.cancel();
+    navigation.dispose();
     for (final watch in _watches.values) {
       unawaited(watch.cancel());
     }

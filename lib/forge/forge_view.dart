@@ -25,32 +25,22 @@ class ForgeLogo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = this.color ?? IconTheme.of(context).color;
+    Widget svg(String asset) => SizedBox.square(
+      dimension: size,
+      child: Center(
+        child: SvgPicture.asset(
+          asset,
+          width: size * .875,
+          colorFilter: color == null
+              ? null
+              : ColorFilter.mode(color, BlendMode.srcIn),
+        ),
+      ),
+    );
     return switch (kind) {
       ForgeKind.github => Icon(Codicons.github, size: size, color: color),
-      ForgeKind.gitlab => SizedBox.square(
-        dimension: size,
-        child: Center(
-          child: SvgPicture.asset(
-            gitlabAsset,
-            width: size * .875,
-            colorFilter: color == null
-                ? null
-                : ColorFilter.mode(color, BlendMode.srcIn),
-          ),
-        ),
-      ),
-      ForgeKind.gitee => SizedBox.square(
-        dimension: size,
-        child: Center(
-          child: SvgPicture.asset(
-            giteeAsset,
-            width: size * .875,
-            colorFilter: color == null
-                ? null
-                : ColorFilter.mode(color, BlendMode.srcIn),
-          ),
-        ),
-      ),
+      ForgeKind.gitlab => svg(gitlabAsset),
+      ForgeKind.gitee => svg(giteeAsset),
     };
   }
 }

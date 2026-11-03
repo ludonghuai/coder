@@ -1,8 +1,10 @@
-// Where code is hosted ("forges": GitHub, GitLab, Gitee; theirs or one of
-// their own), told from links and Git remotes: a repository, and an issue
-// or a pull (merge) request in it. Nothing here asks the network.
+// Where code is hosted ("forges": GitHub, GitLab, Gitee, theirs or one of
+// their own), told from links and Git remotes: a repository, and an issue or a
+// pull (merge) request in it. Nothing here asks the network.
 
 import 'package:flutter/foundation.dart';
+
+import 'forge_address.dart';
 
 enum ForgeKind {
   github,
@@ -29,8 +31,8 @@ enum ForgeKind {
 }
 
 /// What a host is: [ForgeKind.github] for github.com, [ForgeKind.gitlab]
-/// for gitlab.com, [ForgeKind.gitee] for gitee.com, else as [known] says
-/// (an account's on it); null when it cannot be told.
+/// for gitlab.com, [ForgeKind.gitee] for gitee.com, else as [known] says (an account's on it); null when
+/// it cannot be told.
 typedef ForgeKindOf = ForgeKind? Function(String host);
 
 ForgeKind? publicForgeKind(String host) => switch (host.toLowerCase()) {
@@ -44,14 +46,26 @@ ForgeKind? publicForgeKind(String host) => switch (host.toLowerCase()) {
 /// groups before its name, `group/sub/name`).
 @immutable
 class ForgeRepo {
-  const ForgeRepo({required this.kind, required this.host, required this.path});
+  const ForgeRepo({
+    required this.kind,
+    required this.host,
+    required this.path,
+    this.scheme = 'https',
+  });
 
   final ForgeKind kind;
+
+  /// The server's authority: its host, with the port when not [scheme]'s
+  /// default (`gitlab.corp:8080`).
   final String host;
+
   final String path;
 
+  /// `http`, for a self-hosted forge served so; `https` otherwise.
+  final String scheme;
+
   /// Its page.
-  Uri get url => Uri.https(host, '/$path');
+  Uri get url => forgeUri(scheme, host, '/$path');
 
   @override
   String toString() => path;
@@ -71,18 +85,25 @@ class ForgeRepo {
   /// [kindOf] (or [publicForgeKind]) knows; null for none.
   static ForgeRepo? fromRemote(String remote, {ForgeKindOf? kindOf}) {
     final text = remote.trim();
+    final String scheme;
     final String host;
     String path;
     // scp-like: user@host:path.
     final scp = RegExp(r'^(?:[^@/\s]+@)?([^:/\s]+):(?!//)(.+)$')
         .firstMatch(text);
     if (scp != null && !text.contains('://')) {
+      // Git over SSH; its pages are https unless its account says otherwise.
+      scheme = 'https';
       host = scp[1]!;
       path = scp[2]!;
     } else {
       final uri = Uri.tryParse(text);
       if (uri == null || uri.host.isEmpty) return null;
-      host = uri.host;
+      // The web (and API) scheme the remote is served with; a remote over
+      // SSH's pages are https, and its port is not the web's.
+      final web = uri.scheme == 'http' || uri.scheme == 'https';
+      scheme = uri.scheme == 'http' ? 'http' : 'https';
+      host = web ? forgeAuthority(uri) : uri.host;
       path = uri.path;
     }
     path = path.replaceAll(RegExp(r'^/+|/+$'), '');
@@ -93,11 +114,13 @@ class ForgeRepo {
     final kind = kindOf?.call(host) ?? publicForgeKind(host);
     if (kind == null) return null;
     // GitHub's and Gitee's are owner/name, no more.
-    if ((kind == ForgeKind.github || kind == ForgeKind.gitee) &&
-        path.split('/').length != 2) {
-      return null;
-    }
-    return ForgeRepo(kind: kind, host: host.toLowerCase(), path: path);
+    if (kind != ForgeKind.gitlab && path.split('/').length != 2) return null;
+    return ForgeRepo(
+      kind: kind,
+      host: host.toLowerCase(),
+      path: path,
+      scheme: scheme,
+    );
   }
 }
 
@@ -110,15 +133,19 @@ class ForgeRef {
   const ForgeRef({
     required this.repo,
     required this.kind,
-    required this.number,
+    this.number = 0,
+    this.code,
   });
 
   final ForgeRepo repo;
   final ForgeItemKind kind;
+  final int number;
 
-  /// Its number: GitHub's and GitLab's as digits, a Gitee issue's as the
-  /// letters and digits it has (`IKLL6H`; a pull request's are digits).
-  final String number;
+  /// A Gitee issue's number, which is not one: `I8ABCD` (its case matters).
+  final String? code;
+
+  /// Its number as the forge's paths and links write it.
+  String get key => code ?? '$number';
 
   /// Its page.
   Uri get url => switch ((repo.kind, kind)) {
@@ -135,17 +162,18 @@ class ForgeRef {
       path: '/${repo.path}/-/merge_requests/$number',
     ),
     (ForgeKind.gitee, ForgeItemKind.issue) => repo.url.replace(
-      path: '/${repo.path}/issues/$number',
+      path: '/${repo.path}/issues/$key',
     ),
     (ForgeKind.gitee, ForgeItemKind.pull) => repo.url.replace(
       path: '/${repo.path}/pulls/$number',
     ),
   };
 
-  /// `#12`; a merge request's `!12`, as GitLab writes it.
+  /// `#12`; a merge request's `!12`, as GitLab writes it; a Gitee issue's
+  /// `#I8ABCD`.
   String get tag => repo.kind == ForgeKind.gitlab && kind == ForgeItemKind.pull
       ? '!$number'
-      : '#$number';
+      : '#$key';
 
   /// `owner/name#12`.
   String get fullTag => '${repo.path}$tag';
@@ -158,36 +186,26 @@ class ForgeRef {
       other is ForgeRef &&
       other.repo == repo &&
       other.kind == kind &&
-      other.number == number;
+      other.key == key;
 
   @override
-  int get hashCode => Object.hash(repo, kind, number);
+  int get hashCode => Object.hash(repo, kind, key);
 
   /// The issue or pull request [url] is the page of (its comments', its
   /// files' too), on a host [kindOf] (or [publicForgeKind]) knows; a
-  /// GitLab one (`/-/issues/`) on any host but another forge's. Null for
-  /// none.
+  /// GitLab one (`/-/issues/`) on any host. Null for none.
   static ForgeRef? parse(String url, {ForgeKindOf? kindOf}) {
     final uri = Uri.tryParse(url.trim());
     if (uri == null || !uri.isScheme('https') && !uri.isScheme('http')) {
       return null;
     }
     if (uri.host.isEmpty) return null;
-    final host = uri.host.toLowerCase();
-    // `pathSegments` decodes percent-escapes; a legit escape whose bytes are
-    // not valid UTF-8 throws FormatException (a stray `%` never reaches here —
-    // `Uri.parse` rewrites it to `%25`). A URL an agent printed is just text,
-    // so a page we cannot read is no page (null), never a crash on the
-    // notification path that scans chat items. Only `Uri.parse` output is
-    // passed here, so FormatException is the only decode failure to catch.
-    final List<String> parts;
-    try {
-      parts = uri.pathSegments.where((part) => part.isNotEmpty).toList();
-    } on FormatException {
-      return null;
-    }
-    // GitLab: <path>/-/(issues|merge_requests)/<n>, on any host but a
-    // known GitHub's or Gitee's.
+    final host = forgeAuthority(uri);
+    final scheme = uri.isScheme('http') ? 'http' : 'https';
+    final parts = uri.pathSegments.where((part) => part.isNotEmpty).toList();
+    final known = kindOf?.call(host) ?? publicForgeKind(host);
+    // GitLab: <path>/-/(issues|merge_requests)/<n>, on any host but
+    // GitHub's and Gitee's.
     final dash = parts.indexOf('-');
     if (dash >= 2 && parts.length > dash + 2) {
       final kind = switch (parts[dash + 1]) {
@@ -195,67 +213,56 @@ class ForgeRef {
         'merge_requests' => ForgeItemKind.pull,
         _ => null,
       };
-      final digits = int.tryParse(parts[dash + 2]);
-      final known = kindOf?.call(host) ?? publicForgeKind(host);
-      // Its own hosts, and hosts no account has called another forge's.
+      final number = int.tryParse(parts[dash + 2]);
       if (kind != null &&
-          digits != null &&
+          number != null &&
           (known == null || known == ForgeKind.gitlab)) {
         return ForgeRef(
           repo: ForgeRepo(
             kind: ForgeKind.gitlab,
             host: host,
             path: parts.sublist(0, dash).join('/'),
+            scheme: scheme,
           ),
           kind: kind,
-          number: '$digits',
+          number: number,
         );
       }
       return null;
     }
+    // Gitee: <owner>/<name>/issues/<I8ABCD>, <owner>/<name>/pulls/<n>.
+    if (parts.length >= 4 && known == ForgeKind.gitee) {
+      final repo = ForgeRepo(
+        kind: ForgeKind.gitee,
+        host: host,
+        path: '${parts[0]}/${parts[1]}',
+        scheme: scheme,
+      );
+      final key = parts[3];
+      if (parts[2] == 'issues' && RegExp(r'^[0-9A-Za-z]+$').hasMatch(key)) {
+        return ForgeRef(repo: repo, kind: ForgeItemKind.issue, code: key);
+      }
+      final number = int.tryParse(key);
+      if (parts[2] == 'pulls' && number != null) {
+        return ForgeRef(repo: repo, kind: ForgeItemKind.pull, number: number);
+      }
+      return null;
+    }
     // GitHub: <owner>/<name>/(issues|pull)/<n>, on its hosts.
-    if (parts.length >= 4 &&
-        (kindOf?.call(host) ?? publicForgeKind(host)) == ForgeKind.github) {
+    if (parts.length >= 4 && known == ForgeKind.github) {
       final kind = switch (parts[2]) {
         'issues' => ForgeItemKind.issue,
         'pull' || 'pulls' => ForgeItemKind.pull,
         _ => null,
       };
-      final digits = int.tryParse(parts[3]);
-      if (kind != null && digits != null) {
+      final number = int.tryParse(parts[3]);
+      if (kind != null && number != null) {
         return ForgeRef(
           repo: ForgeRepo(
             kind: ForgeKind.github,
             host: host,
             path: '${parts[0]}/${parts[1]}',
-          ),
-          kind: kind,
-          number: '$digits',
-        );
-      }
-    }
-    // Gitee: <owner>/<name>/(issues|pulls)/<id>, on its hosts; its
-    // enterprise pages (`/enterprises/…`) are no repository's. An issue's
-    // id is the letters and digits it is, case and all (`IKLL6H`); a pull
-    // request's is a number.
-    if (parts.length >= 4 &&
-        parts[0] != 'enterprises' &&
-        (kindOf?.call(host) ?? publicForgeKind(host)) == ForgeKind.gitee) {
-      final digits = int.tryParse(parts[3]);
-      final (kind, number) = switch (parts[2]) {
-        'issues' when _issueNumber.hasMatch(parts[3]) => (
-          ForgeItemKind.issue,
-          parts[3],
-        ),
-        'pulls' when digits != null => (ForgeItemKind.pull, '$digits'),
-        _ => (null, null),
-      };
-      if (kind != null && number != null) {
-        return ForgeRef(
-          repo: ForgeRepo(
-            kind: ForgeKind.gitee,
-            host: host,
-            path: '${parts[0]}/${parts[1]}',
+            scheme: scheme,
           ),
           kind: kind,
           number: number,
@@ -274,9 +281,6 @@ class ForgeRef {
     }
     return found.toList();
   }
-
-  /// A Gitee issue's id: letters and digits, as Gitee writes them.
-  static final _issueNumber = RegExp(r'^[A-Za-z0-9]+$');
 
   static final _urlPattern = RegExp(r'''https?://[^\s<>"'`]+''');
 }

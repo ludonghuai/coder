@@ -5,7 +5,7 @@ import 'package:super_sliver_list/super_sliver_list.dart';
 import 'package:baocode/chat/chat_feed.dart';
 import 'package:baocode/chat/chat_history_view.dart';
 import 'package:baocode/chat/chat_models.dart';
-import 'package:baocode/chat/chat_session.dart' show ComposerMessage;
+import 'package:baocode/chat/chat_session.dart' show ComposerMessage, UserPlace;
 import 'package:baocode/chat/composer/composer_draft.dart';
 import 'package:baocode/chat/user_message_style.dart';
 import 'package:baocode/chat/widgets/chat_item_view.dart';
@@ -341,7 +341,7 @@ final class _Feed extends ChangeNotifier implements ChatFeed {
   set editing(({int index, ComposerDraft draft})? value) {}
 
   @override
-  void editMessage(int index, ComposerMessage message) {}
+  void editMessage(int index, ComposerMessage message, {UserPlace? from}) {}
 
   @override
   VoidCallback? moveToBackgroundAt(int index) => null;

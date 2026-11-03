@@ -170,6 +170,7 @@ void _submitOf(ChatComposerState state) {
   state.widget.session.send(
     message,
     editor: state.widget.openEditor,
+    from: UserPlace.computer,
     // Taken off this draft: this message carries none of it.
     editorContext: state.widget.openEditor?.call() != state._dismissedEditor,
   );

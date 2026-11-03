@@ -34,11 +34,11 @@
 
 | 文件 | 我们的块 | 类型 | 接缝 | 行数预算 |
 |---|---|---|---|---|
-| `lib/chat/chat_session.dart` | overlay 装配、host 投影、生命周期钩、缺失能力投影；`send()` 的 `editorContext` / `beforeSend` 与上游 `notes` 参数并存（`notes: [...notes, ...自有 editor 注]`，自有注仍按 `acceptsEditorContext` 收） | 内核适配 | `docs/design/thincoder-adapter.md` §29.2 | 净增 ≤180 行 |
+| `lib/chat/chat_session.dart` | overlay 装配、host 投影、生命周期钩、缺失能力投影；`send()` 的 `editorContext` / `beforeSend` 与上游 `UserPlace? from` / `notes` 参数并存（`notes: [...notes, ..._placeNotes(from), ...自有 editor 注]`，自有注仍按 `acceptsEditorContext` 收） | 内核适配 | `docs/design/thincoder-adapter.md` §29.2 | 净增 ≤180 行 |
 | `lib/chat/chat_feed.dart` | `MarksTurns` 只读接口 | 内核适配 | `ChatSession.turns` 与 folds | 净增 ≤16 行 |
 | `lib/chat/chat_models.dart` | `TurnMark`、`NoticeItem` 与 `editor_context.dart` re-export | 内核适配 | overlay / `KernelTurn.contexts` | 每类 ≤30 行 |
 | `lib/chat/composer/composer_editing.dart` | `hasCommandSource` 命令源门；另承载上游方法体（`_caretAtEndOf` / `_buildBoxOf` / `_buildMarkdownEditorOf` / `_takeDraftCodeOf`，拆分落点见 `docs/design/structure-splits.md` §4.3 第 5 步） | 内核适配 | `ChatSession.hasCommandSource`；`composer.dart` 的委托 | 自有语义 ≤12 行；上游搬入体不构成 fork 净增 |
-| `lib/chat/composer/composer.dart` | 委托形态：`_initStateOf` / `_takeDraftCodeOf` / `_takeDraftMessageOf` / `_handleDraftChangedOf` / `_submitOf` 等，实现体在同目录的 `…Of` 助手（上游新增体含 `_takeDraftCode` 与 `_submit` 的 intercept 分支）；拆分机制归 `docs/design/structure-splits.md` §4.3 | 内核适配 | 顶层 helper（`…Of(this, …)`） | 上游内联体不构成 fork 净增；委托行按助手数计 |
+| `lib/chat/composer/composer.dart` | 委托形态：`_initStateOf` / `_takeDraftCodeOf` / `_takeDraftMessageOf` / `_handleDraftChangedOf` / `_submitOf` 等，实现体在同目录的 `…Of` 助手（上游新增体含 `_takeDraftCode` 与 `_submit` 的 intercept / Send Now 分支；`_submit` 的新体落在 `composer_message.dart` 的 `_submitOf`，本档只留 `void _submit() => _submitOf(this);`）；拆分机制归 `docs/design/structure-splits.md` §4.3 | 内核适配 | 顶层 helper（`…Of(this, …)`） | 上游内联体不构成 fork 净增；委托行按助手数计 |
 | `lib/chat/composer/composer_view.dart` | btest 缓存键与状态行挂点 | 功能 | `ChatSession` 的 btest 七成员 | 净增 ≤24 行 |
 | `lib/chat/chat_screen.dart` | `canStopTasks` 单行接线（`:603`，接线点 ⑬） | 修 bug | `ChatSession.canStopTasks` | 净增 ≤2 行 |
 | `lib/chat/side_panel/file_preview.dart` | 动作区按宽度收口：`tight`（`:505`，<420）与 `compactActions`（`:509`，<720）两个门，外加 `Flexible(FittedBox(scaleDown))`（`:538-539`）；文案按门槛收（`:545` / `:552`），`compact:` 传参 `:564` | 修 bug | 动作区装配点；上游新分支 `sidePanelChanges` 折入同一动作区 | 净增 ≤40 行 |
@@ -46,11 +46,12 @@
 | `lib/workspace/workspace.dart` | thincoder 目录、默认内核偏好、确认改名；标题门 `hostTitlesSession` 落在 `_titleAfter` 内（与其 `canRename` 合一处） | 内核适配 | `SessionCatalog`、`ConfirmsRename`、`SessionRenamed`；`hostTitlesSession` | 新增净增 ≤40 行 |
 | `lib/main.dart` | thincoder 进程 reap/stop 与状态设置接线；上游设置清单由 `followSettingsFiles(files)` 承接，本档只留自有设置（`ThincoderPathSetting`、`EditorContextSetting`、Git 代理环境），逐键不重复赋值 | 内核适配 | `ThincoderLocator` / process registry；`followSettingsFiles` | 新增净增 ≤20 行 |
 | `lib/platform/data_dir.dart` | 进程注册表文件名清单含 `thincoder`（`:87-88` 注释）+ `thincoderDataDir` 只读访问器 + `items` 加 `runtime-data` | 修 bug | `ChildProcessRegistry`；`items` 的迁移 / 清理条目表 | 净增 ≤7 行（≤2 + ≤5） |
+| `lib/diagnostics/frame_watch.dart` | 顶层 `frameWatchState()` 一处定义 + `describeState()` 一行委托 + `_writeJank` 的调用点（台账 #201）；接缝 = `[slow]` / `[jank]` / `[stall]` 行的状态尾段；上游的体检体（树规模、会话数、内存、`heavyObjects` 之上按需分段）折进该函数体 | 功能 | `hang_watch.dart` / `stall_watch.dart` 读同一份定义 | 净增 ≤7 行（顶层函数文档 4 + 函数头 1 + 类收尾 1 + 空行 1） |
 | `lib/kernel/kernel_registry.dart` | thincoder 为默认内核，Claude 保留 | 内核适配 | `_all = [thincoder, claudeCode]` | 净增 ≤12 行 |
 | `lib/kernel/agent_kernel.dart` | fork 能力接口 | 内核适配 | `ConfirmsRename`、`AcceptsImageFiles`、`AcceptsEditorContext` 等 | 每个接口 ≤16 行 |
 | `lib/kernel/kernel_types.dart` | `KernelTurn.contexts` 与回退数据形；`ContextUsage` 两字段并存（`sessionSpent` 会话已耗 + 上游 `detail` 分段明细） | 内核适配 | overlay 发送与 `PlansReverts`；上下文用量面板 | 每类 ≤40 行 |
 | `lib/kernel/mock/mock_kernels.dart` | `MockKernels.thincoder` 描述符（`:34`，不进 `all`） | 内核适配 | `KernelDescriptor`；测试直用 | 净增 ≤16 行 |
-| `lib/l10n/app_en.arb`、`app_zh.arb` | fork 文案键并集 | 功能 | ARB 源档；生成物由 `flutter gen-l10n` 再生，零手改 | 只增所需键；同名不覆盖上游措辞 |
+| `lib/l10n/app_en.arb`、`app_zh.arb` | fork 文案键并集（合后 en 4663 键、zh 3720 键；消息键两侧各 3717、逐键相等，余下为 en 侧的 `@` 元数据） | 功能 | ARB 源档；生成物由 `flutter gen-l10n` 再生，零手改 | 只增所需键；同名不覆盖上游措辞 |
 | `lib/settings/pages/thincoder_models_page.dart` | thincoder 模型配置页 | 功能 | 设置页导航与 CLI 配置文件 | 自有页面；共享导航接缝另计 |
 | `lib/settings/pages/general_page.dart` | thincoder 设置组（`:442-457`，接线点 ⑦）+ 设置 → 通用的 `chat.editorContext` 一行开关（接线点 ⑪） | 功能 | 设置页 `SettingsGroup` / `ThincoderPathSetting`；`EditorContextSetting` | 净增 ≤93 行（≤81 + ≤12） |
 | `lib/settings/app_settings.dart`、`settings/settings_dialog.dart` | thincoder 设置入口；与上游 `SettingsSection.usage` 并存（enum / 分区列表 / 图标 / 文案四处） | 功能 | `SettingsSection.thincoderModels` / `SettingsSection.usage` | 合计净增 ≤50 行 |
@@ -58,7 +59,7 @@
 | `lib/chat/composer/session_model_picker.dart` | thincoder 会话默认收起 + 底部管理入口指向 thincoder 模型页；回合在飞时的等待态后缀（`pendingModel` → label / tooltip 的 `modelsSwitchPending`；机制见 `thincoder-adapter.md` §24） | 内核适配 | `ComposerPicker.startCollapsed`；`SettingsSection.thincoderModels`；`ChatSession.pendingModel` | 净增 ≤20 行 + 等待态块 17 行（`:45-48` · `:129-138` · `:155-157`） |
 | `lib/kernel/claude_code/claude_sdk_tools.dart` | `ClaudeSdkTool` 的 `group` / `picturesOnly` 两字段；删除块只含注册表类 `ClaudeSdkTools` 类本体（注册表在自有 `HostTools`）；类外的 `ClaudeSdkGate` 接口（`offersTool` / `asksUser` / `tellsFeature` 三个成员）与 `claudeSdkImage` / `claudeSdkText` 随上游保留 | 内核适配 | `HostTools` 注册表；ACP 的 MCP 面按 group 分服与 `picturesOnly` 门；`ClaudeSdkGate` 由自有 `HostTools.gate` 承接 | 净增 ≤20 行（两字段 + `ClaudeSdkGate` 接口）+ 1 个删除块（类本体 174 行；改后 106 行 = 上游 273 − 174 + 7：两字段 6 行 + `tellsFeature` 文档注释去掉指向已删类的引用 1 行） |
 | `lib/bots/bots.dart` | 按 cwd 的工具门落在自有注册表：两处 `gate`（`:153` 赋值 / `:174` 清空）与 `called` / `server`（`:460` / `:461` / `:497`）换 `HostTools.`，`claude_sdk_tools.dart` 的 import 换自有 `host_tools.dart`（`ClaudeSdkGate` 接口经自有档 re-export） | 功能 | `HostTools.gate` / `HostTools.called` / `HostTools.server`；`ClaudeSdkGate` 接口 | 净增 ≤6 行（5 行换符 + 至多 1 行自有 import） |
-| `test/bots/bots_test.dart` | 删掉注册表类后的符号改名：档内 11 处 `HostTools.`（`handle` 5 · `register` 1 · `unregister` 1 · `server` 1 · `serversFor` 1 · `asksUser` 2）；断言内容随上游（工具集放开：`launch.tools` 为 null、无 `--tools`），路径表达式按平台拼（25 处 `p.join`：上游写死 `/`，自有档在 Windows 上拼出 `\`） | 内核适配 | `HostTools` 的 handle / register / unregister / server / serversFor / asksUser | 净增 0 行（+38/−38：11 处换符 + 1 行 import 换行 + 断言路径改写） |
+| `test/bots/bots_test.dart` | 删掉注册表类后的符号改名：档内 11 处 `HostTools.`（`handle` 5 · `register` 1 · `unregister` 1 · `server` 1 · `serversFor` 1 · `asksUser` 2）；断言内容随上游（工具集：`launch.tools` = `BotPermissions.agentTools`、带 `--tools`、无 `--strict-mcp-config`；符号仍 `HostTools.`），路径表达式按平台拼（26 处 `p.join`：上游写死 `/`，自有档在 Windows 上拼出 `\`） | 内核适配 | `HostTools` 的 handle / register / unregister / server / serversFor / asksUser | 净增 0 行（+38/−38：11 处换符 + 1 行 import 换行 + 断言路径改写） |
 | `lib/bots/bot_tools.dart` | bots 的工具注册落自有注册表：`HostTools.register`（`:54`）/ `HostTools.unregister`（`:60`）；import 换自有 `host_tools.dart`（上游该档自带 `image_tools.dart` 与 `claude_sdk_tools.dart` 两行 import） | 功能 | `HostTools` 注册表；`HostTools.register` / `unregister` | 净增 1 行（import） |
 | `lib/browser/browser_actions.dart` | `browser_screenshot` 的 `picturesOnly: true`（`:105`）+ 7 个构造点用上游原名 | 内核适配 | `ClaudeSdkTool` / `ClaudeSdkCall`；MCP 面按 `picturesOnly` 过滤 | 结构不变（净 0） |
 | `lib/browser/browser_debug_tools.dart` | 无自有块：7 个构造点用上游原名 | 内核适配 | `ClaudeSdkTool` / `ClaudeSdkCall` | 结构不变（净 0） |
@@ -76,7 +77,7 @@
 | `lib/chat/chat_history_view.dart` | 窗口可见性门：自有 `window_visible.dart` 的 import 与档内 9 处 `WindowVisible` 用法；重建的两个入口 `_showNow` / `_showWords` 各带一个门（窗口不可见时不重建，切回时一次追平） | 修 bug | `WindowVisible.changed` 订阅；集成面见 `test/RTM.md` 2-1 行 | 净增 ≤1 行（import） |
 | `lib/chat/widgets/inline_rename_field.dart` | `checksTitle` 标题判定（空或超 80 不收，带错文案 `_error`），与上游的 `suggestions` / `onSummarize` 并存；`onChanged` 一处同时清错与过滤列表 | 功能 | 改名框的提交路径（§9 判定）；`InlineRenameField.checksTitle` / `initial` | 净增 ≤31 行（实测 +31 / −4） |
 | `lib/kernel/claude_code/claude_code_kernel.dart` | 宿主工具通道：自有 `host_tools.dart` 的 import 与档内 5 行类型使用（`HostTools` 3 · `HostToolCall` 2） | 内核适配 | `HostTools` 注册表；`HostTool` / `HostToolCall` 别名 | 净增 ≤1 行（import） |
-| `lib/update/version.dart`、`pubspec.yaml` | 版本行跟随上游（`1.8.0+24`）：两档必须同值，一处改了另一处不跟就是发货缺陷 | 修 bug | `test/update/version_test.dart` 校验两档同值 | 每档净增 0 |
+| `lib/update/version.dart`、`pubspec.yaml` | 版本行跟随上游（`1.8.1+25`）：两档必须同值，一处改了另一处不跟就是发货缺陷 | 修 bug | `test/update/version_test.dart` 校验两档同值 | 每档净增 0 |
 
 **恢复的上游 import 与自有 re-export 档重复**：`lib/browser/browser_tools.dart:13`、`lib/images/image_tools.dart:13` 与 `lib/bots/bot_tools.dart:13` 各带一条 `unnecessary_import` info（自有 `host_tools.dart` 的 re-export 覆盖同样四个符号）。这三行是上游行，删掉即重建常驻 fork 差异，**禁随 lint 清扫删除**。
 
@@ -308,17 +309,17 @@
 
 行数 = 本轮实测（`split('\n')` 口径，含末行换行）；块的形态与坐标见第 3 节对应行，不在此重复。
 
-| 文件 | 实施前行数 | 本批块 | 预算（第 3 节） |
+| 文件 | 行数（2026-11-02 实测） | 本批块 | 预算（第 3 节） |
 |---|---|---|---|
 | `lib/chat/composer/session_model_picker.dart` | 259 | 回合在飞时的等待态后缀，17 行 | ≤20 行 |
-| `lib/workbench.dart` | 5390 | 面板命令源 · 扫描失败面 | 面板 ≤10 · 扫描 ≤59 |
-| `lib/ide/ide_workbench.dart` | 5908 | chord 第二键的窗口门，21 行 | ≤22 行 |
+| `lib/workbench.dart` | 5408 | 面板命令源 · 扫描失败面 | 面板 ≤10 · 扫描 ≤59 |
+| `lib/ide/ide_workbench.dart` | 5878 | chord 第二键的窗口门，21 行 | ≤22 行 |
 | `lib/ide/ide_editor.dart` | 3160 | 控制器为空的空渲染，7 行 | ≤7 行 |
-| `lib/chat/chat_session.dart` | 1343 | 回退后的审查刷新钩，5 行 | ≤180 行 |
+| `lib/chat/chat_session.dart` | 1401 | 回退后的审查刷新钩，5 行 | ≤180 行 |
 
 **体量立场（不拆档）**：五档都是上游共享档。本批改动合计 +112 / −18（净增 94 行；`54f94769` +76 / −9 与 `e5661df4` +36 / −9，`git diff --numstat` 实测，不计批档自身 32 行），形态都是第 3 节登记块内的小块。
 
-`workbench` 5390 · `ide_workbench` 5908 · `ide_editor` 3160 · `chat_session` 1343 四档过 800 行，属存量债，按 §7.3 同一理由不拆档：把上游共享档拆成两档，两半都成常驻 fork 差异，每次上游合并要在两处对账，与第 1 节的目标相反。
+`workbench` 5408 · `ide_workbench` 5878 · `ide_editor` 3160 · `chat_session` 1401 四档过 800 行，属存量债，按 §7.3 同一理由不拆档：把上游共享档拆成两档，两半都成常驻 fork 差异，每次上游合并要在两处对账，与第 1 节的目标相反。
 
 ### 8.6 验收对照
 
