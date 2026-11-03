@@ -40,7 +40,12 @@ void main() {
 
       expect(
         ForgeRepo.fromRemote('git@gitee.com:o/r.git'),
-        const ForgeRepo(kind: ForgeKind.gitee, host: 'gitee.com', path: 'o/r'),
+        const ForgeRepo(
+          kind: ForgeKind.gitee,
+          host: 'gitee.com',
+          path: 'o/r',
+          scheme: 'https',
+        ),
       );
       // Ours are owner/name, no more; a GitLab's keeps its sub-groups.
       expect(ForgeRepo.fromRemote('git@gitee.com:o/sub/r.git'), isNull);

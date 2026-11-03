@@ -81,7 +81,7 @@
 
 **恢复的上游 import 与自有 re-export 档重复**：`lib/browser/browser_tools.dart:13`、`lib/images/image_tools.dart:13` 与 `lib/bots/bot_tools.dart:13` 各带一条 `unnecessary_import` info（自有 `host_tools.dart` 的 re-export 覆盖同样四个符号）。这三行是上游行，删掉即重建常驻 fork 差异，**禁随 lint 清扫删除**。
 
-**存量债（合并后过 800 行的共享档）**：`lib/kernel/claude_code/claude_code_kernel.dart` 3547 → ≈3600 · `lib/bots/bots.dart` 515 → ≈1248 · `lib/bots/bot_tools.dart` 470 → ≈835 · `test/bots/bots_test.dart` 413 → ≈1376。四档都是上游共享档：拆分会让两半都成常驻 fork 差异（第 7.3 节同一理由），本批不拆。接手批次未排期，涨幅在下一次合并时按本行核对。
+**存量债（过 800 行的上游共享档，2026-11-02 实测）**：`lib/kernel/claude_code/claude_code_kernel.dart` 3808 · `lib/bots/bots.dart` 1364 · `lib/bots/bot_tools.dart` 964 · `test/bots/bots_test.dart` 1655。四档都是上游共享档：拆分会让两半都成常驻 fork 差异（第 7.3 节同一理由），本批不拆。接手批次未排期，涨幅在下一次合并时按本行核对。
 
 ## 4 保持上游实现的共享文件
 
