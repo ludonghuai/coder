@@ -1008,8 +1008,10 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
   // its first item is pressed. That bar is not a row of the list, so no index
   // is moved by it; the room for it is the list's top padding.
 
-  /// The list's room above its first item, and the bar's height after it.
-  static const _chatTopPadding = 20.0;
+  /// The list's room above its first item: as at its sides (the gutter),
+  /// where a message as wide as the chat lets it be sticks too (see
+  /// [_stickyInset]); and the bar's height after it.
+  double get _chatTopPadding => _gutter;
   static const _earlierBarHeight = 40.0;
 
   /// How near the top the list is scrolled before the earlier turns are read.
@@ -1020,17 +1022,37 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
     _ => null,
   };
 
-  /// There were earlier turns to read: the room for the bar stays, as it
-  /// goes with the last of them.
-  bool _earlierSeen = false;
+  /// There are earlier turns to read, or they are being read: room for
+  /// the bar.
+  bool get _earlierRoom => switch (_session) {
+    final session? => session.hasEarlierHistory || session.loadingEarlier,
+    null => false,
+  };
 
-  bool get _earlierRoom {
+  /// Whether the list was last laid out with room for the bar, and for
+  /// whose turns.
+  (ChatSession?, bool) _earlierRoomLaidOut = (null, false);
+
+  /// [_earlierRoom], what is in the list kept where it is as the room comes
+  /// or goes (the last of the earlier turns read): scrolled by as much,
+  /// unless at the top, where the bar goes with it.
+  bool _keepEarlierRoom() {
     final session = _session;
-    if (session != null &&
-        (session.hasEarlierHistory || session.loadingEarlier)) {
-      _earlierSeen = true;
+    final room = _earlierRoom;
+    final (laidOutFor, laidOut) = _earlierRoomLaidOut;
+    _earlierRoomLaidOut = (session, room);
+    if (!identical(laidOutFor, session) || laidOut == room) return room;
+    if (_scrollController.hasClients) {
+      final position = _scrollController.position;
+      if (position.hasPixels && position.pixels > 0) {
+        position.correctBy(
+          room
+              ? _earlierBarHeight
+              : -math.min(_earlierBarHeight, position.pixels),
+        );
+      }
     }
-    return _earlierSeen;
+    return room;
   }
 
   /// Reading them brought nothing: not tried again until asked to.
@@ -1862,15 +1884,16 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
     _editorMoved.value++;
   }
 
-  /// Room above the editor stuck to the top of the list.
-  static const _editorInset = 8.0;
+  /// Room above the editor stuck to the top of the list: as above the
+  /// stuck message it opens from.
+  double get _editorInset => _stickyInset;
 
   /// Where the editor goes, relative to [layer]: on its placeholder, but
   /// never above the top of the list (it sticks there once scrolled past),
   /// unless the user's messages do not stick ([_sticks]). Null when the
   /// placeholder is out of the built items, out of view.
   double? _editorTop(RenderBox layer) {
-    const inset = _editorInset;
+    final inset = _editorInset;
     // Closing: on the message, below its gap (its placeholder is gone).
     if (_closingIndex case final index?) {
       final item = _laidOutItems()
@@ -1904,8 +1927,9 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
 
   // --- The sticky user message ---------------------------------------------
 
-  /// Room above the stuck message, as above the editor stuck to the top.
-  static const _stickyInset = AppMetrics.contentInset;
+  /// Room above the stuck message: as above the list's first item, and at
+  /// its sides where it is as wide as the chat lets it be (the gutter).
+  double get _stickyInset => _chatTopPadding;
 
   /// Height of the fade under the stuck message, over the transcript
   /// scrolling beneath it.
@@ -2913,7 +2937,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
                                           padding: EdgeInsets.fromLTRB(
                                             _gutter,
                                             _chatTopPadding +
-                                                (_earlierRoom
+                                                (_keepEarlierRoom()
                                                     ? _earlierBarHeight
                                                     : 0),
                                             _gutter,

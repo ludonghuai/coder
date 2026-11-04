@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../ide/terminal/terminal_colors.dart';
 import '../platform/app_platform.dart';
 import 'code_font.dart';
+import 'island_tones.dart';
 import 'window_blur.dart';
 import 'workbench_theme.dart' hide ColorScheme;
 
@@ -21,8 +22,26 @@ abstract final class AppColors {
     return const Color(0x00000000);
   }
 
-  /// `sideBar.background`.
+  /// `sideBar.background`: the window's color, under the cards (see
+  /// [IslandTones] for how far apart they are).
   static Color get background => _colors['sideBar.background'];
+
+  /// The least lightness between the faintest text and the cards: about
+  /// the island prototype's `--fg-3` (#878680 on #222221, 0.37); Bao
+  /// Dark's `disabledForeground` (0.34) as it is.
+  static const _faintStep = 0.33;
+
+  /// [color] taken from [from], darker if it is the darker (else
+  /// lighter), till their lightness is [step] apart; as it is if it is
+  /// already.
+  static Color _apart(Color color, Color from, double step) =>
+      _apartCache[(color, from, step)] ??= () {
+        final gap = IslandTones.lightness(color) - IslandTones.lightness(from);
+        if (gap.abs() >= step) return color;
+        return IslandTones.shift(color, gap <= 0 ? gap - step : step - gap);
+      }();
+
+  static final _apartCache = <(Color, Color, double), Color>{};
 
   /// Whether the window has the system's material under it, to show
   /// through the sidebar and the conversation: macOS (see
@@ -92,11 +111,11 @@ abstract final class AppColors {
     return foreground.withValues(alpha: foreground.a * 0.1);
   }
 
-  /// The chat's message bubbles and its input: their own color
-  /// (`agentsChatInput.background`, over [code]) a step towards the
-  /// editor's text, so it stands out from them however far they are from
-  /// the page, tinged with [accent]; the input's when typed into, a step on
-  /// towards [accent].
+  /// The chat's message bubbles and its input: their fill ([bubbleFill]) a
+  /// step towards the editor's text, so it stands out from them however far
+  /// they are from the page, tinged with [accent]; the input's when typed
+  /// into, a step on towards [accent]. Not the theme's border, which may be
+  /// of another hue (Solarized Dark's violet around its teal).
   static Color bubbleBorder({bool focused = false}) {
     final line = Color.lerp(
       _towardsText(bubbleFill, 0.12),
@@ -106,12 +125,19 @@ abstract final class AppColors {
     return focused ? Color.lerp(line, accent.withValues(alpha: 1), 0.2)! : line;
   }
 
-  /// The chat's message bubbles and its input, typed into or not:
-  /// `agentsChatInput.background` over [code].
-  static Color get bubbleFill => _bubble;
+  /// The chat's message bubbles and its input, typed into or not: the
+  /// cards' raised controls' color (`input.background`, over [code]), half
+  /// a step off the card; not `agentsChatInput.background`, a well some
+  /// light themes sink far under it.
+  static Color get bubbleFill =>
+      Color.alphaBlend(_colors['input.background'], code);
 
-  static Color get _bubble =>
-      Color.alphaBlend(_colors['agentsChatInput.background'], code);
+  /// A row hovered on a [bubbleFill] panel: the text's color faintly over
+  /// it, lighter on a dark one, darker on a light one, of its hue (a
+  /// theme's `list.hoverBackground` is the side bar's, maybe darker than
+  /// the panel and of another hue).
+  static Color get bubbleHover =>
+      _colors['editor.foreground'].withValues(alpha: 0.07);
 
   static Color _towardsText(Color color, double t) =>
       Color.lerp(color, _colors['editor.foreground'].withValues(alpha: 1), t)!;
@@ -140,8 +166,10 @@ abstract final class AppColors {
   /// `descriptionForeground`.
   static Color get textMuted => _colors['descriptionForeground'];
 
-  /// `disabledForeground`.
-  static Color get textFaint => _colors['disabledForeground'];
+  /// `disabledForeground`, at least [_faintStep] from the cards: Bao
+  /// Light's (#AEADA8 on #FCFBFA) hardly reads.
+  static Color get textFaint =>
+      _apart(_colors['disabledForeground'], code, _faintStep);
 
   /// The theme's own `textLink.foreground`, else its `focusBorder`: links
   /// in the theme's color, not the registry's blue, in a theme that sets
@@ -216,8 +244,14 @@ abstract final class AppColors {
 
 /// Window chrome shared by the sidebar and the chat, so their edges line up.
 abstract final class AppMetrics {
-  /// The Flutter-drawn title bar, level with the native traffic lights.
+  /// The Flutter-drawn title bar, the native traffic lights moved down to
+  /// its middle (see [nativeTitleBarHeight]): a row of the window's color
+  /// over the cards (see Islands), a part's tabs at its foot.
   static const titleBarHeight = 30.0;
+
+  /// The title bar AppKit lays the traffic lights out in, unmoved: their
+  /// middle half that down.
+  static const nativeTitleBarHeight = 28.0;
 
   /// From the title bar to the first content under it (the sidebar's New
   /// Agent button, the chat's stuck message).

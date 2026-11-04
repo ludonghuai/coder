@@ -1499,37 +1499,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sidePanelTerminal => 'Terminal';
 
   @override
-  String get sidePanelBrowser => 'Browser';
-
-  @override
-  String get browserNotConnected =>
-      'No browser is connected. Add BaoCode\'s extension to Chrome (or Edge, Brave, Arc) and agents can use the tabs you share with them.';
-
-  @override
-  String get browserNoSharedTab =>
-      'No tab is shared yet. Ask an agent to open a page, or click BaoCode in the browser toolbar to share the tab in front.';
-
-  @override
   String get browserOtherApp => 'Another BaoCode is connected to the browser.';
-
-  @override
-  String get browserSharedTabs => 'Shared Tabs';
-
-  @override
-  String get browserReload => 'Reload';
-
-  @override
-  String get browserShowInBrowser => 'Show in Browser';
-
-  @override
-  String get browserDetached =>
-      'The browser stopped letting BaoCode see this tab.';
-
-  @override
-  String get browserReconnect => 'Reconnect';
-
-  @override
-  String get browserShowInPanel => 'Show in Side Panel';
 
   @override
   String get browserWatchTitle => 'Watching you in the browser';
@@ -1685,10 +1655,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sidePanelHide => 'Hide side panel';
 
   @override
-  String get sidePanelMoveLeft => 'Move to the Left of the Conversation';
+  String get chatLayout => 'Layout';
 
   @override
-  String get sidePanelMoveRight => 'Move to the Right of the Conversation';
+  String get chatLayoutSidebarChatPanel => 'Sidebar · Chat · Panel';
+
+  @override
+  String get chatLayoutSidebarPanelChat => 'Sidebar · Panel · Chat';
+
+  @override
+  String get chatLayoutPanelChatSidebar => 'Panel · Chat · Sidebar';
+
+  @override
+  String get chatLayoutChatPanelSidebar => 'Chat · Panel · Sidebar';
 
   @override
   String get sidePanelChanges => 'Changes';
@@ -2054,6 +2033,13 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get btwCommandDetail =>
       'Ask in a conversation of its own, beside this one';
+
+  @override
+  String get forkCommandDetail => 'Fork this conversation and open the copy';
+
+  @override
+  String get forkUnavailable =>
+      'This conversation can\'t be forked: it needs a message first, and its agent has to support forking.';
 
   @override
   String get sidebarFoldAsides => 'Hide /btw Conversations';
@@ -12242,6 +12228,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get gitCommitTab => 'Commit';
+
+  @override
+  String get gitCommitPanelFold => 'Fold';
+
+  @override
+  String get gitCommitPanelUnfold => 'Unfold';
 
   @override
   String get gitStashSelected => 'Stash Selected Files…';

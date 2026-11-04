@@ -665,19 +665,7 @@
   "cmdSidePanelCloseTab": "Close Side Panel Tab",
   "sidePanelFiles": "Files",
   "sidePanelTerminal": "Terminal",
-  "sidePanelBrowser": "Browser",
-  "@sidePanelBrowser": {
-    "description": "The side panel's browser page, there once the browser plugin is installed."
-  },
-  "browserNotConnected": "No browser is connected. Add BaoCode's extension to Chrome (or Edge, Brave, Arc) and agents can use the tabs you share with them.",
-  "browserNoSharedTab": "No tab is shared yet. Ask an agent to open a page, or click BaoCode in the browser toolbar to share the tab in front.",
   "browserOtherApp": "Another BaoCode is connected to the browser.",
-  "browserSharedTabs": "Shared Tabs",
-  "browserReload": "Reload",
-  "browserShowInBrowser": "Show in Browser",
-  "browserDetached": "The browser stopped letting BaoCode see this tab.",
-  "browserReconnect": "Reconnect",
-  "browserShowInPanel": "Show in Side Panel",
   "browserWatchTitle": "Watching you in the browser",
   "@browserWatchTitle": {
     "description": "The card in the conversation while an agent watches the user do something in their browser (browser_watch), recording it."
@@ -748,8 +736,11 @@
     "description": "Tooltip of the title bar button that shows the side panel."
   },
   "sidePanelHide": "Hide side panel",
-  "sidePanelMoveLeft": "Move to the Left of the Conversation",
-  "sidePanelMoveRight": "Move to the Right of the Conversation",
+  "chatLayout": "Layout",
+  "chatLayoutSidebarChatPanel": "Sidebar · Chat · Panel",
+  "chatLayoutSidebarPanelChat": "Sidebar · Panel · Chat",
+  "chatLayoutPanelChatSidebar": "Panel · Chat · Sidebar",
+  "chatLayoutChatPanelSidebar": "Chat · Panel · Sidebar",
   "@sidePanelHide": {
     "description": "Tooltip of the button that hides the side panel."
   },
@@ -1124,6 +1115,14 @@
   "btwCommandDetail": "Ask in a conversation of its own, beside this one",
   "@btwCommandDetail": {
     "description": "The /btw command in the composer's command list: what follows is asked in a new conversation copied from this one, listed under it."
+  },
+  "forkCommandDetail": "Fork this conversation and open the copy",
+  "@forkCommandDetail": {
+    "description": "The /fork command in the composer's command list: the conversation is copied into a new one (as the sidebar's Fork), which opens; what follows the command is sent there."
+  },
+  "forkUnavailable": "This conversation can't be forked: it needs a message first, and its agent has to support forking.",
+  "@forkUnavailable": {
+    "description": "Shown when /fork is sent in a conversation that cannot be copied (nothing sent yet, or its kernel cannot fork)."
   },
   "sidebarFoldAsides": "Hide /btw Conversations",
   "@sidebarFoldAsides": {
@@ -8704,6 +8703,8 @@
   "gitStashNone": "No stashes",
   "gitStashTab": "Stash",
   "gitCommitTab": "Commit",
+  "gitCommitPanelFold": "Fold",
+  "gitCommitPanelUnfold": "Unfold",
   "gitStashSelected": "Stash Selected Files…",
   "gitCommitIgnored": "Ignored Files",
   "gitCommitShowIgnored": "Show Ignored Files",

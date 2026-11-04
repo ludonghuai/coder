@@ -224,7 +224,7 @@ Widget _buildBoxOf(ChatComposerState state, {required bool focused}) {
         // the color of every bubble, and their line; typed into, the line
         // turns a little towards the accent.
         color: AppColors.bubbleFill,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.bubbleBorder(focused: focused)),
       ),
       child: Column(

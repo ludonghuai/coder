@@ -1462,36 +1462,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get sidePanelTerminal => '终端';
 
   @override
-  String get sidePanelBrowser => '浏览器';
-
-  @override
-  String get browserNotConnected =>
-      '没有连接浏览器。在 Chrome（或 Edge、Brave、Arc）中添加 BaoCode 扩展后，agent 就能使用你共享给它的标签页。';
-
-  @override
-  String get browserNoSharedTab =>
-      '还没有共享的标签页。让 agent 打开网页，或在浏览器工具栏点 BaoCode 按钮共享当前标签页。';
-
-  @override
   String get browserOtherApp => '另一个 BaoCode 已连接浏览器。';
-
-  @override
-  String get browserSharedTabs => '共享的标签页';
-
-  @override
-  String get browserReload => '重新加载';
-
-  @override
-  String get browserShowInBrowser => '在浏览器中显示';
-
-  @override
-  String get browserDetached => '浏览器已停止让 BaoCode 查看这个标签页。';
-
-  @override
-  String get browserReconnect => '重新连接';
-
-  @override
-  String get browserShowInPanel => '在侧边栏查看';
 
   @override
   String get browserWatchTitle => '正在看你在浏览器里操作';
@@ -1646,10 +1617,19 @@ class AppLocalizationsZh extends AppLocalizations {
   String get sidePanelHide => '隐藏侧栏';
 
   @override
-  String get sidePanelMoveLeft => '移到对话左侧';
+  String get chatLayout => '布局';
 
   @override
-  String get sidePanelMoveRight => '移到对话右侧';
+  String get chatLayoutSidebarChatPanel => '侧栏 · 对话 · 面板';
+
+  @override
+  String get chatLayoutSidebarPanelChat => '侧栏 · 面板 · 对话';
+
+  @override
+  String get chatLayoutPanelChatSidebar => '面板 · 对话 · 侧栏';
+
+  @override
+  String get chatLayoutChatPanelSidebar => '对话 · 面板 · 侧栏';
 
   @override
   String get sidePanelChanges => '变更';
@@ -1985,6 +1965,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get btwCommandDetail => '在旁边另开一个对话提问';
+
+  @override
+  String get forkCommandDetail => 'Fork 当前对话并打开新对话';
+
+  @override
+  String get forkUnavailable => '此对话暂不能 Fork：要先发过消息，且所用的智能体支持 Fork。';
 
   @override
   String get sidebarFoldAsides => '收起 /btw 子对话';
@@ -11588,6 +11574,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get gitCommitTab => '提交';
+
+  @override
+  String get gitCommitPanelFold => '折叠';
+
+  @override
+  String get gitCommitPanelUnfold => '展开';
 
   @override
   String get gitStashSelected => '暂存选中的文件…';
