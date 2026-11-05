@@ -3,7 +3,7 @@
 > 编制：主 agent · 2026-11-04 · 来源 = 用户 2026-11-04 19:03「B」（两个都合，thincoder 先）；上游 58 个提交（0.12.81），merge-tree 探出 3 处冲突。
 > 台账 = #212（core · 归批）。前情 = docs/batches/2026-11-02-upstream-67.md §16（父侧 out-of-repo 轮先例）。
 ## §1 讨论（主 agent）
-**状态行**：进行中（暂缓 · 复核条件：在 thincoder 锚定的会话里执行本批（三处冲突处置已在本 §1 钉死，可直接照用））
+**状态行**：已收口 2026-11-04
 <§1 模板占位：本批条目 / 关键判据 / 授权口径>
 
 ### 本批：把上游 58 个提交合进 `thincoder/`（2026-11-04 19:10）
@@ -35,6 +35,24 @@
 
 **回退点**：`a709dd0f`。
 
+### 续做（2026-11-04 23:40）
+
+用户原话「I noticed that the thincoder code hasn't been pulled yet. Could you take over the project from here and see what needs to be adjusted?」。暂缓的复核条件（在 thincoder 锚定的会话里执行）不再等：本会话直接在 `thincoder/` 里执行，三处冲突照上面钉死的处置走，该仓的批档写在该仓。上游在暂缓期间没有新提交，仍是 58 个，tip `76e9cc02`。
+
+**读数（父侧执行）**
+
+- **合并**：`thincoder/` 的合并提交 `48e12c0f`（父 = `a709dd0f` + `76e9cc02`），批档提交 `f7c97504`（该仓 `docs/batches/2026-11-04-merge-upstream-58.md`）。没有推送：比 `origin/main` 多 26 个提交，比 `github/main` 多 60 个。
+- **三处冲突**：
+  1. `API-CONTRACT.md`：取上游的删除。
+  2. `ACP-CLIENT.md`：我方正文全留，加上游的空行。「对同一机制描述不同 ⇒ 停下来报」没有触发。读到一处文档口径的分歧：上游 `a2f586a5` 把受影响文件表移出了设计档，我方 §3.5 还留着 2026-10-19 的那张表。没有搬，留给用户裁。
+  3. `helpers.mjs`：取上游的结构，导入只留 `thincoderHome`。
+- **自检**：
+  - 合并改动的 188 个 `.mjs` / `.js` 逐个 `node --check`：0 失败。
+  - 我方三本 ACP 单测档：19 过 / 0 挂。
+  - `node test/run.mjs`：116 条，112 过 / 4 挂。一条是本机没有能起的 Chromium，上次合并也挂在这里。两条缺 `thincoder-vscode` 的 dev 链，`node scripts/dev-link.mjs` 补齐后复跑全过。一条缺 VS Code 扩展的开发依赖 `happy-dom`，未复跑。
+- **ACP 实况**：合并后的 CLI 对 `initialize` 回 `protocolVersion` 1、`agentInfo.version` 0.12.81，`agentCapabilities` 的键与值和 `docs/design/thincoder-adapter.md` §3.4 一致。临时配置目录加一个假渠道走 `session/new` → `set_config_option` → `set_mode` → `session/list` → `session/close`，线形与适配层读的一致；无渠道时 `-32000` 的文案不变。全程没有发 prompt，没有调用模型。
+- **baocode 侧的调整**：另起一批，见 `docs/batches/2026-11-04-thincoder-runtime-0.12.81.md`。
+
 ## §2 批次任务与设计（eng-designer）
 **状态行**：（eng-designer 写入时更新）
 <§2 模板占位：本批条目（覆盖） / 设计档落点 / 机制设计 / 受影响文件与测试覆盖 / 验收对照 / 关键决策 / 上抛项>
@@ -42,3 +60,11 @@
 ## §4 用户批准（主 agent）
 ## §5 实施记录（eng-coder）
 ## §6 验证与收口（父代理）
+**状态行**：已收口 2026-11-04
+
+本批收口的判据是 §1 红线的四条，逐条对照：
+
+- **不改上游行为语义**：逐档比对 `git diff origin/main 48e12c0f` 与 `git diff 77e40351 a709dd0f` 的增删行，65 档逐行相同，只少了上游删掉的 `API-CONTRACT.md`。合并后多出上游的，只有我方合并前的改动。
+- **不把 ACP 内容写回上游面**：合并只在三处冲突里取舍，没有往上游的设计档里加我方的 ACP 内容；新增的只有该仓自己的批档。
+- **不动 baocode 仓**：本批在 baocode 仓里只改了这本批档；打包脚本与设计档的改动全在下一批。
+- **冲突处置逐处留读数**：见 §1「读数」。

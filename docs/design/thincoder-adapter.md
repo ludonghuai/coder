@@ -542,6 +542,7 @@ F16 的 ACP 挂起窗 + 回合边界帧 §19.3；F19 的 `promptCapabilities.ima
 6. **版本下限**：若新版本协议面有变 ⇒ 更新 `thincoderVerifiedVersion` 常量（`thincoder_locator.dart`）+ 本档 §3.4 + 固件；只有内部变化 ⇒ 只重录固件。
 7. **重录固件**：拿真实进程录一遍（一次真实会话的帧，或手工 stdio 交互），落 `test/fixtures/thincoder/`；录法写在该目录的 README 一行。**基准口径**：初版固件 = 按服务端源码线形手工录制（非真进程录音；用途 = 离线回归哨兵）；真机重录的执行点 = T15 端到端走查（重录后同步 `test/fixtures/thincoder/README.md` 的措辞）。
 8. **需求档 §5 核对**：thincoder 补的能力（如模型清单进 `configOptions.options[]`、`session_info_update` 之外的子代理面、`auth.terminal` 动作）⇒ 更新需求档 §5 → 本档 §4/§6 → 适配层小改（E3）。
+9. **内置副本跟版本**：`thincoder/` 工作树换了版本 ⇒ `tool/build_windows.dart` 与 `tool/build_macos.dart` 的 `_thincoderVersion` 同改为 `thincoder-cli/package.json` 的 `version`，两档同值。§26.8 的两道校验比的就是这个常量；只改一档，另一个平台打包时会停在第一道。
 
 ### B. baocode 上游合并后
 
