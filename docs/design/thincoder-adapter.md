@@ -3692,17 +3692,24 @@ T99 已被 §23.1 预留给用量归属的补项（自动轮 ∥ 撤暂存轮）
 
 ### 26.3 候选顺序与四格表
 
-解析顺序：**① 显式 `thincoder.path` → ② 内置副本 → ③ PATH（仅当 ② 不存在）**。
+解析顺序：**① 显式 `thincoder.path` → ② 内置副本 → ③ 源码树里的 checkout → ④ PATH（仅当 ② 不存在）**。
 「内置存在」时**不调用 `candidates()`**（连候选表都不构造），这是 PATH 屏蔽的实现形状。
+
+- **① 可以是脚本**：显式路径以 `.cjs` / `.mjs` / `.js` 结尾（例如 checkout 的 `bin\thincoder.cjs`）⇒ 用本机 node 跑它（`node <脚本> acp`）；找不到 node ⇒ 抛 `ThincoderUnavailable`。
+- **③ checkout**（`ThincoderLocator.checkoutBuild`，2026-11-05 加）：从应用可执行文件所在目录往上找（至多 10 层），第一个同时有 `pubspec.yaml` 与 `thincoder\thincoder-cli\bin\thincoder.cjs` 的目录就是源码树；
+  该 CLI 旁的 `node_modules\@thincoder\core` 链在（`node scripts/dev-link.mjs` 建的）且 PATH 上有 node ⇒ 用 node 直接跑它。
+  理由：开发构建跑的就是旁边正在改的那份 thincoder，不依赖全局 npm 链；node 是 BaoCode 直接起的子进程，停进程就停得掉（npm 的 `.cmd` 垫片会在中间夹一个 `cmd.exe`，`Process.kill` 在 Windows 上只杀得到它）。`flutter test` 下不找（除非测试给了 `executableDirectoryOverride`）。
+- **配置目录**：只有 ② 被选中时才注入 `THINCODER_CONFIG_DIR`；①③④ 一律用调用环境原样（`~/.thincoder`），带不带内置副本都一样（2026-11-05 修：此前只要应用带内置副本，① 也会被注入）。
 
 | 情形 | 内置存在 | 显式设置 | 解析结果 | 是否探测 PATH |
 |---|---|---|---|---|
 | 发行版开箱 | 是 | 无 | 内置（`node.exe` + `bin\thincoder.cjs`） | 否 |
-| 发行版 + 用户设了有效路径 | 是 | 有 | 显式路径（优先于内置） | 否 |
+| 发行版 + 用户设了有效路径 | 是 | 有 | 显式路径（优先于内置；不注入数据目录） | 否 |
 | 发行版 + 显式路径不存在 | 是 | 有（坏） | 抛 `ThincoderUnavailable` ⇒ 状态 `ThincoderFailed`（与今天同形，不回落到内置） | 否 |
-| 开发 `flutter run` / `flutter test` | 否 | 无 | PATH 候选，顺序与今天**逐字相同** | 是 |
+| 开发 `flutter run`（源码树里有可跑的 checkout） | 否 | 无 | checkout（node + `thincoder\thincoder-cli\bin\thincoder.cjs`） | 否 |
+| 开发 `flutter run`（无 checkout / 无 node）· `flutter test` | 否 | 无 | PATH 候选，顺序与今天**逐字相同** | 是 |
 | 开发 + 显式设置 | 否 | 有 | 显式路径 | 否 |
-| 发行版 runtime 被删（安装损坏） | 否 | 无 | 与开发同路走 PATH | 是 |
+| 发行版 runtime 被删（安装损坏） | 否 | 无 | 与开发同路：checkout，没有则 PATH | 视情况 |
 
 末行的取舍：**「内置在不在」是唯一判据**，不引入发行版常量（用户 2026-10-21 03:57「不要影响到我们的开发环境，只有发行版才这样做」）；安装损坏的用户得到今天的引导面，而不是一个无法自救的报错。
 
@@ -3858,6 +3865,8 @@ $a = @(Get-ChildItem -Recurse -Force $p -ErrorAction SilentlyContinue)
 | D110 | 显式路径不存在 ⇒ 报错不回落内置 | 今天的形（`thincoder_locator.dart:97-107`）已如此；F23 验收 ④ 就是它 |
 | D111 | 数据目录用 env 注入，不改上游默认 | 用户终端副本继续用 `~/.thincoder`，两侧零共享；被否：改 `configDir` 默认值（会改掉所有端的行为） |
 | D112 | 外仓改动面 = 6 档 8 处调用点，不是 1 档 | 实测 4 档 7 处绕过 `configDir` 直写 `~/.thincoder`（§26.5）；**批准面 = 这个实测面**（需求档原估「约 3–5 行」偏低，需求档 `:167` 已同步为 6 档 8 处 / ≤ +30 / −7）；被否：只改 `config-io.mjs:32`（logs / tool-errors 仍写用户目录，验收 ③ 不达标） |
+| D113 | 开发构建跑源码树里的 checkout，排在内置之后、PATH 之前（2026-11-05） | 用户 2026-11-05 原话「thincoder and baocode only used by myself, so thincoder -g install is nothing, i don't use it」：开发时要跑的就是旁边那份；node 直起 ⇒ 停得掉（`.cmd` 垫片下 `Process.kill` 只杀到 `cmd.exe`）。判据 = 往上找到同时有 `pubspec.yaml` 与 `thincoder/thincoder-cli/bin/thincoder.cjs` 的目录，且 core 链与 node 都在；缺一项退回 PATH（与今天同形）。被否：排在内置之前（发行目录里也会找到源码树时，交付物就不是测过的那份） |
+| D114 | `THINCODER_CONFIG_DIR` 只随内置副本走（2026-11-05） | 修正：原实现按「应用带不带内置副本」注入，显式路径也被关进数据目录，与本节「显式路径 / PATH 用调用环境原样」的口径相反；改为按「选中的是不是内置副本」判 |
 
 ### 26.11 用例表（T112–T117，a/b 为变体）
 

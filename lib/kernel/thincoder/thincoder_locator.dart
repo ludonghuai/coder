@@ -11,8 +11,9 @@ import 'thincoder_transport.dart';
 
 /// Settings → General → thincoder: the build to run on this machine
 /// (`thincoder.path` in settings.json), e.g. one installed somewhere other
-/// than the PATH; none set, the one the app carries, else the one the PATH
-/// finds.
+/// than the PATH, or a checkout's `bin/thincoder.cjs` (run by node); none
+/// set, the one the app carries, else the checkout of the tree it was built
+/// from, else the one the PATH finds.
 abstract final class ThincoderPathSetting {
   static const settingKey = 'thincoder.path';
 
@@ -64,17 +65,34 @@ String thincoderStatusLine(ThincoderStatus status) => switch (status) {
   ThincoderFailed(:final message) => message,
 };
 
+/// Where a [ThincoderBuild] was found.
+enum ThincoderBuildKind {
+  /// The path set in Settings → General → thincoder.
+  named,
+
+  /// The runtime the distribution carries (§26).
+  builtin,
+
+  /// The checkout in the source tree the app was built from.
+  checkout,
+
+  /// One on the PATH, or where npm puts it.
+  installed,
+}
+
 /// A thincoder to run: what Settings shows ([display]) and what is started
 /// ([executable] with [arguments]).
 ///
 /// The build a distribution carries is node running the CLI's own entry
 /// file, so the file the user knows is not the program started: [display]
-/// is the entry file, and [executable] the node that runs it.
+/// is the entry file, and [executable] the node that runs it. A checkout,
+/// or an entry file named in Settings, runs the same way.
 class ThincoderBuild {
   const ThincoderBuild({
     required this.display,
     required this.executable,
     this.arguments = const [ThincoderLaunch.command],
+    this.kind = ThincoderBuildKind.installed,
   });
 
   /// The thincoder itself, as the user knows it: the path `In use: …` names.
@@ -86,6 +104,9 @@ class ThincoderBuild {
   /// What [executable] is started with.
   final List<String> arguments;
 
+  /// Where it was found.
+  final ThincoderBuildKind kind;
+
   /// What is run to have it say its version: the same command line, with
   /// `--version` where the subcommand is.
   List<String> get versionArguments => [
@@ -95,8 +116,9 @@ class ThincoderBuild {
 }
 
 /// Where the thincoder CLI is (`thincoder.path`, else the build the app
-/// carries, else the PATH), which version is the oldest this adapter was
-/// written against, and what to say when there is none.
+/// carries, else the checkout of the tree it was built from, else the
+/// PATH), which version is the oldest this adapter was written against, and
+/// what to say when there is none.
 abstract final class ThincoderLocator {
   /// The version this adapter was written against (the one checked on
   /// 2026-10-16). An older one is said of, never blocked (D13); a newer one
@@ -122,38 +144,62 @@ abstract final class ThincoderLocator {
   /// The build a distribution carries gets a config folder of its own
   /// (`<data folder>/runtime-data/thincoder`) in that environment, so that
   /// the CLI keeps to it and the user's `~/.thincoder` is left as it is. One
-  /// set in Settings or found on the PATH gets the environment unchanged:
-  /// it keeps reading `~/.thincoder`, whose sessions a terminal of the
-  /// user's opens and this app lists (§26.5).
+  /// set in Settings, a checkout, or one found on the PATH gets the
+  /// environment unchanged — whether or not the app carries a runtime: it
+  /// keeps reading `~/.thincoder`, whose sessions a terminal of the user's
+  /// opens and this app lists (§26.5).
   static Future<ThincoderLaunch> launch(String cwd) async {
     final environment = await ClaudeEnvironment.of();
     final builtin = builtinBuild();
     final build = _resolve(environment, builtin);
     appEvent(
       'thincoder',
-      'launch: ${builtin == null ? 'path' : 'builtin'} ${build.display}',
+      'launch: ${switch (build.kind) {
+        ThincoderBuildKind.builtin => 'builtin',
+        ThincoderBuildKind.checkout => 'checkout',
+        ThincoderBuildKind.named || ThincoderBuildKind.installed => 'path',
+      }} ${build.display}',
     );
     return ThincoderLaunch(
       cwd: cwd,
       executable: build.executable,
       arguments: build.arguments,
-      environment: _withDataFolder(environment, builtin),
+      environment: _withDataFolder(
+        environment,
+        build.kind == ThincoderBuildKind.builtin,
+      ),
     );
   }
 
   /// The environment thincoder runs in — the one [launch] starts it with:
   /// the user's terminal's, and, for the build a distribution carries, the
   /// config folder that build keeps to. Settings → Models (thincoder)
-  /// writes the file this names, so both name one file.
-  static Future<Map<String, String>> environment() async =>
-      _withDataFolder(await ClaudeEnvironment.of(), builtinBuild());
+  /// writes the file this names, so both name one file. With none to run,
+  /// the carried build's folder where there is one: the one it would keep.
+  static Future<Map<String, String>> environment() async {
+    final environment = await ClaudeEnvironment.of();
+    final builtin = builtinBuild();
+    ThincoderBuild? build;
+    try {
+      build = _resolve(environment, builtin);
+    } on ThincoderUnavailable {
+      build = null;
+    }
+    return _withDataFolder(
+      environment,
+      build == null
+          ? builtin != null
+          : build.kind == ThincoderBuildKind.builtin,
+    );
+  }
 
-  /// [environment] with the config folder of the build the app carries; the
-  /// same map, unchanged, where there is none.
+  /// [environment] with the config folder of the build the app carries,
+  /// when that is the build to run ([builtin]); the same map, unchanged,
+  /// otherwise.
   static Map<String, String> _withDataFolder(
     Map<String, String> environment,
-    ThincoderBuild? builtin,
-  ) => builtin == null
+    bool builtin,
+  ) => !builtin
       ? environment
       : {
           ...environment,
@@ -161,9 +207,9 @@ abstract final class ThincoderLocator {
         };
 
   /// The thincoder to run: the path set in Settings, else the one the
-  /// distribution carries, else the first of [candidates] that is there.
-  /// Throws [ThincoderUnavailable] with what to do about it when there is
-  /// none.
+  /// distribution carries, else the checkout of the tree the app was built
+  /// from, else the first of [candidates] that is there. Throws
+  /// [ThincoderUnavailable] with what to do about it when there is none.
   static Future<ThincoderBuild> locateBuild([
     Map<String, String>? environment,
   ]) async {
@@ -177,8 +223,9 @@ abstract final class ThincoderLocator {
 
   /// The build [environment] names: the one in Settings (not there: thrown,
   /// never fallen back from), else [builtin] when the distribution carries
-  /// one, else the PATH. With a [builtin], [candidates] is not even built:
-  /// the PATH is not looked at where the app carries its own.
+  /// one, else the checkout of the tree the app was built from, else the
+  /// PATH. With a [builtin], [candidates] is not even built: the PATH is
+  /// not looked at where the app carries its own.
   static ThincoderBuild _resolve(
     Map<String, String> environment,
     ThincoderBuild? builtin,
@@ -194,9 +241,33 @@ abstract final class ThincoderLocator {
               'thincoder, or clear it to run the installed one.',
         );
       }
-      return ThincoderBuild(display: path, executable: path);
+      // The CLI's own entry file (a checkout's `bin/thincoder.cjs`), which
+      // only node runs.
+      if (_scriptExtensions.contains(p.extension(path).toLowerCase())) {
+        final node = nodeOn(environment);
+        if (node == null) {
+          throw ThincoderUnavailable(
+            'No node to run $path',
+            detail:
+                'Settings → General → thincoder names a script; install '
+                '$nodeRequirement, or name a thincoder program instead.',
+          );
+        }
+        return ThincoderBuild(
+          display: path,
+          executable: node,
+          arguments: [path, ThincoderLaunch.command],
+          kind: ThincoderBuildKind.named,
+        );
+      }
+      return ThincoderBuild(
+        display: path,
+        executable: path,
+        kind: ThincoderBuildKind.named,
+      );
     }
     if (builtin != null) return builtin;
+    if (checkoutBuild(environment) case final checkout?) return checkout;
     final found = candidates(environment)
         .where((path) => File(path).existsSync())
         .firstOrNull;
@@ -291,7 +362,85 @@ abstract final class ThincoderLocator {
       display: entry,
       executable: node,
       arguments: [entry, ThincoderLaunch.command],
+      kind: ThincoderBuildKind.builtin,
     );
+  }
+
+  /// The files Settings may name that node runs, not the system.
+  static const _scriptExtensions = {'.cjs', '.mjs', '.js'};
+
+  /// How far above the app's own folder its source tree may be: a macOS
+  /// build's executable is 8 folders down (`build/macos/Build/Products/
+  /// Debug/BaoCode.app/Contents/MacOS`), a Windows one 5.
+  static const _treeDepth = 10;
+
+  /// The thincoder checked out in the source tree the app was built from
+  /// (`<tree>/thincoder`, the one `tool/build_windows.dart` packages), run
+  /// by the machine's own node: a build made from the tree runs the agent
+  /// beside it, not whatever the PATH happens to have — and node is the
+  /// process started, so stopping it stops the agent (an npm `.cmd` shim
+  /// would put `cmd.exe` in between).
+  ///
+  /// Null where the app does not run from such a tree (an installed one),
+  /// where the checkout cannot run as it stands (no `@thincoder/core` link
+  /// beside its CLI: `node scripts/dev-link.mjs` makes it), or where there
+  /// is no node; and under test, unless [executableDirectory] (or
+  /// [executableDirectoryOverride]) says where to look from.
+  static ThincoderBuild? checkoutBuild(
+    Map<String, String> environment, {
+    String? executableDirectory,
+  }) {
+    final from = executableDirectory ?? executableDirectoryOverride;
+    if (from == null && Platform.environment.containsKey('FLUTTER_TEST')) {
+      return null;
+    }
+    var dir = p.absolute(from ?? p.dirname(Platform.resolvedExecutable));
+    for (var i = 0; i < _treeDepth; i++) {
+      final cli = p.join(dir, 'thincoder', 'thincoder-cli');
+      final entry = p.join(cli, 'bin', 'thincoder.cjs');
+      if (File(p.join(dir, 'pubspec.yaml')).existsSync() &&
+          File(entry).existsSync()) {
+        final core = p.join(cli, 'node_modules', '@thincoder', 'core');
+        if (!File(p.join(core, 'package.json')).existsSync()) return null;
+        final node = nodeOn(environment);
+        if (node == null) return null;
+        return ThincoderBuild(
+          display: entry,
+          executable: node,
+          arguments: [entry, ThincoderLaunch.command],
+          kind: ThincoderBuildKind.checkout,
+        );
+      }
+      final parent = p.dirname(dir);
+      if (parent == dir) return null;
+      dir = parent;
+    }
+    return null;
+  }
+
+  /// The node [environment]'s PATH finds, else the one Node's installer
+  /// puts in place; null when there is none.
+  static String? nodeOn(Map<String, String> environment) {
+    final path = environment['PATH'] ?? '';
+    final List<String> found;
+    if (Platform.isWindows) {
+      found = [
+        for (final entry in path.split(';'))
+          if (entry.trim().replaceAll('"', '') case final dir
+              when dir.isNotEmpty)
+            p.join(dir, 'node.exe'),
+        if (environment['PROGRAMFILES'] case final programs?)
+          p.join(programs, 'nodejs', 'node.exe'),
+      ];
+    } else {
+      found = [
+        for (final dir in path.split(':'))
+          if (dir.isNotEmpty) p.join(dir, 'node'),
+        '/usr/local/bin/node',
+        '/opt/homebrew/bin/node',
+      ];
+    }
+    return found.where((node) => File(node).existsSync()).firstOrNull;
   }
 
   /// The version [executable] says it is (`thincoder --version`, or
@@ -357,9 +506,7 @@ abstract final class ThincoderLocator {
         arguments: build.versionArguments,
         environment: environment,
       );
-      if (version == null &&
-          builtin != null &&
-          build.display == builtin.display) {
+      if (version == null && build.kind == ThincoderBuildKind.builtin) {
         // Its files are there, so it is the build that would run; that it
         // will not is said, and the PATH is not fallen back to (§26.4).
         return ThincoderFailed(
