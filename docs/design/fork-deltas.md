@@ -146,7 +146,7 @@
 
 - `lib/remote/local_tools.dart:74`（`register`）· `:76`（`instructFor`）· `:177`（`server`）
 - `lib/kernel/claude_code/claude_code_kernel.dart:1650`（`called`）
-- `test/kernel_test.dart:1571` / `:1581`、`test/remote/local_tools_test.dart:61` / `:63` / `:80` / `:177`
+- `test/kernel_test.dart:1635` / `:1645`、`test/remote/local_tools_test.dart:61` / `:63` / `:80` / `:177`
 - `tool/e2e/ssh_windows_app.dart:1048` / `:1064`（`handle`）
 
 转发类让这些上游档一行不动，与上游逐字节相同。
