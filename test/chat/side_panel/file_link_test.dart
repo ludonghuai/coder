@@ -167,22 +167,23 @@ void main() {
     });
   });
 
-  group('kept to the project', () {
-    test('relative paths join it; those outside are refused', () {
-      // The POSIX spelling: the host's context would say `\p\lib\a.dart` on Windows.
+  group('made absolute as the agent\'s tools take them', () {
+    test('relative paths join where it works, out of it too; `~` is the '
+        'home folder', () {
       final posix = p.Context(style: p.Style.posix);
-      expect(
-        const FileLink('lib/a.dart').resolveIn('/p', paths: posix),
-        '/p/lib/a.dart',
-      );
-      expect(
-        const FileLink('/p/lib/a.dart').resolveIn('/p', paths: posix),
-        '/p/lib/a.dart',
-      );
-      expect(const FileLink('../etc/passwd').resolveIn('/p', paths: posix), isNull);
-      expect(const FileLink('/etc/passwd').resolveIn('/p', paths: posix), isNull);
-      expect(const FileLink('~/a.dart').resolveIn('/p', paths: posix), isNull);
-      expect(const FileLink('lib/../../x').resolveIn('/p', paths: posix), isNull);
+      String? at(String path, {String? home}) =>
+          FileLink(path).resolveIn('/p', paths: posix, home: home);
+      expect(at('lib/a.dart'), '/p/lib/a.dart');
+      expect(at('/p/lib/a.dart'), '/p/lib/a.dart');
+      expect(at('../q/a.dart'), '/q/a.dart');
+      expect(at('/etc/hosts'), '/etc/hosts');
+      expect(at('lib/../../x'), '/x');
+      expect(at('~/a.dart', home: '/home/me'), '/home/me/a.dart');
+      expect(at('~', home: '/home/me'), '/home/me');
+      // No home known, or another user's.
+      expect(at('~/a.dart'), isNull);
+      expect(at('~bob/a.dart', home: '/home/me'), isNull);
+      expect(at(''), isNull);
     });
 
     test('a Windows project\'s paths, as its host spells them', () {
@@ -197,7 +198,12 @@ void main() {
       );
       expect(
         const FileLink(r'D:\other\a.dart').resolveIn(r'C:\p', paths: windows),
-        isNull,
+        r'D:\other\a.dart',
+      );
+      expect(
+        const FileLink(r'~\a.dart')
+            .resolveIn(r'C:\p', paths: windows, home: r'C:\Users\me'),
+        r'C:\Users\me\a.dart',
       );
     });
   });

@@ -10,7 +10,6 @@ import 'package:baocode/theme/codicons.dart';
 import 'package:baocode/theme/workbench_theme.dart';
 import 'package:baocode/theme/app_theme.dart';
 import 'package:baocode/workspace/back_to_chat_button.dart';
-import 'package:baocode/workspace/islands.dart';
 import 'package:baocode/workspace/pin_window_button.dart';
 
 import '../../debug/support/fake_debug_adapter.dart';
@@ -144,11 +143,11 @@ void main() {
       'against the window\'s right edge, however few', (tester) async {
     await pumpWorkbench(tester, const {'a.dart': 'a'});
     final window = tester.view.physicalSize / tester.view.devicePixelRatio;
-    // No editor: the notifications bell alone, under the chat's card, as
-    // far in as the card is.
+    // No editor: the notifications bell alone, under the chat, as far from
+    // the edge as the bar's items, as high as the row under its line.
     final bell = tester.getRect(find.byTooltip('No Notifications'));
-    expect(bell.right, closeTo(window.width - Islands.gap, 1));
-    expect(bell.bottom, closeTo(window.height - 3, 1));
+    expect(bell.right, closeTo(window.width - 6, 1));
+    expect(bell.bottom, closeTo(window.height, 1));
     // Not in the bar under the rest.
     expect(
       find.descendant(
@@ -201,7 +200,7 @@ void main() {
       );
     }
     final bell = tester.getRect(find.byTooltip('No Notifications'));
-    expect(bell.right, closeTo(window.width - Islands.gap, 1));
+    expect(bell.right, closeTo(window.width - 6, 1));
   });
 
   testWidgets('status bar: a mark of the debugging colors while a session '

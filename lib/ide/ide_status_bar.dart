@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
-import 'package:path/path.dart' as p;
 
 import '../theme/app_theme.dart';
 import '../theme/icon_registry.dart';
@@ -16,6 +15,7 @@ import 'package:bao_editor/monaco/flutter/language_assets.dart';
 import 'package:bao_editor/monaco/flutter/language_overrides.dart';
 import 'package:bao_editor/textmate/textmate_manifest.dart';
 
+import 'host_paths.dart';
 import 'ide_editor.dart';
 import 'ide_hover.dart';
 import 'ide_spinning.dart';
@@ -99,12 +99,29 @@ class IdeStatusBar extends StatelessWidget {
   /// An item's, centered in it.
   static const itemHeight = 22.0;
 
+  /// Over it where the parts are not islands (see [IslandStyle]), the
+  /// line upstream's has: `statusBar.border`, where the theme has one.
+  static Color? get line => themeColors.get('statusBar.border');
+
+  /// Under it and its items where the parts are not islands, as upstream's
+  /// bar: `statusBar.background`; the window's color under the cards else.
+  static Color? backgroundOf(BuildContext context) =>
+      Islands.on(context) ? null : themeColors.get('statusBar.background');
+
   @override
   Widget build(BuildContext context) {
+    final line = Islands.on(context) ? null : IdeStatusBar.line;
     return Container(
       height: height,
       padding: const EdgeInsets.symmetric(horizontal: 6),
       alignment: Alignment.center,
+      decoration: switch ((backgroundOf(context), line)) {
+        (null, null) => null,
+        (final color, final line) => BoxDecoration(
+          color: color,
+          border: line == null ? null : Border(top: BorderSide(color: line)),
+        ),
+      },
       child: LayoutBuilder(
         builder: (context, constraints) => Row(
           children: [
@@ -161,8 +178,13 @@ class IdeStatusBarTrailing extends StatelessWidget {
   final void Function(int index, double width)? onWidth;
 
   @override
-  Widget build(BuildContext context) => SizedBox(
+  Widget build(BuildContext context) => Container(
     height: IdeStatusBar.height,
+    // As far from the window's edge as the bar's are where the parts are
+    // not islands; a card's gaps about it else.
+    padding: Islands.on(context)
+        ? EdgeInsets.zero
+        : const EdgeInsets.only(top: 1, right: 6),
     child: Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -205,18 +227,30 @@ class _StatusItemState extends State<_StatusItem> {
     final colors = themeColors;
     final tappable = item.onTap != null || item.onTapRect != null;
     final hovered = _hover && tappable;
-    // Its icons too (`color: inherit`); its own color stays on hover.
+    final islands = Islands.on(context);
+    // Its icons too (`color: inherit`); its own color stays on hover. Where
+    // the parts are not islands, upstream's `statusBar.*` colors, its items
+    // square and as high as the bar (under its line).
     final color =
-        item.color ?? (hovered ? AppColors.text : AppColors.textFaint);
+        item.color ??
+        (islands
+            ? (hovered ? AppColors.text : AppColors.textFaint)
+            : (hovered ? colors.get('statusBarItem.hoverForeground') : null) ??
+                  colors['statusBar.foreground']);
     // High contrast themes outline a hovered item (dashed upstream).
     final outline = hovered ? colors.get('contrastActiveBorder') : null;
-    const radius = BorderRadius.all(Radius.circular(5));
+    final radius = islands
+        ? const BorderRadius.all(Radius.circular(5))
+        : BorderRadius.zero;
     Widget child = Container(
-      height: IdeStatusBar.itemHeight,
+      height: islands ? IdeStatusBar.itemHeight : IdeStatusBar.height - 1,
       padding: const EdgeInsets.symmetric(horizontal: 6),
       decoration: BoxDecoration(
         color: hovered
-            ? item.hoverBackground ?? AppColors.hover
+            ? item.hoverBackground ??
+                  (islands
+                      ? AppColors.hover
+                      : colors['statusBarItem.hoverBackground'])
             : item.background ?? Colors.transparent,
         borderRadius: radius,
       ),
@@ -239,7 +273,7 @@ class _StatusItemState extends State<_StatusItem> {
                 _label(item.text, color),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 12, color: color),
+                style: TextStyle(fontSize: islands ? 12 : 11.5, color: color),
               ),
             ),
         ],
@@ -440,7 +474,7 @@ class IdeLanguageNames {
     }
     final registrations = _registrations;
     if (registrations == null) return languageNameForFile(path);
-    final lower = p.basename(path).toLowerCase();
+    final lower = hostBasename(path).toLowerCase();
     MonacoLanguageRegistration? best;
     var bestLength = 0;
     for (final registration in registrations) {

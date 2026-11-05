@@ -2317,6 +2317,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatLoadEarlier => 'Load earlier messages';
 
   @override
+  String get chatReload => 'Reload (continued elsewhere)';
+
+  @override
   String get chatStop => 'Stop';
 
   @override
@@ -3647,7 +3650,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get generalSettingsClaudeCoreDescription =>
-      'Claude Code CLI: Anthropic\'s own program, with this machine\'s sign-in and setup; pick it to use a Claude subscription. Built-in: comes with BaoCode, and uses only the models added in Settings → Models. The CLI is the default, downloaded for you if this machine has none. Changes apply to new sessions.';
+      'Claude Code CLI: Anthropic\'s own program, with this machine\'s sign-in and setup; pick it to use a Claude subscription. Built-in: comes with BaoCode, and uses only the models added in Settings → Models. By default, the CLI where this machine has Claude Code, else the built-in core; the CLI, picked where there is none, is downloaded for you. Changes apply to new sessions.';
 
   @override
   String get generalSettingsClaudeCoreBuiltin => 'Built-in';
@@ -3884,8 +3887,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get themeHighContrastThemes => 'high contrast themes';
 
   @override
-  String get themeSelectPlaceholder =>
-      'Select Color Theme (detect system color mode disabled)';
+  String get themeAuto => 'Auto';
+
+  @override
+  String get themeFollowSystem => 'Follow system';
+
+  @override
+  String get themeSelectPlaceholder => 'Select Color Theme';
 
   @override
   String get dateNow => 'now';
@@ -6025,7 +6033,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get claudePathMissing =>
-      'None found yet: Claude Code is downloaded as the first conversation starts.';
+      'None found yet: with the Claude Code CLI picked, it is downloaded as the first conversation starts.';
 
   @override
   String get generalSettingsIdeWindows => 'Fast Ide Windows';
@@ -6598,6 +6606,52 @@ class AppLocalizationsEn extends AppLocalizations {
       'Opens ChatGPT\'s sign-in page in the browser.';
 
   @override
+  String get modelsAccountsImport => 'Import';
+
+  @override
+  String get modelsAccountsImportTitle => 'Import Accounts';
+
+  @override
+  String get modelsAccountsImportFile => 'Choose File…';
+
+  @override
+  String get modelsAccountsImportDescription =>
+      'Enter account credentials as JSON or choose a JSON file.';
+
+  @override
+  String get modelsAccountsPaste => 'Enter JSON…';
+
+  @override
+  String get modelsAccountsPastePlaceholder =>
+      'Type or paste your JSON credentials here.';
+
+  @override
+  String get modelsAccountsImportConfirm => 'Import these ChatGPT credentials?';
+
+  @override
+  String get modelsAccountsImportConfirmDetail =>
+      'BaoCode will keep the credentials securely without changing the original file or actively refreshing tokens during import. Renewing them later may rotate the refresh token and require the original tool to sign in again. Only import credentials you are authorized to use.';
+
+  @override
+  String get modelsAccountsImportFailed =>
+      'The credentials could not be read or imported.';
+
+  @override
+  String modelsAccountsImportSummary(int count) {
+    return 'Accounts imported: $count';
+  }
+
+  @override
+  String modelsAccountsImportKept(int count) {
+    return 'Already here, kept as signed in: $count';
+  }
+
+  @override
+  String modelsAccountsImportItemFailed(int index, String error) {
+    return 'Entry $index: $error';
+  }
+
+  @override
   String get modelsAccountSigningIn => 'Waiting for sign-in…';
 
   @override
@@ -6613,7 +6667,12 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get modelsRefreshQuota => 'Refresh Quota';
+  String get modelsRefreshQuota => 'Refresh All Quotas';
+
+  @override
+  String modelsAccountRefreshQuota(String name) {
+    return 'Refresh quota for $name';
+  }
 
   @override
   String get modelsAccountRemove => 'Remove account';
@@ -8038,6 +8097,11 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String remoteStatusTooltip(String kind, String host) {
     return 'Connected to $host over $kind';
+  }
+
+  @override
+  String remoteStatusSystem(String platform) {
+    return 'System: $platform';
   }
 
   @override
@@ -10350,16 +10414,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get modelSetUp => 'Set Up a Model';
-
-  @override
-  String get claudeCoreHint =>
-      'This chat runs on BaoCode\'s built-in core. We recommend the Claude Code core for the fullest experience; it\'s downloaded for you if needed.';
-
-  @override
-  String get claudeCoreHintSwitch => 'Switch to Claude Code';
-
-  @override
-  String get claudeCoreHintLater => 'Not Now';
 
   @override
   String get remoteAddServer => 'Add SSH Server...';
@@ -13566,6 +13620,87 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get ustatContextUnpickHint =>
       'Click again to unpick: back to the context as it is now';
+
+  @override
+  String get localRunTitle => 'Run on this computer';
+
+  @override
+  String localRunReason(String host, String system) {
+    return 'The agent on $host wants to run this command on your computer ($system), not on $host.';
+  }
+
+  @override
+  String localRunAlways(String host) {
+    return 'Always allow for $host';
+  }
+
+  @override
+  String get remoteLocalAccess => 'Allow Remote Agents to Act on This Computer';
+
+  @override
+  String get remoteLocalAccessDetail =>
+      'Agents on these hosts may run commands on this computer (asking you each time), copy files both ways and forward ports.';
+
+  @override
+  String get remoteLocalAccessNoAsking => 'Runs commands without asking';
+
+  @override
+  String get remoteLocalAccessAskAgain => 'Ask Each Time';
+
+  @override
+  String get sidePanelPorts => 'Ports';
+
+  @override
+  String portsEmpty(String host) {
+    return 'No ports are forwarded. A server on $host that prints its http://localhost address is forwarded here on its own.';
+  }
+
+  @override
+  String get portsAdd => 'Forward a Port';
+
+  @override
+  String get portsCopy => 'Copy Address';
+
+  @override
+  String get portsOpen => 'Open in Browser';
+
+  @override
+  String get portsStop => 'Stop Forwarding';
+
+  @override
+  String portsHostToHere(String host) {
+    return '$host → this computer';
+  }
+
+  @override
+  String portsHereToHost(String host) {
+    return 'This computer → $host';
+  }
+
+  @override
+  String get portsAuto => 'Auto';
+
+  @override
+  String get portsPort => 'Port';
+
+  @override
+  String get portsListen => 'Listen on (optional)';
+
+  @override
+  String get portsForward => 'Forward';
+
+  @override
+  String portsCopied(String address) {
+    return 'Copied $address';
+  }
+
+  @override
+  String branchBarFolder(String path) {
+    return '$path\nClick to copy its path';
+  }
+
+  @override
+  String get branchBarPathCopied => 'Path copied';
 
   @override
   String get sidePanelNoChanges => 'No changes yet';

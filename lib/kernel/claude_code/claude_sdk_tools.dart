@@ -8,6 +8,15 @@
 import 'dart:async';
 
 import '../../chat/chat_models.dart' show ToolCallItem, ToolKind;
+import '../../host_tools/host_tools.dart';
+import '../kernel_types.dart' show ApprovalDecision, ApprovalRequest;
+
+/// Asks the user [request] on the agent's conversation, as the agent's
+/// own requests are: what they decided, or null where it was given up
+/// (the turn stopped) or no one is there to ask.
+typedef ClaudeSdkAsk = Future<ApprovalDecision?> Function(
+  ApprovalRequest request,
+);
 
 /// Where a tool is called from: the agent's working directory (its
 /// project's path, as the workspace has it) and its session.
@@ -17,9 +26,14 @@ class ClaudeSdkCall {
     this.sessionId,
     this.cancelled,
     this.toolUseId,
+    this.ask,
   });
 
   final String cwd;
+
+  /// Asks the user, on the agent's conversation: its id is the kernel's
+  /// to give (the request's own is not kept). None where the kernel cannot.
+  final ClaudeSdkAsk? ask;
   final String? sessionId;
 
   /// The tool use it answers, as Claude Code says (`_meta`'s
@@ -45,9 +59,20 @@ class ClaudeSdkTool {
     this.summary,
     this.files,
     this.alwaysLoad = false,
+    this.offeredIn,
+    this.asksItself = false,
     this.group = '',
     this.picturesOnly = false,
   });
+
+  /// Whether it asks the user itself, each time, whatever the mode
+  /// ([ClaudeSdkCall.ask]): the CLI's leave not asked for it too.
+  final bool asksItself;
+
+  /// Whether an agent working in a folder (its location) is offered it, as
+  /// the tool itself says, besides [HostTools.gate]; everywhere for
+  /// null.
+  final bool Function(String cwd)? offeredIn;
 
   final String name;
   final String description;
@@ -71,8 +96,10 @@ class ClaudeSdkTool {
   /// search (where it would see only its name): for a tool it should think
   /// of unprompted.
   final bool alwaysLoad;
+
   /// The group of tools it belongs to (`'browser'`, `'images'`).
   final String group;
+
   /// Whether its answer is pictures alone: a client without them skips it.
   final bool picturesOnly;
 }
@@ -96,10 +123,49 @@ Map<String, Object?> claudeSdkText(String text) => {
 abstract interface class ClaudeSdkGate {
   bool offersTool(String cwd, String tool);
 
-  /// Whether what [feature] tells of its tools is told there.
+  /// Whether what [feature] tells of its tools ([ClaudeSdkTools.instruct])
+  /// is told there.
   bool tellsFeature(String cwd, String feature);
 
   /// Whether a tool called there may wait on the user at the computer (to
   /// pick a model, say): not where there is none to.
   bool asksUser(String cwd);
+}
+
+/// The app's server and its tools, as the agent's side names them: a thin
+/// face of the app's own registry ([HostTools]), which holds the tools, the
+/// calls under way and the gate. The registry belongs to the app, not to one
+/// kernel: this name is the one the kernels and the remote host's tools
+/// reach it by.
+abstract final class ClaudeSdkTools {
+  /// The server's name: its tools are `mcp__baocode__<name>` to the agent.
+  static const server = HostTools.server;
+
+  static void register(ClaudeSdkTool tool) => HostTools.register(tool);
+
+  static void unregister(String name) => HostTools.unregister(name);
+
+  /// Has the server tell the agent [text] for [feature]; null takes it
+  /// back.
+  static void instruct(String feature, String? text) =>
+      HostTools.instruct(feature, text);
+
+  /// Has the server tell an agent what [text] gives for the folder it
+  /// works in (nothing for null) for [feature].
+  static void instructFor(String feature, String? Function(String cwd) text) =>
+      HostTools.instructFor(feature, text);
+
+  /// The tool an agent calls [name] (`mcp__baocode__<name>`), if one of
+  /// this server's.
+  static ClaudeSdkTool? called(String name) => HostTools.called(name);
+
+  /// The servers to launch an agent working in [cwd] with: this one, if it
+  /// offers that agent a tool.
+  static List<String> serversFor(String cwd) => HostTools.serversFor(cwd);
+
+  /// The answer to [message] (JSON-RPC) for the server.
+  static Future<Map<String, Object?>> handle(
+    Map<String, Object?> message,
+    ClaudeSdkCall call,
+  ) => HostTools.handle(message, call);
 }

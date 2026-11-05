@@ -2365,17 +2365,17 @@ void main() {
     expect(tab.request.range, const FileLineRange(12));
   });
 
-  testWidgets('files outside the project do not open; web links stay the '
-      'browser\'s', (tester) async {
+  testWidgets('files outside the project open too, as the agent\'s tools '
+      'reach them; web links stay the browser\'s', (tester) async {
     final (:panel, :session) = await _pumpReply(
       tester,
-      '[secrets](../outside/key.pem), [passwd](/etc/passwd), '
+      '[key](../outside/key.pem), [passwd](/etc/passwd), '
       '`/etc/hosts` and [the site](https://baocode.dev).',
       texts: {'/etc/hosts': 'x', '/outside/key.pem': 'x'},
     );
-    expect(_span(tester, 'secrets')?.recognizer, isNull);
-    expect(_span(tester, 'passwd')?.recognizer, isNull);
-    expect(_span(tester, '/etc/hosts')?.recognizer, isNull);
+    expect(_span(tester, 'key')?.recognizer, isNotNull);
+    expect(_span(tester, 'passwd')?.recognizer, isNotNull);
+    expect(_span(tester, '/etc/hosts')?.recognizer, isNotNull);
     // The web link keeps its own (the browser's), which no file takes.
     expect(_span(tester, 'the site')?.recognizer, isA<TapGestureRecognizer>());
     final scope = tester.element(find.byType(MarkdownView));
@@ -2385,9 +2385,12 @@ void main() {
     );
     expect(panel.shown, isFalse);
     expect(_active(panel, session), isNull);
+    _tapSpan(tester, '/etc/hosts');
+    await tester.pumpAndSettle();
+    expect(_active(panel, session)!.path, '/etc/hosts');
   });
 
-  testWidgets('a read outside the project is not a link', (tester) async {
+  testWidgets('a read outside the project opens as one in it', (tester) async {
     final panel = AgentSidePanel();
     addTearDown(panel.dispose);
     final existence = FileExistence(null);
@@ -2417,9 +2420,11 @@ void main() {
       ),
     );
     await tester.tap(find.byType(ToolCallRow).first);
-    expect(opened, isEmpty);
     await tester.tap(find.byType(ToolCallRow).last);
-    expect([for (final request in opened) request.path], ['/p/a.dart']);
+    expect(
+      [for (final request in opened) request.path],
+      ['/etc/passwd', '/p/a.dart'],
+    );
   });
 
   testWidgets('the side panel is toggled from the title bar, and kept shown '
@@ -2550,13 +2555,14 @@ void main() {
       expect(composer.right, lessThan(rail.left));
       // Room enough: the column in the middle, as without the rail.
       expect(composer.center.dx, closeTo(chat.center.dx, 0.5));
-      // As far under the conversation's title bar as in from its right;
-      // at the top under Windows' header.
+      // As far under the row along the top of its card as in from its
+      // right; that row at the top under Windows' header, none over it.
       expect(
         rail.top - chat.top,
         (defaultTargetPlatform == TargetPlatform.windows
                 ? 0
                 : AppMetrics.titleBarHeight) +
+            ChatScreen.cardHeaderHeight +
             AgentSidePanelArea.railRight,
       );
 
@@ -2569,6 +2575,48 @@ void main() {
       TargetPlatform.macOS,
       TargetPlatform.windows,
     }),
+  );
+
+  testWidgets(
+    'the panel at the left, the conversation\'s buttons on its card are '
+    'before its title, their left edge on the rail\'s under them',
+    (tester) async {
+      final workspace = await pumpLoaded(tester);
+      await tester.pumpAndSettle();
+      workspace.select(
+        workspace.threads.firstWhere((thread) => thread.record != null),
+      );
+      await tester.pumpAndSettle();
+      tester
+              .widget<AgentSidePanelArea>(find.byType(AgentSidePanelArea))
+              .panel
+              .atLeft =
+          true;
+      await tester.pumpAndSettle();
+      final chat = tester.getRect(find.byType(ChatScreen));
+      final rail = tester.getRect(find.byType(SidePanelRail));
+      final toggle = tester.getRect(
+        find.descendant(
+          of: find.byType(ChatScreen),
+          matching: find.byType(SidePanelToggle),
+        ),
+      );
+      final title = tester.getRect(
+        find
+            .descendant(
+              of: find.byType(ChatScreen),
+              matching: find.text(
+                tester.widget<ChatScreen>(find.byType(ChatScreen)).title,
+              ),
+            )
+            .first,
+      );
+      expect(rail.left, chat.left + AgentSidePanelArea.railRight);
+      // The side panel's nearest the edge, over its rail; then the title.
+      expect(toggle.left, rail.left);
+      expect(title.left, greaterThan(toggle.right));
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.macOS),
   );
 
   test('Close Editor on the terminal page hides the panel: its tabs are '

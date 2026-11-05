@@ -53,15 +53,21 @@ abstract final class HostTools {
   /// prefix): a call's card, from the tool it answers.
   static HostTool? lookup(String name) => _tools[name];
 
-  /// What each feature tells the agent of its tools, by feature: the
-  /// server's instructions, in the agent's system prompt.
-  static final Map<String, String> _instructions = {};
+  /// What each feature tells the agent of its tools, by feature, for the
+  /// folder it works in: the server's instructions, in the agent's system
+  /// prompt.
+  static final Map<String, String? Function(String cwd)> _instructions = {};
 
   /// Has the server tell the agent [text] for [feature]; null takes it
   /// back.
   static void instruct(String feature, String? text) => text == null
       ? _instructions.remove(feature)
-      : _instructions[feature] = text;
+      : _instructions[feature] = (_) => text;
+
+  /// Has the server tell an agent what [text] gives for the folder it
+  /// works in (nothing for null) for [feature].
+  static void instructFor(String feature, String? Function(String cwd) text) =>
+      _instructions[feature] = text;
 
   /// Which tools, by name, an agent working in a folder is offered, and
   /// which features' instructions it is told (see [ClaudeSdkGate]); all of
@@ -72,6 +78,12 @@ abstract final class HostTools {
   /// or every tool's when there is none.
   static bool offersTool(String cwd, String tool) =>
       gate?.offersTool(cwd, tool) ?? true;
+
+  /// Whether [tool] is offered an agent working in [cwd], the tool's own
+  /// say ([ClaudeSdkTool.offeredIn]) and the gate's both: all of them when
+  /// they say nothing.
+  static bool _offers(String cwd, String tool) =>
+      (_tools[tool]?.offeredIn?.call(cwd) ?? true) && offersTool(cwd, tool);
 
   /// Whether what [feature] tells of its tools is told an agent working in
   /// [cwd]: the gate's say, or all of it when there is none.
@@ -106,7 +118,7 @@ abstract final class HostTools {
   /// The servers to launch an agent working in [cwd] with: this one, if it
   /// offers that agent a tool.
   static List<String> serversFor(String cwd) =>
-      _tools.keys.any((name) => offersTool(cwd, name))
+      _tools.keys.any((name) => _offers(cwd, name))
       ? const [server]
       : const [];
 
@@ -127,7 +139,7 @@ abstract final class HostTools {
         final told = [
           for (final MapEntry(key: feature, value: text)
               in _instructions.entries)
-            if (tellsFeature(call.cwd, feature)) text,
+            if (tellsFeature(call.cwd, feature)) ?text(call.cwd),
         ];
         return result({
           'protocolVersion': params['protocolVersion'] ?? '2024-11-05',
@@ -139,7 +151,7 @@ abstract final class HostTools {
         return result({
           'tools': [
             for (final tool in _tools.values)
-              if (offersTool(call.cwd, tool.name))
+              if (_offers(call.cwd, tool.name))
                 {
                   'name': tool.name,
                   'description': tool.description,
@@ -150,7 +162,7 @@ abstract final class HostTools {
         });
       case 'tools/call':
         final tool = switch (params['name']) {
-          final String name when offersTool(call.cwd, name) => _tools[name],
+          final String name when _offers(call.cwd, name) => _tools[name],
           _ => null,
         };
         final input =
@@ -179,6 +191,7 @@ abstract final class HostTools {
               cwd: call.cwd,
               sessionId: call.sessionId,
               cancelled: cancel.future,
+              ask: call.ask,
               toolUseId: switch (params['_meta']) {
                 {'claudecode/toolUseId': final String id} => id,
                 _ => null,

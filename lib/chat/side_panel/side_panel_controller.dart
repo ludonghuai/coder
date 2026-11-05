@@ -66,7 +66,16 @@ class SidePanelTab {
 /// commands; and the plan the agent wrote, alone, while there is one.
 /// The usage page: what the conversation took of its upstream (see
 /// lib/usage/).
-enum SidePanelSection { files, changes, terminal, usage, plan }
+enum SidePanelSection {
+  files,
+  changes,
+  terminal,
+  usage,
+  plan,
+
+  /// An SSH project's ports forwarded (see PortsView).
+  ports,
+}
 
 /// How the agent window lays out, from its left: the sidebar (the
 /// conversations' list), the conversations, the side panel. Each of the
@@ -145,7 +154,9 @@ class SidePanelTabs {
   SidePanelTab? get current => switch (section) {
     SidePanelSection.files => active,
     SidePanelSection.changes => activeDiff,
-    SidePanelSection.terminal || SidePanelSection.usage => null,
+    SidePanelSection.terminal ||
+    SidePanelSection.usage ||
+    SidePanelSection.ports => null,
     SidePanelSection.plan => plan,
   };
 }
@@ -330,6 +341,15 @@ class AgentSidePanel extends ChangeNotifier {
   /// The tabs open for [conversation] (its session).
   SidePanelTabs tabsOf(Object conversation) =>
       _tabs[conversation] ??= SidePanelTabs();
+
+  /// [to] has [from]'s panel as it was, its tabs and its being shown: the
+  /// same conversation read anew.
+  void carryOver(Object from, Object to) {
+    if (_tabs[from] case final tabs?) _tabs[to] = tabs;
+    if (_shownIn[from] case final shown?) _shownIn[to] = shown;
+    if (_focusNodes.remove(from) case final node?) _focusNodes[to] = node;
+    notifyListeners();
+  }
 
   /// The files page's tree of each project (by its folder), kept while
   /// the panel is, so it stays expanded as it was.
@@ -801,7 +821,9 @@ class AgentSidePanel extends ChangeNotifier {
           SidePanelSection.plan:
         if (tabs.current case final tab?) return close(conversation, tab);
       // Its tabs are the terminals themselves, killed by their own Close.
-      case SidePanelSection.terminal || SidePanelSection.usage:
+      case SidePanelSection.terminal ||
+          SidePanelSection.usage ||
+          SidePanelSection.ports:
         break;
     }
     hide();

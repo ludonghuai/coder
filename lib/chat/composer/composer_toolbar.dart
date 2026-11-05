@@ -13,7 +13,6 @@ Widget _buildToolbarOf(ChatComposerState state) {
   final model = session.models;
   final context = session.context;
   final l10n = state.context.l10n;
-  final hasRing = state.widget.onToggleContextPanel != null && context != null;
   KernelOption localized(KernelOption option) => localizedKernelOption(
     l10n,
     session.kernel.id,
@@ -105,14 +104,14 @@ Widget _buildToolbarOf(ChatComposerState state) {
             enabled: state._polishing || state._shownBuilt!.polishable,
             onTap: () => unawaited(state._polish()),
           ),
-          if (hasRing) const SizedBox(width: 2),
+          const SizedBox(width: 2),
         ],
         if ((state.widget.onToggleContextPanel, context) case (
           final onToggle?,
           final usage?,
         )) ...[
-          _ContextRing(
-            fraction: usage.fraction,
+          ContextMeter(
+            usage: usage,
             active: state.widget.contextPanelOpen,
             // Toggle Context Panel's, which has none by default.
             tooltip: state._hovers.ring,

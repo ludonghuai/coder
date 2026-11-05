@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart' hide ColorScheme;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:baocode/theme/app_theme.dart';
-import 'package:baocode/theme/island_tones.dart';
 import 'package:baocode/theme/workbench_theme.dart';
 import 'package:baocode/workspace/preference_store.dart';
 import 'package:baocode/workspace/workspace.dart';
@@ -152,14 +151,8 @@ void main() {
       return AppColors.partBorder;
     }
 
-    // Its side bar's border, lifted with its cards (see IslandTones).
-    expect(
-      await line('Dark Modern'),
-      IslandTones(
-        const Color(0xFF1F1F1F),
-        const Color(0xFF181818),
-      ).apply('sideBar.border', const Color(0xFF2B2B2B)),
-    );
+    // Its side bar's border, as the theme has it.
+    expect(await line('Dark Modern'), const Color(0xFF2B2B2B));
     // Its `surface.border`, apart from both backgrounds.
     expect(await line('Solarized Light'), const Color(0xFFDDD6C1));
     // Transparent.
@@ -167,31 +160,6 @@ void main() {
     expect(
       await line('Tomorrow Night Blue'),
       const Color(0xFFFFFFFF).withValues(alpha: 0.1),
-    );
-  });
-
-  test('the overview rulers\' left edges are gone on the cards, kept in '
-      'a high contrast theme', () async {
-    final kept = WorkbenchThemeService.instance;
-    addTearDown(() => WorkbenchThemeService.instance = kept);
-    Future<List<Color?>> borders(String setting) async {
-      final themes = WorkbenchThemeService()..restore(setting: setting);
-      await themes.initialize();
-      return [
-        themes.colors['editorOverviewRuler.border'],
-        themes.colors['terminalOverviewRuler.border'],
-      ];
-    }
-
-    for (final theme in ['Dark Modern', 'Bao Dark', 'Bao Light']) {
-      expect(await borders(theme), [
-        const Color(0x00000000),
-        const Color(0x00000000),
-      ], reason: theme);
-    }
-    expect(
-      (await borders('Default High Contrast')).every((c) => c!.a > 0),
-      isTrue,
     );
   });
 
