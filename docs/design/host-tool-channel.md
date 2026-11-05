@@ -257,8 +257,10 @@ Accept: application/json, text/event-stream
 ### 4.7 宿主注册面
 
 ```dart
-// lib/kernel/claude_code/claude_sdk_tools.dart（上游档：类定义在此，本仓只加末两个字段）
+// lib/kernel/claude_code/claude_sdk_tools.dart（上游档：类定义在此；本仓只加 group / picturesOnly 两个自有字段，ClaudeSdkTools 是转发到自有 HostTools 的薄类，注册表在自有档）
 class ClaudeSdkTool {
+  final bool asksItself;                         // 上游：工具自己每次问人
+  final bool Function(String cwd)? offeredIn;    // 上游：按目录判是否提供该工具
   final String name, description;
   final Map<String, Object?> inputSchema;
   final Future<Object> Function(Map<String, Object?> input, ClaudeSdkCall call) run;
@@ -266,8 +268,8 @@ class ClaudeSdkTool {
   final String Function(Map<String, Object?> input, String? output)? summary;
   final List<String> Function(String output)? files;
   final bool alwaysLoad;
-  final String group;          // 自有新增：'browser' | 'images'
-  final bool picturesOnly;     // 自有新增：答案只有图（MCP 面不出，见 §12-1）
+  final String group;          // 自有：'browser' | 'images'
+  final bool picturesOnly;     // 自有：答案只有图（MCP 面不出，见 §12-1）
 }
 
 // lib/host_tools/host_tools.dart（自有档）
@@ -275,7 +277,7 @@ typedef HostTool = ClaudeSdkTool;
 typedef HostToolCall = ClaudeSdkCall;
 
 abstract final class HostTools {
-  // 既有语义零变（Claude 面）：register / unregister / instruct / called / any / servers / handle
+  // 既有语义零变（Claude 面）：register / unregister / instruct / instructFor / called / any / servers / handle
   static List<HostTool> byGroup(String group);
   static bool anyIn(Set<String> groups);
   static HostTool? lookup(String name);   // 工具卡还原用
@@ -354,13 +356,13 @@ thincoder 会话 prepare()
 
 ### 7.1 本仓（baocode）
 
-行数 = 编制日只读实测（换行数）；增量 = 设计预算 → 实施实测（实测 = 2026-10-18 工作树，换行数）。
+行数 = `split('\n')` 口径实测（含末行换行；与 `docs/design/fork-deltas.md` §7.3 同口径）；增量 = 设计预算 → 实测（现态读数 = 2026-11-04 工作树）。
 
 | # | 坐标 | 改动 | 增量（预算 → 实测） |
 |---|---|---|---|
-| ① | `lib/host_tools/host_tools.dart`（新；迁自 `lib/kernel/claude_code/claude_sdk_tools.dart` 229 行） | 类型正名 `HostTool` / `HostToolCall` / `HostTools`；加 `group`；加 `byGroup` / `anyIn` / `lookup`；`handle` 语义零改 | ≤ +35（⇒ ≤264）；实测 +34（⇒ 263；含 `picturesOnly` / `named()`） |
-| ①′ | `lib/kernel/claude_code/claude_sdk_tools.dart`（229） | **删除**（全部内容迁入 ①；Claude 面改经 `HostTools`，引用点见 ⑫ / ⑯） | 229 ⇒ 0 |
-| ② | `lib/host_tools/host_mcp_server.dart`（新） | 环回监听、令牌发放 / 撤销、JSON-RPC 分发（复用 `HostTools.handle`）、组过滤、图片折文本、错误映射、1 MiB 上限 | ~+260；实测 328 |
+| ① | `lib/host_tools/host_tools.dart`（新；迁自 `lib/kernel/claude_code/claude_sdk_tools.dart` 229 行） | 类型正名 `HostTool` / `HostToolCall` / `HostTools`；加 `group`；加 `byGroup` / `anyIn` / `lookup`；`handle` 语义零改 | ≤ +35（⇒ ≤264）；现态 237（含 `picturesOnly` / `named()`） |
+| ①′ | `lib/kernel/claude_code/claude_sdk_tools.dart`（172） | 类型层在此档：`ClaudeSdkCall` / `ClaudeSdkTool` / `claudeSdkImage` / `claudeSdkText` / `ClaudeSdkGate`；`ClaudeSdkTool` 带自有字段 `group` / `picturesOnly`。`ClaudeSdkTools` 是转发到自有 `HostTools` 的薄类（八个成员，`:140-171`，不持有自己的工具表），注册表本体在 ①（`lib/host_tools/host_tools.dart:26`） | 172 = 上游 305 + 自有两字段与转发类 38 行（`docs/design/fork-deltas.md` §7.2） |
+| ② | `lib/host_tools/host_mcp_server.dart`（新） | 环回监听、令牌发放 / 撤销、JSON-RPC 分发（复用 `HostTools.handle`）、组过滤、图片折文本、错误映射、1 MiB 上限 | ~+260；现态 345 |
 | ③ | `lib/browser/browser_tools.dart`（675） | 注册面类型名（4 处 `ClaudeSdkTools` 调用 + 6 处 `ClaudeSdkTool`，机械）；注册带 `group: 'browser'`；入口工具（tabs / open / navigate / evaluate / act）description 补一句适用规则（D9）；透传 `picturesOnly`（`browser_tools.dart:112`；标记在 ④） | ≤ +15（⇒ ≤690）；实测 +14（⇒ 689） |
 | ④ | `lib/browser/browser_actions.dart`（625） | 类型名（7 处，机械）；`browser_screenshot` 标 `picturesOnly: true`（`browser_actions.dart:105`，MCP 面不出，§12-1） | 预算净 0；实测 +1（⇒ 626） |
 | ⑤ | `lib/browser/browser_debug_tools.dart`（1785） | 类型名（7 处，机械） | 净 0 |
@@ -391,7 +393,7 @@ thincoder 会话 prepare()
 - `thincoder_events.dart` 784 行（<800）：实施后 798（恰在预算上界），其后他批 +1 ⇒ 现 799，仍在线下；下一触碰先看余量，越线 ⇒ 先停，改按结构级改动报。
 - `test/kernel/thincoder_kernel_test.dart` 2629 行在 >800 名单：只加用例；实测 +211（⇒ 2840，其后他批 +6 ⇒ 2846），超预算 +140 属估算偏差（估算非上界），缝候选沿用 `docs/design/thincoder-adapter.md` §15.4 的四组拆法。
 - **净 0 / 机械改名档（⑤–⑩、⑫、⑬、⑯ 的改名部分）**：只替换类型名，行数与结构不变 ⇒ 不构成结构级触碰、不新增拆分档位；④ = 改名 + `picturesOnly: true`（+1）；⑫ / ⑬ 的 >800 状态不由本批处置。
-- 新增两档（①②）均 <500 行（实测 263 / 328）；⑤–⑩ 的行数不上移。
+- 新增两档（①②）均 <500 行（现态 237 / 345）；⑤–⑩ 的行数不上移。
 
 ### 7.2 thincoder 仓（out-of-repo 轮执行；该仓自己的批次档 + 单元测试随档）
 
@@ -503,7 +505,7 @@ thincoder 会话 prepare()
 10. **多桌面实例**：各自端口、各自令牌，互不可见；浏览器只认一个实例（既有 `otherApp` 逻辑）。
 11. **信任位的上游接受风险（D5）**：`_meta["baocode.dev/trusted"]` → `permissionExempt` 是 thincoder 侧的非标准扩展面（第二个上游面）。判定条件：上游拒收该位（评审 / 合并被拒）⇒ 回落逐调用审批（`dispatch.mjs:177` 的短路条件不扩；浏览器工具每次弹审批卡），信任位整条撤除，其余不变。
 13. **`'browser'` 字面量（非阻塞）**：`host_mcp_server.dart:253`（`tool.group != 'browser'`）与 `:259`（`_given[name] == 'browser'`）用字面量判组，与 `exposedGroups` 常量（`:38`）各自成立；今天暴露组恒为 `{'browser'}`，无行为差异。判定条件：暴露组增加第二组或改名 ⇒ 两处改读 `exposedGroups`。
-14. **`initialize.instructions` 取全体特性文本（非阻塞）**：`host_tools.dart:179-180` 把 `_instructions` 全表（按特性登记，`instruct` `:136-138`）拼进 `instructions`，不按 `exposedGroups` 过滤；今天只有浏览器特性登记文本，MCP 面读数无差异。判定条件：第二个特性开始 `instruct`（图片 / IDE / 终端）⇒ 按 `exposedGroups` 过滤。
+14. **`initialize.instructions` 取全体特性文本（非阻塞）**：`host_tools.dart` 的 `_instructions` 按特性登记、值按会话目录取值，值类型 `Map<String, String? Function(String cwd)>`（`host_tools.dart:59`），`instruct(feature, text)` 登记、传 null 撤回（`:63-65`），`instructFor(feature, text)` 直接给按目录取值的函数（`:69-70`）；`initialize` 把每个特性的文本按目录算出再按 `tellsFeature(call.cwd, feature)` 过滤，拼进 `instructions`（`:139-149`），不按 `exposedGroups` 过滤。今天只有浏览器与远程本地工具两个特性登记文本，MCP 面读数无差异。判定条件：第三类特性开始 `instruct`（图片 / IDE / 终端）⇒ 按 `exposedGroups` 过滤。
 
 **未决项**：无（以上每条都给判定条件）。
 
@@ -549,7 +551,9 @@ thincoder 会话 prepare()
 
 **16-1 测试档路径** = `test/host_tools/host_tools_test.dart`。原设计 ⑯ 记 `test/kernel/claude_sdk_tools_test.dart`（157 行）；实施把整档迁到 `test/host_tools/`，补 T16 逐字段断言与分组 API 用例，共 13 例，旧档已删。§7.1 ⑯ / §10 已按实订正。
 
-同批源码档迁移：`lib/kernel/claude_code/claude_sdk_tools.dart`（229 行）整档删除、内容迁入 `lib/host_tools/host_tools.dart`（§7.1 ① / ①′）；§2.2 / §3.3 / §4.3 / §4.4 / §6 里指向旧档行号的坐标已改指新档符号。
+同批源码档归属：类型层在 `lib/kernel/claude_code/claude_sdk_tools.dart` —— `ClaudeSdkCall` / `ClaudeSdkTool` / `claudeSdkImage` / `claudeSdkText` / `ClaudeSdkGate`，`ClaudeSdkTool` 带自有 `group` / `picturesOnly`。
+
+注册表类 `ClaudeSdkTools` 保留为该档的薄转发类：八个成员（`server` / `register` / `unregister` / `instruct` / `instructFor` / `called` / `serversFor` / `handle`）逐个转发到自有 `lib/host_tools/host_tools.dart` 的 `HostTools`，类体不持有工具表（§7.1 ① / ①′）。该档在 §2.2 的接口表与 D2 里作为类型定义处出现，口径同上。
 
 **16-2 `picturesOnly` 的定义处** = `browser_actions.dart:105`。原设计把它记在 `browser_tools.dart`；实际是 `browser_screenshot` 的注册项上打标（`browser_actions.dart:105`），`BrowserTools.register` 只透传（`browser_tools.dart:112`）。口径不变：MCP 面不出该工具（§4.3 / §12-1）。
 
