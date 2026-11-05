@@ -600,10 +600,14 @@ Do not use the browser tools to scrape or bulk-collect data from government, hea
 
   /// Runs [go] (a navigation) and waits for the page it leads to to load
   /// (its load event: the tab's Page domain is on, see BrowserRecords).
+  ///
+  /// A navigation within the page (a hash route's) loads nothing and fires
+  /// no load event: Page.navigate's answer names no loader for it, and it
+  /// is not waited for.
   static Future<void> _loading(
     BrowserConnection browser,
     int tabId,
-    Future<void> Function() go, {
+    Future<Object?> Function() go, {
     Duration timeout = const Duration(seconds: 20),
   }) async {
     final loaded = Completer<void>();
@@ -624,7 +628,13 @@ Do not use the browser tools to scrape or bulk-collect data from government, hea
       }
     });
     try {
-      await go();
+      final answer = await go();
+      if (answer is Map &&
+          answer['frameId'] != null &&
+          answer['loaderId'] == null &&
+          answer['errorText'] == null) {
+        return;
+      }
       await loaded.future.timeout(timeout, onTimeout: () {});
     } finally {
       await subscription.cancel();
