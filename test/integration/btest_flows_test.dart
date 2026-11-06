@@ -349,7 +349,13 @@ void main() {
     } on BrowserError catch (error) {
       expect(error.message, contains('issues[1].pre'));
       expect(error.message, contains('lacks declared scenario S2'));
-      expect(error.message, contains('R4 case CASE-002'));
+      expect(
+        error.message,
+        isNot(contains('CASE-002')),
+        reason:
+            'a start-index case this round did not reach is counted, '
+            'not refused',
+      );
     }
     expect(state.run?.id, runId, reason: 'a refusal does not consume the run');
 
@@ -404,7 +410,7 @@ void main() {
       await files.settings.load();
     });
     expect(find.text('btest · not started · chain · write'), findsOne);
-    expect(files.settings[BtestSettings.onKey], isTrue);
+    expect(files.settings[BtestSettings.onInKey], [sandbox.path]);
     expect(files.settings[BtestSettings.traversalKey], 'chain');
     expect(files.settings[BtestSettings.modeKey], 'write');
 

@@ -88,6 +88,9 @@ Future<void> _deliverOf(ThincoderKernel owner, KernelTurn turn) async {
   }
   final slot = owner._slot;
   if (owner._turn != turn.id || slot == null) return;
+  // btest on or off, as the agent is to have it for this turn (fork).
+  await _syncTestModeOf(owner);
+  if (owner._turn != turn.id || owner._slot != slot) return;
   owner._lastPromptTurn = turn.id;
   // `timing: first-frame` takes off where the prompt goes out (§25.6).
   owner._firstFrame = Stopwatch()..start();

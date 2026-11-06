@@ -335,10 +335,9 @@ Do not use the browser tools to scrape or bulk-collect data from government, hea
           'detour': {
             'type': 'string',
             'description':
-                'With a second entry navigation, and only then: the defect '
-                'already recorded (one line: what is missing), e.g. "no menu '
-                'entry for the agreement form, the URL has to be typed". '
-                'Without it a second entry is refused.',
+                'Optional, in btest: why this page is reached by URL, one '
+                'line, e.g. "switching to og 21" or "no menu entry for the '
+                'agreement form". Listed with the run\'s entries.',
           },
         },
         'required': ['tabId'],

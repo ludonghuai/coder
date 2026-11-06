@@ -1,7 +1,7 @@
-/// What btest lets a browser tool call do (design §3.6 / §3.7): the entry
-/// rules, the script that may not write, the tool face of a read-only run,
-/// and the domain / production gates. Pure judgements — the counters live
-/// in btest_mode.dart, and the wiring in browser_tools.dart.
+/// What btest lets a browser tool call do (design §3.6 / §3.7): the entries
+/// it records, the script that may not write, the tool face of a read-only
+/// run, and the domain / production gates. Pure judgements — the counters
+/// live in btest_mode.dart, and the wiring in browser_tools.dart.
 library;
 
 /// Where a run says it works: the authority over writes (design §3.7).
@@ -161,7 +161,7 @@ class BtestDecision {
   /// Refused for a script that writes (§3.6.3, rule 1): counted, 4-②.
   final bool evaluateWrite;
 
-  /// Refused as an entry action (§3.6.2): counted on its own.
+  /// Refused as an entry action (§3.6.2: a blank url): counted on its own.
   final bool entryDenied;
 
   /// Refused as a replay — the script making the request (§3.6.3, rule 3);
@@ -201,7 +201,7 @@ abstract final class BtestPolicy {
 
   /// The pages a call goes to without a click (§3.6.2): `browser_navigate`'s
   /// url, `browser_open`'s, and each navigate step of `browser_act` — the
-  /// three ways to a deep link, judged as one rule (KD-17).
+  /// three ways to a URL, recorded alike (KD-17) and judged by host.
   static List<String> entryUrls(String tool, Map<String, Object?> input) {
     switch (tool) {
       case 'browser_navigate' || 'browser_open':
@@ -219,9 +219,9 @@ abstract final class BtestPolicy {
     }
   }
 
-  /// The defect a call brings to justify an entry after the first (§3.6.2):
-  /// `browser_navigate`'s own parameter — its value is already the recorded
-  /// finding's one line.
+  /// The note an entry is taken with (§3.6.2): `browser_navigate`'s own
+  /// parameter, optional — why this page is reached by URL (an og switch, a
+  /// page with no menu entry). Listed with the entries; it allows nothing.
   static String? detourOf(String tool, Map<String, Object?> input) {
     if (tool != 'browser_navigate') return null;
     final detour = input['detour'];
@@ -298,22 +298,25 @@ abstract final class BtestPolicy {
         _ => readonlyTools.contains(tool),
       };
 
-  /// Whether a call [hosts] stands for enters [startUrl] (§3.6.2: compared
-  /// without a trailing slash).
-  static bool sameUrl(String a, String b) => _trimUrl(a) == _trimUrl(b);
-
-  static String _trimUrl(String url) =>
-      url.trim().replaceFirst(RegExp(r'/+$'), '');
+  /// What a refused script is told to do instead (§3.6.3): the user's own
+  /// actions, a dropdown's included — a script that sets `.value` or
+  /// `selectedIndex` is most often one picking an option.
+  static const asTheUser =
+      'act as the user instead: browser_type sets a field, and picks a '
+      "dropdown's option by its words (into: the field's words, text: the "
+      "option's); browser_click presses";
 
   /// The verdict for one browser tool call, the operation rules before the
-  /// release's (§3.7: 前置拒绝 run first).
+  /// release's (§3.7: 前置拒绝 run first). A URL is no rule of its own
+  /// (§3.6.2): it is recorded as an entry, and its host judged like any.
+  ///
+  /// [env] is the run's; null between runs, where the hosts alone tell
+  /// production (rule B's lists).
   static BtestDecision judge({
     required String tool,
     required Map<String, Object?> input,
-    required BtestEnv env,
+    required BtestEnv? env,
     required BtestFace face,
-    required String startUrl,
-    required int entries,
     required List<String> hosts,
     required bool targeted,
     required Set<String> allowHosts,
@@ -326,8 +329,8 @@ abstract final class BtestPolicy {
 
     // §3.6.2 — a browser_act whose steps come from a file cannot be judged
     // here (the file is read at the tool, after this gate): refused rather
-    // than let through, since its navigate steps would skip the entry rule
-    // and the destination host's checks.
+    // than let through, since its navigate steps would skip the destination
+    // host's checks and the record of entries.
     if (tool == 'browser_act' &&
         input['file'] is String &&
         '${input['file']}'.trim().isNotEmpty &&
@@ -363,34 +366,13 @@ abstract final class BtestPolicy {
       final form = writeFormOf('${input['expression'] ?? ''}');
       if (form != null) {
         return BtestDecision.deny(
-          _deny(tool, host, 'btest may not write values from a script ($form)'),
-          evaluateWrite: true,
-          target: target,
-        );
-      }
-    }
-
-    // §3.6.2 — one entry, the run's startUrl; after it, a detour only.
-    if (entry != null) {
-      if (entries == 0) {
-        if (!sameUrl(entry, startUrl)) {
-          return BtestDecision.deny(
-            _deny(tool, host, "the entry must be the run's startUrl $startUrl"),
-            entry: entry,
-            entryDenied: true,
-          );
-        }
-      } else if (detourOf(tool, input) == null) {
-        return BtestDecision.deny(
           _deny(
             tool,
             host,
-            'record the defect first, then take the detour — a second entry '
-            'needs browser_navigate with detour "one line: what is '
-            'missing"',
+            'btest may not write values from a script ($form) — $asTheUser',
           ),
-          entry: entry,
-          entryDenied: true,
+          evaluateWrite: true,
+          target: target,
         );
       }
     }
@@ -431,14 +413,19 @@ abstract final class BtestPolicy {
     // §3.7, release 4 — read-only, or a write with both production gates.
     final readonly = isReadonly(tool, input);
     if (face == BtestFace.readonly && !readonly) {
+      final rule = tool == 'browser_evaluate'
+          ? 'mode: readonly needs readOnly: true (a script that only reads)'
+          : 'mode: readonly refuses write actions';
       return BtestDecision.deny(
         _deny(
           tool,
           host,
-          tool == 'browser_evaluate'
-              ? 'mode: readonly needs readOnly: true (a script that only '
-                    'reads)'
-              : 'mode: readonly refuses write actions',
+          // Between runs the face is the write switch's: said, since no
+          // run's mode is there to blame.
+          env == null
+              ? "$rule — between runs the status line's write switch "
+                    '(只读) decides'
+              : rule,
         ),
         target: target,
       );

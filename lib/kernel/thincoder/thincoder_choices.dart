@@ -215,6 +215,20 @@ Future<void> _configOf(
   }
 }
 
+/// btest's test mode (the fork's `testMode` option, ACP-CLIENT.md): while
+/// btest is on in the conversation, engineering mode's gates stand aside —
+/// a write to the expect file binds no ledger row — and they come back
+/// with it off. The switch is the host's, so it is said before each prompt
+/// and only when the agent's report differs; an agent that reports no such
+/// option is told nothing.
+Future<void> _syncTestModeOf(ThincoderKernel kernel) async {
+  final option = kernel._events.configOf('testMode');
+  if (option == null) return;
+  final on = BtestMode.onFor(kernel._cwd, kernel._slot);
+  if (option['currentValue'] == on) return;
+  await _configOf(kernel, 'testMode', on);
+}
+
 /// A choice over state the kernel holds: options and selection read live
 /// (the form Claude Code's adapter keeps).
 class _Choice implements KernelChoiceSource {

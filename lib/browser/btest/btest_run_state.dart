@@ -14,14 +14,20 @@ import 'btest_expect_file.dart';
 import 'btest_mode.dart';
 import 'btest_policy.dart';
 
-/// A recorded detour (§3.6.2): which entry, where to, and the finding it was
-/// taken for.
+/// One entry (§3.6.2): a page reached by URL rather than a click — by which
+/// tool, where to, and the note it was taken with, if any.
 class BtestEntry {
   const BtestEntry({required this.tool, required this.url, this.detour});
 
   final String tool;
   final String url;
+
+  /// Why this page was reached by URL (an og switch, a page no menu
+  /// leads to); optional, listed with the entry.
   final String? detour;
+
+  /// The entry's line in the readings: `browser_navigate <url> — <note>`.
+  String get line => '$tool $url${detour == null ? '' : ' — $detour'}';
 }
 
 /// One run of a business line (§3.3): what it declared, the expect file's
@@ -58,7 +64,7 @@ class BtestRun {
   /// Its name, from [repoRoot]'s last segment (§3.3: one source for it).
   String get repo => p.basename(repoRoot);
 
-  /// The one URL this run enters by.
+  /// Where this run starts: its first page, as declared.
   final String startUrl;
   final BtestEnv env;
   final BtestFace face;
@@ -88,7 +94,8 @@ class BtestRun {
   /// The run's case index, as the file had it at its start.
   final List<BtestCase> cases;
 
-  /// The entry actions allowed so far, in order (§3.6.2).
+  /// The entry actions allowed so far, in order (§3.6.2): every page this
+  /// run reached by URL.
   final List<BtestEntry> entries = [];
 
   /// Entry actions refused (§3.3, 4-①: counted apart).
@@ -110,17 +117,16 @@ class BtestRun {
   /// Calls refused by any other gate.
   int denied = 0;
 
-  /// The detours taken, in order (§3.6.2).
-  List<BtestEntry> get detours => [
-    for (final entry in entries)
-      if (entry.detour != null) entry,
-  ];
+  /// The most entries the readings list one by one; the rest are counted.
+  static const listedEntries = 40;
 
-  /// The declared entry alone: 入口 counts it, detours are counted apart
-  /// (§3.8's line reads `入口=1 … 绕道=1` with one legal detour).
-  List<BtestEntry> get declared => [
-    for (final entry in entries)
-      if (entry.detour == null) entry,
+  /// The entries as the readings list them (§3.8): one line each, in order,
+  /// the first [listedEntries]; empty when the run reached no page by URL.
+  List<String> get entryLines => [
+    for (final (i, entry) in entries.take(listedEntries).indexed)
+      '${i + 1}. ${entry.line}',
+    if (entries.length > listedEntries)
+      '… ${entries.length - listedEntries} more',
   ];
 
   /// The report's head line (§3.8): the round's traversal and mode first,
@@ -130,7 +136,7 @@ class BtestRun {
   String truthLine({required int noVisibleText}) => [
     'traversal=${traversal.name}',
     'mode=${face.name}',
-    '操作真实性：入口=${declared.length}'
+    '操作真实性：入口=${entries.length}'
         '（navigate=${_count('browser_navigate')}',
     'open=${_count('browser_open')}',
     if (_count('browser_act') > 0) 'act=${_count('browser_act')}',
@@ -140,11 +146,10 @@ class BtestRun {
     '文字定位=$wordsTargets',
     'ref/selector 兜底=$fallbackTargets',
     '无可见文字=$noVisibleText',
-    '绕道=${detours.length}',
   ].join(' · ');
 
   int _count(String tool) =>
-      declared.where((entry) => entry.tool == tool).length;
+      entries.where((entry) => entry.tool == tool).length;
 }
 
 /// What a verdict did to the run under way (§3.3, check 4), as an extension
@@ -159,17 +164,12 @@ extension BtestRunRecord on BtestState {
   ) {
     final run = this.run;
     if (run == null) return;
-    if (decision.entry case final url?) {
-      // The first entry is the declared one: a detour there has no defect to
-      // record (§3.6.2), and counting it as one would read 入口=0.
-      final first = run.entries.isEmpty;
-      run.entries.add(
-        BtestEntry(
-          tool: tool,
-          url: url,
-          detour: first ? null : BtestPolicy.detourOf(tool, input),
-        ),
-      );
+    if (decision.entry != null) {
+      // Every URL the call goes to: a browser_act's navigate steps each.
+      final note = BtestPolicy.detourOf(tool, input);
+      for (final url in BtestPolicy.entryUrls(tool, input)) {
+        run.entries.add(BtestEntry(tool: tool, url: url, detour: note));
+      }
     }
     if (tool == 'browser_request' && input['replay'] == true) {
       run.replayAllowed++;
@@ -390,6 +390,22 @@ Future<Object> btestStartRun(
       'cannot be created (${error.osError?.message ?? error.message})',
     );
   }
+  // The files beside it (§3.4): the flow a line was walked by, a dated copy
+  // — named for the run to read first, so a round does not learn the way
+  // through again.
+  final beside = <String>[];
+  try {
+    for (final entity in Directory(folder).listSync()) {
+      if (entity is File &&
+          p.extension(entity.path).toLowerCase() == '.md' &&
+          !p.equals(entity.path, expectFile)) {
+        beside.add(p.basename(entity.path));
+      }
+    }
+  } on FileSystemException {
+    // Not listed: the run starts all the same.
+  }
+  beside.sort();
   final BtestExpect expect;
   try {
     expect = BtestExpect.read(expectFile);
@@ -425,6 +441,10 @@ Future<Object> btestStartRun(
           '初始状态=${row.pre} · 分支=${row.branch}',
     '2. expectFile（解析后的绝对路径）: $expectFile',
     '   $source$reason',
+    if (beside.isNotEmpty)
+      '   同目录（流程记录等，开始前先读）: '
+          '${beside.take(_besideListed).join(' · ')}'
+          '${beside.length > _besideListed ? ' …' : ''}',
     '3. Case index (${expect.cases.length}):',
     '  ${expect.indexText.replaceAll('\n', '\n  ')}',
     '4. 内容 hash: ${expect.hash ?? 'absent'}（写回基线）',
@@ -438,8 +458,14 @@ Future<Object> btestStartRun(
         commitRange: commitRange,
       ),
     ],
-    '5. 纪律：先读 $expectFile（case 与 expectFrom 都从文件来），再开始；'
-        '不边走边停，收尾带 scenarioResults / blockers / unconfirmedDiffs / '
-        'uncovered，写回之后再 btest_run_end。',
+    '5. 纪律：先读 $expectFile 和同目录的流程记录（case、流程与 expectFrom '
+        '都从文件来），再开始；小事自己定，不停下来问；只有用户才能做的一步'
+        '（上传文件、授权、工具点不动的控件）才停：把页面带到那一步，说清请用户'
+        '做什么，等「好了」再接着走同一个 run。收尾带 scenarioResults / '
+        'blockers / unconfirmedDiffs / uncovered；本轮新增的 case 都要交代，'
+        '起始索引里没走到的只计数。写回预期文件和流程记录之后再 btest_run_end。',
   ].join('\n');
 }
+
+/// The most files beside the expect file run_start names.
+const _besideListed = 20;

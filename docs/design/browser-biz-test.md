@@ -27,7 +27,7 @@
 | F8 | 待确认项只给建议、不改判定：run 后逐条研判，回填「建议」列 | §3.10 · §3.8 |
 | F9 | 两个开关（遍历 / 写）：状态行点选、取值优先级；跨重启保留见 F11 | §9.1 · §3.3 |
 | F10 | `chain` 断点可派只读子代理查明原因（`cause`）：上限 3 次/run，不可用降级 | §3.9 · §3.3 · §3.10 |
-| F11 | 模式与两个开关跨重启：三个全局键 `btest.on` / `btest.traversal` / `btest.mode` 的读入与写回 | §9.1（持久化）· §3.1 · §3.3 |
+| F11 | 模式与两个开关跨重启：`btest.onIn`（按文件夹，2026-11-05 取代全局 `btest.on`）/ `btest.traversal` / `btest.mode` 的读入与写回 | §9.1（持久化）· §3.1 · §3.3 · §12.6 |
 | F12 | 人工接管点：上传这类浏览器内动作分两情形——用户点名单独测才停手，流程中遇到就记 `uncovered` 并继续；三条禁令（不点 file input / 不写临时文件 / 不调接口绕过） | §3.11 · §3.2（`[D9]`） |
 
 | F13 | 收尾必须是门：本轮先声明业务场景（场景 × 角色 × 初始状态 × 分支），收尾逐行交代 `pass` / `fail` / `blocked` / `uncovered`，缺项拒绝收尾 | §3.3.1 · §3.3（`scenarios` / `scenarioResults`）· §3.8 |
@@ -94,7 +94,7 @@
 
 | 项 | 决定 |
 |---|---|
-| 存储 | 当前值 = 会话状态 `BtestState.on`（`lib/chat/chat_session.dart:156-162`）；跨重启落全局设置 `btest.on`（`settings.json`）：会话打开时读入、切换时写回（§9.1「持久化」，F11） |
+| 存储 | 当前值 = 会话状态 `BtestState.on`（`lib/chat/chat_session.dart:156-162`）；跨重启落设置 `btest.onIn`（`settings.json`，文件夹列表：会话的 cwd 在列表里 ⇒ 打开时就是 btest）：会话打开时读入、切换时写回（§9.1「持久化」，F11）。2026-11-05 起取代全局 `btest.on`（它让每个项目的会话都以 btest 开场，§12.6） |
 | 不发内核 | `_applyStartMode` 只认 `plan` / `normal`（`lib/kernel/thincoder/thincoder_kernel.dart:463-467`），多余键不会被误发 |
 | 显示 | composer 的 kernel 选项区（`lib/chat/composer/composer_toolbar.dart:7` 的 `_buildToolbarOf`，选项由 `ComposerPicker` 渲染，`lib/chat/composer/composer_picker.dart:34`）追加一项 `btest`，与 plan 同形 |
 | 两个 run 参数开关 | 遍历（`深度` / `广度`）与写（`只读` / `允许写`）的**当前值**存会话状态——字段落 `BtestState`（`lib/browser/btest/btest_mode.dart:18`，`_traversal` / `_write` 在 `:38-42`；写字段可空 = 未点选，规则见 §9.1「写初始」），`lib/chat/chat_session.dart` 只加访问器（`setBtest` 旁，`:190-214`）；**改值时写回全局设置，读取不写任何键**（`btest.on` / `btest.traversal` / `btest.mode`，§9.1「持久化」，F11）；控件的形态 / 位置 / 文案见 §9.1，取值优先级见 §3.3 字段表后一段 |
@@ -201,7 +201,7 @@
 | R1 空轮 | `coveredCases` 为空 ∧ `issues` 为空 | 两条一起点名——「零覆盖 + 零 issue」不是一个能交的报告 |
 | R2 issue 五字段 | 每条 `issues[]` 的 `step` / `symptom` / `evidence{kind,readout}` / `severity` / `pre` 非空（`caseId` / `expectRef` 既有判据不变） | `issues[i].<字段>` 逐条 |
 | R3 声明场景逐行交代 | 声明的每行场景恰有一条 `scenarioResults[]`：`id` 属于声明集、无重复、无未知 id；`verdict` ∈ `pass` / `fail` / `blocked` / `uncovered`；`pass` / `fail` 带非空 `evidence`，`blocked` / `uncovered` 带非空 `why` | 缺哪行声明 / 哪个 id 未知或重复 / 哪条 verdict 非法 / 哪条证据或原因为空 |
-| R4 覆盖对账（双向，合法域 = 索引 ∪ 本轮新写） | 合法域 = `run_start` 返回的索引 **∪** 本轮写回新增的 case（收尾时重读预期文件取差集）；域内每个 case 出现在 `coveredCases`，**或**被一条 `uncovered[]` 按 `caseId` 点名（`why` 非空）；`coveredCases` 与 `issues[].caseId` 只含域内 ID；**新增 case 必须带非空 `origin` 与 `expectFrom`** | 逐个点名没交代的 case ID / 哪个新 case 缺 `origin` / `expectFrom` |
+| R4 覆盖对账（合法域 = 索引 ∪ 本轮新写；拦的是本轮新增） | 合法域 = `run_start` 返回的索引 **∪** 本轮写回新增的 case（收尾时重读预期文件取差集）；**本轮新增的**每个 case 出现在 `coveredCases`，**或**被一条 `uncovered[]` 按 `caseId` 点名（`why` 非空）；起始索引里本轮没走到的 case 只在检查表第 3 项计数（「本轮未触及 N 条（只计数）」，被 `issues` / `unconfirmedDiffs` 点名的算走到），不拒（2026-11-05，§12.3）；`coveredCases` 与 `issues[].caseId` 只含域内 ID；**新增 case 必须带非空 `origin` 与 `expectFrom`** | 逐个点名没交代的新 case ID / 哪个新 case 缺 `origin` / `expectFrom` |
 | R5 fail 有据 | 任何 `verdict: fail` 的场景行，其 `caseId` 必须能在 `issues[]` 里找到同一 case 的行 | 哪一行说 fail 却没有对应问题行 |
 
 - **拒绝 = 不关 run**：不调 `state.end()`，抛 `BrowserError`，`runId` 照旧有效——补载荷后原样重提 `btest_run_end`；不重开 run、不重跑业务线。
@@ -214,7 +214,7 @@
 
 **顺序钉死**：AI 必须**先完成预期文件写回，再调 `btest_run_end`**；`btest_run_end` 只校验与收尾，不替 AI 写文件。反过来（先 run_end 再写回）会让检查表第 1 项恒为 `not written`，机械读数退化成常量告警（§3.4 · 用例 #2）。
 
-判据：**任何浏览器工具调用**都需要活动 run（只读动作也计入，这样业务线、环境、预期文件三者始终有出处）；run 结束后旧 `runId` 失效，下一次动作先报错再要求新 run。
+判据（2026-11-05 起，§12.1）：一次**测试**是一个 run；run 之间浏览器工具照样可用——同一套主机判据（`btest.allowHosts`、规则 B 的 `btest.prodHosts`），只读 / 写由状态行的写开关定（未点选 ⇒ `btest.readonly`），不计数、不进任何读数。run 结束后旧 `runId` 失效。此前的「任何浏览器调用都要活动 run」让「给我演示一下」「找到那个界面」这类请求各开一个凑场景的 run（用户 2026-11-05 会话里一天 10 个 run，多数是演示）。
 
 ### 3.4 预期文件：位置、格式与写法
 
@@ -386,6 +386,8 @@ F2.1 的六条不是都能在宿主侧机械判。判不了的写清替代，不
 `detour` 的文本是否真描述「缺什么」，宿主判不了（只判非空）——这条归走查，见 §10 第 9 条。
 
 #### 3.6.2 入口规则：一轮一次导航 + `detour` 例外通道（唯一表述）
+
+> **2026-11-05 起由 §12.2 取代**：URL 入口不再判，只记录——每次入口进 run 的 `entries[]`，收尾时在检查表第 4 项下逐条列出；`detour` 变成可选备注。下文保留作当时的判据与理由。
 
 **入口动作** = 任何带 url 的页面跳转，三条路径同判：
 
@@ -642,6 +644,8 @@ traversal=surface · mode=write · 操作真实性：入口=1（navigate=1 · op
 | B 流程中遇到 | 整条业务线跑到上传这一步，用户没点名 | **不停**：记下「该步骤需人工上传，本轮未执行」→ 继续走后面的步骤 | 进 `uncovered[]`：`branch` = 该上传步骤，`why` = `需人工上传，本轮未执行`；不是断点、不算失败、不占研判上限 |
 
 **默认 = B**：只有用户点名才算 A。读不出「用户点了这个功能」⇒ 按 B 走——写成「遇到上传就停」会把整条流程卡死在第一个上传框。
+
+> **2026-11-05 起分界改了（§12.5）**：A 的停手扩到「链要往下走就离不开的那次上传」——用户原话「我可以给你上传」；B 只留给侧枝上的上传。三条禁令不变。停手的同一机制也用于授权、工具点不动的控件这类只有用户能做的一步（卡 `[U5]`）。
 
 **共同禁令（三条，两种情形一样；`[D9]` 与 §6 F12 的验收读数逐条对应）**：
 
@@ -1071,7 +1075,7 @@ consumers: 状态行的两个 `ComposerPicker`（在 `lib/browser/btest/btest_st
 
 | 键 | 类型 | 缺省（键不存在 / 值非法） | 写入点 |
 |---|---|---|---|
-| `btest.on` | bool | `false`（= 关） | 切进 btest ⇒ `true`；切到 normal / plan ⇒ 删键（写 `null`） |
+| `btest.onIn`（2026-11-05 起；取代全局 bool `btest.on`，旧键不再读、首次写列表时删掉，§12.6） | 文件夹路径列表 | 不在列表里 = 关；非列表 ⇒ 当空 | 切进 btest ⇒ 会话的 cwd 加进列表（按路径相等去重）；切到 normal / plan ⇒ 从列表移出，空了删键（写 `null`）；没有 cwd 的会话不写 |
 | `btest.traversal` | string：`chain` / `surface` | `surface`（= `广度`） | 点「遍历」⇒ 取值的英文名（`chain` / `surface`） |
 | `btest.mode` | string：`readonly` / `write` | 键不存在 ⇒ 开关未点选（见上「写初始」一句） | 点「写」⇒ `write` / `readonly` |
 
@@ -1134,3 +1138,79 @@ consumers: 状态行的两个 `ComposerPicker`（在 `lib/browser/btest/btest_st
 **本批落地**：两条行在实施时写成 `test/integration/btest_flows_test.dart` 的 `test('5-1 …')` / `test('6-1 …')`；编号与标题逐字来自本档，不在用例文件里另编。收口报告按 `6 / 50–100` 报。
 
 **不进集成索引的两条（登记口径）**：`[D10]` 的「每步先写预期」是卡正文的文字判据（走查 + `btest_card_test`）；子代理五字段是 `subagent` 的入参形状（`btest_card_test` + 走查派发参数）。两条都从无用户可见入口、也不改变既有行断言的结果，所以只留在单测与走查，不占集成索引的行。
+
+## 12. 2026-11-05 适配：在用户的多仓工作区里用起来
+
+**来源**：用户 2026-11-05「i join repos in project, please help me, make btest model useful. Adaptation work」。读的是用户在工作区 `C:\Users\xinbo\AppData\Roaming\baocode\workspaces\hnevofieco`（`v2-marine.code-workspace`：`C:\Users\xinbo\repos\{v2-*, qa, api, docs, database, …}`）里的两段 btest 会话（thincoder 槽 3 / 23，共 9745 条历史、185 条用户消息）。用户在那里说过的测试口径：「我只看功能」「小问题不必问我」「没有就去新建」「不要用旧数据，旧数据可能是错误的！」「一个人分饰三个角色，切换og的形式来测试」「你这边是og=21、18、28和26，它那边是og=21-25，别搞混了」「下拉做不了我给你做了，你提交就行」「我可以给你上传」「重头开始做，你记得稍微记录一下流程，别下次都忘了」「为什么不看设计文档？？？」。
+
+**会话里撞到的墙（读数）**：
+
+| 墙 | 次数 / 现场 |
+|---|---|
+| 收尾 R4 拦起始索引里的旧 case | 一次收尾 41–58 条「R4 case CASE-0xx is neither covered nor uncovered with a why」；一条业务线的预期文件累到 60+ 条 case，一轮只走其中一段 |
+| 入口规则拒 URL | 「the entry must be the run's startUrl …」「record the defect first, then take the detour …」——切 og（`#og/<id>/…`）本就是 URL，用户还亲口给过直达 URL |
+| 没有 run 就拒一切浏览器调用 | 「给我演示一下」「找到那个界面我看看」都要先开一个凑场景的 run，一天 10 个 run，多数是演示 |
+| 原生下拉 | `select[name=AGT]` 点选 / 方向键 / 回车都不生效；`browser_evaluate` 写 `.value` 被 §3.6.3 拒；用户只好自己点 |
+| 工程模式的台账门 | 写预期文件、写流程记录：「write refused — ledger row not bound: row #38 does not exist …」「… row #1 is "已核销" — only a 在途 row carries writes …」 |
+| btest 全局开关 | `btest.on` 一开，所有项目的会话都以 btest 开场 |
+| Shift+Tab | 模式轮换转进 btest（两条上游 composer 用例因此挂） |
+
+### 12.1 run 之间的浏览器调用
+
+- **变更**：btest 开着、没有 run 时，浏览器工具按同一套主机判据放行（`btest.allowHosts`；写动作要 `btest.prodHosts` 非空且主机不在其中），只读 / 写由状态行的写开关定（未点选 ⇒ `btest.readonly`）。不计数，不进任何读数（`BtestGate.check`，`lib/browser/btest/btest_mode.dart`；`BtestPolicy.judge` 的 `env` 可空：run 之间没有声明的环境，生产面只看主机）。
+- **拒绝文本**：只读面的拒绝在 run 之间多一句「between runs the status line's write switch (只读) decides」，说清该去哪改。
+- **被否**：只放行只读工具——演示多半要点击；保留「无 run 即拒」——见上表读数。
+
+### 12.2 URL 入口只记录
+
+- **变更**：§3.6.2 的入口规则撤掉。每个 URL（`browser_navigate` / `browser_open` / `browser_act` 的每个 navigate 步）放行后记进 run 的 `entries[]`（工具、URL、可选备注 `detour`）；收尾检查表第 4 项下逐条列出（`入口列表：`，至多 40 条，余下计数）。读数行 `入口=` 数全部入口，`绕道=` 与「绕道对账」warning 撤掉；报告表的 `绕道` 列撤掉（13 列 ⇒ 12 列）。
+- **保留**：空 URL 照旧拒（`被拒=` 计它）；URL 的主机照旧按 allow / prod 判；文件里的 `browser_act` 步照旧拒（判不了它的 navigate 步）。
+- **卡**：`[D7]` 改成「点击、输入、按可见文字定位；用户会手输 URL 的地方用 URL（切 og、用户点名的页、回到已知界面），每个都在收尾列出」。`startUrl` 仍必填，是这一轮的起点。
+- **被否**：入口白名单（按路径模式放行）——用户工作区的直达 URL 形态多（`#og/20/Admin/PartnerManagement/partner`），名单维护代价高于收益；放行但要求 `detour`——就是撤掉的那条门。
+
+### 12.3 收尾 R4 只拦本轮新增
+
+- **变更**：§3.3.1 R4 的「域内每个 case 都要交代」改成「**本轮新增的** case 都要交代」；起始索引里本轮没走到的只在检查表第 3 项计数（`本轮新增 case N 条；起始索引 M 条，本轮未触及 K 条（只计数）`；被 `issues` / `unconfirmedDiffs` 点名的算走到）。合法域（`coveredCases` / `issues[].caseId` 只含域内 ID）与新 case 的 `origin` / `expectFrom` 要求不变（`lib/browser/btest/btest_run_end.dart`）。
+- **被否**：`btest_run_start` 加一个范围参数（声明本轮走哪些 case）——多一个要填的参数，填错照样挨拒；预期文件按段拆档——动的是用户的 QA 目录结构。
+
+### 12.4 原生下拉
+
+- **变更**：页面助手 `B.choose` 认 `select`（`lib/browser/browser_page.dart` 的 `pick`）：`browser_type` 的 `text` 按选项文字（精确 → 忽略大小写 → 唯一包含）或 `value` 选中，经原生 `selectedIndex` setter 赋值并发 `input` / `change`（React / Vue 的受控下拉都认 `change`）；不唯一 / 禁用 / 不存在 ⇒ 错误句列出可选项。助手版本 3 → 4，已开着的页面下次调用时重装。回包形与 color / date 输入同形，`lib/browser/browser_actions.dart` 不改。
+- **btest 侧**：`browser_evaluate` 写值被拒时，拒绝文本补一句该怎么做（`BtestPolicy.asTheUser`：browser_type 设字段、按文字选下拉选项；browser_click 按下）；卡新增 `[D12]`。
+- **读数**：headless Edge 实测（`.thincoder/tmp/cdp-select-probe.mjs`，2026-11-05）：按文字、按值、忽略大小写与空白、唯一包含四种都选中且绑定值正确；多义 / 禁用选项 / 不存在 / 禁用的 select 四种错误句如上；事件序列 `input → change` 每次一对。
+- **被否**：新开一个 `browser_select` 工具——`browser_type` 已经是「给字段一个值」的那个工具，color / date 先例同形；快照里列出选项——改的是上游快照形，所有会话的快照都变长。
+
+### 12.5 用户口径进卡；只有用户能做的一步
+
+- **卡新增「The user」一组 `[U1]`…`[U7]`**：只看功能（内容自拟、记住）；小事自己定；链上用自己新建的数据，旧记录只读不依；缺什么（主数据、公司、银行账户、角色）就建，需要时用 admin 账号；一人分饰各方，切 og 扮演对方，只用用户在本会话给的 og；只为用户才能做的一步停手（上传、只有用户能给的授权、工具点不动的控件），带到那一步、一句话说清、结束回合，「好了」之后在同一 run 里接着走；去路不明先读设计文档与代码（或派 explore）；把走法记进预期文件旁的流程记录（`<line>流程.md`），开始前读、收尾前更新。
+- **`btest_run_start` 返回项 2 下列出预期文件同目录的其它 `.md`**（流程记录、按日期留的副本；至多 20 个），返回项 5 的纪律句改成「先读预期文件和同目录的流程记录 … 小事自己定 … 只有用户才能做的一步才停」。读数：用户工作区里已有两份这样的记录（`qa/v2-fixturenote/全链SOP.md`、`qa/v2-timecharter/期租流程.md`），都是 agent 被用户提醒后自己写的。
+- **§3.11 的上传分界改了**：链要往下走就离不开的上传 ⇒ 按 `[U5]` 停手请用户传（原情形 A 的机制）；侧枝上的上传 ⇒ 记 `uncovered` 继续（原情形 B）。三条禁令不变。
+- **`Never:` 行**：撤「deep links」与「stopping mid-run to ask」，换成「stopping to ask what you can decide yourself」。
+- **标记不升版**：卡首行仍是 `[btest-mode-card v1]`。升版会让 `D = 卡 − 中和行` 跨版本计数失真（旧卡的中和行带 v1，新卡带 v2）；代价是**已经带着旧卡的会话要把 btest 关一次再开**才拿到新卡。
+
+### 12.6 btest 开关按项目记
+
+- **变更**：`btest.on`（全局 bool）⇒ `btest.onIn`（文件夹列表；§9.1 持久化表）。会话的文件夹 = `BtestState.key` 的 cwd 段。旧键不再读，第一次写列表时删掉。遍历与写两个开关仍是全局键。
+- **迁移**：旧键不推断到任何文件夹（读不出当时是哪个项目）。用户的 `settings.json` 由本批直接补上 `btest.onIn: ["C:\\Users\\xinbo\\AppData\\Roaming\\baocode\\workspaces\\hnevofieco"]`，那个工作区的会话打开时照旧是 btest。
+
+### 12.7 Shift+Tab 跳过 btest
+
+- **变更**：`_nextModeOf`（`lib/chat/composer/composer_menu.dart`）只轮换内核自己的模式；当前是 btest 时回到第一个。btest 只从模式菜单选。上游用例「Shift+Tab in the input goes through the modes」随之回到上游期望；「mode picker opens on press …」的方向键多按一次绕过菜单末尾的 btest（fork 登记表第 3 节 `test/composer_test.dart` 行）。
+
+### 12.8 工程模式的门在 btest 期间让开（`testMode`）
+
+- **变更**：thincoder 侧新增 configOption `testMode`（外仓 `docs/cli/design/ACP-CLIENT.md` §5.3、批档 `docs/batches/2026-11-05-btest-test-mode.md`）：开 ⇒ 工程模式在位则在内存里暂停（写门不绑台账行、plan 不拒）；关 ⇒ 还原。槽的 `engineering` 照记真值。BaoCode 在每个 `session/prompt` 之前按 `BtestMode.onFor` 对齐（`_syncTestModeOf`，`lib/kernel/thincoder/thincoder_choices.dart`；调用点 `thincoder_turns.dart` 的 `_deliverOf`）：只在 agent 报了这一项且现值不同才发；旧 CLI 没有这一项 ⇒ 什么也不发。
+- **被否**：客户端直接写 `engineering`——槽会存成 `false`，重启后没人知道该还原成什么；卡里教模型带 `ledger` / `project` 参数——测试记录没有在途的台账行可绑；让用户在终端 `/eng`——两个进程，关了就落槽。
+
+### 12.9 用例与读数（2026-11-05）
+
+| 面 | 用例 | 读数 |
+|---|---|---|
+| 判据与开关 | `test/browser/btest_policy_test.dart`（run 之间的判据；URL 记录与备注；`act=2`；主机拒；`btest.onIn` 按文件夹 / 旧键不读且首写删除）· `btest_tool_gate_test.dart` · `btest_expect_file_test.dart`（入口列表） | 全过 |
+| 收尾 | `test/browser/btest_run_end_test.dart` #53（新 case 拦、旧 case 计数）· #53b（被 issue 点名的不算未触及）· `test/integration/btest_flows_test.dart` 5-1 / 6-1 | 全过 |
+| 卡 | `test/browser/btest_card_test.dart`（48 个标签各一次；`[U1]`…`[U7]`；URL 句；上传分界） | 全过 |
+| 流程记录 | `test/browser/btest_run_end_test.dart`「run_start requires and freezes the declared scenario matrix」（同目录的 `<line>流程.md` 列在返回项 2 下，预期文件本身与 `.txt` 不列） | 过 |
+| 状态行 | `test/chat/composer_btest_status_test.dart`（会话带 cwd，`btest.onIn` 写回与读回） | 全过 |
+| Shift+Tab | `test/composer_test.dart` 全档 | 59 过（此前 2 挂） |
+| testMode | `test/kernel/thincoder_kernel_test.dart` 两条新用例（btest 开 ⇒ prompt 前发 `testMode: true`、不变不重发、关 ⇒ `false`；无此项的 agent 什么也不发）；外仓 TM-1…TM-5 | 154 过；外仓 5 过 |
+| 下拉 | headless Edge 探针（§12.4） | 10 项全过 |

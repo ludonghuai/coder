@@ -597,7 +597,8 @@ void main() {
       expect(state.run, isNotNull, reason: 'a refusal never closes the run');
     });
 
-    test('a detour in the run without its report line is counted out (§3.3 4-④)', () async {
+    test('the pages reached by URL are listed under check 4, notes with them '
+        '(§3.3 4-④)', () async {
       await begin();
       BtestGate.check(
         'browser_navigate',
@@ -618,8 +619,17 @@ void main() {
         targeted: true,
       );
       final answer = '${await BtestTools.all.last.run(report(), call)}';
-      expect(answer, contains('绕道对账'));
-      expect(answer, contains('run 记了 1 条'));
+      expect(answer, contains('入口=2（navigate=2'));
+      expect(answer, contains('   入口列表：'));
+      expect(answer, contains('   1. browser_navigate $startUrl\n'));
+      expect(
+        answer,
+        contains(
+          '   2. browser_navigate https://booking.dev.example.com/agreement '
+          '— 无菜单入口',
+        ),
+      );
+      expect(answer, isNot(contains('绕道')), reason: 'no reconcile to fail');
     });
 
     test('an end without a run, or for another run, is refused', () async {
@@ -642,7 +652,7 @@ void main() {
             'uncovered': <Object?>[],
           }, call),
         ),
-        contains('no active run'),
+        contains('no active run in this session'),
       );
       await begin();
       expect(

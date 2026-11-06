@@ -19,6 +19,7 @@ class ThincoderMock implements ThincoderTransport {
     this.authRequired = false,
     this.askPermission = false,
     this.autoApprove,
+    this.testMode,
     this.models,
     this.currentModel,
     this.thinkingLevels,
@@ -64,6 +65,10 @@ class ThincoderMock implements ThincoderTransport {
 
   /// The auto-approval switch it reports; null: an older CLI's, without it.
   bool? autoApprove;
+
+  /// btest's test mode it reports (the fork's option: engineering mode's
+  /// gates stand aside); null: a CLI without it.
+  bool? testMode;
 
   /// What `model.options` / `thinkingLevel.options` list; null: today's.
   final List<String>? models;
@@ -405,6 +410,8 @@ class ThincoderMock implements ThincoderTransport {
         _thinking = value != 'off';
       case 'autoApprove' when value is bool && autoApprove != null:
         autoApprove = value;
+      case 'testMode' when value is bool && testMode != null:
+        testMode = value;
       case 'mode' when value == 'plan' || value == 'normal':
         _mode = '$value';
       default:
@@ -466,6 +473,13 @@ class ThincoderMock implements ThincoderTransport {
         'name': 'Auto-approve tools',
         'type': 'boolean',
         'currentValue': auto,
+      },
+    if (testMode case final test?)
+      {
+        'id': 'testMode',
+        'name': 'Test mode',
+        'type': 'boolean',
+        'currentValue': test,
       },
   ];
 

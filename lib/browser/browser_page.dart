@@ -365,10 +365,10 @@ List<String> _troubles(BrowserTab tab, DateTime since) {
 
 /// The page helper, put in a page once (window.__bao).
 const _pageScript = r'''
-if (!window.__bao || window.__bao.v !== 3) (() => {
+if (!window.__bao || window.__bao.v !== 4) (() => {
   let next = 0;
   for (const e of document.querySelectorAll('[data-bao-ref]')) next = Math.max(next, Number(e.getAttribute('data-bao-ref')) || 0);
-  const B = window.__bao = { v: 3, next, changed: Date.now() };
+  const B = window.__bao = { v: 4, next, changed: Date.now() };
   try {
     new MutationObserver((records) => {
       for (const r of records) {
@@ -653,8 +653,39 @@ if (!window.__bao || window.__bao.v !== 3) (() => {
     color: 'a color: #rrggbb, or as CSS says it', date: '2026-11-05', time: '14:30',
     'datetime-local': '2026-11-05T14:30', month: '2026-11', week: '2026-W45', range: 'a number',
   };
+  // A dropdown's (a select's) option, named by its words or its value: the
+  // list it opens is the system's too. Picked as choosing it would, with
+  // its events; what does not name one option says which there are.
+  const pick = (e, text) => {
+    if (e.disabled) return { error: 'It is disabled.' };
+    const want = norm(text);
+    const lower = want.toLowerCase();
+    const options = [...e.options];
+    const words = (o) => norm(o.label || o.text);
+    let one = options.find((o) => words(o) === want) ||
+      options.find((o) => o.value === String(text).trim()) ||
+      options.find((o) => words(o).toLowerCase() === lower);
+    const listed = (some) => some.map((o) => words(o) || o.value).slice(0, 20).join(' | ') +
+      (some.length > 20 ? ' …' : '');
+    if (!one && lower) {
+      const some = options.filter((o) => words(o).toLowerCase().includes(lower));
+      if (some.length > 1) return { error: 'Several options say "' + want + '": ' + listed(some) + '. Say which.' };
+      one = some[0];
+    }
+    if (!one || one.disabled) {
+      const open = options.filter((o) => !o.disabled && (words(o) || o.value));
+      return { error: (one ? 'Its option "' + words(one) + '" is disabled. ' : 'No option says "' + want + '". ') +
+        'Its options: ' + (open.length ? listed(open) : 'none') + '.' };
+    }
+    e.focus();
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'selectedIndex').set.call(e, options.indexOf(one));
+    e.dispatchEvent(new Event('input', { bubbles: true }));
+    e.dispatchEvent(new Event('change', { bubbles: true }));
+    return { value: words(one) || one.value };
+  };
   B.choose = (r, text) => {
     const e = document.querySelector('[data-bao-ref="' + r + '"]');
+    if (e && e.tagName === 'SELECT') return pick(e, text);
     if (!e || e.tagName !== 'INPUT' || !(e.type in CHOSEN)) return null;
     let v = String(text).trim();
     if (e.type === 'color') {

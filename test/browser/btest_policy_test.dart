@@ -165,6 +165,11 @@ void main() {
         'expression': "document.querySelector('#a').value='1'",
       });
       expect(said, contains('may not write values from a script'));
+      expect(
+        said,
+        contains("browser_type sets a field, and picks a dropdown's option"),
+        reason: 'the refusal says what to do instead',
+      );
       expect(state.run!.scriptsDenied, 1, reason: '4-② counts it');
       expect(
         refusal('browser_evaluate', {
@@ -236,11 +241,38 @@ void main() {
       );
     });
 
-    test('without a run every browser call is refused (#7)', () {
+    test('between runs the same rules judge, by the write switch, and '
+        'nothing is counted (#7)', () {
+      // No run: a look passes; a click follows the write switch, unpicked
+      // here, so btest.readonly (true) stands.
+      expect(refusal('browser_snapshot', {'tabId': 1}), isNull);
+      final said = refusal('browser_click', {'tabId': 1, 'text': '提交'});
+      expect(said, contains('mode: readonly refuses write actions'));
+      expect(said, contains("between runs the status line's write switch"));
+      state.write = true;
+      expect(refusal('browser_click', {'tabId': 1, 'text': '提交'}), isNull);
+      // The host rules are the run's own.
       expect(
-        refusal('browser_snapshot', {'tabId': 1}),
-        contains('btest_run_start'),
+        refusal(
+          'browser_snapshot',
+          {'tabId': 1},
+          hosts: const ['other.example.com'],
+        ),
+        contains('not in btest.allowHosts'),
       );
+      BtestSettings.values![BtestSettings.allowHostsKey] = [
+        host,
+        'prod.example.com',
+      ];
+      expect(
+        refusal(
+          'browser_click',
+          {'tabId': 1, 'text': '提交'},
+          hosts: const ['prod.example.com'],
+        ),
+        contains('production host'),
+      );
+      expect(state.run, isNull, reason: 'no run was made for it');
     });
 
     test('a session without btest is untouched ()', () {
@@ -254,92 +286,71 @@ void main() {
   });
 
   group('the entry (§3.6.2)', () {
-    test('the first one must be the run startUrl (#17 前段)', () {
+    test('every URL passes and is recorded, its note with it (#17, #18)', () {
       start();
       expect(
         refusal('browser_navigate', {
           'tabId': 1,
           'url': 'https://booking.dev.example.com/other',
         }),
-        contains('startUrl'),
-      );
-      expect(
-        refusal('browser_navigate', {'tabId': 1, 'url': '$startUrl/'}),
         isNull,
-        reason: 'a trailing slash is not a different entry',
+        reason: 'not the startUrl: a URL is no rule of its own',
       );
-      expect(state.run!.entries.single.tool, 'browser_navigate');
-    });
-
-    test('a detour on the first entry is not read as one (入口=1)', () {
-      start();
       expect(
         refusal('browser_navigate', {
           'tabId': 1,
-          'url': startUrl,
-          'detour': 'no defect on the first entry',
+          'url': 'https://booking.dev.example.com/#og/21/booking',
+          'detour': '切到 og 21（船代）',
         }),
         isNull,
       );
-      expect(state.run!.declared.length, 1);
-      expect(state.run!.detours, isEmpty);
-      expect(state.run!.truthLine(noVisibleText: 0), contains('入口=1'));
-      expect(state.run!.truthLine(noVisibleText: 0), contains('绕道=0'));
-    });
-
-    test('a second one without detour is refused (#17)', () {
-      start();
-      refusal('browser_navigate', {'tabId': 1, 'url': startUrl});
-      final said = refusal('browser_navigate', {
-        'tabId': 1,
-        'url': 'https://booking.dev.example.com/agreement',
-      });
-      expect(said, contains('detour'));
-      expect(state.run!.entriesDenied, 1);
-      expect(state.run!.entries.length, 1);
-    });
-
-    test('a second one with detour passes and is recorded (#18)', () {
-      start();
-      refusal('browser_navigate', {'tabId': 1, 'url': startUrl});
-      const detour = '货代协议案无菜单入口，只能手输 URL';
       expect(
-        refusal('browser_navigate', {
-          'tabId': 1,
-          'url': 'https://booking.dev.example.com/agreement',
-          'detour': detour,
-        }),
-        isNull,
+        [for (final entry in state.run!.entries) entry.line],
+        [
+          'browser_navigate https://booking.dev.example.com/other',
+          'browser_navigate https://booking.dev.example.com/#og/21/booking '
+              '— 切到 og 21（船代）',
+        ],
       );
-      expect(state.run!.detours.single.detour, detour);
-      expect(state.run!.entries.length, 2);
-      // §3.8's line: one declared entry, the detour read apart (入口=1 …
-      // 绕道=1), so a legal detour is not reported as a second entry.
-      expect(
-        state.run!.truthLine(noVisibleText: 0),
-        contains('入口=1（navigate=1'),
-      );
-      expect(state.run!.truthLine(noVisibleText: 0), contains('绕道=1'));
+      expect(state.run!.entriesDenied, 0);
+      final line = state.run!.truthLine(noVisibleText: 0);
+      expect(line, contains('入口=2（navigate=2'));
+      expect(line, isNot(contains('绕道')));
     });
 
     test('browser_act navigate steps and browser_open count too (KD-17)', () {
       start();
-      expect(
-        refusal('browser_open', {'url': startUrl}),
-        isNull,
-        reason: 'the first entry may come from browser_open',
-      );
+      expect(refusal('browser_open', {'url': startUrl}), isNull);
       expect(
         refusal('browser_act', {
           'tabId': 1,
           'steps': [
             {'action': 'navigate', 'url': 'https://booking.dev.example.com/x'},
+            {'action': 'click', 'text': '提交'},
+            {'action': 'navigate', 'url': 'https://booking.dev.example.com/y'},
           ],
         }),
-        contains('detour'),
-        reason: 'a navigate step is an entry, and none carries a detour',
+        isNull,
       );
-      expect(state.run!.entries.length, 1);
+      expect(
+        [for (final entry in state.run!.entries) entry.tool],
+        ['browser_open', 'browser_act', 'browser_act'],
+        reason: 'each navigate step is an entry of its own',
+      );
+      expect(state.run!.truthLine(noVisibleText: 0), contains('act=2'));
+    });
+
+    test('a URL is judged by its host: outside allowHosts it is refused', () {
+      start();
+      expect(
+        refusal(
+          'browser_navigate',
+          {'tabId': 1, 'url': 'https://other.example.com/'},
+          hosts: const ['other.example.com'],
+        ),
+        allOf(contains('other.example.com'), contains('btest.allowHosts')),
+      );
+      expect(state.run!.entries, isEmpty, reason: 'a refused one is none');
     });
 
     test('back, forward and reload are not entries', () {
@@ -650,7 +661,7 @@ void main() {
       state.on = true;
       state.traversal = BtestTraversal.chain;
       state.write = true;
-      expect(BtestSettings.values![BtestSettings.onKey], isTrue);
+      expect(BtestSettings.values![BtestSettings.onInKey], [sandbox.path]);
       expect(BtestSettings.values![BtestSettings.traversalKey], 'chain');
       expect(BtestSettings.values![BtestSettings.modeKey], 'write');
 
@@ -675,7 +686,7 @@ void main() {
       'missing or illegal keys fall back, and reading writes none (#44)',
       () {
         final keys = BtestSettings.values!
-          ..remove(BtestSettings.onKey)
+          ..remove(BtestSettings.onInKey)
           ..remove(BtestSettings.traversalKey)
           ..remove(BtestSettings.modeKey);
         BtestMode.reset();
@@ -686,14 +697,14 @@ void main() {
         expect(fresh.writePicked, isFalse);
         expect(
           keys.keys,
-          isNot(contains(BtestSettings.onKey)),
+          isNot(contains(BtestSettings.onInKey)),
           reason: 'opening a conversation writes none',
         );
         expect(keys.keys, isNot(contains(BtestSettings.traversalKey)));
         expect(keys.keys, isNot(contains(BtestSettings.modeKey)));
 
         // Illegal values read as the key's absence, and are left as they are.
-        keys[BtestSettings.onKey] = 'yes';
+        keys[BtestSettings.onInKey] = 'yes';
         keys[BtestSettings.traversalKey] = 'depth';
         keys[BtestSettings.modeKey] = 'maybe';
         final again = BtestMode.of(sandbox.path, '44b')..fromSettings();
@@ -701,25 +712,69 @@ void main() {
         expect(again.traversal, BtestTraversal.surface);
         expect(again.write, isFalse);
         expect(again.writePicked, isFalse);
-        expect(keys[BtestSettings.onKey], 'yes', reason: 'not rewritten');
+        expect(keys[BtestSettings.onInKey], 'yes', reason: 'not rewritten');
         expect(keys[BtestSettings.traversalKey], 'depth');
         expect(keys[BtestSettings.modeKey], 'maybe');
       },
     );
 
-    test('leaving btest removes the key; a restart is off (#45)', () {
+    test('leaving btest takes the folder out; a restart is off (#45)', () {
       final keys = BtestSettings.values!;
       final live = BtestMode.of(sandbox.path, '45')..fromSettings();
       live.on = true;
-      expect(keys[BtestSettings.onKey], isTrue);
+      expect(keys[BtestSettings.onInKey], [sandbox.path]);
       live.on = false;
       expect(
-        keys.containsKey(BtestSettings.onKey),
+        keys.containsKey(BtestSettings.onInKey),
         isFalse,
-        reason: 'the key is removed, not set false',
+        reason: 'the last folder out removes the key',
       );
       final again = BtestMode.of(sandbox.path, '45b')..fromSettings();
       expect(again.on, isFalse, reason: 'no old true is read back');
+    });
+
+    test('btest is on per folder: a chat elsewhere starts without it', () {
+      final keys = BtestSettings.values!;
+      final other = p.join(sandbox.path, 'other-project');
+      BtestMode.of(sandbox.path, 'a').on = true;
+      expect(
+        (BtestMode.of(other, 'b')..fromSettings()).on,
+        isFalse,
+        reason: 'another project',
+      );
+      expect(
+        (BtestMode.of(sandbox.path, 'c')..fromSettings()).on,
+        isTrue,
+        reason: 'the same project, another chat',
+      );
+      BtestMode.of(other, 'd').on = true;
+      expect(keys[BtestSettings.onInKey], [sandbox.path, other]);
+      BtestMode.of(sandbox.path, 'e').on = false;
+      expect(keys[BtestSettings.onInKey], [other], reason: 'one folder out');
+      // A chat with no folder keeps nothing.
+      BtestMode.of('', 'f').on = true;
+      expect(keys[BtestSettings.onInKey], [other]);
+    });
+
+    test('the old global key is read no more, and goes at the first write', () {
+      // The folder setUp turned btest on in is taken out first: only the old
+      // key is left to read.
+      final keys = BtestSettings.values!
+        ..remove(BtestSettings.onInKey)
+        ..[BtestSettings.legacyOnKey] = true;
+      expect(
+        (BtestMode.of(sandbox.path, 'g')..fromSettings()).on,
+        isFalse,
+        reason: 'btest.on turned every project on: not read',
+      );
+      expect(
+        keys[BtestSettings.legacyOnKey],
+        isTrue,
+        reason: 'reading writes none',
+      );
+      BtestMode.of(sandbox.path, 'h').on = true;
+      expect(keys.containsKey(BtestSettings.legacyOnKey), isFalse);
+      expect(keys[BtestSettings.onInKey], [sandbox.path]);
     });
 
     test(
@@ -742,14 +797,14 @@ void main() {
         live.write = true;
         // A read queued behind the three writes: they have landed by now.
         await files.settings.load();
-        expect(files.settings[BtestSettings.onKey], isTrue);
+        expect(files.settings[BtestSettings.onInKey], [data.path]);
         expect(files.settings[BtestSettings.traversalKey], 'chain');
         expect(files.settings[BtestSettings.modeKey], 'write');
 
         live.on = false;
         await files.settings.load();
         expect(
-          files.settings.values.containsKey(BtestSettings.onKey),
+          files.settings.values.containsKey(BtestSettings.onInKey),
           isFalse,
           reason: 'leaving btest deletes the key',
         );

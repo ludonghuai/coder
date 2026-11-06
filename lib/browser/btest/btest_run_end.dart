@@ -160,9 +160,42 @@ Future<Object> btestEndRun(
       );
     }
   }
+  // R4 holds the cases this round added: each covered, or in uncovered with
+  // a why. The start index's cases are what earlier rounds left — a round
+  // walks the part of the line it was started for, and the ones it did not
+  // reach are counted here, never a refusal.
+  final uncoveredInput = input['uncovered'];
+  final uncoveredRows = [
+    if (uncoveredInput is List)
+      for (final one in uncoveredInput)
+        if (one is Map) one.cast<String, Object?>(),
+  ];
+  bool answered(String id) =>
+      covered.contains(id) ||
+      uncoveredRows.any(
+        (one) => one['caseId'] == id && btestText(one['why']) != null,
+      );
+  for (final one in newCases) {
+    if (!answered(one.id)) {
+      gate.add(
+        'R4 new case ${one.id} is neither covered nor uncovered with a why',
+      );
+    }
+  }
+  // A case an issue or a diff names was walked too, though not covered.
+  final named = {
+    for (final issue in issues) ?btestText(issue['caseId']),
+    for (final diff in diffs) ?btestText(diff['caseId']),
+  };
+  final untouched = [
+    for (final one in run.cases)
+      if (!answered(one.id) && !named.contains(one.id)) one.id,
+  ];
   checks.add(
     '3. 覆盖对账：coveredCases ${covered.length - outside.length}/'
-    '${covered.length} 在合法域；issues ${issues.length} 条，'
+    '${covered.length} 在合法域；本轮新增 case ${newCases.length} 条；'
+    '起始索引 ${run.cases.length} 条，本轮未触及 ${untouched.length} 条（只计数）；'
+    'issues ${issues.length} 条，'
     '${unpointed.isEmpty ? 'caseId 与 expectRef 都在' : '${unpointed.length} 处不合格'}；'
     'unconfirmedDiffs ${diffs.length} 条，'
     '${unconfirmed.isEmpty ? 'caseId 与 kind 都在' : '${unconfirmed.length} 处不合格'}',
@@ -193,21 +226,6 @@ Future<Object> btestEndRun(
   }
   warnings.addAll(unpointed);
   warnings.addAll(unconfirmed);
-
-  final uncoveredInput = input['uncovered'];
-  final uncoveredRows = [
-    if (uncoveredInput is List)
-      for (final one in uncoveredInput)
-        if (one is Map) one.cast<String, Object?>(),
-  ];
-  for (final id in index) {
-    final explained = uncoveredRows.any(
-      (one) => one['caseId'] == id && btestText(one['why']) != null,
-    );
-    if (!covered.contains(id) && !explained) {
-      gate.add('R4 case $id is neither covered nor uncovered with a why');
-    }
-  }
 
   // R3: every frozen declaration is answered exactly once, with a valid
   // verdict and its required evidence / reason.
@@ -252,20 +270,8 @@ Future<Object> btestEndRun(
     }
   }
 
-  // 4. What the run itself counted. 入口 is the declared entry alone; a
-  // detour is a legal entry and is read apart (§3.8).
-  final declared = run.declared;
-  if (declared.isEmpty) {
-    warnings.add(
-      '入口=0 — the run did not enter by its startUrl '
-      '(${run.startUrl})',
-    );
-  } else if (!BtestPolicy.sameUrl(declared.first.url, run.startUrl)) {
-    warnings.add(
-      '入口=${declared.first.url} is not the run\'s startUrl '
-      '(${run.startUrl})',
-    );
-  }
+  // 4. What the run itself counted. 入口 is every page reached by URL, each
+  // listed below the check (§3.8): read, never refused.
   if (run.scriptsDenied > 0) {
     warnings.add(
       'evaluate 写值被拒 ${run.scriptsDenied} 次 — that is the reading of '
@@ -276,16 +282,6 @@ Future<Object> btestEndRun(
     warnings.add(
       'replay 被拒 ${run.replayDenied} 次 — that is the reading of a script '
       'bypassing the form, not a pass',
-    );
-  }
-  final detoured = [
-    for (final issue in issues)
-      if (btestText(issue['detour']) != null) issue,
-  ];
-  if (run.detours.length != detoured.length) {
-    warnings.add(
-      '绕道对账：run 记了 ${run.detours.length} 条，报告绕道行 '
-      '${detoured.length} 条（差 ${(run.detours.length - detoured.length).abs()}）',
     );
   }
   // 4-③'s reconcile: the run's fallback count is what the payload's
@@ -302,7 +298,15 @@ Future<Object> btestEndRun(
       '（差 ${(run.fallbackTargets - noVisible.length).abs()}）',
     );
   }
-  checks.add('4. ${run.truthLine(noVisibleText: noVisible.length)}');
+  checks.add(
+    [
+      '4. ${run.truthLine(noVisibleText: noVisible.length)}',
+      if (run.entryLines.isNotEmpty) ...[
+        '   入口列表：',
+        for (final line in run.entryLines) '   $line',
+      ],
+    ].join('\n'),
+  );
 
   if (gate.isNotEmpty) {
     throw BrowserError(

@@ -2,6 +2,7 @@ import 'package:baocode/browser/btest/btest_mode.dart';
 import 'package:baocode/browser/btest/btest_policy.dart';
 import 'package:baocode/chat/chat_session.dart';
 import 'package:baocode/chat/composer/composer.dart';
+import 'package:baocode/kernel/agent_kernel.dart' show KernelContext;
 import 'package:baocode/l10n/l10n.dart';
 import 'package:baocode/theme/app_theme.dart';
 import 'package:flutter/material.dart';
@@ -12,6 +13,9 @@ import 'package:flutter_test/flutter_test.dart';
 // writes the switch back and a restart reads the three keys again (F11), and
 // that a run under way keeps its own values.
 void main() {
+  /// The folder the chats run in: btest is kept on per folder (F11).
+  const project = KernelContext(cwd: '/project');
+
   setUp(() {
     BtestMode.reset();
     BtestSettings.values = {
@@ -32,7 +36,7 @@ void main() {
     Locale locale = const Locale('zh'),
     void Function(ChatSession session)? before,
   }) async {
-    final session = ChatSession(historyCount: 0);
+    final session = ChatSession(historyCount: 0, kernelContext: project);
     addTearDown(session.dispose);
     session.setBtest(true);
     before?.call(session);
@@ -109,11 +113,9 @@ void main() {
     await openSwitch(tester, 'btest-write-switch');
     await pick(tester, 'write');
     expect(find.text('btest · not started · chain · write'), findsOne);
-    expect(
-      BtestSettings.values![BtestSettings.onKey],
-      isTrue,
-      reason: 'the flask wrote btest.on',
-    );
+    expect(BtestSettings.values![BtestSettings.onInKey], [
+      '/project',
+    ], reason: 'the flask wrote the folder into btest.onIn');
     expect(BtestSettings.values![BtestSettings.traversalKey], 'chain');
     expect(BtestSettings.values![BtestSettings.modeKey], 'write');
 
@@ -158,7 +160,7 @@ void main() {
     tester,
   ) async {
     final session = await pumpComposer(tester, locale: const Locale('en'));
-    expect(BtestSettings.values![BtestSettings.onKey], isTrue);
+    expect(BtestSettings.values![BtestSettings.onInKey], ['/project']);
 
     session.setBtest(false);
     await tester.pump();
@@ -168,12 +170,12 @@ void main() {
       reason: 'the line goes with the mode',
     );
     expect(
-      BtestSettings.values!.containsKey(BtestSettings.onKey),
+      BtestSettings.values!.containsKey(BtestSettings.onInKey),
       isFalse,
-      reason: 'the key is removed, not set false',
+      reason: 'the last folder out removes the key',
     );
 
-    final again = ChatSession(historyCount: 0);
+    final again = ChatSession(historyCount: 0, kernelContext: project);
     addTearDown(again.dispose);
     expect(again.btestOn, isFalse, reason: 'no old true is read back');
   });

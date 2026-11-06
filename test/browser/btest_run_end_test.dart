@@ -131,10 +131,18 @@ void main() {
     expect(said, contains('scenarios[2].role is empty'));
     expect(state.run, isNull);
 
+    // The flow notes beside the expect file are named for the run to read
+    // first; the expect file itself and other kinds of file are not.
+    File(
+      p.join(expectFile.parent.path, '$line流程.md'),
+    ).writeAsStringSync('# $line 流程\n');
+    File(p.join(expectFile.parent.path, 'notes.txt')).writeAsStringSync('x');
     final answer = await start(count: 2);
     expect(answer, contains('S1 · 场景=场景 1 · 角色=角色 1'));
     expect(answer, contains('S2 · 场景=场景 2 · 角色=角色 2'));
     expect(state.run!.scenarios.map((one) => one.id), ['S1', 'S2']);
+    expect(answer, contains('同目录（流程记录等，开始前先读）: $line流程.md\n'));
+    expect(answer, isNot(contains('notes.txt')));
   });
 
   test(
@@ -219,22 +227,61 @@ void main() {
   );
 
   test(
-    '#53 an index case needs coverage or a reasoned uncovered row',
+    '#53 a case this round added needs coverage or a reasoned uncovered row',
     () async {
       await start();
+      // The round adds one case to the file, and covers neither it nor
+      // CASE-003 of the start index.
+      writeExpect(
+        '${expectFile.readAsStringSync()}\n'
+        '## CASE-004 本轮新增\n'
+        '- source: new\n'
+        '- origin: 2026-11-05 本轮走查\n'
+        '- expectFrom: 强 · docs/vibe-coding.md §3.2\n',
+      );
       final covered = ['CASE-001', 'CASE-002'];
       final said = await refusal(
         () => BtestTools.all.last.run(report({'coveredCases': covered}), call),
       );
-      expect(said, contains('R4 case CASE-003'));
+      expect(said, contains('R4 new case CASE-004 is neither covered'));
+      expect(
+        said,
+        isNot(contains('CASE-003')),
+        reason: 'a start-index case left untouched is no refusal',
+      );
       expect(state.run, isNotNull);
       final answer = await end({
         'coveredCases': covered,
         'uncovered': [
-          {'caseId': 'CASE-003', 'branch': '改单', 'why': '缺账号'},
+          {'caseId': 'CASE-004', 'branch': '改单', 'why': '缺账号'},
         ],
       });
       expect(answer, contains('closed'));
+      expect(
+        answer,
+        contains('本轮新增 case 1 条；起始索引 3 条，本轮未触及 1 条（只计数）'),
+        reason: 'CASE-003 is counted, CASE-004 is answered by uncovered',
+      );
+    },
+  );
+
+  test(
+    '#53b a start-index case named by an issue is not counted untouched',
+    () async {
+      await start();
+      final answer = await end({
+        'coveredCases': ['CASE-001'],
+        'issues': [issue('CASE-002')],
+        'scenarioResults': [
+          {
+            'id': 'S1',
+            'verdict': 'fail',
+            'evidence': '提交后状态未推进',
+            'caseId': 'CASE-002',
+          },
+        ],
+      });
+      expect(answer, contains('本轮未触及 1 条（只计数）'), reason: 'CASE-003 alone');
     },
   );
 

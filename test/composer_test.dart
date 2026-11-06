@@ -1387,7 +1387,9 @@ void main() {
     expect(menuRow, findsOneWidget);
     final focus = tester.widget<MarkdownEditor>(composerEditor()).focusNode!;
     expect(focus.hasFocus, isTrue);
-    await pressKey(tester, LogicalKeyboardKey.arrowDown); // Plan -> Agent
+    // Plan -> btest (the fork's, last in the menu) -> Agent, round the end.
+    await pressKey(tester, LogicalKeyboardKey.arrowDown);
+    await pressKey(tester, LogicalKeyboardKey.arrowDown);
     await pressKey(tester, LogicalKeyboardKey.enter);
     await settleAnimations(tester);
     expect(menuRow, findsNothing);

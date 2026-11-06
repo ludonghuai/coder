@@ -98,13 +98,26 @@ void main() {
   );
 
   test(
-    'btest on with no run refuses, naming the tool and the run gate',
+    'btest on with no run judges by the host and the write switch',
     () async {
       open(run: false);
-      final message = await refusal('browser_click', {'tabId': 5});
+      expect(
+        await refusal('browser_snapshot', {'tabId': 5}),
+        isNull,
+        reason: 'a look needs no run',
+      );
+      final message = await refusal('browser_click', {'tabId': 5, 'ref': 1});
       expect(message, contains('browser_click'));
-      expect(message, contains('no active run'));
-      expect(message, contains('btest_run_start'));
+      expect(
+        message,
+        contains("between runs the status line's write switch"),
+        reason: 'btest.readonly stands while the switch is unpicked',
+      );
+      expect(
+        await refusal('browser_snapshot', {'tabId': 6}),
+        allOf(contains('evil.example.com'), contains('btest.allowHosts')),
+        reason: 'the host rules are the same without a run',
+      );
     },
   );
 
@@ -130,8 +143,8 @@ void main() {
       expect(message, contains('evil.example.com'));
       expect(
         message,
-        contains('startUrl'),
-        reason: 'the unmet gate is the run entry, not the allow list',
+        contains('btest.allowHosts'),
+        reason: 'a URL is no rule of its own: its host is what is judged',
       );
       expect(asked, isEmpty, reason: 'an entry url needs no tab lookup');
     },

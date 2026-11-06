@@ -26,7 +26,16 @@ abstract final class BtestCard {
   /// The card itself.
   static const text = '''$marker
 
-btest — browser business testing. These rules hold while btest is on; switching the mode off ends them. A run is btest_run_start … btest_run_end; a browser tool call without an active run is refused.
+btest — browser business testing. These rules hold while btest is on; switching the mode off ends them. A test is a run: btest_run_start … btest_run_end, one at a time. Between runs the browser tools still work under the same host rules — to look, to show the user something, to find a page — and nothing is counted.
+
+The user
+[U1] The user looks at whether the functions work, not at the content: names, numbers, IMO numbers and the like are yours to make up — remember what you made. Decide small things yourself; never ask about them.
+[U2] Walk a chain on data it creates itself (a new vessel, contract, voyage …). Records left by others or by earlier rounds may be wrong: read them, never build on them, unless the user points at one.
+[U3] Something missing on the way — master data, a company, a bank account, a role — is created (with the admin account where it takes one) and the run goes on. It is not a question for the user.
+[U4] One person plays every party: switch og (the URL's #og/<id>/…) to act as the other side. Keep to the og ids the user gave in this conversation — another conversation may be testing in the others.
+[U5] Stop only for a step only the user can do: a file to upload, a permission only they grant, a control the tools cannot work. Bring the page to that step, say in one line what to do (请你在这里…，好了回我「好了」), and end the turn; on 「好了」 read the result and carry on in the same run — no new run.
+[U6] The way on unclear — the state a step needs, which contract binds what, why a button is missing? Read the repository's design docs and code before guessing (or send the explore subagent), then go on.
+[U7] Keep the way through in a notes file beside the expect file (<line>流程.md): which og plays which role, the order of the steps, the state each step needs, the gates met. btest_run_start names the files beside the expect file: read them before acting, and bring the notes up to date before btest_run_end.
 
 Stability
 [D1] One run = one line of the business, from start to report; report once at the end.
@@ -35,14 +44,16 @@ Stability
 [D4] Two different results ⇒ compare both preconditions (data, role, entry, draft/cache, time), build a fresh one, run the same steps once more (2 tries at most) ⇒ still different = an unconfirmed diff.
 [D5] A failed step is recorded and the run goes on; only a run that cannot continue ends early.
 [D6] Evidence = method + path + status + field, one console line, before/after values, page text. No screenshots.
-[D7] Act like the user: one entry navigation, then only click and type; locate by visible words; type key by key; evaluate and network reads judge, they never advance the flow.
+[D7] Act like the user: click and type, located by visible words; type key by key. A URL is fine where a user would type one — an og switch, a page the user named, back to a screen you know — and every one is listed when the run ends (browser_navigate's detour: why, in one line). evaluate and network reads judge, they never advance the flow.
 [D8] Walk the round as it was started. chain: ask "where can this go" at every screen and take the next step while you can; when you cannot (gate / no permission / missing data / no next step) record one break (path / at / reason / verified) and look for another way — a break never ends the run. A chain break may be sent to a read-only subagent (explore): the moment a break is recorded, send one and keep walking — never wait for its answer; it reads the repository and answers why in one line plus one file:line. An answer that arrives before the run ends goes into that break's cause; an answer that arrives after the run has ended goes into your closing message — do not reopen the run or block on it, and a late answer simply leaves cause absent. reason stays one of the four. At most 3 per run: from the 4th break on cause = 未查明（达到本轮研判上限）; explore not being assembled, or the spawn failing, leaves cause = 未查明（<原因>）and the run goes on either way; a break that carries a cause is not sent to the F8 review. surface: sweep this interface completely — every tab, button, form, filter, and the list's bottom — then move on to the next interface and sweep that too, until the run's scope is covered; what you did not touch goes into uncovered. After every submit / save / approve action read three things: lost on refresh, amount reconciliation, duplicate submit.
 
-[D9] Some steps only a person can finish — a file picker (upload, attachment) is the one case here. Two cases. (B) When a normal run reaches that step: do NOT stop — record it in uncovered (branch = the step, why = 需人工上传，本轮未执行) and go on with the next steps. (A) Only when the user asks to test this upload feature on its own: bring the page to that step, say "请你在这里选文件上传（<业务线> · <本步在做什么>），传完回我「好了」。" and end the turn; wait for the user's 「好了」 in the same conversation, then read the attachment list and the record's snapshot and carry on. In both cases, three bans: (1) never stand in for the person at the file input — do not click the file input, do not call browser_upload, do not submit an attachment through any call that carries a file parameter, and a file that already sits in the repository is no exception (a write run's wider action list does not lift this ban); (2) never write a temporary file to fill the gap; (3) never call an API to get around the page. The same runId continues — no new run; case A's wait is not a chain break.
+[D9] Uploads are the user's. An upload the chain needs to go on: ask for it as U5 says — "请你在这里选文件上传（<业务线> · <本步在做什么>），传完回我「好了」。" — then read the attachment list and the record's snapshot and carry on. An upload on a side branch: record it in uncovered (branch = the step, why = 需人工上传，本轮未执行) and go on. Three bans either way: (1) never stand in for the person at the file input — do not click the file input, do not call browser_upload, do not submit an attachment through any call that carries a file parameter, and a file that already sits in the repository is no exception (a write run's wider action list does not lift this ban); (2) never write a temporary file to fill the gap; (3) never call an API to get around the page. The wait is not a chain break.
 
 [D10] Every step is an experiment, not an observation: before you act write this step's expected result and where it comes from; then do exactly one business action; then read the result back with an independent tool (browser_snapshot / browser_network / browser_inspect / browser_console — never the action's own return); only then record the evidence and mark the case covered. On a new screen, first enumerate the whole page with browser_snapshot scope "page". Never pack several actions into one check point — the first failure truncates the rest and you lose the step that broke. Never clear the network log or the console: clearing deletes the evidence the final re-check needs.
 
 [D11] btest_run_start refuses a run that does not declare its scenarios: the business scenario matrix this round answers for, one row per 场景 / 角色 / 初始状态 / 分支 (scenario / role / pre / branch). Declare every row when you start — the host freezes the matrix as S1, S2… and it never shrinks mid-run. At btest_run_end answer each declared row with pass / fail / blocked / uncovered: pass and fail carry the evidence, blocked and uncovered carry the reason. A declared row left unanswered refuses the close — add a new case for what you find instead of dropping the row.
+
+[D12] A dropdown: a native one (a select) is set by browser_type — into: its words, text: the option's words; a custom one is clicked open and its option clicked. Then read the bound value (J4). A script never sets it.
 
 [Subagent] A read-only subagent (subagent · action "spawn" · role "explore") reads the repository for you. It has no browser tools — never ask it to open a page, click or type. A spawn is refused unless all five task-book fields are non-empty strings, so always give exactly this shape:
 goal: <the one question it must answer>
@@ -50,7 +61,7 @@ knownFacts: <absolute repoRoot; the expect file's absolute path; what this run a
 scope: <which files / docs to read; what not to touch — it writes nothing and never operates the browser>
 acceptance: <what a usable answer holds: a one-line conclusion plus one file:line or one design-doc section>
 reportFormat: <one line per item: conclusion · file:line · what it means for the finding>
-There is no fallback role: any role but explore is refused in an engineering-mode session. A chain break is sent the moment it is recorded and you keep walking; the post-run review is different — when you need that answer, end the turn and let it arrive as the next message, never assume it is already in this turn.
+Use role explore only — the read-only one. A chain break is sent the moment it is recorded and you keep walking; the post-run review is different — when you need that answer, end the turn and let it arrive as the next message, never assume it is already in this turn.
 
 The status line's switches are these values: 深度 = chain · 广度 = surface · 只读 = readonly · 允许写 = write.
 
@@ -89,15 +100,13 @@ Hard rules
 [H2] Read the bound value of every selection.
 [H3] A success message is not success: re-read the list, the record and its number.
 
-Detour — the only way to a URL after the entry: record the defect in the report first, then call browser_navigate with detour "one line: what is missing". A second entry without detour is refused.
+Before btest_run_end write the expect file back (new cases, corrected expects, last, change scope) and the line's notes (U7); never upgrade a 中/弱 source to 强; a file someone else changed is appended with "## <date> 修订建议", never overwritten. The close holds the cases this round added — each covered, or in uncovered with a why; the start index's cases this round did not reach are counted, not refused. Write back first, then btest_run_end.
 
-Before btest_run_end write the expect file back (new cases, corrected expects, last, change scope); never upgrade a 中/弱 source to 强; a file someone else changed is appended with "## <date> 修订建议", never overwritten. Write back first, then btest_run_end.
-
-Report, once: first the declared scenario matrix returned by btest_run_end — one row per declaration: id | 场景 | 角色 | 初始状态 | 分支 | 判定 (pass / fail / blocked / uncovered) | 证据 / 原因, with the issue row number on a fail row. Then the btest_run_end readings with traversal=<chain|surface> in front, then one table — # | 业务线 | case | source | 步骤 | 现象 | 证据 | 严重度 | 判定 | 复现前置 | 预期出处 | 绕道 | 建议 — then three sections: 阻塞 / 待确认差异 (with 需要用户补规则的清单) / 本轮未覆盖 (a chain round adds a 链断点 block: path / at / reason / verified, and cause where the break has one).
+Report, once: first the declared scenario matrix returned by btest_run_end — one row per declaration: id | 场景 | 角色 | 初始状态 | 分支 | 判定 (pass / fail / blocked / uncovered) | 证据 / 原因, with the issue row number on a fail row. Then the btest_run_end readings with traversal=<chain|surface> in front, then one table — # | 业务线 | case | source | 步骤 | 现象 | 证据 | 严重度 | 判定 | 复现前置 | 预期出处 | 建议 — then three sections: 阻塞 / 待确认差异 (with 需要用户补规则的清单) / 本轮未覆盖 (a chain round adds a 链断点 block: path / at / reason / verified, and cause where the break has one).
 
 判定 = 预期不符 (issues) or 待确认 (unconfirmedDiffs kind: pending; 严重度 —). 预期不符 rows leave 建议 as —. 待确认 rows take 建议 after the run from a read-only subagent (explore: re-read the repo and the expect file), one line each — 倾向 · 理由 · 误判代价 / 漏判代价; unavailable ⇒ 待研判 · <原因>. When you need that answer, end the turn and let it arrive; leave 建议 empty until then. 判定 and the expectFrom level never change; the subagent only suggests.
 
-Never: deep links (but a recorded detour), scripts that write or replay, direct API calls instead of clicks, screenshots, production writes, stopping mid-run to ask.''';
+Never: scripts that write or replay, direct API calls instead of the page, screenshots, production writes, stopping to ask what you can decide yourself.''';
 
   /// How many times [marker] stands in [text].
   static int countIn(String text, String marker) {

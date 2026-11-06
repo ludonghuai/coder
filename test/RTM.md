@@ -57,7 +57,7 @@
 | 编号 | 用例 | 组件间交互 | 断言的业务可观察结果 | 用户入口 | 回溯需求 | 用例文件 · 标题 | 状态 |
 |---|---|---|---|---|---|---|---|
 | 4-1 | 切到 btest 后提示与浏览器门读同一会话状态 | `ChatComposer` ⇄ `ChatSession` overlay ⇄ `BtestGate`：composer 的 mode picker 打开模式，发送与工具门读同一 overlay | 切到 btest 后下一 turn 的 btest card 恰一次；readonly 写调用被拒且原因可读；切回普通模式后 off 文本恰一次；工具与 composer 读到同一 run / 开关状态 | composer mode picker | F1 · F2 · F9 · F11 | `test/integration/btest_flows_test.dart` · `test('4-1 …')` | 本批新增 |
-| 5-1 | btest 收尾：载荷缺项被拒、补齐后同一 run 交出场景矩阵报告 | `ChatSession` overlay ⇄ `btest_run_end`（收尾门）⇄ 报告生成 | 第一次收尾被拒，文本逐项点名缺哪行声明的场景、哪个 issue 字段、哪个 case 没交代，run 未关；补齐后用同一 `runId` 重提并成功，报告首块逐行给出声明场景的四轴、判定、证据或原因 | btest 里跑完一条业务线后让 agent 收尾 | F13 · F14 | `test/integration/btest_flows_test.dart` · `test('5-1 …')` | 本批新增 |
+| 5-1 | btest 收尾：载荷缺项被拒、补齐后同一 run 交出场景矩阵报告 | `ChatSession` overlay ⇄ `btest_run_end`（收尾门）⇄ 报告生成 | 第一次收尾被拒，文本逐项点名缺哪行声明的场景、哪个 issue 字段，起始索引里本轮没走到的 case 不在拒绝里（只计数），run 未关；补齐后用同一 `runId` 重提并成功，报告首块逐行给出声明场景的四轴、判定、证据或原因 | btest 里跑完一条业务线后让 agent 收尾 | F13 · F14 | `test/integration/btest_flows_test.dart` · `test('5-1 …')` | 本批新增 |
 | 6-1 | btest 两个开关跨重启读回 | `settings.json` ⇄ `BtestState.fromSettings` ⇄ composer 状态行 | 点「深度」与「允许写」后重开会话，状态行保持两值，起 run 不带参数得 `traversal=chain` / `mode=write`；再点「广度」并重开，读回 `surface` | composer → 关会话 → 重开 | F9 · F11 | `test/integration/btest_flows_test.dart` · `test('6-1 …')` | 本批新增 |
 
 ## 7 SSH 远程项目：连上远端主机，在远端目录里干活
@@ -90,5 +90,5 @@
 - **新增** 6-1：两个开关写入设置并在两次重开后读回。
 - **新增** 7-1：SSH 远程项目的行已定；用例体待假远端 harness（条件挂在用例体上，不挂在行上）。
 - **新增** 8-1：导入 ChatGPT 凭证的账号可用、坏输入被拒；行已定，用例体待假凭证端点 harness（条件同样挂在用例体上）。
-- **改写**：无。
+- **改写**：5-1（2026-11-05，`docs/design/browser-biz-test.md` §12.3）：收尾门只拦本轮新增的 case，起始索引里没走到的只计数；断言从「拒绝点名 CASE-002」改成「拒绝里没有 CASE-002」。
 - **删除**：无。

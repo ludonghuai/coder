@@ -21,7 +21,10 @@ void main() {
     });
 
     test('holds every label the content check lists', () {
-      for (var i = 1; i <= 11; i++) {
+      for (var i = 1; i <= 7; i++) {
+        expect(BtestCard.text, contains('[U$i]'), reason: "the user's rule $i");
+      }
+      for (var i = 1; i <= 12; i++) {
         expect(BtestCard.text, contains('[D$i]'));
       }
       for (var i = 1; i <= 7; i++) {
@@ -37,18 +40,74 @@ void main() {
       for (var i = 1; i <= 3; i++) {
         expect(BtestCard.text, contains('[H$i]'));
       }
-      // The label form above is what the card reads: D1 … D11, J1 … J7.
+      // The label form above is what the card reads: D1 … D12, J1 … J7.
       expect(BtestCard.text, contains('[D10]'));
-      expect(BtestCard.text, contains('[D11]'));
+      expect(BtestCard.text, contains('[D12]'));
       expect(BtestCard.text, isNot(contains('[P20]')));
-      // 40 labels in all, each exactly once: +D10, +D11 and −P20 (§6 F2 ②).
-      final labels = RegExp(r'\[(?:D\d\d?|J\d|P\d\d|H\d)\]')
+      // 48 labels in all, each exactly once: U1 … U7 and D12 on top of the
+      // 40 before them (§6 F2 ②).
+      final labels = RegExp(r'\[(?:U\d|D\d\d?|J\d|P\d\d|H\d)\]')
           .allMatches(BtestCard.text)
           .map((m) => m[0])
           .toList();
-      expect(labels, hasLength(40));
-      expect(labels.toSet(), hasLength(40));
+      expect(labels, hasLength(48));
+      expect(labels.toSet(), hasLength(48));
     });
+
+    test("carries the user's ways of testing (U1 … U7)", () {
+      // What the user said in the btest sessions, as rules the card holds.
+      expect(BtestCard.text, contains('looks at whether the functions work'));
+      expect(BtestCard.text, contains('Decide small things yourself'));
+      expect(BtestCard.text, contains('on data it creates itself'));
+      expect(BtestCard.text, contains('never build on them'));
+      expect(BtestCard.text, contains('is created (with the admin account'));
+      expect(BtestCard.text, contains('switch og'));
+      expect(BtestCard.text, contains('Keep to the og ids the user gave'));
+      expect(
+        BtestCard.text,
+        contains('Stop only for a step only the user can do'),
+      );
+      expect(
+        BtestCard.text,
+        contains("Read the repository's design docs and code"),
+      );
+      expect(BtestCard.text, contains('<line>流程.md'));
+      expect(
+        BtestCard.text,
+        contains('names the files beside the expect file'),
+      );
+    });
+
+    test(
+      'a URL is an entry, read rather than refused; a run is for a test',
+      () {
+        expect(
+          BtestCard.text,
+          contains('A URL is fine where a user would type one'),
+        );
+        expect(
+          BtestCard.text,
+          contains('every one is listed when the run ends'),
+        );
+        expect(BtestCard.text, isNot(contains('deep links')));
+        expect(
+          BtestCard.text,
+          isNot(contains('A second entry without detour')),
+        );
+        expect(BtestCard.text, isNot(contains('one entry navigation')));
+        expect(
+          BtestCard.text,
+          contains('Between runs the browser tools still work'),
+        );
+        expect(
+          BtestCard.text,
+          contains(
+            "the start index's cases this round did not reach are counted, not refused",
+          ),
+        );
+        expect(BtestCard.text, contains('set by browser_type'), reason: 'D12');
+      },
+    );
 
     test('the run declaration is a discipline on the card (F13)', () {
       expect(BtestCard.countIn(BtestCard.text, '[D11]'), 1);
@@ -87,7 +146,7 @@ void main() {
         expect(BtestCard.text, contains(field), reason: 'task-book $field');
       }
       expect(BtestCard.text, contains('role "explore"'));
-      expect(BtestCard.text, contains('There is no fallback role'));
+      expect(BtestCard.text, contains('Use role explore only'));
       expect(BtestCard.text, isNot(contains('else plan')));
       expect(BtestCard.text, isNot(contains('or plan')));
       expect(
@@ -99,24 +158,10 @@ void main() {
     test(
       'the manual hand-off keeps both cases and three bans (§3.11, F12)',
       () {
-        // Case B is the default: the run goes on and the step is recorded.
-        expect(BtestCard.text, contains('do NOT stop'));
-        expect(BtestCard.text, contains('record it in uncovered'));
-        // The why is a datum of the report, not prose: §3.11 fixes it in
-        // Chinese (one string for the card, §6 F12 and §7 #47).
-        expect(BtestCard.text, contains('why = 需人工上传，本轮未执行'));
+        // An upload the chain needs is asked for: the user does uploads.
         expect(
           BtestCard.text,
-          isNot(contains('needs a manual upload, not run this round')),
-          reason: 'the old English value is gone (§3.11 取值语种)',
-        );
-        // Case A stops only when the user asks for it, and the same run carries
-        // on after the wait — the wait is not a break.
-        expect(
-          BtestCard.text,
-          contains(
-            'Only when the user asks to test this upload feature on its own',
-          ),
+          contains('An upload the chain needs to go on: ask for it as U5 says'),
         );
         expect(
           BtestCard.text,
@@ -124,8 +169,8 @@ void main() {
         );
         expect(
           BtestCard.text,
-          contains('bring the page to that step'),
-          reason: 'case A brings the page to the upload step (§6 F12 A)',
+          contains('Bring the page to that step'),
+          reason: 'the page is brought to the step (§6 F12 A)',
         );
         expect(
           BtestCard.text,
@@ -139,16 +184,25 @@ void main() {
         );
         expect(
           BtestCard.text,
-          contains("wait for the user's 「好了」 in the same conversation"),
+          contains('carry on in the same run — no new run'),
         );
         expect(
           BtestCard.text,
-          contains('The same runId continues — no new run'),
-        );
-        expect(
-          BtestCard.text,
-          contains("case A's wait is not a chain break"),
+          contains('The wait is not a chain break'),
           reason: 'the hand-off wait never enters chainBreaks (§3.11)',
+        );
+        // One on a side branch is recorded and the run goes on.
+        expect(
+          BtestCard.text,
+          contains('An upload on a side branch: record it in uncovered'),
+        );
+        // The why is a datum of the report, not prose: §3.11 fixes it in
+        // Chinese (one string for the card, §6 F12 and §7 #47).
+        expect(BtestCard.text, contains('why = 需人工上传，本轮未执行'));
+        expect(
+          BtestCard.text,
+          isNot(contains('needs a manual upload, not run this round')),
+          reason: 'the old English value is gone (§3.11 取值语种)',
         );
         // Ban 1 names the browser_upload / file-parameter route (review #91):
         // a file already on disk is no way to stand in for the person.
@@ -196,9 +250,11 @@ void main() {
           BtestCard.text,
           contains(
             '# | 业务线 | case | source | 步骤 | 现象 | 证据 | 严重度 | 判定 | '
-            '复现前置 | 预期出处 | 绕道 | 建议',
+            '复现前置 | 预期出处 | 建议',
           ),
-          reason: '13 columns, the row number and both judgement columns in',
+          reason:
+              '12 columns, the row number and both judgement columns in; '
+              'the entries are the readings\' list, no column of their own',
         );
         expect(BtestCard.text, contains('判定'));
         expect(BtestCard.text, contains('建议'));

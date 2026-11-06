@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:bao_markdown/bao_markdown.dart';
 
 import '../../browser/btest/btest_status_switches.dart';
+import '../session/mode_state.dart' show btestModeId;
 import '../../kernel/agent_kernel.dart';
 import '../../kernel/kernel_types.dart';
 import '../../keybindings/chat_keybindings.dart';

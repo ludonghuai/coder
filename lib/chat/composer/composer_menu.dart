@@ -228,9 +228,14 @@ Map<String, VoidCallback> chatCommandsOf(ChatComposerState state) {
 bool chatComposingOf(ChatComposerState state) => state._isComposing;
 
 /// Picks the mode after the one picked, back to the first after the
-/// last.
+/// last. btest is not one of them: it is picked from the menu alone, and
+/// from it the cycle goes back to the first of the kernel's own.
 void _nextModeOf(ChatComposerState state, KernelChoice modes) {
-  final options = modes.options;
+  final options = [
+    for (final option in modes.options)
+      if (option.id != btestModeId) option,
+  ];
+  if (options.isEmpty) return;
   final at = options.indexWhere((o) => o.id == modes.selected.id);
   modes.onSelected(options[(at + 1) % options.length]);
 }

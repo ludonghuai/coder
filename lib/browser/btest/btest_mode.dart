@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
 
 import '../../chat/chat_models.dart' show ToolKind;
 import '../../host_tools/host_tools.dart';
@@ -21,16 +22,22 @@ class BtestState {
   /// The key it is kept under (see [BtestMode.keyOf]).
   String key;
 
+  /// The conversation's folder: the key's part before its slot.
+  String get folder {
+    final at = key.lastIndexOf('|');
+    return at < 0 ? '' : key.substring(0, at);
+  }
+
   bool _on = false;
 
   /// Whether the mode is on in this conversation.
   bool get on => _on;
 
-  /// Turns it on or off (§3.1) and keeps it for the next start (§9.1,
-  /// F11): on ⇒ `btest.on` written as `true`; off ⇒ the key removed.
+  /// Turns it on or off (§3.1) and keeps it for the next start in the same
+  /// folder (§9.1, F11): on ⇒ the folder in `btest.onIn`; off ⇒ out of it.
   set on(bool value) {
     _on = value;
-    BtestSettings.put(BtestSettings.onKey, value ? true : null);
+    BtestSettings.putOnIn(folder, value);
   }
 
   /// How the next run walks (§9.1): the traversal switch, kept in
@@ -45,9 +52,10 @@ class BtestState {
   /// three keys written straight into the fields, never through a setter —
   /// opening a conversation writes none of them (§7 #44). A key that is
   /// missing or holds something else falls back: off, the built-in
-  /// `surface`, and the write switch left unpicked.
+  /// `surface`, and the write switch left unpicked. On is the folder's own
+  /// (`btest.onIn`): a chat in another project starts without btest.
   void fromSettings() {
-    _on = BtestSettings.on;
+    _on = BtestSettings.onInFolder(folder);
     _traversal = BtestSettings.traversal ?? BtestTraversal.surface;
     _write = BtestSettings.write;
   }
@@ -222,6 +230,11 @@ abstract final class BtestGate {
   /// Refuses [tool] when btest's rules say no (§3.7: the op rules first),
   /// and counts what it allowed. [hosts] are the hosts the call targets,
   /// [targeted] whether it targets one at all.
+  ///
+  /// Between runs the same rules judge, by the status line's write switch
+  /// and with no env declared — a look, a demonstration, a page found for
+  /// the user needs no run — and nothing is counted: the readings are a
+  /// run's.
   static void check(
     String tool,
     Map<String, Object?> input,
@@ -232,19 +245,11 @@ abstract final class BtestGate {
     final state = stateOf(call);
     if (state == null) return;
     final run = state.run;
-    if (run == null) {
-      throw BrowserError(
-        'btest denied: $tool — no active run: call btest_run_start first '
-        '(Settings → Browser → btest)',
-      );
-    }
     final decision = BtestPolicy.judge(
       tool: tool,
       input: input,
-      env: run.env,
-      face: run.face,
-      startUrl: run.startUrl,
-      entries: run.entries.length,
+      env: run?.env,
+      face: run?.face ?? (state.write ? BtestFace.write : BtestFace.readonly),
       hosts: hosts,
       targeted: targeted,
       allowHosts: BtestSettings.allowHosts,
@@ -266,18 +271,20 @@ abstract final class BtestTools {
   static final HostTool _start = HostTool(
     name: 'btest_run_start',
     description:
-        'Starts one btest run for a business line: the business repository, '
-        'the one entry URL, dev/test/prod, read-only or write, and the way '
-        'the round walks (traversal: chain dives down the business chain; '
-        'surface sweeps one interface completely, then the next, until the '
-        "run's scope is covered; surface is the default). The expect "
-        'file is derived by the host from the line, the repository and the '
-        'QA root, and its absolute path is returned. Declare every business '
-        'scenario this run will answer for (scenario / role / pre / branch); '
-        'the host freezes them as S1, S2… and returns them with the run id, '
-        'traversal, expect path, case index and SHA-256 write-back baseline. '
-        'btest refuses every browser action until a run is started, and one '
-        'run at a time.',
+        'Starts one btest run for a business line — a test the user gets a '
+        'report of: the business repository, the URL it starts at, '
+        'dev/test/prod, read-only or write, and the way the round walks '
+        '(traversal: chain dives down the business chain; surface sweeps one '
+        'interface completely, then the next, until the run\'s scope is '
+        'covered; surface is the default). The expect file is derived by the '
+        'host from the line, the repository and the QA root, and its '
+        'absolute path is returned with the notes beside it. Declare every '
+        'business scenario this run will answer for (scenario / role / pre / '
+        'branch); the host freezes them as S1, S2… and returns them with the '
+        'run id, traversal, expect path, case index and SHA-256 write-back '
+        'baseline. One run at a time; between runs the browser tools still '
+        'work under the same host rules (to look, to show the user '
+        'something), and nothing is counted.',
     inputSchema: {
       'type': 'object',
       'properties': {
@@ -296,8 +303,10 @@ abstract final class BtestTools {
         'startUrl': {
           'type': 'string',
           'description':
-              'The one URL this run enters by: every other page '
-              'comes from a click, or a recorded detour.',
+              'Where this run starts. Later pages come from clicks, '
+              'or by URL where a user would type one (an og switch, a page '
+              'the user named); every URL is recorded and listed when the '
+              'run ends.',
         },
         'env': {
           'type': 'string',
@@ -369,11 +378,13 @@ abstract final class BtestTools {
         'Closes the run only when its gate passes: scenarioResults answers '
         'every frozen S-id with pass / fail / blocked / uncovered and its '
         'evidence or why; issues carry step / symptom / evidence / severity / '
-        'pre; every start-index or same-round-new case is covered or named in '
-        'uncovered with why, and every fail scenario links to an issue. '
+        'pre; every case added this round is covered or named in uncovered '
+        'with why (the start index\'s cases this round did not reach are '
+        'counted, not refused), and every fail scenario links to an issue. '
         'Refusal names every missing item and keeps the run open for a retry. '
-        'The four mechanical readings and the scenario-matrix report block '
-        'are returned on success. Write the expect file back BEFORE calling.',
+        'The four mechanical readings (the pages reached by URL listed) and '
+        'the scenario-matrix report block are returned on success. Write the '
+        'expect file back BEFORE calling.',
     inputSchema: {
       'type': 'object',
       'properties': {
@@ -417,7 +428,6 @@ abstract final class BtestTools {
               'severity': {'type': 'string'},
               'pre': {'type': 'string'},
               'expectRef': {'type': 'string'},
-              'detour': {'type': 'string'},
             },
           },
         },

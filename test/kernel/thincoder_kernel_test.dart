@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
 import 'package:baocode/browser/browser_steps.dart';
+import 'package:baocode/browser/btest/btest_mode.dart';
 import 'package:baocode/chat/chat_models.dart';
 import 'package:baocode/chat/chat_session.dart';
 import 'package:baocode/chat/editor_context_setting.dart';
@@ -937,6 +938,79 @@ void main() {
         'value': true,
       });
       expect(s.kernel.permission.selected, 'auto');
+    });
+
+    test('btest on in the conversation: testMode is said before the prompt, '
+        'and off again with it (fork)', () async {
+      BtestMode.reset();
+      BtestSettings.values = <String, Object?>{};
+      addTearDown(() {
+        BtestMode.reset();
+        BtestSettings.values = null;
+      });
+      final s = _Session(make: () => ThincoderMock(testMode: false));
+      addTearDown(s.dispose);
+      s.kernel.prepare();
+      await settle();
+      List<String> said() => [
+        for (final message in s.agent.written)
+          if (message['method'] case final String method) method,
+      ];
+
+      // btest off: nothing to say, the agent already reports false.
+      s.send('one', id: 'turn-1');
+      await settle();
+      expect(s.agent.requests('session/set_config_option'), isEmpty);
+
+      // On, as the host keeps it: `<cwd>|<slot>`.
+      final state = BtestMode.of('/project', '1')..on = true;
+      s.send('two', id: 'turn-2');
+      await settle();
+      expect(s.agent.requests('session/set_config_option').single['params'], {
+        'sessionId': '1',
+        'configId': 'testMode',
+        'value': true,
+      });
+      expect(
+        said().lastIndexOf('session/set_config_option'),
+        lessThan(said().lastIndexOf('session/prompt')),
+        reason: 'the switch is in effect for the turn it was said for',
+      );
+      expect(s.agent.testMode, isTrue);
+
+      // Still on: the agent reports it, so nothing more is said.
+      s.send('three', id: 'turn-3');
+      await settle();
+      expect(s.agent.requests('session/set_config_option'), hasLength(1));
+
+      state.on = false;
+      s.send('four', id: 'turn-4');
+      await settle();
+      expect(s.agent.requests('session/set_config_option').last['params'], {
+        'sessionId': '1',
+        'configId': 'testMode',
+        'value': false,
+      });
+      expect(s.agent.testMode, isFalse);
+      expect(s.agent.requests('session/prompt'), hasLength(4));
+    });
+
+    test('an agent without testMode is told nothing of btest (fork)', () async {
+      BtestMode.reset();
+      BtestSettings.values = <String, Object?>{};
+      addTearDown(() {
+        BtestMode.reset();
+        BtestSettings.values = null;
+      });
+      final s = _Session();
+      addTearDown(s.dispose);
+      s.kernel.prepare();
+      await settle();
+      BtestMode.of('/project', '1').on = true;
+      s.send('go');
+      await settle();
+      expect(s.agent.requests('session/set_config_option'), isEmpty);
+      expect(s.agent.requests('session/prompt'), hasLength(1));
     });
 
     test('always turns auto on with the approval; once and reject do not '

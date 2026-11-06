@@ -17,8 +17,14 @@ abstract final class BtestSettings {
   /// workspace root (§3.4).
   static const qaRootKey = 'btest.qaRoot';
 
-  /// Whether the mode was on when its session closed (§9.1, F11).
-  static const onKey = 'btest.on';
+  /// The folders btest was last left on in (§9.1, F11): a list of paths —
+  /// a chat opened in one of them starts in btest, one opened anywhere else
+  /// does not.
+  static const onInKey = 'btest.onIn';
+
+  /// The one global switch [onInKey] replaced: read no more (it turned
+  /// btest on in every project), removed at the first write of the list.
+  static const legacyOnKey = 'btest.on';
 
   /// The traversal the last session picked (§9.1, F11): `chain` / `surface`.
   static const traversalKey = 'btest.traversal';
@@ -44,9 +50,35 @@ abstract final class BtestSettings {
     _ => null,
   };
 
-  /// Whether btest was on (§9.1, F11): `btest.on` holds a bool, and only
-  /// `true` turns the mode on — a string or a number is not one.
-  static bool get on => _read(onKey) == true;
+  /// The folders [onInKey] lists, as written; anything but a list of
+  /// strings is none.
+  static List<String> get onIn => [
+    if (_read(onInKey) case final List folders)
+      for (final folder in folders)
+        if (folder is String && folder.trim().isNotEmpty) folder,
+  ];
+
+  /// Whether btest was left on in [folder] (§9.1, F11). A chat with no
+  /// folder is never one.
+  static bool onInFolder(String folder) =>
+      folder.trim().isNotEmpty &&
+      onIn.any((one) => p.equals(one.trim(), folder.trim()));
+
+  /// Keeps whether btest is on in [folder]: the folder added to [onInKey]
+  /// or taken out of it (the key removed once none is left), and the
+  /// global [legacyOnKey] gone with the first such write. A chat with no
+  /// folder keeps nothing.
+  static void putOnIn(String folder, bool on) {
+    final path = folder.trim();
+    if (path.isEmpty) return;
+    final kept = [
+      for (final one in onIn)
+        if (!p.equals(one.trim(), path)) one,
+    ];
+    if (on) kept.add(path);
+    put(onInKey, kept.isEmpty ? null : kept);
+    if (_read(legacyOnKey) != null) put(legacyOnKey, null);
+  }
 
   /// The traversal the last session picked (§9.1); null when the key is
   /// missing or holds anything but `chain` / `surface` — the reader then
