@@ -71,7 +71,7 @@
 | `lib/images/image_tools.dart` | `group: 'images'` + 注册接线（`HostTools.unregister` `:47` / `register` `:49`）+ 选图前的问人判定走 `HostTools.asksUser(call.cwd)`（同一行换符，净 0 行） | 功能 | `HostTools` 注册表；MCP 面按组暴露；`HostTools.asksUser` | 净增 ≤1 行（第二根 import） |
 | `lib/ide/git/git_repository.dart` | 空仓与未出生分支：图加载的无 await 早退路径上经 `scheduleMicrotask(_notify)` 通知（`:871-875`），避开 build 期 `setState` | 修 bug | `GitRepository` 图加载 getter 的监听者 | 净增 ≤5 行 |
 | `lib/workbench.dart` | 命令面板的会话命令源（`_paletteActions` 里窗口命令 ∪ 焦点会话的 `ChatKeys.commandsOf`，Rename Agent 一项在 `:1316`）；侧栏仓库扫描的失败面（机制见 `ide-git.md` §4.7） | 修 bug | `ChatKeys.targetsOf` / `ChatKeys.commandsOf`；`_sidePanelFolderRepositories` 的扫描 async 块 | 面板 ≤10 行 · 扫描 ≤59 行 |
-| `lib/ide/ide_workbench.dart` | chord 第二键的窗口门（`_holdsKeys` `:3344-3357`：本窗口持有主焦点且本路由当前才吃键；`_onChordKey` 守卫 `:3375-3380` 与 5 秒检查器 `:3397` 共用） | 修 bug | 上游按键服务的 `_onChordKey` / `_onLateKey` 钩 | 净增 ≤22 行（实测 21） |
+| `lib/ide/services/keybindings.dart` | chord 第二键的窗口门（`KeybindingDispatchService._holdsKeys` `:149-163`：本窗口持有主焦点且本路由当前才吃键；`onLateKey` `:140`、`onChordKey` 守卫 `:176-179` 与 500 ms 检查器 `:198` 共用）。上游 2026-11 把工作台拆成服务与部件，块随按键服务迁来；`lib/ide/ide_workbench.dart` 自 `50649b2e` 起与上游同档、不带自有块 | 修 bug | 上游按键服务的 `onChordKey` / `onLateKey` 钩 | 净增 ≤26 行（实测 +26 / −8） |
 | `lib/ide/ide_editor.dart` | 控制器为空时的空渲染（三处 `SizedBox.expand`：`_surface` `:2638-2641` · diff 原侧 `:2757-2758` · build 的 native 分支 `:2890`） | 修 bug | `_nativeController` / `IdeOriginalDiff.controller` | 净增 ≤7 行 |
 | `lib/ide/ide_tab_bar.dart` | `renameInitial`：调用方给定的初值，优先于标签文本（改名框从该值起） | 功能 | `InlineRenameField.initial` | 净增 ≤6 行（`renameInitial` 三处：`_Tab` 字段 / 形参 / 透传；同段布局改写随上游 `96e61f6b`，前几批累积的 +89 / −57 随之失效） |
 | `lib/chat/chat_history_view.dart` | 窗口可见性门：自有 `window_visible.dart` 的 import 与档内 9 处 `WindowVisible` 用法；重建的两个入口 `_showNow` / `_showWords` 各带一个门（窗口不可见时不重建，切回时一次追平） | 修 bug | `WindowVisible.changed` 订阅；集成面见 `test/RTM.md` 2-1 行 | 窗口门 1 行 import + 9 处用法；档整体相对上游 +337 / −26（`split('\n')` 口径实测 4262 / 3951） |
@@ -106,7 +106,7 @@
 - `lib/browser/browser_actions.dart`、`browser_debug_tools.dart`：按第 7 节复原为 `ClaudeSdkTool` 形态，只修父库。
 - 上游 SCM 测试档与 `test/chat/side_panel/side_panel_test.dart`。
 
-`lib/ide/ide_editor.dart`、`lib/ide/ide_workbench.dart`、`lib/workbench.dart` 不在此列：三者各带第 8 节登记的自有行为块，改动只许落在登记块内。
+`lib/ide/ide_editor.dart`、`lib/ide/services/keybindings.dart`、`lib/workbench.dart` 不在此列：三者各带第 8 节登记的自有行为块，改动只许落在登记块内。`lib/ide/ide_workbench.dart` 现与上游同档，按表外上游面对待。
 
 ## 5 合并核对顺序
 
@@ -269,7 +269,7 @@
 | 1 | 回合在飞时点模型：pill 主 label 后追加 ` · 回合结束后切换到 <目标>`，tooltip 同句；目标名取选项里同 id 的 label，选项已不在则退回 id | `thincoder-adapter.md` §24（F21 · pill 后缀段） | `lib/chat/composer/session_model_picker.dart:129-138` · `:155-157` · `_nameOf` `:45-48` |
 | 2 | 命令面板搜得到并执行会话命令，Rename Agent 在内：面板动作源 = 窗口命令 ∪ 焦点会话的命令 | 第 3 节 `lib/workbench.dart` 行 · §8.1 | `lib/workbench.dart:1291-1299` · `:1316` |
 | 3 | 侧栏仓库扫描失败：记一行 `appEvent('sidePanel', …)`、30 秒后自动重试、同一位置提示一次 `scmScanFailed`、一次成功即清标记；`dispose` 取消重试定时器 | `ide-git.md` §4.7 | `lib/workbench.dart:3741-3786` · `:3812-3823` · `:778` |
-| 4 | chord 第二键只在本窗口持有键时生效：不持有 ⇒ 退出 chord 态并忽略该键，不把另一窗口的键当成自己的 | 第 3 节 `lib/ide/ide_workbench.dart` 行 · §8.1 | `lib/ide/ide_workbench.dart:3344-3357` · `:3375-3380` · `:3397` |
+| 4 | chord 第二键只在本窗口持有键时生效：不持有 ⇒ 退出 chord 态并忽略该键，不把另一窗口的键当成自己的 | 第 3 节 `lib/ide/services/keybindings.dart` 行 · §8.1 | `lib/ide/services/keybindings.dart:149-163` · `:140` · `:176-179` · `:198` |
 | 5 | 文档关闭 / diff 重建时控制器为空不崩：活动文档面、diff 原侧、build 的 native 分支三处渲染 `SizedBox.expand()` | 第 3 节 `lib/ide/ide_editor.dart` 行 · §8.1 | `lib/ide/ide_editor.dart:2638-2641` · `:2757-2758` · `:2890` |
 | 6 | 回退文件后变更审查列表立即刷新：`ChangesReverted` ⇒ 取消防抖计时器 + `review.observe()` 立即看一次；事件本身仍按 `outcome.files` 非空才发 | `session-governance.md` D-SG12（事件面）· 第 3 节 `chat_session.dart` 行（宿主钩） | `lib/chat/chat_session.dart:269-273` |
 
@@ -292,7 +292,7 @@
 | 1 | `SessionModelPicker` ← `ChatSession.pendingModel` | 等待态非空 ⇒ 主 label 追加 ` · <modelsSwitchPending(目标名)>`，tooltip 追加同句（原 tooltip 保留）；目标名 = `_nameOf(pending, model.options)`，找不到退回 id |
 | 2 | `Workbench._paletteActions` | 动作源 = 窗口命令 `_chatCommands()` ∪ 焦点会话命令 `ChatKeys.commandsOf(ChatKeys.targetsOf(会话上下文))`；焦点会话 = 当前 agent 窗口的会话，否则工作区当前会话，都没有 ⇒ 只有窗口命令 |
 | 3 | `Workbench._sidePanelFolderRepositories` | 失败 ⇒ 记一条 `appEvent('sidePanel', …)`、面板本轮不列仓库、30 秒后自动重试、同一位置只提示一次 `scmScanFailed`、一次成功即清标记；机制与失败分类归属 `ide-git.md` §4.7（本轮逐条核过：五条与 §4.7 逐句对应，此处不重述状态机） |
-| 4 | `IdeWorkbenchState._holdsKeys` | 第二键只在 `_holdsKeys()` 为真时进食，否则 `_leaveChordMode()` + `ignored`；5 秒检查器同一判定，另加生命周期 `resumed` 与 5 秒上限（同形源：`26c969aa` 的 `lib/ide/ide_workbench.dart:2976-2983`）。判定内容归第 3 节该行，此处只留接口面 |
+| 4 | `KeybindingDispatchService._holdsKeys` | 第二键只在 `_holdsKeys()` 为真时进食，否则 `_leaveChordMode()` + `ignored`；漏到窗口的键（`onLateKey`）同一判定；500 ms 检查器同一判定，另加生命周期 `resumed` 与 5 秒上限（同形源：`26c969aa` 的 `lib/ide/ide_workbench.dart:2976-2983`；2026-11-05 随上游拆档迁到按键服务）。判定内容归第 3 节该行，此处只留接口面 |
 | 5 | `_IdeEditorState` | 原生控制器为 null ⇒ `SizedBox.expand()`；三处 = 活动文档面（`_surface`）· diff 原侧（`_diffEditor.original`）· build 的 native 分支 |
 | 6 | `ChatSession._reviewEvent` | `ChangesReverted` ⇒ 取消防抖计时器 + `review.observe()`（全量）；`review.session` 照旧按事件赋值。事件面不变：仍由内核按 `outcome.files` 非空才发（`session-governance.md` D-SG12） |
 
@@ -333,13 +333,13 @@
 |---|---|---|---|
 | `lib/chat/composer/session_model_picker.dart` | 259 | 回合在飞时的等待态后缀，17 行 | ≤20 行 |
 | `lib/workbench.dart` | 5408 | 面板命令源 · 扫描失败面 | 面板 ≤10 · 扫描 ≤59 |
-| `lib/ide/ide_workbench.dart` | 5878 | chord 第二键的窗口门，21 行 | ≤22 行 |
+| `lib/ide/services/keybindings.dart`（2026-11-05 实测 267；原 `lib/ide/ide_workbench.dart` 5878，拆档后 967 且与上游同档） | 267 | chord 第二键的窗口门，+26 / −8 | ≤26 行 |
 | `lib/ide/ide_editor.dart` | 3160 | 控制器为空的空渲染，7 行 | ≤7 行 |
 | `lib/chat/chat_session.dart` | 1401 | 回退后的审查刷新钩，5 行 | ≤180 行 |
 
 **体量立场（不拆档）**：五档都是上游共享档。本批改动合计 +112 / −18（净增 94 行；`54f94769` +76 / −9 与 `e5661df4` +36 / −9，`git diff --numstat` 实测，不计批档自身 32 行），形态都是第 3 节登记块内的小块。
 
-`workbench` 5408 · `ide_workbench` 5878 · `ide_editor` 3160 · `chat_session` 1401 四档过 800 行，属存量债，按 §7.3 同一理由不拆档：把上游共享档拆成两档，两半都成常驻 fork 差异，每次上游合并要在两处对账，与第 1 节的目标相反。
+`workbench` 5408 · `ide_editor` 3160 · `chat_session` 1401 三档过 800 行（`ide_workbench` 原 5878，2026-11-05 上游拆档后 967，块已迁 `lib/ide/services/keybindings.dart`），属存量债，按 §7.3 同一理由不拆档：把上游共享档拆成两档，两半都成常驻 fork 差异，每次上游合并要在两处对账，与第 1 节的目标相反。
 
 ### 8.6 验收对照
 
