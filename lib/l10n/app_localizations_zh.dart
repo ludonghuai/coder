@@ -2608,6 +2608,11 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String turnStopped(String duration) {
+    return '处理 $duration 后停止';
+  }
+
+  @override
   String get planCardLabel => '计划';
 
   @override
@@ -11016,6 +11021,18 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get diffUnified => '单栏查看';
+
+  @override
+  String get gitDetailsLayout => '详情位置';
+
+  @override
+  String get gitDetailsLayoutAuto => '够宽时在右侧';
+
+  @override
+  String get gitDetailsLayoutBeside => '右侧';
+
+  @override
+  String get gitDetailsLayoutBelow => '下方';
 
   @override
   String get diffIgnoreWhitespace => '忽略行首尾空白';

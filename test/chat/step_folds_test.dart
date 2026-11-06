@@ -22,8 +22,19 @@ StepFolds _fold(
   List<TurnMark> turns = const [],
 }) => StepFolds.of(items.length, (i) => items[i], live: live, turns: turns);
 
-TurnMark _mark(String id, int start, {int? prompt, Duration? worked}) =>
-    (turnId: id, start: start, prompt: prompt, worked: worked);
+TurnMark _mark(
+  String id,
+  int start, {
+  int? prompt,
+  Duration? worked,
+  bool stopped = false,
+}) => (
+  turnId: id,
+  start: start,
+  prompt: prompt,
+  worked: worked,
+  stopped: stopped,
+);
 
 /// The folds as `kind start-end`, each once, in order.
 List<String> _folds(List<ChatItem> items, {bool live = false}) {
@@ -127,6 +138,28 @@ void main() {
       expect(_folds([_prompt(), _edit, _words, error]), isEmpty);
     });
 
+    test('stopped, all of it folds, an answer or not, but why it stopped', () {
+      final stopped = UserMessageItem(
+        text: 'Fix it',
+        worked: const Duration(seconds: 9),
+        stopped: true,
+      );
+      expect(_folds([stopped, _read, _grep, _edit]), ['work 1-4', 'steps 1-3']);
+      const error = NoticeItem(NoticeKind.error, 'Overloaded');
+      expect(_folds([stopped, _edit, _read, error]), ['work 1-3']);
+      expect(_folds([stopped, _read, _edit, _answer]), ['work 1-3']);
+      expect(_fold([stopped, _read, _edit]).workAt(1)?.stopped, isTrue);
+      // Untimed (stopped before this was kept), it shows as it is.
+      expect(
+        _folds([
+          const UserMessageItem(text: 'Fix it', stopped: true),
+          _edit,
+          _read,
+        ]),
+        isEmpty,
+      );
+    });
+
     test('its answer is all the words after its last step', () {
       expect(_folds([_prompt(), _edit, _read, _words, _thought, _answer]), [
         'work 1-3',
@@ -184,6 +217,22 @@ void main() {
       final stopped = _fold(twoTurns, turns: twoMarks(auto: null));
       expect(stopped.workAt(4), isNull);
       expect(stopped.rowAt(6, twoTurns[6], (_) => false).item, isTrue);
+    });
+
+    test('a turn marked stopped folds all its work, but why it stopped', () {
+      // The marks' side of upstream's stopped turns: the window a turn
+      // makes carries it, as a message's does.
+      const error = NoticeItem(NoticeKind.error, 'Overloaded');
+      final items = <ChatItem>[...userTurn, _read, _grep, error];
+      final turns = [
+        _mark('u1', 1, prompt: 0, worked: const Duration(seconds: 65)),
+        _mark('auto:1', 4, worked: const Duration(seconds: 9), stopped: true),
+      ];
+      expect(work(items, turns: turns), ['1-3 65', '4-6 9']);
+      final folds = _fold(items, turns: turns);
+      expect(folds.workAt(4)?.stopped, isTrue);
+      expect(folds.workAt(1)?.stopped, isFalse);
+      expect(folds.rowAt(6, error, (_) => false).item, isTrue);
     });
 
     test('R3: turns one after another each fold their own work', () {

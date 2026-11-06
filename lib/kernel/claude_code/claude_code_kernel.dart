@@ -254,19 +254,10 @@ class ClaudeCodeKernel
   String? _earlier;
   Future<void>? _earlierLoad;
 
-  /// Whether what was read begins within a turn (a long one is cut so):
-  /// the turn the page before it ends with goes on past it, so is not
-  /// timed.
-  bool _readInTurn = false;
-
-  /// Whether [page] begins within a turn: with a message of the agent's,
-  /// not the user's prompt.
-  static bool _beginsInTurn(ClaudeHistoryPage page) {
-    for (final line in page.entries) {
-      if (line['type'] != 'attachment') return line['type'] == 'assistant';
-    }
-    return false;
-  }
+  /// How what was read begins, where that is within a turn (a long one is
+  /// cut so; see [ClaudeTranslator.head]): the turn the page before it ends
+  /// with goes on past it, and is timed to where it ends.
+  ({DateTime? until, bool stopped})? _readHead;
 
   /// Writes wait on this: for the process to be ready, and for a rewind to
   /// land before the message that follows it.
@@ -392,6 +383,11 @@ class ClaudeCodeKernel
   /// [_applyWindow]).
   String _launchedProvider = '';
   String? _reportedModel;
+
+  /// Whether the CLI sends a queued message now on its own (an interrupt
+  /// with `send_now`), sparing the tasks in the background, as its init
+  /// says (`interrupt_send_now_v1`).
+  bool _sendsNow = false;
 
   /// When the usage limit the last turn hit resets (see
   /// [ReportsUsageLimit]): the account's own plan's, or every ChatGPT
@@ -1108,7 +1104,9 @@ class ClaudeCodeKernel
       }
     }
     _permissions.clear();
-    if (!interrupted && worked != null) {
+    // Stopped too: its work folds all the same (the session file tells it
+    // was stopped).
+    if (worked != null) {
       if ((_turnStats, _sessionId) case (final stats?, final session?)) {
         stats.write(session, turn, (worked: worked, usage: usage));
       }
@@ -1190,6 +1188,25 @@ class ClaudeCodeKernel
         !_held.containsKey(turnId) &&
         others.every(_held.containsKey)) {
       cancel();
+      return;
+    }
+    // Given the CLI, none before it there: the CLI makes way for it itself,
+    // the tasks in the background left at work. Taking it back to send it
+    // again could fail (the CLI keeping it), and then nothing was sent.
+    final given = _queued.where((id) => !_held.containsKey(id));
+    if (_sendsNow && given.firstOrNull == turnId) {
+      unawaited(
+        _control!
+            .request('interrupt', {'send_now': true, 'message_uuid': turnId})
+            .then<void>(
+              (_) {},
+              onError: (Object _) {
+                if (_queued.contains(turnId)) {
+                  _resendQueued([turnId, ...others], now: turnId);
+                }
+              },
+            ),
+      );
       return;
     }
     // The CLI takes up all it queued as one turn, in the order sent: the
@@ -1838,6 +1855,9 @@ class ClaudeCodeKernel
       case 'system' when message['subtype'] == 'init':
         _sessionId = message['session_id'] as String? ?? _sessionId;
         _reportedModel = message['model'] as String?;
+        _sendsNow = (message['capabilities'] as List? ?? const []).contains(
+          'interrupt_send_now_v1',
+        );
         if (message.containsKey('effort')) {
           _appliedEffort = message['effort'] as String?;
         }
@@ -2828,7 +2848,6 @@ class ClaudeCodeKernel
       final page = await read(session, turns: _firstTurns);
       final kept = await keptTurns;
       _earlier = page.earlier;
-      _readInTurn = _beginsInTurn(page);
       _translator
         ..replaying = true
         ..keptTurns = kept;
@@ -2837,6 +2856,7 @@ class ClaudeCodeKernel
         if (line['type'] == 'assistant') counted |= _countRequest(line);
         _translator.translate(line);
       }
+      _readHead = _translator.head;
       _translator.endReplay();
       if (counted) _reportStats();
     } on Object catch (error) {
@@ -2893,10 +2913,10 @@ class ClaudeCodeKernel
         if (line['type'] == 'assistant') counted |= _countRequest(line);
         translator.translate(line);
       }
-      if (!_readInTurn) translator.endPage();
+      translator.endPage(after: _readHead);
       if (counted) _reportStats();
       _earlier = page.earlier;
-      _readInTurn = _beginsInTurn(page);
+      _readHead = translator.head;
       emit(HistoryPrepended(nextSeq, [...items.liveItems]));
     } on Object catch (error) {
       if (_disposed) return;
@@ -3312,7 +3332,7 @@ class ClaudeCodeKernel
           for (final info in provider.enabledModels)
             KernelOption(
               modelRef(provider.id, info.id),
-              info.displayName,
+              provider.labelOf(info),
               Icons.hub_outlined,
               [
                 info.id,

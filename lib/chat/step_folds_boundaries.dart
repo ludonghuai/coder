@@ -5,8 +5,14 @@ part of 'step_folds.dart';
 // that consumes them stays in step_folds.dart.
 
 /// A window the folds scan: where a turn starts, the message that began it
-/// (none when the agent took it up on its own), and how long it worked.
-typedef _TurnBoundary = ({int start, int? prompt, Duration? worked});
+/// (none when the agent took it up on its own), how long it worked, and
+/// whether the user stopped it.
+typedef _TurnBoundary = ({
+  int start,
+  int? prompt,
+  Duration? worked,
+  bool stopped,
+});
 
 /// The windows the folds scan in `[from, count]`, ascending: those the
 /// messages sent make, and those the turns make, merged where they meet
@@ -34,8 +40,8 @@ List<_TurnBoundary> _boundariesOf(
   var i = from;
   for (final mark in marks.reversed) {
     while (i < mark.start) {
-      if (folds._items[i] case UserMessageItem(queued: false, :final worked)) {
-        boundaries.add((start: i, prompt: i, worked: worked));
+      if (_messageBoundary(folds._items[i], i) case final boundary?) {
+        boundaries.add(boundary);
       }
       i++;
     }
@@ -45,12 +51,24 @@ List<_TurnBoundary> _boundariesOf(
       start: mark.start,
       prompt: mark.prompt,
       worked: mark.worked,
+      stopped: mark.stopped,
     ));
   }
   for (; i < count; i++) {
-    if (folds._items[i] case UserMessageItem(queued: false, :final worked)) {
-      boundaries.add((start: i, prompt: i, worked: worked));
+    if (_messageBoundary(folds._items[i], i) case final boundary?) {
+      boundaries.add(boundary);
     }
   }
   return boundaries;
 }
+
+/// The window a message sent at [index] begins, when [item] is one.
+_TurnBoundary? _messageBoundary(ChatItem item, int index) => switch (item) {
+  UserMessageItem(queued: false, :final worked, :final stopped) => (
+    start: index,
+    prompt: index,
+    worked: worked,
+    stopped: stopped,
+  ),
+  _ => null,
+};

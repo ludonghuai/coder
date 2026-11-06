@@ -401,7 +401,7 @@ void main() {
 
 /// One turn, as a kernel would mark it.
 TurnMark _mark(String id, int start, {int? prompt, Duration? worked}) =>
-    (turnId: id, start: start, prompt: prompt, worked: worked);
+    (turnId: id, start: start, prompt: prompt, worked: worked, stopped: false);
 
 /// A finished turn of a long history: a message, two steps, its answer.
 List<ChatItem> _reportTurn(int n) => [

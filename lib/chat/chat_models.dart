@@ -19,6 +19,7 @@ class UserMessageItem extends ChatItem {
     this.contexts = const [],
     this.worked,
     this.usage,
+    this.stopped = false,
     this.sentAt,
     this.fromAgent,
   });
@@ -42,24 +43,32 @@ class UserMessageItem extends ChatItem {
   /// back until then.
   final bool queued;
 
-  /// How long the agent worked on it, once its turn ended as it should
-  /// (not stopped): the work before its answer folds into that.
+  /// How long the agent worked on it, once its turn ended: the work before
+  /// its answer folds into that.
   final Duration? worked;
 
   /// What its turn spent, kept with [worked], when the kernel said.
   final TurnUsage? usage;
 
-  UserMessageItem copyWith({Duration? worked, TurnUsage? usage}) =>
-      UserMessageItem(
-        text: text,
-        queued: queued,
-        images: images,
-        contexts: contexts,
-        worked: worked ?? this.worked,
-        usage: usage ?? this.usage,
-        sentAt: sentAt,
-        fromAgent: fromAgent,
-      );
+  /// The user stopped its turn, [worked] in: all its work folds, an answer
+  /// or not.
+  final bool stopped;
+
+  UserMessageItem copyWith({
+    Duration? worked,
+    TurnUsage? usage,
+    bool? stopped,
+  }) => UserMessageItem(
+    text: text,
+    queued: queued,
+    images: images,
+    contexts: contexts,
+    worked: worked ?? this.worked,
+    usage: usage ?? this.usage,
+    stopped: stopped ?? this.stopped,
+    sentAt: sentAt,
+    fromAgent: fromAgent,
+  );
 }
 
 /// What a turn spent, as its kernel reported at its end.
@@ -96,9 +105,16 @@ class TurnUsage {
 }
 
 /// One turn, as the folds see it: its id, where its first item is, the
-/// message that began it (none when the agent took it up on its own), and
-/// how long it worked (null while under way, or stopped).
-typedef TurnMark = ({String turnId, int start, int? prompt, Duration? worked});
+/// message that began it (none when the agent took it up on its own), how
+/// long it worked (null while under way), and whether the user stopped it
+/// (then [worked] is to where it stopped: all its work folds).
+typedef TurnMark = ({
+  String turnId,
+  int start,
+  int? prompt,
+  Duration? worked,
+  bool stopped,
+});
 
 /// What the model has written so far in the turn under way, and how fast it
 /// writes (now while it does, else on average so far; null before it has

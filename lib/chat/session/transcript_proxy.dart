@@ -46,9 +46,17 @@ int markTurnOf(
       final start = transcript.length;
       // Its message, under the turn's id (a queued one may land early).
       final prompt = unprompted ? null : transcript.indexOf(turnId) ?? start;
-      turns.add((turnId: turnId, start: start, prompt: prompt, worked: null));
+      turns.add((
+        turnId: turnId,
+        start: start,
+        prompt: prompt,
+        worked: null,
+        stopped: false,
+      ));
     case TurnEnded(:final turnId, :final interrupted, :final worked):
-      // A turn the history no longer holds is not told of any more.
+      // A turn the history no longer holds is not told of any more. A
+      // stopped one is timed too, to where it stopped (as the transcript
+      // times its message): all its work folds.
       for (var i = turns.length - 1; i >= 0; i--) {
         final mark = turns[i];
         if (mark.turnId != turnId) continue;
@@ -56,7 +64,8 @@ int markTurnOf(
           turnId: turnId,
           start: mark.start,
           prompt: mark.prompt,
-          worked: interrupted ? null : worked,
+          worked: worked,
+          stopped: interrupted && worked != null,
         );
         break;
       }
@@ -71,6 +80,7 @@ int markTurnOf(
           start: mark.start + moved,
           prompt: mark.prompt == null ? null : mark.prompt! + moved,
           worked: mark.worked,
+          stopped: mark.stopped,
         );
       }
     case Rewound():

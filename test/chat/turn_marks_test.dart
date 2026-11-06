@@ -77,12 +77,20 @@ void main() {
       )
       ..emit(TurnStarted(kernel.nextSeq, 'u1'))
       ..emit(ItemUpserted(kernel.nextSeq, 'a1', _read));
-    expect(session.turns, [(turnId: 'u1', start: 1, prompt: 0, worked: null)]);
+    expect(session.turns, [
+      (turnId: 'u1', start: 1, prompt: 0, worked: null, stopped: false),
+    ]);
     kernel.emit(
       TurnEnded(kernel.nextSeq, 'u1', worked: const Duration(seconds: 65)),
     );
     expect(session.turns, [
-      (turnId: 'u1', start: 1, prompt: 0, worked: const Duration(seconds: 65)),
+      (
+        turnId: 'u1',
+        start: 1,
+        prompt: 0,
+        worked: const Duration(seconds: 65),
+        stopped: false,
+      ),
     ]);
   });
 
@@ -105,7 +113,8 @@ void main() {
     expect(session.turns.single.prompt, 0);
   });
 
-  test('a stopped turn keeps no time', () {
+  test('a stopped turn keeps its time, marked stopped (as upstream times '
+      'its message)', () {
     final (:session, :kernel) = _session();
     kernel.emit(TurnStarted(kernel.nextSeq, 'u1'));
     kernel.emit(
@@ -116,7 +125,13 @@ void main() {
         worked: const Duration(seconds: 30),
       ),
     );
-    expect(session.turns.single.worked, isNull);
+    expect(session.turns.single.worked, const Duration(seconds: 30));
+    expect(session.turns.single.stopped, isTrue);
+    // Untimed, it is no stopped one to fold.
+    kernel.emit(TurnStarted(kernel.nextSeq, 'u2'));
+    kernel.emit(TurnEnded(kernel.nextSeq, 'u2', interrupted: true));
+    expect(session.turns.last.worked, isNull);
+    expect(session.turns.last.stopped, isFalse);
   });
 
   test('earlier history read moves the turns along', () {

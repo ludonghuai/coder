@@ -2703,6 +2703,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String turnStopped(String duration) {
+    return 'Stopped after $duration';
+  }
+
+  @override
   String get planCardLabel => 'Plan';
 
   @override
@@ -11645,6 +11650,18 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get diffUnified => 'Unified Viewer';
+
+  @override
+  String get gitDetailsLayout => 'Details Position';
+
+  @override
+  String get gitDetailsLayoutAuto => 'Right When Wide Enough';
+
+  @override
+  String get gitDetailsLayoutBeside => 'Right';
+
+  @override
+  String get gitDetailsLayoutBelow => 'Bottom';
 
   @override
   String get diffIgnoreWhitespace => 'Ignore Whitespace at Line Ends';
