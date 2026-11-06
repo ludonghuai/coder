@@ -1975,7 +1975,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
         ?_topTurnMessage(),
         if (_sticks)
           for (final item in _laidOutItems())
-            if (_feed.itemAt(_indexOf(item)) is UserMessageItem) _indexOf(item),
+            if (_sticksAt(_indexOf(item))) _indexOf(item),
       };
       if (setEquals(indices, _stickyIndices)) return;
       _stickyKeys.removeWhere((index, _) => !indices.contains(index));
@@ -1985,6 +1985,13 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
       _rebuild();
     });
   }
+
+  /// Whether the item at [index] is a message the user sent, which sticks
+  /// at the top: not a subagent's.
+  bool _sticksAt(int index) => switch (_feed.itemAt(index)) {
+    UserMessageItem(fromAgent: null) => true,
+    _ => false,
+  };
 
   /// The user message of the turn at the top of the view: the last one
   /// scrolled past the top. (It keeps the top while the next one, below,
@@ -1998,14 +2005,14 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
     for (final item in _laidOutItems()) {
       final index = _indexOf(item);
       first ??= index;
-      if (_feed.itemAt(index) is! UserMessageItem) continue;
+      if (!_sticksAt(index)) continue;
       if (_messageTop(index, list)! >= _stickyInset) break;
       passed = index;
     }
     if (passed != null || first == null) return passed;
     // Scrolled past long ago: above the laid-out items.
     for (var index = first - 1; index >= 0; index--) {
-      if (_feed.itemAt(index) is UserMessageItem) return index;
+      if (_sticksAt(index)) return index;
     }
     return null;
   }
@@ -2035,7 +2042,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
     if (sticky == null || !sticky.hasSize || list == null) return null;
     for (final item in _laidOutItems()) {
       final next = _indexOf(item);
-      if (next <= index || _feed.itemAt(next) is! UserMessageItem) {
+      if (next <= index || !_sticksAt(next)) {
         continue;
       }
       final nextTop = _messageTop(next, list)!;
@@ -2459,8 +2466,10 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
         item: item,
         expanded: _isExpanded(index),
         onToggle: () => _toggle(index),
-        onEdit: item is UserMessageItem ? () => _startEditing(index) : null,
-        onContextMenu: item is UserMessageItem
+        onEdit: item is UserMessageItem && item.fromAgent == null
+            ? () => _startEditing(index)
+            : null,
+        onContextMenu: item is UserMessageItem && item.fromAgent == null
             ? (at) => _showTurnMenu(index, at)
             : null,
         onMoveToBackground: _feed.moveToBackgroundAt(index),

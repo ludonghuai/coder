@@ -20,9 +20,14 @@ class UserMessageItem extends ChatItem {
     this.worked,
     this.usage,
     this.sentAt,
+    this.fromAgent,
   });
 
   final String text;
+
+  /// Sent by a subagent (SendMessage), not typed: what it was given to do,
+  /// else its id. Shown as its, and not to be edited.
+  final String? fromAgent;
 
   /// Pictures sent with it (screenshots, mockups…).
   final List<ImageAttachment> images;
@@ -53,6 +58,7 @@ class UserMessageItem extends ChatItem {
         worked: worked ?? this.worked,
         usage: usage ?? this.usage,
         sentAt: sentAt,
+        fromAgent: fromAgent,
       );
 }
 

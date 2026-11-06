@@ -20,7 +20,7 @@ List<String> _sentPromptsOf(ChatComposerState state) {
   final session = state.widget.session;
   final prompts = <String>[];
   for (var i = 0; i < session.itemCount; i++) {
-    if (session.itemAt(i) case UserMessageItem(:final text)
+    if (session.itemAt(i) case UserMessageItem(:final text, fromAgent: null)
         when text.trim().isNotEmpty &&
             (prompts.isEmpty || prompts.last != text)) {
       prompts.add(text);
