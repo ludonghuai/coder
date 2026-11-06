@@ -473,14 +473,17 @@ extend(count, itemAt, live):
 ```dart
 /// 一个回合，折叠看得到的那部分：内核给的回合 id、第一条条目的下标、
 /// 开这一回合的用户消息下标（unprompted 回合为 null）、耗时（进行中
-/// 或被打断为 null）。
+/// 为 null）、是否被用户停下。
 typedef TurnMark = ({
   String turnId,
   int start,
   int? prompt,
   Duration? worked,
+  bool stopped,
 });
 ```
+
+**2026-11-05 改**（随上游 `b79433ef`「a stopped turn's work folds too」）：被停下的回合也计时（到停下那一刻），`stopped = true`；窗内规则跟上游的提示词规则一致——停下的回合不论有没有答案，工作全部折叠，只把末尾说明原因的 `NoticeItem`（错误）留在外面，折叠行读「处理 X 后停止」。此前被打断的回合 `worked = null`、不折叠。边界并集（`lib/chat/step_folds_boundaries.dart`）里提示词开的窗也带上消息的 `stopped`。
 
 **能力接口（`lib/chat/chat_feed.dart`，与 `ChatFeed` 并列，不进 `ChatFeed`）**：
 
@@ -504,8 +507,8 @@ abstract interface class MarksTurns {
 
 | 事件 | 动作 |
 |---|---|
-| `TurnStarted(turnId, unprompted)` | 追加一条 mark：`turnId = turnId`、`start = _transcript.length`（此刻之后第一条条目的下标；可等于 `count`，是合法的空边界，见 §14-2 规则 4）、`prompt = unprompted ? null : (_transcript.indexOf(turnId) ?? start)`、`worked = null` |
-| `TurnEnded(turnId, interrupted, worked)` | 从尾往前找第一条 `turnId` 相同的 mark，写 `worked = interrupted ? null : worked`；找不到 ⇒ 不改账（如该回合的 mark 已被回退裁掉） |
+| `TurnStarted(turnId, unprompted)` | 追加一条 mark：`turnId = turnId`、`start = _transcript.length`（此刻之后第一条条目的下标；可等于 `count`，是合法的空边界，见 §14-2 规则 4）、`prompt = unprompted ? null : (_transcript.indexOf(turnId) ?? start)`、`worked = null`、`stopped = false` |
+| `TurnEnded(turnId, interrupted, worked)` | 从尾往前找第一条 `turnId` 相同的 mark，写 `worked = worked`、`stopped = interrupted && worked != null`（2026-11-05 起；此前被打断写 `worked = null`）；找不到 ⇒ 不改账（如该回合的 mark 已被回退裁掉） |
 | `HistoryPrepended` | 先算 `moved = _transcript.prepended - _prependedSeen`，写回 `_prependedSeen = _transcript.prepended`，再把每条 mark 的 `start` / `prompt` 加 `moved`（只算真正插入的条数：`_prepend` 会滤掉已有 id，`transcript.dart:219-225`）。字段 `_prependedSeen`（int，初值 0）与视图侧同形（`chat_history_view.dart:786`）；换内核重建 `Transcript`（`prepended` 归 0）时一并归 0；`Rewound` 不改 `prepended`（`transcript.dart:45-47` 只增），无需同步 |
 | `Rewound` | 截断点 = 应用后的 `_transcript.length`；从尾往前删「起点 ≥ 截断点」的 mark。剩下的最后一条 mark 只在**跨过且非消息点**时删：跨过 = 被删 mark 里最小的起点 > 截断点，或未删 mark 但砍掉了条目；消息点 = 截断点上是 `UserMessageItem`（下一回合的提示词，不算被截回合的）。消息点在 `apply` 前判，按 `itemId` 解析、缺省 `index`（`_cutsAtMessage`，`chat_session.dart:185-192`；裁剪分支 `:234-247`） |
 | 换内核（`chat_session.dart:328-337` 重建 `Transcript`） | 清空 mark；`_prependedSeen = 0` |
