@@ -8,6 +8,7 @@
 - 本表不是历史 diff 的逐行镜像。表外共享文件是只读上游面；合并前仍须做全量 diff，对账发现自有块时先补表再解决冲突，不得凭「表外」推断没有自有块。
 - 自有目录 / 文件不得因冲突整档取上游；共享文件不得把上游实现回退成旧 fork 版本。
 - 「行数预算」约束共享文件的 fork 净增行；自有文件用「自有」标记，仍受既有结构拆分规则约束。
+- **首次登记行的「行数预算」列放实测值**：该行是合并对账时新补的，当场只有对 `origin/main` 的 `git diff --numstat` 读数、没有事先约定的上限 ⇒ 实测值即此后涨幅的核对基线；已有上限的行仍按上限判。
 - 类型只用：**修 bug · 功能 · 内核适配**。
 - l10n 只合并 `app_en.arb` / `app_zh.arb` 的键级并集；生成文件由 `flutter gen-l10n` 重产，不手解、不选边。
 - 上游测试与自有断言分档；不为保留 fork 断言改写上游测试。
@@ -90,17 +91,18 @@
 | `test/chat/side_panel/file_open_test.dart` | Windows 路径拼写：两个项目路径常量与「项目外文件」的绝对路径改 `p.normalize`（档内 3 处），文件名解析的期望值改 `p.join`（1 处） | 修 bug | 路径断言的比较面；三条用例与断言强度不变（无 `skip`、无放宽成 `contains`） | 上游 63 行 ⇒ 60 行（多行 `expect` 收到一行） |
 | `test/composer_test.dart` | 自有用例 `two approvals are a switch at the end, five a menu (T61)`（`ComposerPermissionSwitch`：两条批准为开关、五条为菜单）+ 四条自有 import + btest 模式追加后的四处期望调整（第四处 2026-11-05：`mode picker opens on press…` 的方向键多按一次，绕过菜单末尾的 btest；Shift+Tab 那条随 `_nextModeOf` 跳过 btest 回到上游期望） | 功能 | `ComposerPermissionSwitch`；overlay 追加的 btest 模式 | 净增 ≤99 行（实测 +95 / −2，净增 93）；2026-11-08 合并取上游 `inset` 后，四处粘顶断言归上游面 |
 | `lib/models/secret_store_io.dart` | 令牌一次运行只解一次：读路径先查 `_values`、并发读经 `_reading` 去重、写与删以 `_changed` 递增让在途读作废；解封一律走 `ProcessHost.start`（`ProcessHostUnavailable` 转 `SecretStoreException`），不在窗口线程（自有提交 `29d21308`） | 修 bug | `SecretCommand` / `ProcessHost.start`（`_run`）；消费方 = `lib/models/secret_store.dart` 的 `SecretStore.instance = platform.systemSecretStore()` | 对 `origin/main` 实测 +121 / −19；2026-11-08 合并时首次登记（此前表外） |
+| `test/models/models_test.dart` | 自有 DPAPI 块的用例面：4 条 Windows 用例（已存的一次运行只解一次 · 并发读只起一次 PowerShell · 删除后忘掉 · 失败的那次可重试），承载第 3 节 `lib/models/secret_store_io.dart` 行的行为断言；块落在上游用例之后，不改上游断言 | 修 bug | `DpapiSecretStore` 的 `run` 注入（`lib/models/secret_store_io.dart`）；消费方同该行 | 对 `origin/main` 实测 +131 / −0；2026-11-08 合并时首次登记（此前表外） |
 | `lib/keybindings/workbench_keybindings.dart` | 1 行标签：`git.fetchAll` 在本仓读 `Fetch and Pull All Repositories`（上游读 `Fetch From All Remotes`），其余随上游（自有提交 `434f76be`） | 功能 | `CommandInfo('git.fetchAll')` 的展示标签；键位表与命令面板读同一 `CommandInfo` | 对 `origin/main` 实测 +1 / −1；2026-11-08 合并时首次登记（此前表外） |
 
 **恢复的上游 import 与自有 re-export 档重复**：`lib/browser/browser_tools.dart:13`、`lib/images/image_tools.dart:13` 与 `lib/bots/bot_tools.dart:13` 各带一条 `unnecessary_import` info（自有 `host_tools.dart` 的 re-export 覆盖同样四个符号）。这三行是上游行，删掉即重建常驻 fork 差异，**禁随 lint 清扫删除**。
 
-**存量债（过 800 行的上游共享档，`wc -l` 实测 2026-11-04）**：`lib/kernel/claude_code/claude_code_kernel.dart` 3881 · `test/bots/bots_test.dart` 1690 · `lib/bots/bots.dart` 1367 · `lib/bots/bot_tools.dart` 963。
+**存量债（过 800 行的上游共享档，`wc -l` 实测 2026-11-04）**：`lib/kernel/claude_code/claude_code_kernel.dart` 3881 · `test/bots/bots_test.dart` 1690 · `lib/bots/bots.dart` 1367 · `lib/bots/bot_tools.dart` 963；`test/models/models_test.dart` 1769（2026-11-08 `wc -l` 实测）。
 
 另四档（同口径）：`lib/chat/side_panel/side_panel_view.dart` 2303 · `lib/main.dart` 1112 · `lib/settings/settings_dialog.dart` 864 · `lib/ide/ide_tab_bar.dart` 946。
 
-第九档 `lib/workspace/workspace.dart`（实测 4050）：按第 3 节该行维护四块自有语义（预算 ≤40 行）；档整体相对上游 `+125 / −31`，见该行读数。
+第十档 `lib/workspace/workspace.dart`（实测 4050）：按第 3 节该行维护四块自有语义（预算 ≤40 行）；档整体相对上游 `+125 / −31`，见该行读数。
 
-九档都是上游共享档：拆分会让两半都成常驻 fork 差异（第 7.3 节同一理由），认账不排期。`lib/chat/composer/composer.dart` 现 744 行（<800），不在本名单。`workbench.dart` 的读数与体量立场归第 8.5 节，此处不复述。接手批次未排期，涨幅在下一次合并时按本行核对。
+十档都是上游共享档：拆分会让两半都成常驻 fork 差异（第 7.3 节同一理由），认账不排期。`lib/chat/composer/composer.dart` 现 744 行（<800），不在本名单。`workbench.dart` 的读数与体量立场归第 8.5 节，此处不复述。接手批次未排期，涨幅在下一次合并时按本行核对。
 
 ## 4 保持上游实现的共享文件
 
@@ -317,7 +319,7 @@
 
 ### 8.4 集成测试设计（RTM delta）
 
-读 `test/RTM.md`（69 行 = `split('\n')` 口径含末行换行；6 / 50–100 条）。六组都改既有界面的可观察结果，但没有一条新的业务故事从用户入口长出来：六组是合并面审查发现的回归，无生产报告，也无新业务场景。
+读 `test/RTM.md`（`wc -l` 实测 107 行；9 / 50–100 条，2026-11-08 实测）。六组都改既有界面的可观察结果，但没有一条新的业务故事从用户入口长出来：六组是合并面审查发现的回归，无生产报告，也无新业务场景。
 
 | 行 | 断言面（本轮逐行读过） |
 |---|---|
