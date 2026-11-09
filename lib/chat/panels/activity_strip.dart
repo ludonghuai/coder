@@ -527,7 +527,7 @@ class _TasksHeader extends StatelessWidget {
 class _FilesHeader extends StatelessWidget {
   const _FilesHeader({
     required this.changes, required this.expanded, required this.onToggle,
-    required this.onUndo, required this.onKeep, this.undoTooltip,
+    required this.onUndo, required this.onKeep, required this.undoTooltip,
   });
 
   final List<FileChange> changes;
