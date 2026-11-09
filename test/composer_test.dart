@@ -1926,6 +1926,7 @@ void main() {
       await reveal(tester, '第 3 轮');
       await reveal(tester, '第 2 轮');
       final list = tester.getRect(find.byType(SuperListView));
+      final inset = chatGutter(list.width);
       final position = tester
           .state<ScrollableState>(
             find
@@ -1953,12 +1954,12 @@ void main() {
       expect(stuck, findsOneWidget);
       expect(stuck.hitTestable(), findsNothing);
 
-      // Scrolled past: its copy at the top, in the same frame — 24 down,
-      // as far as the chat's gutter (see the list's top room).
+      // Scrolled past: its copy at the top, in the same frame — the chat's
+      // gutter down (see the list's top room).
       position.jumpTo(position.pixels + 60);
       await tester.pump();
       expect(stuck.hitTestable(), findsOneWidget);
-      expect(tester.getTopLeft(stuck).dy, list.top + 24);
+      expect(tester.getTopLeft(stuck).dy, list.top + inset);
       final stuckAt = position.pixels;
 
       // The next message, arriving, pushes it up: the copy's fade ends at it.
@@ -1974,7 +1975,7 @@ void main() {
         tester.getTopLeft(bubble('第 3 轮')).dy,
         closeTo(list.top + 40, 0.01),
       );
-      expect(tester.getTopLeft(stuck).dy, lessThan(list.top + 24));
+      expect(tester.getTopLeft(stuck).dy, lessThan(list.top + inset));
       expect(tester.getBottomLeft(stuck).dy + 16, closeTo(list.top + 40, 0.01));
 
       // Clicked, it opens the message to edit, stuck to the top in its place.
@@ -1999,6 +2000,7 @@ void main() {
       // The editor opens over a moment.
       await tester.pump(const Duration(milliseconds: 300));
       final list = tester.getRect(find.byType(SuperListView));
+      final inset = chatGutter(list.width);
       final composer = find.descendant(
         of: find.byType(ChatHistoryView),
         matching: find.byType(ChatComposer),
@@ -2019,12 +2021,12 @@ void main() {
       await tester.pump();
       final start = position.pixels;
       final inPlace = tester.getTopLeft(composer).dy;
-      expect(inPlace, greaterThan(list.top + 24));
+      expect(inPlace, greaterThan(list.top + inset));
 
       // Scrolled past: pinned just below the top of the list.
       position.jumpTo(position.maxScrollExtent);
       await tester.pump();
-      expect(tester.getTopLeft(composer).dy, list.top + 24);
+      expect(tester.getTopLeft(composer).dy, list.top + inset);
       // Still usable there: the wheel over it scrolls the list.
       final wheel = TestPointer(7, PointerDeviceKind.mouse);
       wheel.hover(tester.getCenter(composer));

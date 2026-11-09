@@ -932,6 +932,34 @@ void main() {
       expect((jsonDecode(counted.text) as Map)['input_tokens'], greaterThan(0));
     });
 
+    test('OpenCode is not told Claude Code\'s session', () async {
+      final opencode = ModelProxy(
+        provider: (id) => ModelProvider(
+          id: 'oc',
+          name: 'OpenCode',
+          baseUrl: 'http://opencode.ai/inference/anthropic',
+          auth: ProviderAuth.apiKey,
+        ),
+        key: (id) async => 'sk-$id',
+        findProxy: (_) => 'PROXY ${Uri.parse(anthropic.base).authority}',
+        token: 'tok',
+      );
+      addTearDown(opencode.close);
+      anthropic.reply = (_) => (200, const ['event: message_stop', '']);
+      const headers = {'x-api-key': 'tok', sessionHeaderName: 's1'};
+      final body = {'model': 'deepseek-v4.1-flash', 'messages': []};
+      await post(
+        Uri.parse('${(await opencode.endpoint('oc')).baseUrl}/v1/messages'),
+        body,
+        headers: headers,
+      );
+      await post(await on('an'), body, headers: headers);
+      final [toOpencode, toClaude] = anthropic.requests;
+      expect(toOpencode.path, '/inference/anthropic/v1/messages');
+      expect(toOpencode.headers.containsKey(sessionHeaderName), isFalse);
+      expect(toClaude.headers[sessionHeaderName], 's1');
+    });
+
     test('Anthropic\'s API at an address of its own: the endpoint\'s query '
         'kept, tokens counted under it', () async {
       final origin = Uri.parse(anthropic.base).origin;

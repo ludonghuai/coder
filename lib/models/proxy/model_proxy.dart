@@ -617,9 +617,14 @@ class ModelProxy {
     final upstreamRequest = await client.postUrl(url);
     final key = await _key(provider.id);
     upstreamHeaders(provider, key).forEach(upstreamRequest.headers.set);
+    // OpenCode, told the session, sends it to a backend that refuses the
+    // cache's marks (`cache_control`).
+    final opencode =
+        url.host == 'opencode.ai' || url.host.endsWith('.opencode.ai');
     request.headers.forEach((name, values) {
       if (!_notPassed.contains(name) &&
-          !UsageHeaders.hintsOnly.contains(name)) {
+          !UsageHeaders.hintsOnly.contains(name) &&
+          !(opencode && name == sessionHeaderName)) {
         upstreamRequest.headers.set(name, values);
       }
     });

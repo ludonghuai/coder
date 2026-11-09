@@ -67,12 +67,14 @@
 
 ### 2.3 survey 证据
 
-查过：外仓设计档 `thincoder/docs/cli/design/ACP-CLIENT.md` §2.1（方法面表，`:29-44`）、§3.1（FIFO 豁免与三条判据，`:87-114`）、§3.3（方法 → agent 映射，`:174-184`）、§12.8 / §12.9（`_meta` 扩展帧先例）；
-`thincoder/docs/cli/design/TUI-COMMANDS.md` §5.3（`/undo` 双上界与快照单源，`:139-141`）；
-`thincoder/docs/core/design/SESSION.md` §6.7（标题生成五环：源 / 生成 / 触发 / 写 / 读，`:157-174`）、`:244-245`（`renameSlot` 标题写契约 `{ok, reason}`）、`:276`（`/rename` 只改标题，sidecar 零动作）。
-公开源：无新增——两个方法名是 ACP 方法面之外的**扩展方法**（同 `session/delete`、`ledger/*` 的既有做法），不涉协议版本 / 能力位变更；`_meta` 扩展位未被本批使用。结论：上列档与本次设计无相抵之处；`session/set_title` / `session/revert` 需在 ACP-CLIENT §2.1 方法表登记为扩展方法。
-A2 追加（2026-10-20）：`thincoder/docs/cli/design/ACP-CLIENT.md` §2.1（方法面表；`session/revert` 行在 `:44`，`session/prompt` 的 `turnId` 在 `:70`）、§2.4（排队归属）；`thincoder/docs/core/design/SESSION.md` §6.27（A1 的撤销栈回合化）、§6.14（记录存储分段与窗口）。公开源：无新增——`session/rewind` 同为扩展方法，不涉协议版本 / 能力位。
-同仓设计档：`docs/design/thincoder-adapter.md` §24.1（后置态先例，本批对齐）、§5.2（体量立场 = 只跟 >800 硬顶）、§10（边界行与本批相抵，处置见 §4.1 ㉑，由父侧文档层修正）。
+查过（外仓设计档）：
+
+- `thincoder/docs/cli/design/ACP-CLIENT.md`：§2.1 方法面表（`:29-44`）· §3.1 FIFO 豁免与三条判据（`:87-114`）· §3.3 方法 → agent 映射（`:174-184`）· §12.8 / §12.9 的 `_meta` 扩展帧先例。
+- `thincoder/docs/cli/design/TUI-COMMANDS.md`：§5.3 `/undo` 双上界与快照单源（`:139-141`）。
+- `thincoder/docs/core/design/SESSION.md`：§6.7 标题生成五环（源 / 生成 / 触发 / 写 / 读，`:157-174`）· `:244-245` 的 `renameSlot` 标题写契约 `{ok, reason}` · `:276` 的 `/rename` 只改标题、sidecar 零动作。
+- **公开源**：无新增。两个方法名是 ACP 方法面之外的**扩展方法**（同 `session/delete`、`ledger/*` 的既有做法），不涉协议版本 / 能力位变更；`_meta` 扩展位未被本批使用。结论：上列档与本次设计无相抵之处；`session/set_title` / `session/revert` 需在 ACP-CLIENT §2.1 方法表登记为扩展方法。
+- **A2 追加（2026-10-20）**：`thincoder/docs/cli/design/ACP-CLIENT.md` §2.1（方法面表；`session/revert` 行在 `:44`，`session/prompt` 的 `turnId` 在 `:70`）、§2.4（排队归属）；`thincoder/docs/core/design/SESSION.md` §6.27（A1 的撤销栈回合化）、§6.14（记录存储分段与窗口）。公开源同样无新增 —— `session/rewind` 同为扩展方法，不涉协议版本 / 能力位。
+- **同仓设计档**：`docs/design/thincoder-adapter.md` §24.1（后置态先例，本批对齐）、§5.2（体量立场 = 只跟 >800 硬顶）、§10（边界行与本批相抵，处置见 §4.1 ㉑，由父侧文档层修正）。
 
 ### 2.4 回退算法（逐文件、逆序、部分成功）
 
@@ -100,8 +102,10 @@ A2 追加（2026-10-20）：`thincoder/docs/cli/design/ACP-CLIENT.md` §2.1（�
 **预算影响**：每条目 = 一条路径的一次写；一次多文件 `apply_patch` 产出 N 条 ⇒ 50 条 / 64MB 按 N 倍速率消耗。本批接受（§2.2 偏离① / §10 U6）。
 
 **回合键**：`session/prompt` 的 `turnId` 由宿主给（`KernelTurn.id`，UUIDv4，`lib/chat/chat_session.dart:1099-1101`）。
-核 `execTurn`（`thincoder/thincoder-cli/src/acp/session.mjs:88-114`）为每个执行回合取键：用户回合用 `turnId`，自动轮（挂起窗消化 / 唤醒）**继承上一个键**、ordinal 自增。
-无 `turnId` 的客户端（非桌面）由核铸 `p<n>`。未知键 ⇒ `-32602 unknown turn`（栈与会话同生共死，进程重开后没有可回退的回合）。
+
+- 取键：核 `execTurn`（`thincoder/thincoder-cli/src/acp/session.mjs:88-114`）逐回合取键 —— 用户回合用 `turnId`，自动轮（挂起窗消化 / 唤醒）**继承上一个键**、ordinal 自增。
+- 无 `turnId` 的客户端（非桌面）：由核铸 `p<n>`。
+- 未知键 ⇒ `-32602 unknown turn`（栈与会话同生共死，进程重开后没有可回退的回合）。
 
 ### 2.5 rewind 算法（截断点、两线、索引）
 
@@ -117,13 +121,19 @@ A2 追加（2026-10-20）：`thincoder/docs/cli/design/ACP-CLIENT.md` §2.1（�
    盘面瘦身形（tool 参数截 300 / 结果截 500 / 图占位）随重载支与恢复过的会话进入人读线；半截 `\uXXXX` 会毒化发送载荷（会诊 F6 结论，`thincoder-core/session-lifecycle.mjs:60-61`）⇒ 复用恢复面同一消毒（同档 `:62` 的既有导出，`session-rewind.mjs:13` import；本批只加 `export `、函数体零改，D2 单源）。D-SG22 的取舍不变：transient 注入与压缩摘要仍不在重建面。
 5. 回合索引：从 `agent._undoTurns` 移除 `firstOrdinal >= turn.firstOrdinal` 的全部键（被截断回合及其后的键；实现 = `dropTurnsFrom(agent, turn.firstOrdinal)`，§4.2 ⑬）；**撤销栈条目原样保留**（ordinal 不变 ⇒ 前一回合的「从该回合起」仍覆盖它们，F3.4）；`_undoLost` 不动；`agent._undoTurn = null`。
 
-**位次不变量（步骤 3 的承重假设）**：绑定态下 `_fullHistory` 恰为记录存储的末 `full.length` 条——`pushReal`（`thincoder-core/context-push.mjs:27-37`）是两线的单一写缝（同一消息对象、同一顺序）；存储侧按 `shouldAppend` 过滤（`thincoder-core/session-store.mjs:269-271`）——
-注：transient 注入直推机器线、不走 `pushReal`（`context-push.mjs:13-14`），故两线条目集相同；窗口驱逐只在人读线尾部裁（`full.length = min(total, window)`）。由此 `_fullHistory[i]` ↔ 存储绝对位次 `total - full.length + i`；未绑定态无存储，位次 = 下标，恒成立。
+**位次不变量（步骤 3 的承重假设）**：绑定态下 `_fullHistory` 恰为记录存储的末 `full.length` 条。
+
+- 写缝单源：`pushReal`（`thincoder-core/context-push.mjs:27-37`）—— 同一消息对象、同一顺序；存储侧按 `shouldAppend` 过滤（`thincoder-core/session-store.mjs:269-271`）。
+- 条目集相同：transient 注入直推机器线、不走 `pushReal`（`context-push.mjs:13-14`）；窗口驱逐只在人读线尾部裁（`full.length = min(total, window)`）。
+- 由此 `_fullHistory[i]` ↔ 存储绝对位次 `total - full.length + i`；未绑定态无存储，位次 = 下标，恒成立。
 
 **被否：按相对位次切**（`full.splice(from - (total - full.length))`）——窗口饱和（`total > win`）时它只删尾巴，留下 `win - (total - from)` 条，与不变量 `full.length === min(total, win)` 冲突 ⇒ 同一会话第二次 rewind 在步骤 1 被拒成 `-32602 unknown turn`（红绿读数：`_fullHistory.length` actual 2 / expected 4）。
 
-**不成立时 ⇒ 拒绝**（步骤 1 的检查项，先于任何写入）：判据 = `store.degraded === false` ∧ `full.length === Math.min(total, agent._historyWindow > 0 ? agent._historyWindow : total)`（未绑定 ⇒ 免检）。
-降级缺口（`memTotal > total`）与窗口长度不符都会让「存储尾 ≡ 人读线」不成立 ⇒ `-32602 unknown turn`、零变更。不选：断言抛错（内部不一致变 500，错误面不可见）；按 `_fullHistory` 下标直接切（两坐标系不同，错位会静默删错消息）。
+**不成立时 ⇒ 拒绝**（步骤 1 的检查项，先于任何写入）。判据 = `store.degraded === false` ∧ `full.length === Math.min(total, agent._historyWindow > 0 ? agent._historyWindow : total)`（未绑定 ⇒ 免检）。
+
+- 两种破法：降级缺口（`memTotal > total`）与窗口长度不符 —— 都让「存储尾 ≡ 人读线」不成立 ⇒ `-32602 unknown turn`、零变更。
+- 不选：断言抛错（内部不一致变 500，错误面不可见）。
+- 不选：按 `_fullHistory` 下标直接切（两坐标系不同，错位会静默删错消息）。
 
 **为什么重建机器线而不是按位切**：两线不等长（机器线多出 transient 提醒，`context-push.mjs:13-15`），且机器线会被压缩改形；按位切会漂。重建丢的是 transient 注入（每轮重发）与压缩摘要（下一次压缩重跑），内容面不缺。被否：按位切两线（漂）；被否：按对象身份找边界（降级是 copy-on-write，`context-degrade.mjs:55-57` 会换对象）。
 
@@ -154,8 +164,12 @@ A2 追加（2026-10-20）：`thincoder/docs/cli/design/ACP-CLIENT.md` §2.1（�
 - 三个方法都过 `requireConfigured()` 凭据门（与会话族同）：无 key 时 `-32000`。
 - `session/rewind` 的会话解析与 `revert` 同：**须活跃会话**（回合键随进程；短命连接没有键可查）。排队归属同 A1（§2.2 对齐④）：默认排队、不进白名单。
 - **`persist()` 失败面**（`session/rewind` 的落盘步）：`persist()` 与回合尾同一个 `save`（`thincoder-core/session.mjs:131`），槽 JSON 写失败（`EACCES` / `ENOSPC`，`saveProjectedSlot` 的 `.tmp` + rename 兜底也失败）向上抛 ⇒ 回 `-32603 persist-failed`。
-  失败后状态：**截断已在内存两线与 sidecar 生效，槽 JSON / manifest 未重写**——**不可重试**（回合键已剪、`_undoTurn` 已清 ⇒ 同 `turnId` 再发得 `-32602`）；**会话内自愈** = 下一次任何 `save`（下一回合尾 `execTurn` 的 finally，`thincoder-cli/src/acp/session.mjs:106-117`）按同一投影重写槽 JSON，两侧收敛到「已截断」；
-  **进程若先退出** = `load` 见槽 JSON 更长、`bind` 的 `_materialize` 以槽为准重建 sidecar（`thincoder-core/session-store.mjs:73-81`）⇒ 截断整体撤销，两侧同回旧值（不会停在对不上的两侧）。宿主面：`-32603` 落 §3.3「其余 ⇒ error 提示」，不加文案键。
+  失败后状态：**截断已在内存两线与 sidecar 生效，槽 JSON / manifest 未重写**。
+
+  - **不可重试**：回合键已剪、`_undoTurn` 已清 ⇒ 同 `turnId` 再发得 `-32602`。
+  - **会话内自愈**：下一次任何 `save`（下一回合尾 `execTurn` 的 finally，`thincoder-cli/src/acp/session.mjs:106-117`）按同一投影重写槽 JSON，两侧收敛到「已截断」。
+  - **进程若先退出**：`load` 见槽 JSON 更长、`bind` 的 `_materialize` 以槽为准重建 sidecar（`thincoder-core/session-store.mjs:73-81`）⇒ 截断整体撤销，两侧同回旧值（不会停在对不上的两侧）。
+  - 宿主面：`-32603` 落 §3.3「其余 ⇒ error 提示」，不加文案键。
 - **`truncate` 失败面**（与 `persist-failed` 分档）：`rewindConversation` 的 `store.truncate(from)` 写盘失败（`EACCES` / `ENOSPC` / 删段中途失败）⇒ 存储按盘面重同步、保留缺口并置 `degraded`（`thincoder-core/session-store.mjs:256-261`），错误向上抛 ⇒ 回 `-32603 rewind failed: <msg>`。
   失败后状态：**盘面（记录段）可能已变，人读线 / 机器线 / 回合索引 / 槽 JSON 均未动**——本次 rewind 整体失败（宿主一条 error 提示，对话不变）；降级态下同 `turnId` 再发先被步骤 1 的位次不变量拒成 `-32602`。
   **会话内自愈** = 下一次 `save` 的 `catchUp` 按人读线窗口补回被误删的尾段并清降级（同档 `:383-398`，入口 `saveProjectedSlot` `:436`；缺口已滑出窗口 ⇒ 保持降级、投影按存储前缀写）⇒ 补回之后同 `turnId` 重发即正常截断。
@@ -181,8 +195,10 @@ A2 追加（2026-10-20）：`thincoder/docs/cli/design/ACP-CLIENT.md` §2.1（�
 { key, firstOrdinal, storeFrom, paths: ['<abs>', …] }
 ```
 
-范围 = `ordinal >= firstOrdinal`（开区间到尾，跨后续键）；上限 50 键、最旧先出；键被逐出而条目仍在栈里 ⇒ 该键回退 `-32602 unknown turn`（§2.4 边界规则）。
-`storeFrom` = 该回合起点在记录存储里的绝对位次（起轮时 `_recordStore.total()`；未绑定 = `_fullHistory.length`），rewind 的截断点（§2.5）；自动轮继承键 ⇒ 沿用原值。该字段的消费依赖**位次不变量**（存储尾 ≡ 人读线；`_fullHistory[i]` ↔ 绝对位次 `total - full.length + i`）；不成立 ⇒ rewind 拒绝（§2.5）。rewind 剪枝 = 移除 `firstOrdinal >= turn.firstOrdinal` 的全部键，条目保留（F3.4）。
+- **范围** = `ordinal >= firstOrdinal`（开区间到尾，跨后续键）；上限 50 键、最旧先出；键被逐出而条目仍在栈里 ⇒ 该键回退 `-32602 unknown turn`（§2.4 边界规则）。
+- **`storeFrom`** = 该回合起点在记录存储里的绝对位次（起轮时 `_recordStore.total()`；未绑定 = `_fullHistory.length`），rewind 的截断点（§2.5）；自动轮继承键 ⇒ 沿用原值。
+- **依赖**：该字段的消费依赖**位次不变量**（存储尾 ≡ 人读线；`_fullHistory[i]` ↔ 绝对位次 `total - full.length + i`）；不成立 ⇒ rewind 拒绝（§2.5）。
+- **剪枝** = 移除 `firstOrdinal >= turn.firstOrdinal` 的全部键，条目保留（F3.4）。
 
 **写入点**：
 - `beginUndoTurn(agent, { turnId })`：`ordinal = ++agent._undoTurnSeq`；有 `turnId` ⇒ 新键；无 `turnId` 且有上一键 ⇒ 继承；无 `turnId` 且无上一键 ⇒ 铸 `p<n>` 新键。调用点 = `session.mjs` 的 `execTurn`（覆盖用户回合 / 消化轮 / 唤醒轮三条起轮径）。
@@ -229,12 +245,12 @@ class RevertFailure { final String path; final String? displayPath; final String
 
 - `ThincoderKernel implements RenamesSession, PlansReverts, GeneratesTitles, DefersRename, RewindsConversation`；`ThincoderCatalog implements RenamesStoredSessions`。
 - `RewindsConversation.rewind`（`lib/kernel/agent_kernel.dart:268-282`）：thincoder 只消费 `itemId`（= A1 回合 id）⇒ 发 `session/rewind {sessionId, turnId: itemId}`。
-  `index / turns / lastSeen` 不进请求；`index` 只作 `Rewound` 的位次兜底（实现注释注明）。
-  成功 ⇒ 清内核 `_queue`（`thincoder_kernel.dart:146`；既有同类清理点 `:496` / `:591`）+ 发 `Rewound(itemId, index)`（同档 `:976`）+ 返回 `true`。
-  清队列的由：被截断点之后仍在排队的回合消息不再投递——否则它们照常执行，重发回合反排在它们之后，与 F3.1「从该消息起截断」相抵。
-  宿主 `lib/kernel/transcript.dart:174-180` 据此截断 transcript：按 `itemId` 定位、找不到时用 `index` 兜底（Claude / Codex 同法：`codex_kernel.dart:244` / `claude_code_kernel.dart:1123`）。
-  `-32602` ⇒ 一条 `rewindNotInThisRun` 提示；`-32002` ⇒ `rewindTurnInFlight`；其余 ⇒ error 提示。
-  失败一律 `false`，对话不变。请求发送走 `revertPlan` 的同一请求面。
+- `index / turns / lastSeen` 不进请求；`index` 只作 `Rewound` 的位次兜底（实现注释注明）。
+- 成功 ⇒ 清内核 `_queue`（`thincoder_kernel.dart:146`；既有同类清理点 `:496` / `:591`）+ 发 `Rewound(itemId, index)`（同档 `:976`）+ 返回 `true`。
+- 清队列的由：被截断点之后仍在排队的回合消息不再投递——否则它们照常执行，重发回合反排在它们之后，与 F3.1「从该消息起截断」相抵。
+- 宿主 `lib/kernel/transcript.dart:174-180` 据此截断 transcript：按 `itemId` 定位、找不到时用 `index` 兜底（Claude / Codex 同法：`codex_kernel.dart:244` / `claude_code_kernel.dart:1123`）。
+- `-32602` ⇒ 一条 `rewindNotInThisRun` 提示；`-32002` ⇒ `rewindTurnInFlight`；其余 ⇒ error 提示。
+- 失败一律 `false`，对话不变。请求发送走 `revertPlan` 的同一请求面。
 - `ChatSession` 投影：
   - `String? get revertTurn` = 首个待处理改动的 `turnId`——只供 ActivityStrip「Undo all」取起点，不承担「有没有可回退的改动」的判据。
   - `bool get canPlanRevert` = **只看能力 + 空闲**（内核为 `PlansReverts` 且 `canRevertNow`）——不以宿主 pending 列表为门（与 D-SG5 一致：宿主会少列）。
@@ -329,7 +345,7 @@ class RevertFailure { final String path; final String? displayPath; final String
 | ⑲ | `lib/kernel/thincoder/thincoder_mock.dart`（668） | G1 / G1b / G5–G8 的脚本面：`session/set_title`（空白 / 超 80 / `titleError` ⇒ `-32602`，成功改 `slots` 标题）+ `session/revert`（可脚本计划 / 结果 / 错误）+ 请求记录 | ≤ +35（⇒ ≤703；>500 且 <800，不立缝） |
 | ⑳ | `test/workspace/agent_title_test.dart`（40） | G2（自动标题器门：thincoder 零调用、Claude 照旧） | ≤ +25（⇒ ≤65） |
 | ㉑ | `docs/design/thincoder-adapter.md`（文档面） | §10 边界删「回退 / 改名」；§3.4 `session/prompt` 行补 `turnId?`；档头批次名册（`:5`）+ §7 B1 例外补本批；§5.2 的 `thincoder_kernel.dart` 缝候选行注明「本批 +175 后再评估」 | 文档面；**本批只报告，由父侧文档层修正**（R1/R7a：他板块档，不在本设计笔域） |
-| ㉒ | `lib/chat/panels/activity_strip.dart`（520） | 「Undo all」在飞时灰态 + `revertTurnInFlight` tooltip（`PanelButton` 已支持 tooltip，`interaction_panel.dart:947-962`）；其余不动 | ≤ +5（⇒ ≤525） |
+| ㉒ | `lib/chat/panels/activity_strip.dart`（上游基线 615） | 「Undo all」在飞时灰态 + `revertTurnInFlight` tooltip（`PanelButton` 已支持 tooltip，`lib/chat/panels/interaction_panel.dart:947-962`）。接缝 = `undoTooltip` 从 `ActivityStrip` 透传到 `_FilesHeader` 再进 `PanelButton.tooltip`；显示门 `onUndo != null \|\| undoTooltip != null`（回合在飞时 `onUndo` 为 null，靠 tooltip 让按钮出现并灰显）。档内其余是上游实现：`Stack` + 可拖高的 sash（`_tree` / `_treeHeight` / `_sash()`，`ValueKey('activity-strip-sash')`） | 净增 ≤ +5（对上游 615 ⇒ ≤620；实测净 +5，增 11 / 减 6） |
 | ㉓ | `lib/kernel/thincoder/thincoder_kernel.dart`（1295） | implements `RewindsConversation`；`rewind`（发 `session/rewind` + 拒绝提示；`-32602` / `-32002` 分流）；成功 ⇒ 清 `_queue` + 发 `Rewound(itemId, index)` | ≤ +50（⇒ ≤1345） |
 | ㉔ | `lib/kernel/thincoder/thincoder_mock.dart`（702） | `session/rewind` 脚本面（成功 / `-32602` / `-32002`）+ 请求记录 | ≤ +20（⇒ ≤722） |
 | ㉕ | `lib/l10n/app_en.arb`（7282）· `app_zh.arb`（2841） | **2 键**（`rewindNotInThisRun` / `rewindTurnInFlight`，§9） | +4（⇒ 7286）/ +2（⇒ 2843） |
@@ -404,8 +420,7 @@ F3（A2）零改动面（口径 = **A2 相对 A1 落地后的零改动**；A1 �
 | D-SG11 | 跳过 / 无法回退 / 失败的条目**保留在栈里**，只有成功恢复的文件出栈 | F2.4/F2.5 要求「如实列出、不假装成功」；保留让用户修好现场（关闭文件、撤销自己的改动）后可重试，与 `/undo` 失败路径同法（`cmd-undo.mjs:63-65` 只在成功后 splice）。被否：一律出栈（失败即永久丢失） |
 | D-SG12 | 结果面 = 结果对话框 + 会话内一条摘要 `NoticeItem`（文案 owner = 宿主，§9 的 `revertSummary*` 三键）+ `ChangesReverted` 事件（仅 `outcome.files` 非空时发；全跳过 / 全失败不发，宿主待处理清单保留） | 清单可能长（超框仍可回看）；`ChangesReverted` 清空待处理清单是既有宿主语义（`transcript.dart:172-173`），但盘面未恢复时清空会让「保留可重试」失去可见面（D-SG11）。被否：只留 notice（长清单难读）；被否：只弹窗（关掉即无痕） |
 | D-SG13 | 「与终端 `/undo` 同一份快照」的口径 = **同一实现 / 同一模块**（进程内 `agent._undoStack`），不是跨进程共享对象 | 终端与桌面各自一个 `thincoder acp` 进程（每会话一进程），内存栈不可能共享；需求原文的落点是「不另建宿主快照」。被否：把栈落盘共享（新增持久化面，需求未要求且与逐出预算语义冲突） |
-| D-SG14 | 运行中改名 = 后置态（`_titleTarget` / `_titleDeferred` / `_titleSending`；回合收尾发送；last-wins；迟到回报经下一次 `session/list` 自愈） | 排队写若发在回合在飞时，会排在 prompt 之后、超 60s 被桌面丢弃而核照常执行 ⇒ 假失败 + 标题分叉（A1 不成立）。被否：`set_title` 显式不设超时 + 可见等待态（写卡住永久占位，适配档 §24.1 D98 同判据；等待窗口无上界）；
-被否：加 FIFO 豁免（写落在在飞回合里，与回合尾整档 save 交错）。`revert` 同判据：在飞时入口不可用 |
+| D-SG14 | 运行中改名 = 后置态（`_titleTarget` / `_titleDeferred` / `_titleSending`；回合收尾发送；last-wins；迟到回报经下一次 `session/list` 自愈） | 排队写若发在回合在飞时，会排在 prompt 之后、超 60s 被桌面丢弃而核照常执行 ⇒ 假失败 + 标题分叉（A1 不成立）。被否：`set_title` 显式不设超时 + 可见等待态（写卡住永久占位，适配档 §24.1 D98 同判据；等待窗口无上界）；被否：加 FIFO 豁免（写落在在飞回合里，与回合尾整档 save 交错）。`revert` 同判据：在飞时入口不可用 |
 | D-SG15 | 回退投影携带 `sinceTurn`；`canPlanRevert` = 能力 × 空闲（`PlansReverts.canRevertNow`），不以宿主 pending 列表为门；「该回合有核内记录」由 dryRun 空计划回答 | 入口 ② 必须能落到「该回合起」（F2.1）；宿主 pending 会少列（D-SG5）。被否：以 `revertTurn != null` 为门（= 用宿主 pending 当真值源）；被否：新增核侧只读「有没有改动」查询（多一条协议面，空计划探测已足够） |
 | D-SG16 | 逐出账 = `Map<path, highestEvictedOrdinal>`（按路径 + 回合下界）；回合索引 50 键最旧先出；键逐出 ⇒ 该键回退未知回合；apply 后空键 = 空计划；无前键 ⇒ 铸 `p<n>` | 按键记账漏「只出现在后续回合、且已被逐出」的路径（查询跨键）；其余三条是 F2.5「如实报」与「不假装成功」的边界。被否：按键记 `lost` 列表（跨键漏报） |
 | D-SG17 | routed 写的写后值 = 请求内容哈希（不读回）；本地写仍读回 | `fs/write_text_file` 的内容核侧已知，读回引入时序不确定（§10 U1 的另一半）；本地写读回是唯一可得路径。被否：一律读回（routed 半边悬在未验证时序上） |
@@ -499,8 +514,9 @@ F3（A2）零改动面（口径 = **A2 相对 A1 落地后的零改动**；A1 �
 - **改名校验**：空白或 >80 字符 ⇒ 字段不关闭、行内红字提示（`renameTitleRequired` / `renameTitleTooLong`）；内核 / 目录写失败 ⇒ 标题保持原值 + 会话内 `NoticeItem(error)`（关闭会话时用 `showIdeDialog` 单行说明）。
 - **运行中改名**：允许提交；标题在回合结束生效（后置态，§3.5）。字段关闭，行仍显示**已确认**标题；等待期间再开字段预填 `pendingTitle`（last-wins 目标）。失败 / 超时 ⇒ 标题保持原值 + 会话内 `NoticeItem(error)`（关闭会话时 `showIdeDialog` 单行说明）；核已迟到执行的情形由下一次列表刷新自愈。
 - **回退入口**：① ActivityStrip 的「Undo all」（`activity_strip.dart:494-504`）——起点 = 首个待处理回合的 `turnId`（`revertTurn`），仅当 `canPlanRevert` 且有待处理项时出现；② 用户消息右键「Revert files from this turn…」——该回合 id，仅当 `canPlanRevert`。
-  `canPlanRevert` = 内核为 `PlansReverts` 且 `canRevertNow`（无在飞回合且有可用连接），**不以宿主 pending 列表为门**；「该回合有没有改动」由 dryRun 回答：空计划 ⇒ `revertNothingToRevert` 提示。在飞时：ActivityStrip 的「Undo all」灰显 + tooltip `revertTurnInFlight`；右键项的禁用形态 = **不出现**（该项本就只在 `canPlanRevert` 时构建；菜单面无 tooltip，不改 `ide_menu.dart`）。
-  用户消息项 id = 回合 id（`chat_session.dart:201-202` 的 `_transcript.indexOf(turnId)` 即此约定）。两处同一确认流程。
+- `canPlanRevert` = 内核为 `PlansReverts` 且 `canRevertNow`（无在飞回合且有可用连接），**不以宿主 pending 列表为门**；「该回合有没有改动」由 dryRun 回答：空计划 ⇒ `revertNothingToRevert` 提示。
+- 在飞时：ActivityStrip 的「Undo all」灰显 + tooltip `revertTurnInFlight`；右键项的禁用形态 = **不出现**（该项本就只在 `canPlanRevert` 时构建；菜单面无 tooltip，不改 `ide_menu.dart`）。
+- 用户消息项 id = 回合 id（`chat_session.dart:201-202` 的 `_transcript.indexOf(turnId)` 即此约定）。两处同一确认流程。
 - **确认框**：标题「Revert files from this turn?」；正文 = 文件数（`revertFileCount`，ICU 复数 =0 / =1 / other）+ 文件清单（超 12 行滚动，`displayPath`）+ 提示「回合之后的改动将丢弃」+ 跳过 / 无法回退分组（reason 用 `revertReason*`）；按钮 = Cancel（默认）/ Revert。
 - **结果框**：恢复 / 跳过 / 无法回退 / 失败四组（`revertGroup*`）计数与清单；同类计数为零不显示该组。
 - **会话内记录**：一条 `NoticeItem` 摘要 = 3 条 ICU 复数片段（`revertSummaryRestored` / `revertSummarySkipped` / `revertSummaryUnrevertable`）以 ` · ` 连接；`ChangesReverted` 清空待处理清单。
