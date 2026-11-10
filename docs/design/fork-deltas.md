@@ -96,13 +96,15 @@
 
 **恢复的上游 import 与自有 re-export 档重复**：`lib/browser/browser_tools.dart:13`、`lib/images/image_tools.dart:13` 与 `lib/bots/bot_tools.dart:13` 各带一条 `unnecessary_import` info（自有 `host_tools.dart` 的 re-export 覆盖同样四个符号）。这三行是上游行，删掉即重建常驻 fork 差异，**禁随 lint 清扫删除**。
 
-**存量债（过 800 行的上游共享档，`wc -l` 实测 2026-11-04）**：`lib/kernel/claude_code/claude_code_kernel.dart` 3881 · `test/bots/bots_test.dart` 1690 · `lib/bots/bots.dart` 1367 · `lib/bots/bot_tools.dart` 963；`test/models/models_test.dart` 1769（2026-11-08 `wc -l` 实测）。
+**存量债（过 800 行的上游共享档，`wc -l` 实测）**：`lib/kernel/claude_code/claude_code_kernel.dart` 3881 · `test/bots/bots_test.dart` 1690 · `lib/bots/bots.dart` 1367 · `lib/bots/bot_tools.dart` 963（2026-11-04 实测）；`test/models/models_test.dart` 1769（2026-11-08 实测）。
 
 另四档（同口径）：`lib/chat/side_panel/side_panel_view.dart` 2303 · `lib/main.dart` 1112 · `lib/settings/settings_dialog.dart` 864 · `lib/ide/ide_tab_bar.dart` 946。
 
 第十档 `lib/workspace/workspace.dart`（实测 4050）：按第 3 节该行维护四块自有语义（预算 ≤40 行）；档整体相对上游 `+125 / −31`，见该行读数。
 
-十档都是上游共享档：拆分会让两半都成常驻 fork 差异（第 7.3 节同一理由），认账不排期。`lib/chat/composer/composer.dart` 现 744 行（<800），不在本名单。`workbench.dart` 的读数与体量立场归第 8.5 节，此处不复述。接手批次未排期，涨幅在下一次合并时按本行核对。
+第十一档 `lib/ide/git/ide_git_commit_panel.dart`（`wc -l` 实测 3146，2026-11-09）：上游共享档，本仓在该档零自有块 ⇒ 第 3 节无接缝行；合后对 `origin/main` 的 `git diff --numstat` 为空。
+
+十一档都是上游共享档：拆分会让两半都成常驻 fork 差异（第 7.3 节同一理由），认账不排期。本名单的口径是主仓（`lib/**` / `test/**`）的共享档；`packages/**` 子包不在其内，扩面另议。`lib/chat/composer/composer.dart` 现 744 行（<800），不在本名单。`workbench.dart` 的读数与体量立场归第 8.5 节，此处不复述。接手批次未排期，涨幅在下一次合并时按本行核对。
 
 ## 4 保持上游实现的共享文件
 
