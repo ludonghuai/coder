@@ -12,7 +12,7 @@
 - 类型只用：**修 bug · 功能 · 内核适配**。
 - l10n 只合并 `app_en.arb` / `app_zh.arb` 的键级并集；生成文件由 `flutter gen-l10n` 重产，不手解、不选边。
 - 上游测试与自有断言分档；不为保留 fork 断言改写上游测试。
-- 每次上游合并后按符号核对本表，不以旧行号判断接线是否仍在。
+- 每次上游合并后按符号核对本表，不以旧行号判断接线是否仍在；合后按第 3.1 节的 numstat 口径复核。
 - 第 2 / 3 节各行登记的是**改后形态**；实施前的读数见第 7.3 节的「实施前」列与 §8.5 的「行数」列，两者可互证。实施是否落地归批档记录，本表只写形态。
 
 ## 2 整档自有资产
@@ -74,7 +74,7 @@
 | `lib/browser/browser_watch.dart` | 无自有块：1 个构造点用上游原名 | 内核适配 | `ClaudeSdkTool` / `ClaudeSdkCall` | 结构不变（净 0） |
 | `lib/images/image_tools.dart` | `group: 'images'` + 注册接线（`HostTools.unregister` `:47` / `register` `:49`）+ 选图前的问人判定走 `HostTools.asksUser(call.cwd)`（同一行换符，净 0 行） | 功能 | `HostTools` 注册表；MCP 面按组暴露；`HostTools.asksUser` | 净增 ≤1 行（第二根 import） |
 | `lib/ide/git/git_repository.dart` | 空仓与未出生分支：图加载的无 await 早退路径上经 `scheduleMicrotask(_notify)` 通知（`:871-875`），避开 build 期 `setState` | 修 bug | `GitRepository` 图加载 getter 的监听者 | 净增 ≤5 行 |
-| `lib/workbench.dart` | 命令面板的会话命令源（`_paletteActions` 里窗口命令 ∪ 焦点会话的 `ChatKeys.commandsOf`，Rename Agent 一项在 `:1316`）；侧栏仓库扫描的失败面（机制见 `ide-git.md` §4.7） | 修 bug | `ChatKeys.targetsOf` / `ChatKeys.commandsOf`；`_sidePanelFolderRepositories` 的扫描 async 块 | 面板 ≤10 行 · 扫描 ≤59 行 |
+| `lib/workbench.dart` | 命令面板的会话命令源（`_paletteActions` 里窗口命令 ∪ 焦点会话的 `ChatKeys.commandsOf`，Rename Agent 一项据 `ChatCommandIds.renameAgent`）；侧栏仓库扫描的失败面（机制见 `ide-git.md` §4.7） | 修 bug | `ChatKeys.targetsOf` / `ChatKeys.commandsOf`；`_sidePanelFolderRepositories` 的扫描 async 块 | 面板 ≤10 行 · 扫描 ≤59 行（对 `origin/main` 实测 +56 / −3：面板 10 · 扫描 46） |
 | `lib/ide/services/keybindings.dart` | chord 第二键的窗口门（`KeybindingDispatchService._holdsKeys` `:149-163`：本窗口持有主焦点且本路由当前才吃键；`onLateKey` `:140`、`onChordKey` 守卫 `:176-179` 与 500 ms 检查器 `:198` 共用）。上游 2026-11 把工作台拆成服务与部件，块随按键服务迁来；`lib/ide/ide_workbench.dart` 自 `50649b2e` 起与上游同档、不带自有块 | 修 bug | 上游按键服务的 `onChordKey` / `onLateKey` 钩 | 净增 ≤26 行（实测 +26 / −8） |
 | `lib/ide/ide_editor.dart` | 控制器为空时的空渲染（三处 `SizedBox.expand`：`_surface` `:2638-2641` · diff 原侧 `:2757-2758` · build 的 native 分支 `:2890`） | 修 bug | `_nativeController` / `IdeOriginalDiff.controller` | 净增 ≤7 行 |
 | `lib/ide/ide_tab_bar.dart` | `renameInitial`：调用方给定的初值，优先于标签文本（改名框从该值起） | 功能 | `InlineRenameField.initial` | 净增 ≤6 行（`renameInitial` 三处：`_Tab` 字段 / 形参 / 透传；同段布局改写随上游 `96e61f6b`，前几批累积的 +89 / −57 随之失效） |
@@ -88,11 +88,13 @@
 | `lib/ide/ide_chat_title.dart` | 聊天页签的改名初值：`renameInitial: thread.pendingTitle`，经 `_ChatTab` 的形参透传到 `InlineRenameField.initial`（与 `lib/ide/ide_tab_bar.dart` 同一个 `renameInitial` 特性） | 功能 | `InlineRenameField.initial`；`AgentThread.pendingTitle` | 净增 ≤6 行 |
 | `test/chat/code_citation_test.dart` | Windows 路径拼写：`path` import 与 `_q(path)`（`p.normalize`），断言按宿主拼写比对 | 修 bug | 路径断言的比较面 | 净增 ≤33 行 |
 | `test/chat/side_panel/side_panel_workspace_test.dart` | Windows 路径拼写：三个根路径常量改 `p.normalize`，文件表与期望值改 `p.join`（档内 `p.join` 11 · `p.normalize` 4）；`_pump` 的 `roots` 默认值移进函数体（根路径改 `final` 后不能作 `const` 默认值） | 修 bug | 路径断言的比较面；用例条数与断言强度不变（无 `skip`、无放宽成 `contains`） | 净增 ≤3 行（上游 431 ⇒ 434） |
-| `test/chat/side_panel/file_open_test.dart` | Windows 路径拼写：两个项目路径常量与「项目外文件」的绝对路径改 `p.normalize`（档内 3 处），文件名解析的期望值改 `p.join`（1 处） | 修 bug | 路径断言的比较面；三条用例与断言强度不变（无 `skip`、无放宽成 `contains`） | 上游 63 行 ⇒ 60 行（多行 `expect` 收到一行） |
+| `test/chat/side_panel/file_open_test.dart` | Windows 路径拼写：两个项目路径常量与「项目外文件」的绝对路径改 `p.normalize`（档内 3 处），文件名解析的期望值改 `p.join`（1 处） | 修 bug | 路径断言的比较面；三条用例与断言强度不变（无 `skip`、无放宽成 `contains`） | 对 `origin/main` 实测 +10 / −13（上游 164 行 ⇒ 本仓 161 行） |
 | `test/composer_test.dart` | 自有用例 `two approvals are a switch at the end, five a menu (T61)`（`ComposerPermissionSwitch`：两条批准为开关、五条为菜单）+ 四条自有 import + btest 模式追加后的四处期望调整（第四处 2026-11-05：`mode picker opens on press…` 的方向键多按一次，绕过菜单末尾的 btest；Shift+Tab 那条随 `_nextModeOf` 跳过 btest 回到上游期望） | 功能 | `ComposerPermissionSwitch`；overlay 追加的 btest 模式 | 净增 ≤99 行（实测 +95 / −2，净增 93）；2026-11-08 合并取上游 `inset` 后，四处粘顶断言归上游面 |
 | `lib/models/secret_store_io.dart` | 令牌一次运行只解一次：读路径先查 `_values`、并发读经 `_reading` 去重、写与删以 `_changed` 递增让在途读作废；解封一律走 `ProcessHost.start`（`ProcessHostUnavailable` 转 `SecretStoreException`），不在窗口线程（自有提交 `29d21308`） | 修 bug | `SecretCommand` / `ProcessHost.start`（`_run`）；消费方 = `lib/models/secret_store.dart` 的 `SecretStore.instance = platform.systemSecretStore()` | 对 `origin/main` 实测 +121 / −19；2026-11-08 合并时首次登记（此前表外） |
 | `test/models/models_test.dart` | 自有 DPAPI 块的用例面：4 条 Windows 用例（已存的一次运行只解一次 · 并发读只起一次 PowerShell · 删除后忘掉 · 失败的那次可重试），承载第 3 节 `lib/models/secret_store_io.dart` 行的行为断言；块落在上游用例之后，不改上游断言 | 修 bug | `DpapiSecretStore` 的 `run` 注入（`lib/models/secret_store_io.dart`）；消费方同该行 | 对 `origin/main` 实测 +131 / −0；2026-11-08 合并时首次登记（此前表外） |
 | `lib/keybindings/workbench_keybindings.dart` | 1 行标签：`git.fetchAll` 在本仓读 `Fetch and Pull All Repositories`（上游读 `Fetch From All Remotes`），其余随上游（自有提交 `434f76be`） | 功能 | `CommandInfo('git.fetchAll')` 的展示标签；键位表与命令面板读同一 `CommandInfo` | 对 `origin/main` 实测 +1 / −1；2026-11-08 合并时首次登记（此前表外） |
+| `README.md` | 发售面文案四处：首句并列 ThinCoder 内核、正文「no agent of its own」段落改写、特性表「Two kernels」一条、Requirements 段的 ThinCoder 可选安装行 | 功能 | 无代码接缝；消费面 = 仓库首页与官网下载页 | 对 `origin/main` 实测 +4 / −3；2026-11-09 合并时首次登记（此前表外） |
+| `lib/kernel/claude_code/claude_code_transport.dart` | 1 行注释：`ClaudeLaunch.sdkServers` 的文档注释把读者指向自有 `host_tools.dart`（上游写 `claude_sdk_tools.dart`） | 内核适配 | 该文档注释；注册表落点见第 7 节 | 对 `origin/main` 实测 +1 / −1；2026-11-09 合并时首次登记（此前表外） |
 
 **恢复的上游 import 与自有 re-export 档重复**：`lib/browser/browser_tools.dart:13`、`lib/images/image_tools.dart:13` 与 `lib/bots/bot_tools.dart:13` 各带一条 `unnecessary_import` info（自有 `host_tools.dart` 的 re-export 覆盖同样四个符号）。这三行是上游行，删掉即重建常驻 fork 差异，**禁随 lint 清扫删除**。
 
@@ -100,11 +102,72 @@
 
 另四档（同口径）：`lib/chat/side_panel/side_panel_view.dart` 2303 · `lib/main.dart` 1112 · `lib/settings/settings_dialog.dart` 864 · `lib/ide/ide_tab_bar.dart` 946。
 
-第十档 `lib/workspace/workspace.dart`（实测 4050）：按第 3 节该行维护四块自有语义（预算 ≤40 行）；档整体相对上游 `+125 / −31`，见该行读数。
+第十档 `lib/workspace/workspace.dart`（`wc -l` 实测 4050；第 3 节该行同档按 `split('\n')` 口径读 4051，两口径只差末尾换行 1 行）：按第 3 节该行维护四块自有语义（预算 ≤40 行）；档整体相对上游 `+125 / −31`，见该行读数。
 
 第十一档 `lib/ide/git/ide_git_commit_panel.dart`（`wc -l` 实测 3146，2026-11-09）：上游共享档，本仓在该档零自有块 ⇒ 第 3 节无接缝行；合后对 `origin/main` 的 `git diff --numstat` 为空。
 
-十一档都是上游共享档：拆分会让两半都成常驻 fork 差异（第 7.3 节同一理由），认账不排期。本名单的口径是主仓（`lib/**` / `test/**`）的共享档；`packages/**` 子包不在其内，扩面另议。`lib/chat/composer/composer.dart` 现 744 行（<800），不在本名单。`workbench.dart` 的读数与体量立场归第 8.5 节，此处不复述。接手批次未排期，涨幅在下一次合并时按本行核对。
+十一档都是上游共享档：拆分会让两半都成常驻 fork 差异（体量立场见第 8.5 节），认账不排期。本名单的口径是主仓（`lib/**` / `test/**`）的共享档；`packages/**` 子包不在其内，扩面另议。`lib/chat/composer/composer.dart` 现 744 行（<800），不在本名单。`workbench.dart` 的读数与体量立场归第 8.5 节，此处不复述。接手批次未排期，涨幅在下一次合并时按本行核对。
+
+### 3.1 登记面的对账口径
+
+**决策**：上游合并后，对本批合并触碰的共享上游档按 `git diff --numstat origin/main` 逐档读合后形态。非零行 = 必须有本节的登记行；零输出 = 该档是纯上游面。
+
+**判据域**：只到共享上游档 —— 本批合并触碰的 15 档。第 2 节的整档自有资产（`lib/kernel/thincoder/**`、`lib/browser/btest/**`、`lib/host_tools/**` 等）对 `origin/main` 本来就非零，不在本节判据内。
+
+**为什么不用冲突清单**：冲突清单只记「合并时打架的地方」。自有块消失的常见形态是自动合并把自有块和上游改动一起吃掉 —— 不冲突，所以不进清单。
+
+那类档对 `origin/main` 仍有差异。冲突清单与 numstat 互为补集，缺一边就有一整类静默丢失。
+
+**为什么表外发现要补登记，不删块**：依据 docs/design/fork-deltas.md「表外不许改上游档」。表的作用是让自有语义在下一轮可被找到。
+
+删块能让表立刻变干净，代价是那段产品语义永久消失，且下一轮没人知道它存在过。补一行表的成本是一次 numstat 读数。
+
+**处置次序**：依据 docs/design/fork-deltas.md「表外发现自有块时先补第 3 节」——先补行，再谈其它。
+
+**最近先例**：第 7 节（宿主工具类型复原）与第 8 节（六组易被覆盖的行为）同一形：改动压成最小登记块，其余交给上游符号。表外补登记同形的先例都在第 3 节表内：
+
+- 2026-11-05 合并补的 `lib/chat/step_folds.dart`（对 `origin/main` +181 / −74）。
+- 2026-11-05 合并补的 `lib/sidebar/sidebar.dart`（+11 / −3）。
+- 2026-11-08 合并补的 `lib/models/secret_store_io.dart`（+121 / −19）。
+- 2026-11-08 合并补的 `lib/keybindings/workbench_keybindings.dart`（+1 / −1）。
+
+本节把「找不到登记行」也当成一种要处置的形态。
+
+**调查证据**：`manifest.index.publicRepos` 为空（`PROJECT-MANIFEST.json` 读得 `"publicRepos":[]`），无独立文档仓；上游源码经本仓 `origin` 远端读取，属仓内读。查过，无外部相关来源。
+
+**表外补登记的两行**：`README.md`（发售面文案四处）与 `lib/kernel/claude_code/claude_code_transport.dart`（1 行指路注释）。两处都自合基 `99f225c6` 起就存在，一直按表外放着。
+
+本节第 1 条口径把它们当缺陷：语义在盘，表里没有行，下一轮无从对账。本批按上条处置次序补行。
+
+| 选项 | 内容 | 结论与理由 |
+|---|---|---|
+| A（采用） | 按 numstat 对账，表外两处补登记 | 零代码改动。第 5 节第 2 步的既定处置 |
+| B（否） | 只核有冲突的档 | 自有块被自动合并吃掉的形态正是零冲突，清单证明不了零差异的档干净 |
+| C（否） | 删 README 的 ThinCoder 文案、删 transport 的指路注释 | 删的是产品语义，换来一句「表干净了」；与第 1 节目标相反 |
+
+**验收对照**：
+
+| 条目 | 判据（机器可判） |
+|---|---|
+| 表外零自有块 | 判据域内（共享上游档；本批 = 合并触碰的 15 档）`git diff --numstat origin/main` 的每条非零行，逐条命中本节的行；第 2 节的整档自有资产不在此列 |
+| 两处新行与实测一致 | `README.md` 行 = +4 / −3；`claude_code_transport.dart` 行 = +1 / −1 |
+| 预算按行判 | `workbench` 面板 10 ≤10、扫描 46 ≤59；`chat_screen` 净 16 ≤19；`file_open_test` 上游 164 ⇒ 本仓 161 |
+
+**用例表**：
+
+| 场景 | 输入 | 期望 |
+|---|---|---|
+| 正常 | 15 档 numstat | 6 条非零，每条有登记行 |
+| 边界 | 零差异的档 | 零输出，不判为丢块 |
+| 错误 | 非零而无登记行 | 停止实施，先补表（本节第 1 条） |
+
+本表是 git 读数面，不配运行用例。
+
+**边界（不做）**：不改任何产品代码；不修平台路径族的既有失败用例；不拆大档。README 的文案与那 1 行注释是存量，本批只登记不重写。
+
+**UI / 交互**：无 —— 两处都不进运行时界面。
+
+**集成测试设计（RTM delta）**：无 —— 两行都不改业务可观察结果。`test/RTM.md` 的 1-1 / 2-1 / 3-1 / 4-1 四行断言面都不落在它们上。收口报 `none`。
 
 ## 4 保持上游实现的共享文件
 
@@ -122,7 +185,7 @@
 ## 5 合并核对顺序
 
 1. 先核第 2 节自有文件仍存在，未被共享档选边覆盖。
-2. 对全量 diff 做自有块对账；表外发现自有块时先补第 3 节，再选冲突解法。
+2. 对全量 diff 做自有块对账；表外发现自有块时先补第 3 节，再选冲突解法；合后按第 3.1 节的 numstat 口径复核一遍。
 3. 核第 3 节每个接缝的符号与行为；行号只作定位参考。
 4. 运行 `flutter analyze --no-pub`，把错误按登记模块归因；不得以整档回退消除冲突。
 5. 重跑各模块定向测试；l10n 由源档重产；SCM 只跑对应独立断言。
@@ -350,7 +413,7 @@
 
 **体量立场（不拆档）**：五档都是上游共享档。本批改动合计 +112 / −18（净增 94 行；`54f94769` +76 / −9 与 `e5661df4` +36 / −9，`git diff --numstat` 实测，不计批档自身 32 行），形态都是第 3 节登记块内的小块。
 
-`workbench` 5408 · `ide_editor` 3160 · `chat_session` 1401 三档过 800 行（`ide_workbench` 原 5878，2026-11-05 上游拆档后 967，块已迁 `lib/ide/services/keybindings.dart`），属存量债，按 §7.3 同一理由不拆档：把上游共享档拆成两档，两半都成常驻 fork 差异，每次上游合并要在两处对账，与第 1 节的目标相反。
+`workbench` 5408 · `ide_editor` 3160 · `chat_session` 1401 三档过 800 行（`ide_workbench` 原 5878，2026-11-05 上游拆档后 967，块已迁 `lib/ide/services/keybindings.dart`），属存量债，不拆档：把上游共享档拆成两档，两半都成常驻 fork 差异，每次上游合并要在两处对账，与第 1 节的目标相反。
 
 ### 8.6 验收对照
 
