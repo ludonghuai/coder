@@ -1,5 +1,6 @@
 # BaoCode
-<a href="https://trendshift.io/repositories/289180?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-289180" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/289180/daily?language=Dart" alt="baocode-dev%2Fbaocode | Trendshift" width="250" height="55"/></a>
+
+- <a href="https://trendshift.io/repositories/289180?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-289180" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/289180/daily?language=Dart" alt="baocode-dev%2Fbaocode | Trendshift" width="250" height="55"/></a>
 
 **English** · [简体中文](README_CN.md) · [日本語](README_JA.md) · [Français](README_FR.md) · [Español](README_ES.md)
 
@@ -15,7 +16,11 @@ An awesome, easy-to-use desktop UI for [Claude Code](https://github.com/anthropi
 
 We use Claude Code every day. The terminal is a fine place to run it, but a poor place to read it: long diffs scroll out of view, earlier steps are hard to find again, and reviewing what changed means switching to another app. BaoCode is the window we wanted around it.
 
-BaoCode has no agent of its own, by design. It runs the agent you already have: Claude Code by default, or ThinCoder over ACP as the other kernel — a workspace picks its own. Claude Code's ecosystem is unmatched: its tools, skills, plugins, MCP servers, subagents and hooks. BaoCode gives it the interface it deserves and makes everything around it work out of the box, with your settings and your `CLAUDE.md`. ThinCoder sessions get the app's browser tools too: the host tool channel hands them to the agent over a loopback MCP server.
+BaoCode has no agent of its own, by design. It runs the agent you already have: Claude Code by default, or ThinCoder over ACP as the other kernel — a workspace picks its own.
+
+Claude Code's ecosystem is unmatched: its tools, skills, plugins, MCP servers, subagents and hooks. BaoCode gives it the interface it deserves and makes everything around it work out of the box, with your settings and your `CLAUDE.md`.
+
+ThinCoder sessions get the app's browser tools too: the host tool channel hands them to the agent over a loopback MCP server.
 
 ## Features
 
@@ -44,7 +49,7 @@ VS Code and Cursor are built on Electron: each window is a web page, and every c
 
 ## Requirements
 
-- macOS 12 or later (Apple silicon or Intel, one download each), Windows 10 or later (x64), or Linux: Ubuntu 22.04 or later and other Debian-based distributions (x64 or arm64, a .deb each).
+- macOS 12 or later (Apple silicon or Intel, one download each), Windows 10 or later (x64), or Linux: Ubuntu 20.04 or later and other Debian-based distributions (x64 or arm64, a .deb each).
 - [Claude Code](https://github.com/anthropics/claude-code), installed — the default kernel. ThinCoder is optional: `npm i -g thincoder` (or point `thincoder.path` at a local build) for the ThinCoder kernel.
 
 ## Building from source

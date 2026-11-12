@@ -1,5 +1,7 @@
 # BaoCode
 
+<img width="300" height="356" alt="image" src="https://github.com/user-attachments/assets/d8288f00-a7f6-41fd-8cbb-f99acfe59418" />
+
 [English](README.md) · **简体中文** · [日本語](README_JA.md) · [Français](README_FR.md) · [Español](README_ES.md)
 
 一个出色、易用的 [Claude Code](https://github.com/anthropics/claude-code) 与 [ThinCoder](https://gitee.com/shanghai-xinbo/thincoder) 桌面界面，内置毫秒级响应的快速 IDE。
@@ -45,7 +47,7 @@ BaoCode 是原生应用，直接通过 GPU 绘制界面。以下为英文 README
 
 ## 系统要求
 
-- macOS 12 或更新版本（Apple 芯片和 Intel 各提供一个下载版本），Windows 10 或更新版本（x64），或 Linux：Ubuntu 22.04 或更新版本及其他基于 Debian 的发行版（x64 和 arm64 各一个 .deb）。
+- macOS 12 或更新版本（Apple 芯片和 Intel 各提供一个下载版本），Windows 10 或更新版本（x64），或 Linux：Ubuntu 20.04 或更新版本及其他基于 Debian 的发行版（x64 和 arm64 各一个 .deb）。
 - 已安装 [Claude Code](https://github.com/anthropics/claude-code)——默认内核。ThinCoder 可选：`npm i -g thincoder`（或把 `thincoder.path` 指向本地构建）即可使用 ThinCoder 内核。
 
 ## 从源码构建
