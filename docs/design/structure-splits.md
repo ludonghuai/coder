@@ -166,7 +166,7 @@
 
 | # | 段 | 搬什么符号（点名） | 现坐标 | 搬出 | 新档（估） |
 |---|---|---|---|---|---|
-| 1 | 工具栏与小部件 | `_buildToolbar` · `ComposerPermissionSwitch` · `_PolishButton` · `_ContextRing` · `_RingPainter` · `_SendButton` | `:2051-2460` | ≈410 | `composer_toolbar.dart` ≈420 |
+| 1 | 工具栏与小部件 | `_buildToolbar` · `_PolishButton` · `_ContextRing` · `_RingPainter` · `_SendButton` | `:2051-2460` | ≈410 | `composer_toolbar.dart` ≈420 |
 | 2 | 编辑面（图片/文件/草稿） | `_initialPool` `_createController` `_paste` `_nextPastedNumber` `_references` `_referredImages` `_addImages` `_numbered` `insertFiles` `_copyToHost` `_picturesIn` `_insertTags` `_canSend` `_takeDraftFiles` `_takeDraftMessage` `_saveDraft` `_handleDraftChanged` `_inAtom` `_shownOfText` `_ShownOfText` `_hasWords` `_handleEditorChanged` | `:201-898` 内 | ≈450 | `composer_editing.dart` ≈460 |
 | 3 | 菜单与键盘 | `_suggestion` `_suggestionKey` `_suggestionKeyContext` `_lookups` `_lookUpFiles` `_padTrailingTokens` `_findTrigger` `_caretX` `_closeMenu` `_menuOwner` `_menuRegistered` `_syncMenuRegistration` `_moveHighlight` `_accept` `_handleKey` `_caretAtStart` `_caretAtEnd` `chatContextKey` `chatCommands` `chatComposing` `_nextMode` `_buildMenu` | `:616-628` `:899-1143` `:1695-1706` | ≈330 | `composer_menu.dart` ≈340 |
 | 4 | 指针与拖放 | `_attachContext` `_ghostAt` `_ghost` `_ghostFiles` `_ghosting` `_dropOffset` `_dropStashes` `_showGhost` `_hideGhost` `_removeGhost` `_editGhost` `fileDragOver` `fileDragLeave` `fileDrop` `_dropFiles` `_menuPressAt` `_handleMenuPointerDown` `_handleMenuPointerUp` `_showContextMenu` `_selectAll` `_clickSlop` `_clickDownAt` `_clickWindow` `_clickUpAt` `_clickOnSelection` `_secondClick` `_handleClickDown` `_handleClickUp` | `:1144-1286` `:1754-1882` | ≈330 | `composer_pointer.dart` ≈340 |
@@ -176,7 +176,7 @@
 - **「搬出」为指示值**（按点名方法与坐标区间估）：坐标只用于定位，不参与加总；判据以行数门为准（主档 ≤800、新档 ≤500）。
 - **不在本批**：`_buildBtestStatus`（`:1932` 起）与 `_btestSwitch`（`:2031-2050`）归 #55（在飞实施轮）；工作树中该段已由 #55 搬出（未提交），本步实施时按符号名定位。本批不碰 `lib/browser/btest/**`、不重构 btest 状态面。
 - **留在主档**：import（50）· `_Trigger`（`:54-82`，30）· `ChatComposer` 构造与字段（`:84-130`，50）· State 字段与共享助手 `_rankOthers`（`:136-200`，65）· 约 65 行委托 · btest 段 119 ⇒ **估 379–520 行 ≤800**（下界 = 上列各项之和）。
-- **对外暴露**：`ChatComposer` · `ChatComposerState` · `ComposerPermissionSwitch`。调用方 = `lib/chat/chat_screen.dart:35` · `lib/chat/chat_history_view.dart:27` · `test/composer_test.dart` · `test/kernel_ui_test.dart`。
+- **对外暴露**：`ChatComposer` · `ChatComposerState`。调用方 = `lib/chat/chat_screen.dart:35` · `lib/chat/chat_history_view.dart:27` · `test/composer_test.dart` · `test/kernel_ui_test.dart`。
 - **风险**：State 方法体里 `setState` / `context` / `widget` / `mounted` 改成 `state.setState` 等，指向同一对象，行为不变；`build` 仍在 State 内，子树与重建时机不变。
 
 ### 4.4 chat_session（独立 overlay 模块）

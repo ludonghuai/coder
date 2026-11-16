@@ -319,7 +319,7 @@ server 由 `HostMcpServer` 签发（127.0.0.1 系统选端口 + 每会话 Bearer
 
 thincoder 侧的接口例外见 §16.1。）批 4 的改动点见 §15.4（同为最小接线点集）；
 
-批 5 的改动面见 §16.4（本仓测试面 + out-of-repo 档）；批 6 见 §17.4（本仓适配层两面 + 宿主 1 档 composer 开关 + 两处测试面）；
+批 5 的改动面见 §16.4（本仓测试面 + out-of-repo 档）；批 6 见 §17.4（本仓适配层两面 + 宿主 1 档 composer 审批药丸 + 两处测试面）；
 
 批 8 见 §19.4（本仓 2 档（kernel + events）+ 固件 / 测试面；thincoder 侧 = out-of-repo 档）。
 
@@ -352,7 +352,7 @@ thincoder 侧的接口例外见 §16.1。）批 4 的改动点见 §15.4（同�
 - `thincoder_kernel.dart`：>800 行触发已执行——拆分前实测 1168 行 ⇒ 拆出 `thincoder_events.dart`（§3.6 事件翻译段，外部形态不变）；编制日实测（2026-10-19）**1121** 行（§21.3 拆分已落）仍处 >800 线上：**续拆裁定 = 不续拆**（同其他 >800 行既有档；选择面缝已兑现，不再立新缝）。
   行数口径：与 §24.3 起点 1091 差 30 行（两批各记了当时的实测）；**实施首轮 `wc -l` 复核，以复核值为准**。
 - `thincoder_events.dart`（799，2026-10-19 `wc -l` 实测）：<800 硬顶；批 11 的用量翻译面 ≤ +8 ⇒ ≤807 ⇒ **入 >800 名单**（行级新增，不动结构）；缝候选 = 子代理段（段头 `:436`）出档 `thincoder_agents.dart`（`part` 先例同 §21.3；段界由拆分批勘定——`_putSubagent` / `_card` 另有 `:682` / `:741` 调用点）；**拆分方案（分步 + 行数预算）见 §23.3**；触发 = 下一次结构级触碰或独立拆分批立项。
-- **>500 且 <800 的档**（`thincoder_mock.dart` 668 · `kernel_types.dart` 615 · `context_usage_panel.dart` 530 等）：体量立场只跟 >800 硬顶——>500 层不立缝、不登记拆分候选；新增按行级计，不触发结构级裁定。`thincoder_kernel.dart`（会话治理 A1 后 1296）入 >800 名单，行级新增不续拆。
+- **>500 且 <800 的档**（`thincoder_mock.dart` 668 · `kernel_types.dart` 615 · `context_usage_panel.dart` 530 等）：体量立场只跟 >800 硬顶——>500 层不立缝、不登记拆分候选；新增按行级计，不触发结构级裁定。`thincoder_kernel.dart` 会话治理 A1 后 482 行（本轮 `wc -l` 实测；按末行号记作 483）——<800 硬顶，不在 >800 名单；行级新增不触档位（旧裁定「不续拆」原样成立）。
 - `test/kernel/thincoder_kernel_test.dart`（3395，2026-10-19 实测）：在 >800 名单；只加用例、不动结构，缝候选沿用 §15.4 的四组拆法。
 
 **实施读数（`host-tool-channel` 批，2026-10-18；本批起点 → 终点）**：`lib/kernel/thincoder/thincoder_kernel.dart` 1156 → 1195（+39，上界 ≤1196）· `lib/kernel/thincoder/thincoder_events.dart` 784 → 798（+14，上界 ≤798）· `test/kernel/thincoder_kernel_test.dart` 2629 → 2840（+211，超估算 +140，估算非上界）。三档现值见 §5.2 体量行。
@@ -402,14 +402,14 @@ thincoder 侧的接口例外见 §16.1。）批 4 的改动点见 §15.4（同�
 | A10 扩展性 | §5 + §12 | 改动点清单 + 升级核对说明（本档在场即载体） |
 | F11 子代理活动可见（批 4） | §15（验收对照 = §15.6） | 真机走查 7 步：卡片 / 活动条 / 计数行 / 静默期；控制面不做（§15.8） |
 | F12 子代理内容归属（批 5） | §16（验收对照 = §16.6） | thincoder 侧归属标（§16.1 逐行 diff：内容帧 + 工具帧）+ 本仓路由进只读视图（§16.2）；走查 §16.9；工具结果通道仍缺（§16.8-1） |
-| F13 审批自动档（批 6） | §17.1（验收对照 = §17.6） | 服务端位 `autoApprove` 暴露 + 桌面右下角开关显示与切换（宿主 1 档 = `composer.dart` ㉗）；走查 §17.9②③④ |
+| F13 审批自动档（批 6） | §17.1（验收对照 = §17.6） | 服务端位 `autoApprove` 暴露 + 桌面左簇审批药丸显示与切换（宿主 1 档 = 左簇 `ComposerPicker`，§17.1-③）；走查 §17.9②③④ |
 | F14 模型清单与思考档位（批 6） | §17.3（验收对照 = §17.6） | 运行期清单投影进 `model.options[]` + `thinkingLevel` 档位面；模型面桌面零改动；走查 §17.9⑤⑥ |
 | F15 工作中发送的消息（批 7） | §18（验收对照 = §18.5 · 用例 = §18.7） | 内核本地队列 + 声明 `QueuesMessages`：在跑时入队，回合结束依次发，撤回 / 立即发送 / 收束清队；宿主零改动（唯一触碰 = 设置页一句文案）；走查 §18.10 |
 | F16 回合结束后继续关注后台子代理（批 8） | §19（验收对照 = §19.6 · 用例 = §19.7） | ACP 挂起窗（out-of-repo）+ `_meta["thincoder.dev/turn"]` 边界帧 + 桌面 unprompted 回合；走查 §19.10 |
 | F17 编辑器上下文随消息注入（批 10） | §20（验收对照 = §20.6 · 用例 = §20.7） | 每消息快照（路径 + 光标行 + 选区）随 `session/prompt` 一个文本块；composer chip 可撤销 + 气泡摘要；开关 `chat.editorContext` 带设置 UI；走查 §20.9 |
 | F18 agent 编辑走 IDE 原生 diff（批 10） | §21（验收对照 = §21.5 · 用例 = §21.6） | 内核 `initialize` 宣告 `fs` 两位 + 两个反向 RPC handler；脏缓冲拒绝写 + 只读 diff；干净 / 未打开落盘并发既有 `FileEdited`；根外拒绝 + 可见提示；走查 §21.9 |
 | F19 原生图片块（批 11） | §22（验收对照 = §22.5 · 用例 = §22.6 · 真机 provider 面 = §22.9） | 握手 `promptCapabilities.image` ⇒ prompt 数组带原生 image 块（不落盘）；旧 CLI ⇒ 今天逐字；B1 例外面 = §22.2（**已裁 A**）；「模型能看图」判据 = T1 / T1b + 走查 S1；走查 §22.8 / §22.12 |
-| F20 用量（批 11） | §23（验收对照 = §23.5 · 用例 = §23.6） | 回合 token = 本回合 `usage_update.used` 之和（turn footer）；会话累计 = 全会话之和（上下文面板）；成本无来源（§14-25）；走查 §23.8 |
+| F20 用量（批 11） | §23（验收对照 = §23.5 · 用例 = §23.6）；成本 / 缓存面 = §30（批 23） | 回合 token = 本回合 `usage_update.used` 之和（turn footer）；会话累计 = 全会话之和（上下文面板）；成本与缓存见 §30；走查 §23.8 |
 | F21 模型切换后置应用（批 14） | §24（验收对照 = §24.5 · 用例 = §24.6） | 回合在飞时点模型 ⇒ 回合收尾自动重发；pill 标「回合结束后切换到 <目标>」；失败 = 旧模型 + 一条 error；走查 §24.8 |
 | F22 交互响应（批 16） | §25（验收对照 = §25.10 · 用例 = §25.11） | 宿主侧：打开项目预热进程（领池即用）+ 乐观就绪可见（`NoticeItem` 等待面）+ 打点 8 类；CLI 侧瘦身归已批准的外仓批（§25.13 C′1–C′3）；走查 §25.14 |
 | F23 内置运行时（批 17） | §26（验收对照 = §26.12 · 用例 = §26.11） | 发行版内置 `runtime\node\node.exe` + thincoder 源码树 + 私有数据目录（`THINCODER_CONFIG_DIR`）；开发环境按「内置目录在不在」自然分叉、零 release 常量；外仓 6 档 8 处改动归独立外仓批；走查 §26.14 |
@@ -491,7 +491,7 @@ F16 的 ACP 挂起窗 + 回合边界帧 §19.3；F19 的 `promptCapabilities.ima
 - 挂起面（回合结束后继续关注后台子代理）= 批 8 设计已定（§19）；本批边界见 §19.8（timer 唤醒 / 自动轮审批 / 重放边界 / 只停一轮不做）。
 - `tool_call` 路由不发 `FileEdited`：ACP 的 `tool_call` / `tool_call_update` 不带 diff（`bridge.mjs:259-292`），无可靠增删行数 ⇒ 变更审查面板按既有快照面工作；`fs/write_text_file` 写路由发既有 `FileEdited`（§21.2 / D79）。登记 = §14-5。
 - 图片面（F19）= 批 11 设计已定（§22）：原生块需 B1 例外（§22.2，**已裁 A**）；桌面半与 CLI 半一并实施；新 CLI 合入前生产行为 = 今天；边界见 §22.7。
-- 用量面（F20）= 批 11 设计已定（§23）：成本无来源（§14-25）、终端无 `/usage` 命令（§14-26）；边界见 §23.7。
+- 用量面（F20）= 批 11 设计已定（§23），成本 / 缓存面见 §30（批 23）：终端无 `/usage` 命令（§14-26）；边界见 §23.7 与 §30.10。
 - 图片收口面（F19 CLI 半）= 批 12 设计已定（§22.9–§22.12）：core 3 档 + CLI 1 档属 B1 例外（依据 = §22.12 首段）；各节边界见 §22.9 / §22.10 / §22.11 末段。
 - 模型切换后置面（批 14）= 设计已定（§24）：只对 thincoder 内核的 `model` configId；不做回合内生效、不做 provider 后置、不做等待态持久化；边界见 §24.7。
 - 交互响应面（F22）= 批 16 设计已定（§25）：宿主侧 = 预热池 + 乐观就绪可见性 + 打点；CLI 侧瘦身归**已获批准**的外仓批（§25.13）；边界见 §25.12。批 16 见 §25。
@@ -505,7 +505,7 @@ F16 的 ACP 挂起窗 + 回合边界帧 §19.3；F19 的 `promptCapabilities.ima
 - open：模型候选仅一项时，picker 仍显示（点开只有一个选项）——保持现状（诚实显示上报面），不特判。
 - 已落地（批 4）：子代理卡片 / 活动条 / 会话状态全部复用既有面（§15.9）；无停止 / 转后台按钮（display-only，D22）。
 - 已落地（批 5）：子代理卡片可点开只读视图（思考 / 正文 / 工具卡），活动条行同入口（§16.3）；仍无控制面（D22 不变）。
-- 已落地（批 6）：审批自动档 = composer 右下角的拨动开关（胶囊 track + 圆 knob，开 = knob 在右、track 橙，关 = knob 在左、无填充；两档 ⇒ 右端开关，≥3 档仍是左簇菜单——Claude 的 UI 不动；§17.1-③）——本批唯一的宿主改动（`composer.dart` ㉗，+≤70）；思考面在 CLI 上报 `thinkingLevel` 时变为档位列表，否则仍是开关（§17.3-③）。无新 l10n 键：tooltip 文案来自内核选项（英文占位，§14-19），标题复用 `composerApprovalTitle`。
+- 审批自动档 = composer 左簇的审批药丸 + 菜单（`ComposerPicker`；两档与多档内核同形，§17.1-③）；思考面在 CLI 上报 `thinkingLevel` 时变为档位列表，否则仍是开关（§17.3-③）。无新 l10n 键：tooltip 文案来自内核选项（英文占位，§14-19），标题复用 `composerApprovalTitle`。
 - 批 7 设计已定（§18）：工作中发送的消息 = 宿主既有队列面（队列面板 / 撤回 / 编辑 / 立即发送三动作），thincoder 内核声明 `QueuesMessages` 后自动生效，宿主零改动（§18.8）；唯一触碰 = 设置页「工作中发送的消息」的说明文案（D54）。
 - 已落地（批 8，设计）：自动轮 = 宿主既有「无提示回合」面（不滚到底 / 完成不响铃 / 可停止 / 期间可排队）；无新组件、无新文案（§19.9）。
 - 已落地（批 10，设计）：编辑器上下文 = composer 输入区下方的可撤销 chip + 已发消息气泡里的只读摘要（无新面板，§20.3）；agent 编辑的拒绝面 = 会话内 `NoticeItem(error)` + 编辑器只读 diff，不弹窗（§21.2 / D80）。
@@ -536,7 +536,7 @@ F16 的 ACP 挂起窗 + 回合边界帧 §19.3；F19 的 `promptCapabilities.ima
 
 批 12 起的存档线形：槽 JSON 的 `contextHistory` 与 `history` 都不再含 `image_url` / `data:image/`（§22.10 剥离；只剩占位文本 `[image omitted — stripped from the session archive]`）——批 12 前落盘的旧槽仍可能带图（不回扫）。
 
-批 11 起的线形：`initialize` 回包的 `agentCapabilities.promptCapabilities.image`（true ⇒ `session/prompt.prompt[]` 可含 `{type:"image", data, mimeType}`；缺位 / false ⇒ 桌面只发 text 块）；`usage_update.cost` 仍不出现（CLI 不上报，§14-25）。
+批 11 起的线形：`initialize` 回包的 `agentCapabilities.promptCapabilities.image`（true ⇒ `session/prompt.prompt[]` 可含 `{type:"image", data, mimeType}`；缺位 / false ⇒ 桌面只发 text 块）；`usage_update.cost` 仍不出现（CLI 不上报）；扩展字段见 §30.4。
 变了 ⇒ 改 `thincoder_protocol.dart` 的解析与 `thincoder_events.dart` 的翻译（§3.6 / §15.2），重录固件。
 5. **核对错误面**：`-32000/-32601/-32602/-32603` 语义（`acp/transport.mjs:14-20`）；凭据门文案是否仍指向 `providers[].apiKey` 与 `thincoder acp --login`（`handlers-session.mjs:85-105`）。
 6. **版本下限**：若新版本协议面有变 ⇒ 更新 `thincoderVerifiedVersion` 常量（`thincoder_locator.dart`）+ 本档 §3.4 + 固件；只有内部变化 ⇒ 只重录固件。
@@ -590,13 +590,13 @@ F16 的 ACP 挂起窗 + 回合边界帧 §19.3；F19 的 `promptCapabilities.ima
 | 16 | 子代理工具卡的归属与结果 | 归属已接（批 5）：工具帧带同一 `_meta`、本仓路由进 children（§16.1 / §16.2）。结果面仍缺：结果不经 ACP（`spawn-child.mjs:159-161`；`wrapChildCallbacks` 不包 `onToolResult`）⇒ 视图内工具卡停在 in_progress（不伪造终态，§16.8-1）。判定条件：补结果通道 ⇒ `tool_call_update` 路由自动闭合；输出通知另接 |
 | 17 | 子代理内容不落盘 | 谈话表随进程（`endSubagents()` 清；§16.8-4）。重开桌面后卡片只剩状态、无 children。判定条件：需要事后回看 ⇒ 另立持久面（会话存档无此字段） |
 | 18 | 「Approve for this session」名不副实 | **已闭合（桌面侧；批 6）**：面板选 always ⇒ 先答本次，同一回合写 `autoApprove=true` ⇒ 会话级承诺成立（§17.1-④；用户 2026-10-16 21:47 裁定）。服务端 `approve_always` 仍无记忆（`bridge.mjs:57-62`），桌面不再依赖它；残余判定条件见 §17.1-④ 两条（CLI 改名 / 摘掉、按工具会话级放行表） |
-| 19 | 审批开关与档位标签英文占位 | 审批两项（`Ask` / `Auto`）、其 description（开关 tooltip 的第二句）与档位名（`effortLabel`）英文直写；`localizedKernelOption`（`kernel_option_text.dart:8-46`）只认 claude 元组，未知元组原样透出 ⇒ 英文占位接受。同因 = §14-14；补齐窗口 = SDK 就位轮（同轮补 `app_en.arb` / `app_zh.arb` 键 + 生成档重产） |
+| 19 | 审批开关与档位标签英文占位 | 审批两项（`Ask` / `Auto`）、其 description（审批菜单行的描述句）与档位名（`effortLabel`）英文直写；`localizedKernelOption`（`kernel_option_text.dart:8-46`）只认 claude 元组，未知元组原样透出 ⇒ 英文占位接受。同因 = §14-14；补齐窗口 = SDK 就位轮（同轮补 `app_en.arb` / `app_zh.arb` 键 + 生成档重产） |
 | 20 | 模型清单后台推送的落地面 | `refreshModelChoices` 是 fire-and-forget（§17.3-①）：落地时会话已关 / 已被 load·resume 替换 ⇒ 丢弃；`notify` 抛出（管道已断）⇒ 吞掉并记一行日志，不重试、不抛。判据 = 会话在册且同实例（`liveSession(id)?.agent === agent`，`acp.mjs` 的 ctx 包装传入）。判定条件：观察到清单在会话关闭后仍被推送 / 进程因未处理的拒绝退出 ⇒ 复核该判据 |
 | 21 | timer 唤醒轮不在 ACP 面 | 挂起窗不接 `timerFace`（§19.3-①），且窗内轮与普通轮都带 `suspDriven:true`（§19.3-②）⇒ 桌面会话里到期的 timer 不在后台自起一轮，也不在工具轮收尾投递（`post-turn.mjs:23`）；到期件留在途（不出列、不丢），交付面为零（§19.8-1）。判定条件：桌面需要 timer 唤醒 ⇒ 接 `timerFace`（`suspension.mjs:173-205` 第四态）+ 边界帧 `kind:"timer"` |
 | 22 | F17 重放里的 system-reminder 原文 | `session/load` 重放 `user_message_chunk` 文本；CLI 是否过滤机器行未核（`unverified`，§20.8-4）⇒ 本批不解析、不剥离。判定条件：走查看到重放消息里出现 system-reminder 正文 ⇒ 翻译层按固定前缀剥离（另立） |
 | 23 | 同一文件并发写 | 不同文件各自落盘；同一文件由 CLI 工具调用串行 + `expectedText` 基线保护（后写发现基线变了 ⇒ `-32603`，§21.8-9）。判定条件：走查见到同一文件并发写丢更新 ⇒ `IdeKernelFiles` 加每路径串行队列 |
 | 24 | F17 / F18 的 l10n 键与生成档 | 6 键（F17 4 + F18 2）在 `app_en.arb` / `app_zh.arb` 与生成档同拍在位——无 SDK ⇒ 生成档随 ARB 手改、保持 `test/l10n_test.dart` 绿（同 §18.8 / §14-14）；SDK 就位轮 `flutter gen-l10n` 重产。T82 只机检两源档（生成档由编译引用与控件走查覆盖）。判定条件：重产结果与手改逐键一致 |
-| 25 | 成本无来源（F20） | CLI 从不上报 `usage_update.cost`（`bridge.mjs:254-261` 只发 used / size），core 无价目表 ⇒ 桌面不显示成本（不重算，D89）。判定条件：CLI 在 `usage_update.cost`（ACP 可选 `Cost{amount,currency}`）上报 ⇒ 桌面在会话面板与回合 footer 显示（字段按 ACP 形读） |
+| 25 | 成本（F20） | 桌面按 `UsagePrices` 价格表估算（机制与判据 = §30.1 ⑤ / §30.5）；线上不发 `cost`（§30.4）；缺价 ⇒ 费用行不出现（不填 0）。判定条件：外仓 core 有价目表并在 `usage_update` 带 `cost` ⇒ 以线上值为准（届时改 §30.1 ⑤） |
 | 26 | 终端 `/usage` 不存在 / context% 非同一仪器 | 终端斜杠命令表无 `/usage`（`slash-commands.mjs:44-106`）；终端用量面 = 状态行累计 ↑prompt ↓completion + context%（`status-line.mjs:122-143`），其中 context% 是 `estimateTokens(history)` 估算（`render-loop.mjs:89-90`），与 ACP `usage_update.used` 不同仪器。本批对照口径 = token 合计（同 `onUsage` 源，D90）。判定条件：终端后续加 `/usage`（CLI 面）⇒ 按该命令输出补对照项 |
 | 27 | F20 的 l10n 键与生成档 | 2 键（`turnTokensSpentHint` / `usageSessionTotal`）在两源档与生成档同拍在位——无 SDK ⇒ 生成档随 ARB 手改、保持 `test/l10n_test.dart` 绿（同 §18.8 / §14-14）；SDK 就位轮 `flutter gen-l10n` 重产。T96 只机检两源档。判定条件：重产结果与手改逐键一致 |
 | 28 | F21 后置切换的失败文案英文占位 | 回合收尾重发失败 ⇒ 会话内 error notice 为内核口英文（含原始错误），形同 `thincoder stopped unexpectedly`；等待态文案已走 l10n（`modelsSwitchPending`，§24.2）。内核层无 l10n 面（`lib/kernel/**` 零 `l10n` 引用，2026-10-19 实测）。判定条件：`KernelContext` 携本地化回调（内核 l10n 面）⇒ 该 notice 改走键 |
@@ -1104,20 +1104,20 @@ console.log(JSON.stringify(seen, null, 1))
 ## 17. 批 6：审批自动档 + 模型清单与思考档位（F13 / F14）
 
 > 需求档 F13 / F14（批 6；用户 2026-10-16 20:07 裁定「开」；同日 21:09 二次裁定「和终端同源」⇒ 主线 = CLI 侧 `agent.autoApprove` 暴露成 config option，桌面只显示与切换服务端回报）。
-> 两半：**thincoder 侧**（§17.1-① 与 §17.3-①② 的投影；父侧 out-of-repo 轮执行）· **本仓**（§17.1-③ 审批面 + §17.3-③ 档位面；适配层 + 宿主 1 档——composer 右下角的小开关，§17.4 ㉗）。P0（桌面内核自答）= 兜底，只留判据（§17.2）。
+> 两半：**thincoder 侧**（§17.1-① 与 §17.3-①② 的投影；父侧 out-of-repo 轮执行）· **本仓**（§17.1-③ 审批面 + §17.3-③ 档位面；适配层 + 宿主 1 档——composer 左簇的审批药丸 + 菜单，§17.1-③）。P0（桌面内核自答）= 兜底，只留判据（§17.2）。
 
 **最近先例（对齐 ∥ 偏离）**
 
 先例 = F5 的三面（§4 F5：`mode` / `model` / `thinking` 全由回报驱动，D20 不乐观改）+ Claude 的审批面与 effort 列表（`claude_code_kernel.dart:2788-2798` 的 `permission`、`:2644-2670` 的 `_approvals`、`:2801-2818` 的档位列表：`toggle: false` + `effortLabel`）+ 批 5 §16.1 的 out-of-repo 写法（逐行 diff / 探针 / 门禁 / 不预占号）。
 
-- **对齐**：新开关走宿主**现成的** `SelectsPermission`（`agent_kernel.dart:130-132`：「How the agent's actions are approved」），档位走现成的 `SelectsEffort` 列表形态——接口与事件都不新造（E2）；放置沿用 composer 工具条右端（`_ContextRing` 的位）。
+- **对齐**：审批面走宿主**现成的** `SelectsPermission`（`agent_kernel.dart:130-132`：「How the agent's actions are approved」），档位走现成的 `SelectsEffort` 列表形态——接口与事件都不新造（E2）；放置走 composer 左簇 `PickersRow`（审批药丸在模式 picker 之后、模型 picker 之前，§17.1-③）。
 - **偏离 1 · 「上报即显示」只对已接线的 configId 成立**：桌面读 `configOptions` 的面是**固定**的——`mode` / `model` / `thinking` 三处（`thincoder_kernel.dart:681-720`），`chat_session.dart:370-377` 也只收 `SelectsContextSize` / `SelectsEffort` / `SelectsFast` 三个接口；新 id 只进 `_events.options`（`thincoder_events.dart:169-188`），不产生任何 UI。
-  故 F13 的桌面面 = 适配层实现 `SelectsPermission`（既有接口）+ 宿主 composer 一处放置（用户 2026-10-16 21:25 定形：右下角紧凑开关，不是左簇菜单 pill，§17.1-③）。需求档 F13 的「上报即显示开关」按此口径读：能力上报即点亮，需要适配层接线 + 宿主这一处开关。
+  故 F13 的桌面面 = 适配层实现 `SelectsPermission`（既有接口）+ 宿主 composer 一处放置（用户 2026-11-15 定形：左簇审批药丸 + 菜单，§17.1-③）。需求档 F13 的「上报即显示」按此口径读：能力上报即出审批药丸，需要适配层接线 + 宿主这一处放置。
 - **偏离 2 · 思考档位 = 新 id 并行投影，不改 `thinking` 的形状**：§17.3-② 给判据（旧桌面按布尔读 `thinking`）。
 
 ### 17.1 F13 · 审批自动档（主线：服务端真值 + 桌面回报驱动）
 
-一句话：CLI 把 `agent.autoApprove` 做成 `configOptions.autoApprove`（boolean）；桌面用 composer 右下角的小开关显示它、切换它。开着 ⇒ 核在审批阶段之前短路，请求根本不到桥 ⇒ 无面板、无逐次点头；关着 ⇒ 逐次问。
+一句话：CLI 把 `agent.autoApprove` 做成 `configOptions.autoApprove`（boolean）；桌面用 composer 左簇的审批药丸显示它、用它的菜单切换它。开着 ⇒ 核在审批阶段之前短路，请求根本不到桥 ⇒ 无面板、无逐次点头；关着 ⇒ 逐次问。
 
 **① CLI 侧（thincoder 仓）**
 
@@ -1167,57 +1167,40 @@ console.log(JSON.stringify(seen, null, 1))
 - **起点**：`agent.autoApprove` 默认 false（`thincoder-core/agent.mjs:55`）；`session/new` 直建会话、不读槽（`handlers-session.mjs:193-195`）⇒ 新会话默认关，与终端一致（终端新会话也默认关）。
 - **终端 → 桌面**：`session/load` / `resume` 走 `applySession`（`handlers-slots.mjs:112` / `:177`）⇒ `agent.autoApprove = data.autoApprove ?? false`（`session-lifecycle.mjs:119`）⇒ 槽里开着，ACP 会话就开着，`configOptions` 如实报出。
 - **桌面 → 终端**：`set_config_option` 只改内存（与 model / thinking 同口径，`:107-111`），落盘靠**既有的**回合末存档（`acp/session.mjs:111` `save(agent)` → `thincoder-core/session.mjs:155` 写 `autoApprove`）⇒ 终端下次打开同槽读到的就是它。**不新增写盘路径**。
-  - 精度：开关后**没发消息就关窗口** ⇒ 不落盘（本回合没发生）。走查按「开关 → 发一条 → 再看终端」验（§17.9-④⑧）。
+  - 精度：切到 `Auto` 后**没发消息就关窗口** ⇒ 不落盘（本回合没发生）。走查按「切到 `Auto` → 发一条 → 再看终端」验（§17.9-④⑧）。
   - 同槽两窗口 = last-write-wins，各自内存态不互推（与今天终端两开一致）。
 
-**③ 桌面侧（本仓；宿主 1 档 = composer 的右下角开关）**
+**③ 桌面侧（本仓；宿主 1 档 = composer 左簇的审批药丸）**
 
-- `ThincoderKernel` 增实现 `SelectsPermission`，`permission` 两项（`description` = tooltip 的第二句；`label` / `icon` 留在数据面，开关面不渲染——见下「无文字 label」）：
+- `ThincoderKernel` 增实现 `SelectsPermission`，`permission` 两项（`label` / `icon` / `description` 三个字段都进药丸与菜单，渲染见下「形态与放置」）：
 
 | id | label | 图标 | description | 备注 |
 |---|---|---|---|---|
 | `ask` | `Ask` | `Icons.front_hand_outlined` | `Ask before each tool call` | — |
-| `auto` | `Auto` | `Icons.fast_forward_rounded` | `Tools run without asking — the same switch as /auto in the terminal` | `caution: true`（数据面语义 = 有风险；本面不取色，见下「颜色」） |
+| `auto` | `Auto` | `Icons.fast_forward_rounded` | `Tools run without asking — the same switch as /auto in the terminal` | `caution: true`（数据面语义 = 有风险；药丸按它取警示色，见下「态」） |
 
-- `options` = `configOf('autoApprove') == null ? [] :` 上表两项 ⇒ **旧 CLI 无此项 ⇒ 空表 ⇒ `ChatSession.permissions == null`（`chat_session.dart:370-373`）⇒ composer 不出现该开关（零变化）**。
+- `options` = `configOf('autoApprove') == null ? [] :` 上表两项 ⇒ **旧 CLI 无此项 ⇒ 空表 ⇒ `ChatSession.permissions == null`（`chat_session.dart:370-373`）⇒ composer 不出现审批药丸（零变化）**。
 - `selected` = `configOf('autoApprove')['currentValue'] == true ? 'auto' : 'ask'` ⇒ **只读回报**（D20；点完等 `config_option_update`）。
 - `select(id)` ⇒ `_config('autoApprove', id == 'auto')`（`thincoder_kernel.dart:807-819` 的 `_config` 已收 `Object?`，boolean 直传；回包 / 通知都经 `_events.optionsFrom` 刷新，`thincoder_events.dart:140-157`）。
 - **写失败面**：`_config` 既有 `try/catch`（`thincoder_kernel.dart:808-818`）⇒ 服务端回错时显示保持回报值、零异常、连接与回合不受影响；留痕 = `appEvent('thincoder', …)`（`:817`），不新增路径。用例 T59。
 
-**形态与放置（用户 2026-10-16 22:12 定形：拨动开关）**
+**形态与放置（用户 2026-11-15 定形：下拉框）**
 
-- **通用规则，不特判内核**：`permission.options.length == 2` ⇒ **右下角拨动开关**（`selected.id == options[1].id` = 开，`options[0].id` = 关）；否则（≥3 项，如 Claude 的 5 档）⇒ 左簇既有 `ComposerPicker` 菜单——Claude 的 UI 逐字不动。0 项 ⇒ `permissions == null`（无控件）；1 项 ⇒ 走菜单（同今天）。
-- **位置**：`_buildToolbar` 右端（`composer.dart:1869-1879`），`_ContextRing` 左侧、`SizedBox(2)` 邻接；无环（`context == null`）时同样贴发送钮左侧 2px。开关态下左簇跳过审批 pill（主 composer：左 = 模式 + 模型，与用户的截图一致）。放置与邻接不随形态改。
-- **形状与几何**：track = 胶囊 **35 × 20**、圆角 **10**（= 高 / 2）；knob = 圆、**直径 16**，左右内缩 **2**。逐项照既有开关 `IdeSwitch`（`lib/ide/ide_switch.dart:44-84`）：宽 = 高 × 1.75（`:64`）、knob = 高 − 4（`:48`）、`padding: EdgeInsets.all(2)`（`:66`）、圆角 = 高 / 2（`:70`）、换位用 `alignment: value ? centerRight : centerLeft`（`:67`）。
-  高取 20：在用户给的 18–20 内，且落在工具栏既有高度里（`_ContextRing` 23×22，`composer.dart:1990-1991`；发送钮 24×24，`:2102-2103`）。用户建议的 knob「高 − 6 / 内缩 3」按既有开关的「高 − 4 / 内缩 2」统一——同一个应用的两个开关不该有两套内缩。
-- **态：位置即状态**。**关 = knob 在左、track 无填充**（`Colors.transparent` + 1px `AppColors.textFaint` 描边，`app_theme.dart:142`），knob `AppColors.textMuted`（`app_theme.dart:139`）。
-  **开 = knob 在右、track 填充橙色**，knob `themeColors['button.foreground']`（既有填充按钮上的前景色，`ide_switch.dart:47`；同 `_SendButton` 的图标色，`composer.dart:2081`）。
-  关态的 1px 描边只让「左」这个位置读得出来，不是状态信号——没有它，一颗灰圆看不出是开关。
-- **颜色：橙 = `AppColors.autoTrack`，值 `0xFFE2B373`**（`app_theme.dart` 新增常量；取色自用户 2026-10-16 23:37 指定的参照图 pill 底色 `#E2B373`，逐像素实读）。早前借 `AppColors.claude`（`0xFFD97857`）作暖橙的方案已被该指示取代；其余橙都在别域，不跨域借（`stash_editor.dart:141` 标签色板、`extension_widgets.dart:462` 市场五星兜底）。
-  被否 `caution` = `editorWarning.foreground`（`app_theme.dart:194-196`）：用户 2026-10-16 21:39 明确不要警示色——auto 是用户主动选的省事档，不是警告；拿警示色画开关，等于把「有风险」写在上面。
-
-  被否 `button.background`：出厂两套主题都是蓝（`workbench_theme_initial_colors.dart:22` `#0078D4` / `:164` `#005FB8`）——不是橙，且随主题漂移。
-  被否 `button.secondaryHoverBackground`：那套信号是「有没有底色」；换成 track + knob 后 track 要一个固定色相，主题灰每换主题就变。
-- **动画**：位置与底色各一个 `AnimatedContainer`，**140ms · `Curves.easeOut`**——逐字照 `IdeSwitch`（外层 `ide_switch.dart:61-63`、knob `:72-74`）；在用户给的 150ms 上界内。
-- **关态 hover**：track 才出底色 `themeColors['toolbar.hoverBackground']`（同 `_ContextRing` 的 hover，`composer.dart:1995-1999`）；开态恒为橙，hover 不变色。
-- **无文字 label、无图标**（用户没要）：两项的 `label` / `icon` 留在数据面（T51 的断言面、≥3 档菜单面要用），本形态不渲染；宽度因此固定 35，不随文案长短变。
-- **点击热区 = 整颗胶囊 35 × 22**（track 外上下各 1px，`GestureDetector` 包在外层）——与工具栏同高，满足用户「≥ 22」。
-- **可访问面**：`Semantics(toggled: on, label: title)`，照 `IdeSwitch`（`ide_switch.dart:49-54`）——没有文字 label，开关态只能靠语义树说给读屏。
-- **动作**：点即切到另一项（`onSelected(options.firstWhere((o) => o.id != selected.id))`）——无菜单、无键位（与 `_ContextRing` 同为点按面）；显示只认回报（D20）——点完 knob 不动，收到 `config_option_update` 后位置与颜色一起换。
-- **tooltip** = `composerApprovalTitle(kernel.label)` + ` · ` + **点击后进入的那一项**的 description：关态即 `Tools run without asking — the same switch as /auto in the terminal`（与终端 `/auto` 同源的语义句来自选项描述，不新造文案、不特判内核）；开态即 `Ask before each tool call`（说的是点一下会到哪）。没有文字 label ⇒ tooltip 是唯一的文字语义面。
-  l10n：**0 新键**——本机无 `flutter gen-l10n`（2026-10-16 实测），英文占位，登记 §14-19。
-- **实现落点**：`composer.dart` 的 `ComposerPermissionSwitch`（公开类，供 widget 用例直取；现于 `:1911-1964`）画 track + knob；签名不动 = `ComposerPermissionSwitch({required KernelChoice permission, required String title})`，`permission` 已过 `localizedKernelOption`。
-  `_buildToolbar` 的放置分支不动（`:1869-1879`：`permission != null && permission.options.length == 2`）。
-- **可见性（用户要「一眼看出」）** = 右下角常驻 + **颜色即状态**（开 = 橙 track、knob 在右；关 = 无填充、knob 在左）+ tooltip 的同源语义句。
-
-- **不做状态行 / 侧栏 AUTO 徽标**：宿主的状态文案由宿主从事件状态派生，内核没有「供给一个徽标」的面（新接口 = E2 的又一接线点）。判据 = 走查时若右下角开关仍不够醒目（用户没注意到）⇒ 再评估加面；在服务端真值这条主线上，常驻开关已承载该信息。
+- **通用规则，不特判内核**：`permission.options` 非空 ⇒ 左簇既有 `ComposerPicker` 药丸 + 菜单——两档（thincoder 的 `ask` / `auto`）与多档（Claude 的 5 档）**同形**；0 项 ⇒ `permissions == null`（旧 CLI 无 `autoApprove`）⇒ 不出版面。
+- **位置**：左簇 `PickersRow` 内，模式 picker 之后、模型 picker 之前（`composer_toolbar.dart:58-74`）；右端不再有开关分支。
+- **文案与图标**：药丸读选中项的 `label`（`Ask` / `Auto`）与该选项的 `icon`（`thincoder_choices.dart:23-36`）；不传 `label:`，走 picker 内建「取选中项文案」。
+- **菜单**：头 = `composerApprovalTitle(kernel.label)`；`menuWidth: 290`、`describes` 缺省 true、行高 40；每行 label + 描述（`ask` 行「Ask before each tool call」，`auto` 行「Tools run without asking — the same switch as /auto in the terminal」）。
+- **交互**：按下即开、可拖到选项松手选中、↑↓ / Enter / Esc 驱动、点外面关闭——全部是 `ComposerPicker` 的内建行为，本批一个参数都不加。
+- **态**：`auto` 项的 `caution: true` 派生药丸的 `AppColors.caution` 取色（选中 `auto` 时文案与图标为警示色，选中 `ask` 时为 `AppColors.textMuted`）；状态靠文案 + 图标 + 颜色读，不靠位置。
+- **动作**：`onSelected: permission.onSelected` ⇒ `KernelChoice.select(id)` ⇒ `_configOf(kernel, 'autoApprove', id == 'auto')`（`thincoder_choices.dart:43`）；显示只认回报（D20）——点完药丸不动，收到 `config_option_update` 后文案与图标一起换。
+- **不做状态行 / 侧栏 AUTO 徽标**：宿主没有「内核供给状态徽标」的面；药丸的文案 + `caution` 色已承载该信息（判据见 §17.8-2）。
 - **不做本地自答**（P0 见 §17.2）。
 
 **④ 「Approve for this session」= 会话级 auto（本批做 · 桌面侧；用户 2026-10-16 21:47 裁定）**
 
 事实：面板第二行的标签取自服务端 `approve_always` 的 `name`（`thincoder_kernel.dart:590` ← `bridge.mjs:52`「Approve for this session」），答复 `approve_always`（`thincoder_kernel.dart:598-617`）在服务端只换算成**本次** true（`bridge.mjs:57-62`，无任何记忆）⇒ 服务端没有「本会话记住」的位。终端同源（`dispatch.mjs:190-208` 单次 boolean）⇒ 偏差在服务端，不在桌面。
 
-裁定：面板选 **always**（`approve_always`）⇒ 桌面**先答本次 approve**（该行字面兑现：本次放行已生效），**同一回合**追加一次 `set_config_option("autoApprove", true)`——写路径与右下角开关同一个 `_config('autoApprove', …)`（`thincoder_kernel.dart:807-819`）⇒ 本会话此后的工具请求不再弹（服务端短路，§17.1-①）。
+裁定：面板选 **always**（`approve_always`）⇒ 桌面**先答本次 approve**（该行字面兑现：本次放行已生效），**同一回合**追加一次 `set_config_option("autoApprove", true)`——写路径与左簇审批药丸同一个 `_config('autoApprove', …)`（`thincoder_kernel.dart:807-819`）⇒ 本会话此后的工具请求不再弹（服务端短路，§17.1-①）。
 选 once / reject ⇒ **不发该写**（行为与今天一致）。
 
 做法（`answer`，`thincoder_kernel.dart:598-617`；diff，行号按分支定位；净增 4 行含注释）：
@@ -1234,9 +1217,9 @@ console.log(JSON.stringify(seen, null, 1))
 
 `dart:async` 已在用（`:1`）；不新增写路径、不加能力预判——旧 CLI 的回错就走下面的失败面。
 
-**语义（为什么是会话级）**：终端 `a` = 批量放行（本次询问族）；本口径 = **会话级 auto**——与终端 `/auto`、右下角开关同源（同一个 `agent.autoApprove`）。服务端 `approve_always` 无记忆，桌面也没有「本轮批量」的面 ⇒ 会话级是唯一诚实的解释。
+**语义（为什么是会话级）**：终端 `a` = 批量放行（本次询问族）；本口径 = **会话级 auto**——与终端 `/auto`、左簇审批药丸同源（同一个 `agent.autoApprove`）。服务端 `approve_always` 无记忆，桌面也没有「本轮批量」的面 ⇒ 会话级是唯一诚实的解释。
 
-**失败面**：写失败（RPC 错 / 旧 CLI 无 `autoApprove` 项）⇒ **不影响本次批准**（应答已发、工具照跑）、开关保持原状（在场时只认服务端回报，D20；旧 CLI 无此项 ⇒ 无开关）、零异常、连接与回合不受影响；留痕走 `_config` 既有 `appEvent`（`thincoder_kernel.dart:817`）。用例 T62。
+**失败面**：写失败（RPC 错 / 旧 CLI 无 `autoApprove` 项）⇒ **不影响本次批准**（应答已发、工具照跑）、药丸保持原状（在场时只认服务端回报，D20；旧 CLI 无此项 ⇒ 无药丸）、零异常、连接与回合不受影响；留痕走 `_config` 既有 `appEvent`（`thincoder_kernel.dart:817`）。用例 T62。
 
 判定条件（先到先做）：
 - ① CLI 把该选项 `name` 改成「Approve once」或摘掉（协议面仍三值，只改名字）⇒ 桌面的 always 行**连同这个副作用一起撤**（「一次」的标签不能开全会话 auto）；
@@ -1245,7 +1228,7 @@ console.log(JSON.stringify(seen, null, 1))
 ### 17.2 P0（兜底）：桌面内核自答 — 不做，只留判据
 
 判据（一句）：**仅当 §17.1 的跨仓轮无法在用户要的时间窗内落地、且用户明确要先有自动档时**，才启用本地兜底——
-内核在自己的反向请求入口（`thincoder_kernel.dart:556-595` `_serverRequest`）对 autoApprove 为真时直接回 `{outcome:{outcome:'selected',optionId:'approve_once'}}`、不发 `InteractionRequested`，开关仍借 `SelectsPermission` 显示。
+内核在自己的反向请求入口（`thincoder_kernel.dart:556-595` `_serverRequest`）对 autoApprove 为真时直接回 `{outcome:{outcome:'selected',optionId:'approve_once'}}`、不发 `InteractionRequested`，审批药丸仍借 `SelectsPermission` 显示。
 
 **互斥**：§17.1 在位时开关的真值在服务端，本地再自答 = 同一件事两个真相（且服务端已不问，本地分支永不可达）⇒ 二者不并存；真启用时另立用例与走查。
 
@@ -1412,23 +1395,26 @@ console.log(JSON.stringify(seen, null, 1))
 
 | 组合 | 表现 |
 |---|---|
-| 旧 CLI（0.12.74，无新项）+ 新桌面 | `autoApprove` / `thinkingLevel` 缺席 ⇒ 无审批开关、思考仍是开关、模型一项（= 今天） |
+| 旧 CLI（0.12.74，无新项）+ 新桌面 | `autoApprove` / `thinkingLevel` 缺席 ⇒ 无审批药丸、思考仍是开关、模型一项（= 今天） |
 | 新 CLI + 旧桌面 | 旧桌面只读 `mode` / `model` / `thinking` 三个 id ⇒ 新项被忽略；`thinking` 布尔未改形 ⇒ 无假报；`model.options[]` 多项走既有 `options` 机制 ⇒ **模型清单在旧桌面就已生效** |
 | 新 CLI + 新桌面 | F13 / F14 目标行为 |
 
 ### 17.4 受影响文件清单（E2 增量；行数 = 2026-10-16 只读实测，`wc -l` 换行数）
+
+> 本表是批 6 的交付账。审批控件的现状以 §17.1-③ 为准：右下角拨动开关已由批 24 删除，两档与多档统一走左簇审批药丸 + 菜单。
 
 | # | 坐标 | 改动 | 增量 |
 |---|---|---|---|
 | ㉔ | `lib/kernel/thincoder/thincoder_kernel.dart`（899 行） | `implements SelectsPermission` + `permission` 面（F13，§17.1-③）· `effort` 读 `thinkingLevel`（F14，§17.3-③）· `_ModelSetting` 的 `toggle` 可注入 · `answer`：always ⇒ 同一回合 `_config('autoApprove', true)`（§17.1-④） | ≤ +66（⇒ ≤965） |
 | ㉕ | `lib/kernel/thincoder/thincoder_mock.dart`（567 行） | 构造参数（`autoApprove` / `models` / `thinkingLevels` / `configError`，缺省 = 今天）· `_options()`（`:312-338`）增对应项 · `_configure`（`:289-308`）接受它们（`configError` 时对任意 id 回 `-32602`）· `_approve`（`:395-423`）在 auto 时**不发请求**（模拟 `:177` 短路）· T62 复用既有参数（`autoApprove` / `configError`），零增 | ≤ +55 |
 | ㉖ | `test/kernel/thincoder_kernel_test.dart`（1845 行） | T51–T62（§17.7；T62 四个面） | ≤ +290 |
-| ㉗ | `lib/chat/composer/composer.dart`（2069 行） | `ComposerPermissionSwitch`（右下角拨动开关：胶囊 track 35×20 + 圆 knob 16（再小会糊）、开 = knob 右 + 橙 track（`AppColors.autoTrack` `0xFFE2B373`）/ 关 = knob 左 + 无填充、只留 1px 淡描边；动画 140ms easeOut；hover / tooltip）+ `_buildToolbar` 放置分支（两档 ⇒ 右端；≥3 档仍左簇菜单） | ≤ +70（⇒ ≤2139；实交 2139） |
-| ㉘ | `test/composer_test.dart`（2097 行） | T61（两档 ⇒ 开关 / 五档 ⇒ 菜单 / 点开关 ⇒ 第二项） | ≤ +90（⇒ ≤2187；实交 2184 = +87） |
+| ㉗ | `lib/chat/composer/composer.dart`（2069 行） | 批 6 加的右下角拨动开关，**批 24 已删**——`ComposerPermissionSwitch` 与 `_buildToolbar` 的「两档 ⇒ 右端」放置分支一并删除；审批面现为左簇审批药丸（§17.1-③），两档与多档同一条路径 | ≤ +70（⇒ ≤2139；实交 2139） |
+| ㉘ | `test/composer_test.dart`（2416 行） | T61（两档 ⇒ 左簇审批药丸读 `Ask` / 五档 ⇒ 同一个药丸读 `Ask for approval` / 按药丸开菜单选 `Auto` ⇒ 写 `autoApprove: true`） | 行级改写一条用例，不动结构 |
 | — | `test/fixtures/thincoder/*` | **不加**：固件回放没有「点选择器」的动作（`thincoder_fixtures_test.dart:84-125` 只有 `client` / `server` / `turn` / `answer` / `cancel` / `expect`），选项面在 kernel 测试里断言；既有固件保持绿 = 回归哨兵 | 0 |
 
-- **宿主改动面 = 1 档**：`composer.dart`（右下角开关构件 + 放置分支，≤ +70；㉗）——用户 21:25 定的形只落在这一处。其余宿主档零改动：`agent_kernel.dart` · `chat_session.dart` · `composer_picker.dart` · `kernel_option_text.dart` · `interaction_panel.dart`——`SelectsPermission` 与 `SelectsEffort` 仍是既有接口，菜单渲染与档位列表仍是既有面。
-- 体量（`composer.dart` 编制日 2069 行 / 实交 2139 行（+70）；`composer_test.dart` 2097 行）：两者都在 >800 名单，`composer.dart` 远在 >800 线之上——本批只加这一个控件（`ComposerPermissionSwitch` + 放置分支），不动结构、不删注释；缝候选 = 右下角固定组（`_ContextRing` / `_SendButton` / 本开关）整段出档，`composer_test.dart` = 按面分组（工具条 / 历史编辑 / 布局）；触发 = 下一次结构级触碰或独立拆分批立项。
+- **宿主改动面 = 1 档（批 6）**：`composer.dart`（右下角开关构件 + 放置分支，≤ +70；㉗）——那是用户 2026-10-16 21:25 定的形。用户 2026-11-15 重定形 = 左簇审批药丸 + 菜单（§17.1-③），批 24 删掉该开关与放置分支，宿主改动面 = `lib/chat/composer/composer_toolbar.dart` 一处构件删除。其余宿主档零改动：`agent_kernel.dart` · `chat_session.dart` · `composer_picker.dart` · `kernel_option_text.dart` · `interaction_panel.dart`——`SelectsPermission` 与 `SelectsEffort` 仍是既有接口，菜单渲染与档位列表仍是既有面。
+- 体量（批 6 编制日 `composer.dart` 2069 行 / 实交 2139 行（+70）；`composer_test.dart` 2097 行）：两者当时都在 >800 名单——批 6 只加这一个控件（`ComposerPermissionSwitch` + 放置分支），不动结构、不删注释。
+- 体量现态：`composer.dart` 的拆分已落，现已 <800（本批见批档 §2 §D）；`composer_test.dart` 仍在 >800 名单。缝候选 = 右下角固定组（`_ContextRing` / `_SendButton`）整段出档 · `composer_test.dart` 按面分组（工具条 / 历史编辑 / 布局）；触发 = 下一次结构级触碰或独立拆分批立项。
 - 零改动：`thincoder_events.dart`（`configOf` / `optionsOf` / `selected` 已是通用读面）· `lib/kernel/claude_code/**` · `lib/chat/**` 其它。
 - 体量：`thincoder_kernel.dart` 899 行本就在 >800 硬顶之上。**本批不拆（显式裁定）**：本批对它是行级新增（两面 + 一个取值器），而拆分缝恰在同一区域（选择面 `:691-731` + 两个内部类 `:841-899`）——同日交付里动结构会把风险叠在风险上。
   **拆分触发 = F13/F14 两面定形之后的独立拆分批**（缝 = 选择面整段出档：`mode` / `model` / `effort` / `permission` 的构造 + `_Choice` / `_ModelSetting`；判据 = 下一次结构级触碰，或用户/评审要求）。本裁定只覆盖本批，交付后失效；拆分批已挂触发 ⇒ 下一批不得再在这两面上叠行（要动先立拆分批）。
@@ -1502,24 +1488,24 @@ console.log(applyConfigOption(tiers, "thinkingLevel", "bogus"))
 |---|---|---|
 | D39 | 自动档 = 服务端位 `agent.autoApprove`；桌面只显示与切换回报 | 「和终端同源」的唯一实现：终端 `/auto` 改的就是这个位，落槽、跨端一致（§17.1-②）。被否：桌面本地自答（P0）——两个真相，且与服务端短路并存时本地分支不可达 |
 | D40 | 桥的权限路径**不改**（仅注释） | 核 `dispatch.mjs:177` 已在审批阶段之前短路，请求不到桥；改桥 = 死代码 + 同一判定两处写 |
-| D41 | 开关落点 = 宿主审批面 `SelectsPermission` + composer 右下角拨动开关（两档时） | 宿主接口现成、语义正对（`agent_kernel.dart:130-132`）；右下角常驻、位置 + 颜色即状态（knob 右 + 橙 track = 开）⇒ 「一眼看出」（常驻 + 位置 + 颜色）；宿主代价 = composer 一档 +≤70 行（§17.4 ㉗）。被否：左簇菜单 pill（用户 2026-10-16 21:25 定形：两档要开菜单才看清状态）；被否：模式菜单（两个概念一个开关）；被否：设置页（要改宿主 + 不在工作面 + 作用域错） |
-| D42 | 不加 AUTO 徽标 | 宿主没有「内核供给状态徽标」的面；右下角拨动开关 + 开态橙 track（常驻 + 位置 + 颜色）已满足「一眼看出」；加面 = E2 又一接线点 |
+| D41 | 控件 = 宿主审批面 `SelectsPermission` + 左簇 `ComposerPicker` 药丸（两档与多档同形） | 宿主接口现成、语义正对（`agent_kernel.dart:130-132`）；用户 2026-11-15 定形：两档改成与 Claude Code 一致的下拉框，一个形态覆盖两档与多档（§17.1-③）。被否：右下角拨动开关（没有文字 label，状态只能靠位置 + 颜色读，且与多档内核分成两个形态）；被否：模式菜单（两个概念一个开关）；被否：设置页（要改宿主 + 不在工作面 + 作用域错） |
+| D42 | 不加 AUTO 徽标 | 宿主没有「内核供给状态徽标」的面；审批药丸的文案 + `caution` 色（常驻 + 文案 + 颜色）已满足「一眼看出」；加面 = E2 又一接线点 |
 | D43 | `thinking` 布尔不动，新增 `thinkingLevel` | 旧桌面按布尔读 `thinking`（`thincoder_events.dart:191-194`）——改形 = 旧桌面假报 OFF。被否：把 `thinking` 改成 select |
 | D44 | 档位只对有思考面的模型（`spec.thinking === true`） | 不替无思考面的模型造档位（与终端通用菜单的偏离，理由在此） |
 | D45 | 模型清单 = 后台预取 + 缓存 + `config_option_update` 推送 | `sessionConfigOptions` 同步且被六处同源调用，不能在投影里拉网络；先包不等网络。被否：会话起点同步拉（慢 + 失败面扩到首包）；被否：新增 ACP 方法（协议面扩张，需求只要投影） |
-| D46 | 「Approve for this session」= 会话级 auto（本批做 · 桌面侧） | 原判断：偏差在服务端措辞/语义（`bridge.mjs:52` + `:57-62`），非桌面独有 ⇒ 不改 CLI 的 `name`、不改协议。新裁定（用户 2026-10-16 21:47）：面板选 always ⇒ 先答本次 approve，同一回合写 `autoApprove=true`（与右下角开关同一写路径）⇒ 标签的会话级承诺成立；写失败不影响本次批准（§17.1-④）。被否：桌面本地记住「这一种工具」——服务端没有这个状态，桌面自演 = 两套真相；被否：只改标签不改行为——用户要的是真的开 auto |
+| D46 | 「Approve for this session」= 会话级 auto（本批做 · 桌面侧） | 原判断：偏差在服务端措辞/语义（`bridge.mjs:52` + `:57-62`），非桌面独有 ⇒ 不改 CLI 的 `name`、不改协议。新裁定（用户 2026-10-16 21:47）：面板选 always ⇒ 先答本次 approve，同一回合写 `autoApprove=true`（与审批药丸同一写路径）⇒ 标签的会话级承诺成立；写失败不影响本次批准（§17.1-④）。被否：桌面本地记住「这一种工具」——服务端没有这个状态，桌面自演 = 两套真相；被否：只改标签不改行为——用户要的是真的开 auto |
 | D47 | `thinking` 布尔补 `thinkAlwaysOn` 口径 | 终端对强制思考族恒报 ON（`cmd-think.mjs:27-28`）；ACP 面今天可能报 false = 与终端不一致，且 F14 的验收含「与终端一致」 |
 
 ### 17.6 验收对照（回指需求档 F13 / F14）
 
 | 需求条目 | 本档落点 | 判据 |
 |---|---|---|
-| F13 桌面开 auto ⇒ 工具不再逐次弹审批 | §17.1-①②③（服务端短路 + 桌面开关） | T51 / T52；走查③ |
+| F13 桌面开 auto ⇒ 工具不再逐次弹审批 | §17.1-①②③（服务端短路 + 桌面审批药丸） | T51 / T52；走查③ |
 | F13 关 ⇒ 恢复逐次 | §17.1-③（`select` 回 false） | T53；走查③（后半） |
 | F13 与终端同源 | §17.1-②（同一位、同一槽、同一存档点） | T51（`set_config_option` 载荷）+ 走查②④⑧ |
-| F13 开着时一眼可见 | §17.1-③（右下角开关常驻 + 位置与颜色即状态） | T61（knob 在右 + track 橙 = 开；knob 在左 + 无填充 = 关）；走查②③ |
-| （派生）审批面形态随选项数 | §17.1-③（两档 ⇒ 开关；≥3 档 ⇒ 菜单，Claude 不动） | T61 |
-| （派生）面板 always = 会话级 auto | §17.1-④（先答本次，同一回合写 `autoApprove`） | T62：always ⇒ 一次 `approve_always` 应答 + 一次 `set_config_option('autoApprove', true)` + 后续不弹；once / reject ⇒ 零写；写失败 ⇒ 批准成立、开关不变 |
+| F13 开着时一眼可见 | §17.1-③（药丸文案 `Auto` + `caution` 色 + 图标） | T61（选 `Auto` 后 pill 文案 `Auto`、图标 `fast_forward_rounded`、文案色 = `AppColors.caution`）；走查②③ |
+| （派生）审批面形态 | §17.1-③（两档与多档同一个药丸 + 菜单） | T61 |
+| （派生）面板 always = 会话级 auto | §17.1-④（先答本次，同一回合写 `autoApprove`） | T62：always ⇒ 一次 `approve_always` 应答 + 一次 `set_config_option('autoApprove', true)` + 后续不弹；once / reject ⇒ 零写；写失败 ⇒ 批准成立、药丸不变 |
 | F13 边界：不做逐工具白名单 | §17.8-1 | — |
 | F14 模型清单与终端一致 | §17.3-①② · §17.3-④ | T55；走查⑤ |
 | F14 切换生效（回报驱动） | §17.3-① 末 | T55；走查⑤ |
@@ -1531,44 +1517,44 @@ console.log(applyConfigOption(tiers, "thinkingLevel", "bogus"))
 
 | # | 场景 | 输入 | 期望 |
 |---|---|---|---|
-| T51 | 审批面随回报出现 + 切换 | mock 报 `autoApprove=false` | `permission.options` = [ask, auto]；`auto.caution == true`；`selected == 'ask'`；`select('auto')` ⇒ 写出 `session/set_config_option{configId:'autoApprove', value:true}`（布尔，不是串）；UI 形（开关 / 菜单）见 T61 |
+| T51 | 审批面随回报出现 + 切换 | mock 报 `autoApprove=false` | `permission.options` = [ask, auto]；`auto.caution == true`；`selected == 'ask'`；`select('auto')` ⇒ 写出 `session/set_config_option{configId:'autoApprove', value:true}`（布尔，不是串）；UI 形见 T61 |
 | T62 | 面板 always ⇒ 会话级 auto（紧接 T51） | mock 报 `autoApprove=false`；脚本首个工具发审批请求；`configError` 缺省 | ① 答 always ⇒ `mock.written` 里的答复 = `{outcome:'selected', optionId:'approve_always'}`（面板核销、工具照跑），同回合 `mock.requests('session/set_config_option')` = 1（configId `autoApprove`，value `true`）；回报 `autoApprove=true` ⇒ `permission.selected == 'auto'`；脚本的第二个工具 ⇒ 零 `session/request_permission`。② 答 once ⇒ 零 `set_config_option`。③ 答 reject ⇒ 零 `set_config_option`、答复 `reject`。④ `configError=true` 时答 always ⇒ 答复 `approve_always` 已发、工具照跑；`permission.selected == 'ask'`（回报值）；零异常 |
 | T59 | 审批面写失败（T51 的错误面） | mock 报 `autoApprove=false` + `configError=true`（`set_config_option` 回 `-32602`） | `select('auto')` ⇒ 服务端错误：`permission` 显示仍 `ask`（等回报、不乐观改）；零异常；健康仍 ready、随后一个回合照常收尾。留痕 = `appEvent('thincoder', …)`（`thincoder_kernel.dart:817`）——测试不设 `EventLog.current` ⇒ 不落盘、不断言 |
 | T52 | 自动开 ⇒ 无面板 + 工具照常 | mock `askPermission` + `autoApprove=true`（mock 按核的短路行为不发请求） | 事件流**零** `InteractionRequested`；工具卡与结果照常进 transcript；回合正常收尾 |
 | T53 | 自动关 ⇒ 恢复逐次 | 同上但 `autoApprove=false` | `InteractionRequested` 出现；答「一次」⇒ `approve_once`；与 T6 同 |
-| T54 | 旧 CLI（无 `autoApprove`） | mock 不报该项 | `session.permissions == null` ⇒ 无审批开关；面板路径与 T6 同（零回归） |
+| T54 | 旧 CLI（无 `autoApprove`） | mock 不报该项 | `session.permissions == null` ⇒ 不出审批 pill；面板路径与 T6 同（零回归） |
 | T55 | 多模型清单 + 切换 | mock 报三项 `model.options`（两个渠道） | `model.options` = 3 项；选第二项 ⇒ `set_config_option('model', <value>)`；`selected` 等回报（不乐观改） |
 | T56 | 档位面（新 CLI） | mock 报 `thinkingLevel`（off / high / max / low）+ `thinking=true` | `effort.toggle == false`；标签 = Off / High / Max / Low（`effortLabel`；`low` ⇒ `Low`）；`selected == 'high'`；选 `high` / `low` / `off` ⇒ 各发 `set_config_option('thinkingLevel', <值>)` |
 | T60 | 档位面写失败（T56 的错误面） | mock 报 `thinkingLevel`（high / max）+ `configError=true`（服务端换模型后旧档不在表内） | `select('max')` ⇒ 服务端错误：`effort.selected` 不变（回报值）；零异常；连接与下一回合不受影响；留痕同 T59 |
 | T57 | 旧思考面与强制思考族（边界） | ① mock 不报 `thinkingLevel`；② `thinkingLevels: ['high','max']` + `thinking: true` | ① `effort.toggle == true`、只有一个 `on`（= 今天）；② `thinkingLevel.options` 无 Off、`currentValue` 为某档；`thinking.currentValue == true` |
 | T58 | 空档位表（错误面） | mock 报 `thinkingLevel` 但 `options: []` | 视作缺席 ⇒ 退回布尔开关（不出现空列表 / 死面）；零异常 |
-| T61 | 审批开关的形态（widget） | ① thincoder mock `autoApprove=false`（两项）② Claude mock（五项，`pumpScreen`） | ① 右下角出现 `ComposerPermissionSwitch`：**关态** = `AnimatedContainer.alignment == Alignment.centerLeft`、`BoxDecoration.color == Colors.transparent`、knob 色 `AppColors.textMuted`；控件内零 `Text`、零 `Icon`（无 label）；左簇无审批 pill；点一次 ⇒ 交给第二项（`onSelected(options[1])`）⇒ 写出 `set_config_option('autoApprove', true)`；回报 `autoApprove=true` 后 = knob `Alignment.centerRight`、track `BoxDecoration.color == AppColors.autoTrack`、knob `button.foreground`——断言「位置 + 颜色」两项，不断言 caution 色。② 无开关；审批仍是左簇菜单（`Ask for approval` 的 `ComposerPicker`） |
+| T61 | 审批面的形态（widget） | ① thincoder mock `autoApprove=false`（两项）② Claude mock（五项，`pumpScreen`） | ① 左簇审批 pill 读 `Ask`（选中项文案），右端无开关；按下 pill 开菜单，两行 `Ask` / `Auto` 各带描述；点 `Auto` ⇒ 写出 `set_config_option{configId:'autoApprove', value:true}`；回报 `autoApprove=true` 后 pill 读 `Auto`、图标 `fast_forward_rounded`、文案色 `AppColors.caution`。② 同一个 pill 读 `Ask for approval`，菜单五行——两档与多档同形 |
 
-注：T62 是 always 行的会话语义，紧接 T51；T59 / T60 是两条写路径的错误面，各紧接其成功面（T51 / T56）放置，便于对读；T61 是形态面的 widget 用例（`test/composer_test.dart`）；编号 = 登记序。
+注：T62 是 always 行的会话语义，紧接 T51；T59 / T60 是两条写路径的错误面，各紧接其成功面（T51 / T56）放置，便于对读；T61 是形态面的 widget 用例（`test/composer_test.dart`，标题逐字 `two approvals and five are one menu (T61)`）；编号 = 登记序。
 
 ### 17.8 边界（批 6 不做）与登记（判定条件）
 
 1. **逐工具白名单**：不做（需求档 F13 边界原文）；首版只有总开关。
-2. **AUTO 徽标 / 状态行面**：不做（D42）。判定条件 = 走查时右下角开关不足以「一眼看出」⇒ 评估加宿主面。
+2. **AUTO 徽标 / 状态行面**：不做（D42）。判定条件 = 走查时审批药丸不足以「一眼看出」⇒ 评估加宿主面。
 3. **「Approve for this session」的服务端语义**：服务端仍无记忆、按工具会话级放行表不做；桌面侧已按 §17.1-④ 接成会话级 auto（先答本次 + 同一回合写 `autoApprove`）。判定条件 = §17.1-④ 两条（先到先做）。
 4. **P0（桌面内核自答）**：不做（§17.2）；判据 = §17.2 那一句，且与 P1 互斥。
 5. **模型清单的失败面**：拉不到的渠道只报当前项，失败不缓存（下次会话再试）；不做「桌面代拉 `/models`」（provider / key 的编辑面 = F24 §27，只写 `providers[]` 与 `defaultModel`；清单仍由 CLI 投射，与 D9 同口径）。
 6. **档位面只覆盖有思考面的模型**（D44）：无 `spec` 行 / `thinking:false` 的模型没有 `thinkingLevel`，思考仍只有既有布尔开面。
 7. **auto 不越过核的其它闸**：工程模式设计门与 D5 冻结窗在 `dispatch.mjs:142-165`，位于 autoApprove 短路（`:177`）**之前** ⇒ 自动档不越过它们（与终端同）；桌面不额外加闸（加一条终端没有的闸 = 两端分叉）。
-8. **开关不落盘的情形**：切了没发消息就关窗口 ⇒ 槽里没写（§17.1-② 精度条）；不为此加写盘路径。
+8. **审批档不落盘的情形**：切了没发消息就关窗口 ⇒ 槽里没写（§17.1-② 精度条）；不为此加写盘路径。
 9. **强制思考族的布尔面**：D47 之后恒真（与终端一致）；`thinkingLevel` 无 Off 档 ⇒ 用户无从「关掉」——这是服务端事实，不是缺口。
 
 ### 17.9 真机走查步骤（P1 / F14 落地后执行）
 
 1. 装含本批的 CLI（本地 `npm link` 或发布版），`thincoder.path` 指对；桌面新建 thincoder 会话。
-2. **终端 → 桌面**：终端 `/auto` 打开 → 发一条 → 桌面开同槽会话（load / resume）⇒ 右下角（发送钮左侧、上下文环左边）出现拨动开关，**knob 在右、track 橙**。
-3. **自动档生效（开关各点一次）**：桌面点开关打开（**knob 到右、track 橙**）→ 发一条会跑 `bash` 的消息 ⇒ **无审批面板**，工具卡正常完成；点开关关掉（**knob 回左、track 无填充**）→ 再发 ⇒ 面板照旧（三行）。
+2. **终端 → 桌面**：终端 `/auto` 打开 → 发一条 → 桌面开同槽会话（load / resume）⇒ 左簇（模式药丸之后、模型药丸之前）出现审批药丸，读 `Auto`、图标 `fast_forward_rounded`、警示色（`AppColors.caution`）。
+3. **自动档生效（药丸各选一次）**：按审批药丸开菜单、选 `Auto` ⇒ 药丸读 `Auto`、警示色 → 发一条会跑 `bash` 的消息 ⇒ **无审批面板**，工具卡正常完成；再开菜单选 `Ask` ⇒ 药丸读 `Ask`、色回 `textMuted` → 再发 ⇒ 面板照旧（三行）。
 4. **反向同源**：桌面把 auto 打开 → 发一条 → 终端打开同槽 ⇒ `/auto` 显示 ON。
 5. **模型清单**：终端 `/model` 的清单与桌面模型选择器逐项比对（同渠道、同模型名、同去重）；桌面选一个 ⇒ 该会话当前模型随动，终端 `/model` 的会话行同步。
 6. **档位**：桌面切 Off / High / Max ⇒ 终端 `/think` 抬头显示同一档；切回 Off ⇒ 终端显示 OFF。
-7. **旧 CLI 回退**：`thincoder.path` 指回 0.12.74 ⇒ 右下角无开关、左簇无审批 pill、思考面仍是开关、模型只一项，**不报错、不提示**。
-8. **重启**：开关 + 发一条 → 关桌面重开 ⇒ auto 状态从槽恢复（与终端一致）。
-9. **always 行 = 会话级 auto**：确认右下角是关态（knob 在左）→ 发一条会跑工具的消息 ⇒ 审批面板出现 → 点第二行「Approve for this session」⇒ 工具照跑（本次批准生效）；右下角随即转开态（**knob 到右、track 橙**）→ 再发一条工具消息 ⇒ **无审批面板**。终端开同槽 ⇒ `/auto` 显示 ON（与步 4 同源）。
+7. **旧 CLI 回退**：`thincoder.path` 指回 0.12.74 ⇒ 左簇无审批药丸、思考面仍是开关、模型只一项，**不报错、不提示**。
+8. **重启**：按药丸选 `Auto` 后发一条 → 关桌面重开 ⇒ auto 状态从槽恢复（与终端一致）。
+9. **always 行 = 会话级 auto**：确认审批药丸读 `Ask` → 发一条会跑工具的消息 ⇒ 审批面板出现 → 点第二行「Approve for this session」⇒ 工具照跑（本次批准生效）；药丸随即转 `Auto`（警示色）→ 再发一条工具消息 ⇒ **无审批面板**。终端开同槽 ⇒ `/auto` 显示 ON（与步 4 同源）。
 
 ## 18. 批 7：工作中发送的消息（F15）
 
@@ -2914,7 +2900,7 @@ tool 块形按官方 SDK 类型定义与核 PROVIDER 设计档 §6.8 写死，**
 
 机读线保留 transient——`:119-139`，决策 D-SE6 / D-SE7 / D-SE8 `:1010-1012`）；
 
-`thincoder/docs/cli/design/ACP-CLIENT.md` §6.3（每回合末存档）；`thincoder/docs/core/design/API-CONTRACT.md:1815`（`saveSession` 出口坐标）。结论：剥离只该动机读线、人读线已有先例——本节断言与上列档一致；同仓代码实读见上文先例坐标（`session.mjs:134-147` · `session-segments.mjs:35-39` · `normalize.mjs:86-98`）。
+`thincoder/docs/cli/design/ACP-CLIENT.md` §6.3（每回合末存档）。结论：剥离只该动机读线、人读线已有先例——本节断言与上列档一致；同仓代码实读见上文先例坐标（`session.mjs:134-147` · `session-segments.mjs:35-39` · `normalize.mjs:86-98`）。
 
 **做法**：`thincoder-core/session.mjs` 导出纯函数 `stripImagesForArchive(messages)`（`:77-88`），`saveSession` 的机器线生成点（`:144`）用它；占位常量 `IMAGES_STRIPPED_PLACEHOLDER` 单源住 `session-segments.mjs:33`，人读线 `slimForDisplay` 与机器线同用（`:38-45`），`session.mjs:73-74` import + re-export 保既有 import 面。
 
@@ -3077,7 +3063,7 @@ for (const item of residual) {
 core 无价目表（全仓唯一 `cost` 是 web-deepseek 的按次计费常量 `tools/web-deepseek.mjs:29`）。
 
 ACP v1 schema：`UsageUpdate.required = ["used","size"]`，`cost?: Cost{amount,currency}`「Cumulative session cost」（可选）。
-结论：token 合计可从 `usage_update` 精确累计（与终端同源）；上下文占用沿用最新快照；成本无来源。
+结论：token 合计可从 `usage_update` 精确累计（与终端同源）；上下文占用沿用最新快照；成本无来源（批 23 起由桌面 `UsagePrices` 价格表估算，判据 = §30.1 ⑤）。
 
 ### 23.1 做法：两条累计 ∥ 三个落点
 
@@ -3116,10 +3102,10 @@ class ContextUsage {                   // lib/kernel/kernel_types.dart:126-140
 }
 ```
 
-- `usage_update.used` 语义（逐字对 CLI）：`used = prompt_tokens + completion_tokens`（该次请求）；合计 = 各条之和——**不重算**、不拆分（拆分行只有终端面有，ACP 线上无）。
+- `usage_update.used` 语义（逐字对 CLI）：`used = prompt_tokens + completion_tokens`（该次请求）；合计 = 各条之和——**不重算**；拆分与缓存由批 23 的扩展字段带上来（§30.4），无扩展帧时只有合计（今天的形）。
 - `size` = 上下文窗口（CLI 侧 `providerSpec.context`，随模型切换变）；桌面不猜窗口。
 - 会话累计 = 随聊天会话存活：同一内核实例（一次聊天会话）内收到的全部 `usage_update.used` 之和（与终端 `state.tokens` 同源）；`restart()` / release 后重新 attach 不清零（`_spent` 只在内核构造时置 0，`thincoder_events.dart:45`）；新建聊天会话（新内核实例）从 0 起（终端进程重开同形：`tui-state.mjs:38` 初始化 0）。
-- `cost` 不读（CLI 不发；§14-25）。
+- `cost` 不在线上（§30.4）；费用由桌面价格表估算（§30.1 ⑤），缺价即不显示（§14-25）。
 
 ### 23.3 受影响文件清单与 `thincoder_events.dart` 拆分方案（E2 增量；行数 = 批 11 编制日（2026-10-19）快照——勿与 §24.3 的现值互校）
 
@@ -3153,8 +3139,8 @@ class ContextUsage {                   // lib/kernel/kernel_types.dart:126-140
 | # | 决策 | 理由 / 被否 |
 |---|---|---|
 | D87 | 回合用量 = 本回合各条 `usage_update.used` 之和；会话累计 = 全会话之和 | 需求验收「会话级累计 = 各回合之和」；`used` = 该请求 prompt+completion（CLI 定义，`bridge.mjs:254-259`），求和即消耗合计 = 终端状态行 ↑+↓ 同源。被否：取回合最后一条 `used`（那是上下文快照、不是消耗，且与「累计 = 之和」矛盾） |
-| D88 | 会话累计挂 `ContextUsage.sessionSpent`，不新增事件 / 接口 | 面板已有 `ContextUsage` 与 `stats` 两条数据路；加字段零新机制、Claude 面零影响（缺省 null）。被否：实现 `ReportsUsage`（`accountLimits` / `refreshUsage` 对 thincoder 是假面，E3）；被否：新事件 `SessionUsageReported`（宿主与翻译面双改，E2 违规） |
-| D89 | 成本本批不做（无来源）；登记判定条件 | CLI 不上报 `cost`（`bridge.mjs:258-261` 只发 used/size），core 无价目表 ⇒ 桌面要显示只能自建价目表 = 重算（违「口径 = CLI 上报值，不重算」+ B3 不代管账号 / 账单用量）。被否：桌面按 provider 价目表估算（第二判据源） |
+| D88 | 会话累计挂 `ContextUsage.sessionSpent`，不新增事件 / 接口 | 面板已有 `ContextUsage` 与 `stats` 两条数据路；加字段零新机制、Claude 面零影响（缺省 null）。被否：新事件 `SessionUsageReported`（宿主与翻译面双改，E2 违规）。thincoder 对 `ReportsUsage` 的实现见 §30.1 ②（批 23） |
+| D89 | 成本：桌面按 `UsagePrices` 价格表估算（§30.1 ⑤） | CLI 不上报 `cost`（`bridge.mjs:258-261` 只发 used/size），core 无价目表 ⇒ 唯一有来源的价格源 = 桌面既有用户可编辑价目表（`usage_prices.dart` 的 `UsagePrices`）；缺价 ⇒ null，不填 0（不造数）。被否：只用线上 cost（永远空）；被否：按 `used` 单一数估（价格表分 input / output，同价假设 = 造数） |
 | D90 | 「与终端同口径」= 同一 `onUsage` 来源的 token 合计；context% 不作对照 | 终端 context% = `estimateTokens(history)` 估算（`render-loop.mjs:89-90`）、非 CLI 上报值；终端也无 `/usage` 命令 ⇒ 对照面 = 状态行累计 ↑+↓（同源）。被否：把 context% 差异当缺陷（不同仪器） |
 
 ### 23.5 验收对照（回指需求档 F20）
@@ -3165,7 +3151,7 @@ class ContextUsage {                   // lib/kernel/kernel_types.dart:126-140
 | 上下文占用随 `usage_update` 更新 | §23.1 快照路 | T97：最新一条 `used/size` 进 `ContextUsage`（今天形，F10 不回归） |
 | 同一会话与终端读数一致（口径 = CLI 上报值，不重算） | §23.4 D90 | 走查 4：**逐回合 delta** 对照——同一批 turn 前（起算点）后各记一次终端状态行 ↑+↓，差值 == 桌面该批回合 footer 之和；两进程各持自己的累计（§23.2：累计随聊天会话存活，新建会话归零）⇒ 「一致」= 同源同算法，不是同数值；T96 = 机检侧（同源求和） |
 | 按回合 token 可见 | §23.1 turn footer | T96：两回合 footer 各显示 150 / 70（`TurnUsage.spentTokens`） |
-| 成本 / 上下文占用展示 | §23.4 D89 / F10 既有 | 成本本批不做（登记 §14-25）；上下文占用 = 既有面板（T97） |
+| 成本 / 上下文占用展示 | §30.1 ⑤（成本）· F10 既有（上下文） | 成本 = 桌面价格表估算（T144，缺价即不显示）；上下文占用 = 既有面板（T97） |
 
 ### 23.6 用例表（T96–T98，`test/kernel/thincoder_kernel_test.dart`）
 
@@ -3182,9 +3168,9 @@ class ContextUsage {                   // lib/kernel/kernel_types.dart:126-140
 1. **不做账号 / 账单用量**（B3，需求边界）。
 2. **不改 CLI 的 usage 计算**（需求边界）：桌面只消费 `usage_update`。
 3. **不做跨会话历史统计**（需求边界）：会话累计只随聊天会话存活，新建聊天会话从 0 起。
-4. **成本不做**：§14-25。
-5. **拆分行 input / output 不做**：ACP 线上只有合计（`used`）；终端的拆分来自 TUI 自己的 `onUsage` 字段（`prompt_tokens` / `completion_tokens`），ACP 未携。
-6. **缓存命中 / 推理 token 不做**：同上，ACP 未携。
+4. **成本**：由桌面价格表估算（批 23 起，§30.1 ⑤）；线上不发 `cost`，缺价即不显示。
+5. **拆分行 input / output**：今天 ACP 线上只有合计（`used`）；拆分由批 23（§30.4）的扩展字段带上来，缺字段 = 不知道。
+6. **缓存命中 / 推理 token**：缓存由批 23（§30.4）带上来；推理 token 仍不做（线上无来源，§30.10）。
 7. **重放不带 usage、重连不清零**：`session/load` 重放不带 usage；`restart()` / release 后重新 attach 不清会话累计（随聊天会话存活，`thincoder_events.dart:45`）；新建聊天会话（新内核实例）从 0 起。判定条件：产品要求跨聊天会话延续累计（桌面重启后仍接续）⇒ CLI 侧给会话级累计帧或重放 usage（另立）。
 
 ### 23.8 真机走查步骤
@@ -3696,9 +3682,11 @@ T99 已被 §23.1 预留给用量归属的补项（自动轮 ∥ 撤暂存轮）
 「内置存在」时**不调用 `candidates()`**（连候选表都不构造），这是 PATH 屏蔽的实现形状。
 
 - **① 可以是脚本**：显式路径以 `.cjs` / `.mjs` / `.js` 结尾（例如 checkout 的 `bin\thincoder.cjs`）⇒ 用本机 node 跑它（`node <脚本> acp`）；找不到 node ⇒ 抛 `ThincoderUnavailable`。
-- **③ checkout**（`ThincoderLocator.checkoutBuild`，2026-11-05 加）：从应用可执行文件所在目录往上找（至多 10 层），第一个同时有 `pubspec.yaml` 与 `thincoder\thincoder-cli\bin\thincoder.cjs` 的目录就是源码树；
-  该 CLI 旁的 `node_modules\@thincoder\core` 链在（`node scripts/dev-link.mjs` 建的）且 PATH 上有 node ⇒ 用 node 直接跑它。
-  理由：开发构建跑的就是旁边正在改的那份 thincoder，不依赖全局 npm 链；node 是 BaoCode 直接起的子进程，停进程就停得掉（npm 的 `.cmd` 垫片会在中间夹一个 `cmd.exe`，`Process.kill` 在 Windows 上只杀得到它）。`flutter test` 下不找（除非测试给了 `executableDirectoryOverride`）。
+- **③ checkout**（`ThincoderLocator.checkoutBuild`，2026-11-05 加）：从应用可执行文件所在目录往上找（至多 10 层），第一个同时有 `pubspec.yaml` 与 `thincoder\thincoder-cli\bin\thincoder.cjs` 的目录就是源码树；该 CLI 旁的 `node_modules\@thincoder\core` 链在（`node scripts/dev-link.mjs` 建的）且 PATH 上有 node ⇒ 用 node 直接跑它。
+
+  理由：开发构建跑的就是旁边正在改的那份 thincoder，不依赖全局 npm 链；node 是 BaoCode 直接起的子进程，停进程就停得掉。
+
+  npm 的 `.cmd` 垫片会在中间夹一个 `cmd.exe`，`Process.kill` 在 Windows 上只杀得到它，所以显式路径优先。`flutter test` 下不找（除非测试给了 `executableDirectoryOverride`）。
 - **配置目录**：只有 ② 被选中时才注入 `THINCODER_CONFIG_DIR`；①③④ 一律用调用环境原样（`~/.thincoder`），带不带内置副本都一样（2026-11-05 修：此前只要应用带内置副本，① 也会被注入）。
 
 | 情形 | 内置存在 | 显式设置 | 解析结果 | 是否探测 PATH |
@@ -4695,3 +4683,203 @@ RTM 从 `test/RTM.md` 现有 3 行出发：
 - **回溯需求**：`docs/requirements/browser-biz-test.md` §3 F1/F2/F9/F11。落点 = `test/integration/btest_flows_test.dart`，标题以 `4-1` 开头。该用例有真实用户入口和业务结果，不是把单元断言提升成集成用例。
 
 集成规模由 3 / 50–100 变为 4 / 50–100。没有其它新增行。
+
+---
+
+## 30. 批 23：用量上报（`ReportsUsage`；台账 #244）
+
+> 来源：用户 2026-11-15「nonono，我们直接有模板了，直接全抄过来，后端也抄过来」——把 Claude 侧既有用量面抄到 thincoder 会话上。承接需求档 F20（批 11 只做到 token 合计）。
+> 一句结论：**桌面侧零新展示面**——`ThincoderKernel` 实现 `ReportsUsage`（空限额 + 空刷新），把 `usage_update` 的扩展字段翻成既有 `StatsReported(UsageStats)` 与 `TurnEnded.usage`；上下文面板既有的缓存条与费用行随之出现。
+> **可见结果的一半在外仓**：ACP 今天只发 `{used, size}`，拆分与缓存都不在线上（费用由桌面价格表算，不取自线上）⇒ 外仓扩帧（R1）先落，本仓（R2）才有数可显示。只做 R2 = 零可见变化（R1 是外仓独立批：`thincoder/` 锚定会话另开批档，本批只做 R2）。
+
+**最近先例（对齐 ∥ 偏离及理由）**
+
+- 对齐 ①：数据载体 = 既有 `StatsReported` / `UsageStats` / `TurnUsage`，展示 = 既有上下文面板的 `_PromptCacheMeter` 与费用行（`lib/chat/panels/context_usage_panel.dart:441-448` / `:557` / `:665`）——本批只把这些面喂上，不新造事件、不新造 UI。
+- 对齐 ②：扩展位走 `_meta`，先例 = `thincoder.dev/subagent`（§15.2）与 `thincoder.dev/turn`（§19.2）：不新增 `sessionUpdate` 变体。
+- 对齐 ③：能力探针形（`canRename` / `renameConfirmed`，§28.3）：`ReportsUsage` 由内核实现，宿主按接口探测。
+- 偏离 ①：费用由**桌面价格表估算**，不从线上取——线上没有价目表（§23 survey）；被否的「第二判据源」在这里是唯一有来源的价格源（§30.7）。
+- 偏离 ②：缓存 / 拆分走**扩展字段**，不扩 `usage_update` 的必选字段：旧 CLI / 旧桌面各自忽略即合规。
+
+**survey 证据**：本仓内无其它公开文档源（`index.publicRepos` 为空）；以代码实读为准。
+
+- `lib/kernel/agent_kernel.dart:281-289`（`ReportsUsage` 两成员）· `lib/chat/chat_session.dart:505-508`（`stats` 的门）。
+- `lib/chat/panels/context_usage_panel.dart:441-448` / `:665-672`（面板已有缓存条与费用行）· `lib/usage/usage_prices.dart:805`（`UsagePrices.of`）与 `:324` 起（`ModelPrice` + `cost`）。
+
+### 30.1 决议总表
+
+| # | 项 | 决议 |
+|---|---|---|
+| ① | `ReportsUsage` 的语义 | 它是**账户限额面**（`accountLimits` / `refreshUsage`），不是「累计 token / 缓存 / 费用」本身；它是 `ChatSession.stats` 的门（`UsageStats? get stats => switch (_kernel) { final ReportsUsage kernel => … }`，`lib/chat/chat_session.dart:505-509`）。实现它 = 解锁既有面板的缓存与费用行 |
+| ② | 实现形态 | `accountLimits` 返回空表，`refreshUsage()` 空实现。空表说的是「没有已知限额」，不造窗口 ⇒ 不是假能力。`limitsState` 走缺省 `idle`：空表 + idle 时面板不出限额区（U21 已闭合，§30.11） |
+| ③ | 数据载体 | 既有 `StatsReported(UsageStats)`（`lib/kernel/kernel_event.dart:192-196`，字段 `final UsageStats stats;`）+ 既有 `TurnUsage`（`lib/chat/chat_models.dart:75-105`）；**零新事件、零新接口、零 UI 改动** |
+| ④ | 缓存 | `UsageStats.cache` = `PromptCache(last, conversation)`；`CacheTokens` 三段 `read` / `written` / `uncached`（`lib/kernel/kernel_types.dart:417-432`）。`written` 恒 0：线上没有写计数（§30.4），0 说的是「没有已知写入量」，不是「没写」；命中率只用 `read` 与 `uncached`，不受它影响 |
+| ⑤ | 费用 | 只由桌面价格表估算：`UsagePrices.of(upstream, model)?.cost(call)`；线上**不发** `cost`（§30.4）；缺价 ⇒ `costUsd = null`（不猜、不填 0）；价目表该模型的币种不是 `USD` ⇒ 同按无价处理（`costUsd` 是美元字段，写进别的单位是错数字、不是估算）；缺 `cacheRead` 的块不估价（§30.5 半块行） |
+| ⑥ | 回合面 | 有扩展帧的回合：`TurnEnded.usage = TurnUsage(inputTokens, outputTokens, costUsd)`，**不设 `spentTokens`** ⇒ `totalTokens = input + output`、footer hover 显示拆分（`turn_footer.dart:116-146` 的 `turnTokensHint`）与费用（同处 `turnCostHint`），零 UI 改动。无扩展帧的回合：`TurnUsage(spentTokens: 本回合 used 之和)`，逐字今天 |
+
+### 30.2 现状实读（为什么今天不显示）
+
+| 面 | 现状 | 坐标 |
+|---|---|---|
+| 引擎已累缓存计数 | CLI 侧按请求累 `_cacheHitTokens` / `_cacheMissTokens` / `_lastPromptTokens` / `_usageTurns` | `thincoder-core/agent/turn-loop.mjs:216-229`——**批档 §1 的读数，本席未复读**（外仓轮首步复读，U19） |
+| 线上只有两字段 | `usage_update {used, size}`，`used = prompt_tokens + completion_tokens` | `thincoder-cli/src/acp/bridge.mjs:307-308`（同上，§1 读数） |
+| 桌面只接上下文 | `usage_update` → `UsageReported(ContextUsage(used, window))`；会话累计走 `sessionSpent` | §23.1；`thincoder_events.dart:428-442` 的 `_usage`（本轮实读） |
+| 面板的门没开 | `ChatSession.stats` 只在 `_kernel is ReportsUsage` 时非空 ⇒ 缓存条 / 费用行 / 限额行都不出 | `lib/chat/chat_session.dart:505-509`；`ThincoderKernel` 的 implements 列表无 `ReportsUsage`（`thincoder_kernel.dart:52-71`，本轮实读） |
+
+承载字段的原文（本轮实读）：
+
+依据 lib/kernel/agent_kernel.dart「abstract interface class ReportsUsage {」
+
+依据 lib/kernel/agent_kernel.dart「List<RateLimitWindow> get accountLimits;」
+
+依据 lib/chat/chat_session.dart「UsageStats? get stats => switch (_kernel) {」
+
+依据 lib/kernel/kernel_event.dart「final UsageStats stats;」
+
+依据 lib/kernel/kernel_types.dart「const CacheTokens({this.read = 0, this.written = 0, this.uncached = 0});」
+
+依据 lib/kernel/kernel_types.dart「final PromptCache? cache;」
+
+依据 lib/chat/chat_models.dart「int? get totalTokens => spentTokens ??」
+
+依据 lib/chat/widgets/turn_footer.dart「final spentOnly = usage != null &&」
+
+### 30.3 做法：一条数据流 ∥ 两半
+
+```text
+外仓（R1）CLI
+  LLM 请求结束：turn-loop 已累出 prompt / completion / cacheHit / cacheMiss
+    └─ bridge 发 usage_update{ used, size, _meta["thincoder.dev/usage"]{input, output, cacheRead} }
+本仓（R2）
+  ThincoderEvents._usage
+    ├─ 交 thincoder_usage.dart 解扩展块（形判 / 坏形留痕 / CacheTokens 组装 / 价格表估算）
+    ├─ 会话累计：_cacheRead / _cacheUncached / _costUsd 与既有 _spent 同寿命
+    ├─ emit StatsReported(UsageStats(cache: PromptCache(last, conversation), costUsd: _costUsd))
+    └─ 回合尾：_endTurn ⇒ TurnEnded.usage（拆分形态；无扩展帧的回合走 spentTokens）
+  ThincoderKernel implements ReportsUsage（空限额 / 空刷新）
+    └─ ChatSession.stats 非空 ⇒ 面板：_PromptCacheMeter + 费用行（零改 UI）
+```
+
+### 30.4 线上契约（扩展帧）
+
+```json
+{ "sessionUpdate": "usage_update", "used": 1234, "size": 200000,
+  "_meta": { "thincoder.dev/usage": {
+      "input": 900, "output": 334, "cacheRead": 700 } } }
+```
+
+| 字段 | 域 | 语义 |
+|---|---|---|
+| `input` | 非负整数，必填 | 该次请求的输入总量（含缓存部分） |
+| `output` | 非负整数，必填 | 该次请求的输出量 |
+| `cacheRead` | 非负整数，必填 | 其中从缓存读到的量；未命中 = `input − cacheRead`（钳到 ≥ 0） |
+| 整块缺席 | — | 旧 CLI：桌面零缓存 / 零费用，其余逐字今天 |
+
+- 粒度 = **per-request**（与 `used` 同粒度）；桌面自己累计。不发累计帧：累计帧的重置点（新建会话 / 重连）桌面看不见。
+- 这三段是线上唯一新增的载荷；`used` / `size` 的语义不动。
+- **不在线上**：`cacheWrite`（core 无写计数）、`cost`（core 无价目表）——两者都要改 CLI 的 usage 计算，本批不做（§30.10-4）。
+- 缺失 / 坏形 / 半块的处理只有一处口径：§30.5 表。不回推、不补 0。
+
+### 30.5 桌面翻译
+
+| 线上 `_meta["thincoder.dev/usage"]` | 落点 |
+|---|---|
+| 整块缺席（旧 CLI） | 零 `StatsReported`；`stats.cache == null`、`costUsd == null`；`TurnEnded.usage` 只有 `spentTokens`（逐字今天）；`UsageReported` 照今天 |
+| 坏形（不是映射，或三段无一是非负整数） | 零 `StatsReported`；`UsageReported` 照今天、`TurnEnded.usage` 走 `spentTokens`（逐字今天）；**已知道的 `cache` / `costUsd` 不清空**（保持上一次已知值；此前无好帧时仍为 null）；写一行 `appEvent('thincoder', …)` 点名坏块（§15.2「绝不静默丢弃」） |
+| 半块（`input` / `cacheRead` 缺一，或 `output` 缺） | **纯防御：本设计自己的生产者发不出半块**（§30.4 三段必填，bridge 一次写全）⇒ 本行只对陌生的 `_meta` 生效；若 R1 复读发现某后端无缓存计数、只能发半块，该后端即本行的真实场景（U19）。落点：`input` + `cacheRead` 齐 ⇒ 发缓存段；**三段齐（`input` / `output` / `cacheRead`）才估费用——缺 `cacheRead` 时 `costUsd = null`，不按 0 计**（缓存价远低于输入价，缺它按 0 算 = 系统性高估，等于给用户一个错数字；不给比给错好，判据同 ⑤「缺价即 null」）；缺的留空（`TurnUsage.outputTokens` 为 null，累计的 `cache` / `costUsd` 保持上一次已知、不清成 null），并写一行 `appEvent` 点名缺哪个字段 |
+| 字段齐 | 一条 `StatsReported`：`UsageStats(cache: PromptCache(last: 该次, conversation: 累计), costUsd: 累计估费)`；`UsageReported` 同点照发 |
+| `written` 段 | 恒 0（§30.1 ④） |
+| 回合收尾 · 本回合有扩展帧 | `TurnEnded.usage = TurnUsage(inputTokens: Σinput, outputTokens: Σoutput, costUsd: Σ每请求估费)`，`spentTokens` 留空 ⇒ footer 总额 = 两者之和、hover 显示拆分 |
+| 回合收尾 · 本回合无扩展帧 | `TurnUsage(spentTokens: 本回合 used 之和)`（逐字今天；footer 走 `turnTokensSpentHint`） |
+
+- `upstream` = `configOptions.model` 的 `provider:` 段，`model` = 其余（§17.3 的 `provider:model` 形）。查表只有 `UsagePrices.of` 一处，不做第二套。
+- **币种规则**：只认 `USD`。价目表里该模型的价格币种不是 `USD` ⇒ 按无价处理（`costUsd = null`）——`costUsd` 是美元字段，把别的单位写进去是错数字而非估算，判据同「缺价即 null」。
+- 每个带完整扩展块的 `usage_update` 至多发一条 `StatsReported`（与 `UsageReported` 同点）。
+- 拆分与合计只填一种形态，不并填：`totalTokens` 优先取 `spentTokens`（§30.2 引文），两个都填会让 footer 的总额与拆分对不上。
+- **坏块不清空已知道的 cache / 费用**：一块坏 payload 不构成「cache 归零」的证据——按整块缺席处理等于用垃圾帧丢真数据，与 §15.2「绝不静默丢弃」同一判据。留痕先例 = 同档子代理坏报告的 `appEvent('thincoder', 'a subagent report to leave alone: …')`（`thincoder_events.dart:459` 实读）。
+
+### 30.6 受影响文件清单
+
+| # | 坐标 | 改动 |
+|---|---|---|
+| ① | `lib/kernel/thincoder/thincoder_kernel.dart` | implements 列表加 `ReportsUsage`；`accountLimits` / `refreshUsage` 两成员（§30.1 ②）；`refreshUsage` 不发请求 |
+| ② | `lib/kernel/thincoder/thincoder_events.dart` | `_usage` 把扩展块交 ③；累计 `_cacheRead` / `_cacheUncached` / `_costUsd`；发 `StatsReported`；新增 `turnUsage` getter（§30.12） |
+| ③ | `lib/kernel/thincoder/thincoder_usage.dart`（新，**`part of 'thincoder_events.dart'`**） | `_meta` 块解析（形判 / 坏形与半块的 `appEvent` 留痕）、`CacheTokens` 组装、`UsagePrices.of` + `ModelPrice.cost`、金额取整 |
+| ④ | `lib/kernel/thincoder/thincoder_turns.dart` | 回合尾按 §30.5 末两行填 `TurnUsage`（拆分形态 ∥ `spentTokens`） |
+| ⑤ | `test/kernel/thincoder_kernel_test.dart` | T140–T146（§30.8） |
+| ⑥ | `test/RTM.md` · `test/integration/thincoder_usage_test.dart`（新） | 10-1 行与用例体（§30.9） |
+| ⑦ | 外仓 `thincoder/thincoder-cli/src/acp/bridge.mjs`、`thincoder-core/agent/turn-loop.mjs` | R1：扩展帧（**外仓库、独立轮、需用户批准**，R2 的前置） |
+
+**解析归属（一处）**：`_meta` 块的解析、`CacheTokens` 组装与查价全在 ③；② 只调它、累计、发事件；④ 只读 ② 的 `turnUsage`。③ 挂在 ② 的库上（`part of 'thincoder_events.dart'`，形同 §23.3 的 `thincoder_agents.dart`），因为消费方是 ②——挂内核库不可达（`thincoder_events.dart` 是独立库，`thincoder_kernel.dart:20` 只是 import 它）。
+
+**分层结论（逐档，行数 = 本轮实读）**：`thincoder_events.dart` 808 行（>800）⇒ 新逻辑落 ③ 新 part 档，② 只加分支与 getter，不续拆；`thincoder_kernel.dart` 483 行（<800）⇒ 只加 implements 一项与两成员，不触档位；`test/kernel/thincoder_kernel_test.dart` 4967 行（§28.8 ⑧ 的读数）⇒ 用例追加到末尾，行级新增，不动结构。三档同在本仓内核适配一面，无跨档档位变化。
+
+### 30.7 关键决策记录（含被否）
+
+| 决策 | 理由 / 被否方案 |
+|---|---|
+| 用既有 `StatsReported` + `UsageStats`，不新增事件 | 面板缓存条与费用行已在盘；新事件 = 翻译面与宿主双改。被否：`SessionUsageReported`（§23.4 D88 已否，理由今天仍成立） |
+| 实现 `ReportsUsage`（空限额 + 空刷新） | **反转的是「实现 `ReportsUsage`」这一项**：§23.4 D88 曾以「`accountLimits` / `refreshUsage` 对 thincoder 是假面」否掉它；`ChatSession.stats` 的门就在该接口上（§30.2 引文），不实现它则缓存 / 费用永不显示。空表 + 空实现说的是「没有已知限额」，不造窗口 ⇒ 诚实空面，不是假能力（与 §1「不做 `ReportsUsageLimit`」同一判据） |
+| 费用由桌面价格表估算 | 桌面已有用户可编辑价目表，是唯一有来源的价格源；线上不发 `cost`（core 无价目表）。被否：等线上 `cost`（永远空）；被否：按 `used` 单一数估（同价假设 = 造数） |
+| 扩展走 `_meta` | 同 §15.2 / §19.2 先例；旧 CLI / 旧桌面各自忽略即合规 |
+| 扩展帧 per-request | 与 `used` 同粒度；累计帧的重置点桌面看不见 |
+| 缓存三段里 `written` 恒 0 | `CacheTokens` 三段是定长整数场（无「未知」态），线上无写计数 ⇒ 0 是「没有已知写入量」；命中率只用 `read` 与 `uncached`，不受影响；面板 hover 把它读作 0，不做别的解释 |
+| 拆分与合计二选一 | `totalTokens` 优先 `spentTokens`；并填会让 footer 总额与 hover 拆分不一致。有拆分 ⇒ 只填拆分；无扩展帧 ⇒ 只填合计 |
+
+### 30.8 用例表（T140–T146，`test/kernel/thincoder_kernel_test.dart`）
+
+| # | 场景 | 输入 | 期望 |
+|---|---|---|---|
+| T140 | 扩展帧进面板数据 | 一条 `usage_update{used:1234, size:200000, _meta.usage{input:900, output:334, cacheRead:700}}` | 恰一条 `StatsReported`；`cache!.last == CacheTokens(read:700, written:0, uncached:200)`；`UsageReported` 仍发（F10 不回归） |
+| T141 | 旧 CLI 零回归 | 同上但无 `_meta` | 零 `StatsReported`；`stats!.cache == null`、`costUsd == null`；`UsageReported` 与今天逐字相同 |
+| T142 | 会话累计 | 两条扩展帧（input 900 / 500，cacheRead 700 / 300） | `conversation == CacheTokens(read:1000, written:0, uncached:400)`；`last` = 第二条 |
+| T143 | 能力面 | `ThincoderKernel` 实例 | `kernel is ReportsUsage`；`accountLimits` 为空表；`refreshUsage()` 不发任何 JSON-RPC 请求（假件计数 0） |
+| T144 | 费用两态 | 用例自建 `UsagePrices` 加一条 `provider:model` 价（`USD`）；② 清空该表后开一个新会话 | ① `costUsd` 与 `ModelPrice.cost` 手算值一致；② 新会话 `costUsd == null`，费用行不出现（不显 0；已估出的费用不重算） |
+| T145 | 回合拆分与回退 | 回合内两条扩展帧 ⇒ `end_turn`；另一回合无扩展帧 | 前者 `TurnEnded.usage` 有 `inputTokens` / `outputTokens` / `costUsd` 且 `spentTokens == null`、`totalTokens == input+output`；后者只有 `spentTokens`、`totalTokens == 该值` |
+| T146 | 坏块与半块不静默丢弃 | ① 先一条字段齐的扩展帧，再一条 `_meta.usage` 为字符串（同用例另测：只有坏块、此前无好帧）；② 缺 `cacheRead`、`input` / `output` 在 | ① 坏块不增发 `StatsReported`，`cache` / `costUsd` 保持好帧那条的值（不被坏块清空）；无好帧态 ⇒ 两者为 null；② 缓存段不发（`cache` 保持上一次已知）、`TurnEnded.usage` 的 `inputTokens` / `outputTokens` 在、**`costUsd` 为 null**（缺 `cacheRead` ⇒ 不估价，§30.5 半块行）；两态各恰一行 `appEvent` 点名坏在哪个字段 |
+
+### 30.9 验收对照（回指 F20 与台账 #244）
+
+| 判据 | 本档落点 | 机检 |
+|---|---|---|
+| ① 缓存命中率可见（与终端 hit% 同源） | §30.1 ④ / §30.5 | T140 / T142 + 真机走查 1–2（§30.10） |
+| ② 费用可见：有价目表给数、无价目表显空（清表只影响其后新开的会话——逐帧估价，已估出的费用不重算） | §30.1 ⑤ / §30.5 | T144 |
+| ③ 回合用量带拆分与费用 | §30.1 ⑥ / §30.5 | T145 |
+| ④ 旧 CLI / 旧桌面零回归 | §30.4 末行 / §30.5 首行 | T141；§23.6 的 T96–T98 不回归 |
+| ⑤ `ReportsUsage` 是诚实的空限额面 | §30.1 ② | T143 |
+| ⑥ 坏形与半块不静默丢弃 | §30.5 第二 / 三行 | T146 |
+
+**RTM 增量（索引 = `test/RTM.md`，现行 9 / 50–100）**
+
+- 不改写 / 不删除：1-1 … 9-1 与本批无关，一条不动。
+- **新增 10-1**：「thincoder 会话看用量：缓存命中与费用与终端同源」。
+- 组件间交互 = ACP `usage_update` → `ThincoderEvents`（+ `thincoder_usage.dart`）→ `StatsReported` → `ContextUsagePanel`；用户入口 = 上下文面板（`lib/chat/chat_screen.dart:533`：打开面板即问一次刷新）。
+- 10-1 断言（业务可观察）：发两条带工具的回合后打开面板 ⇒ 缓存条出现且命中率 > 0；价目表里有该模型时费用行出现，清空价目表后开的会话里不出现（不显 0；已估出的费用不随后改的价目表重算）。
+- **回溯需求** = 需求档 F20「批 23 扩」句：缓存三段与费用在上下文面板可见、缺价即空（不猜、不填 0）、`ReportsUsageLimit` 不实现。
+- **帧来源** = mock 传输推扩展帧（`usage_update` + `_meta["thincoder.dev/usage"]`），单测与集成共用同一帧源；真 CLI 需 R1 已落且 `thincoder.path` 指到该版本。
+- **价目表在用例里配**：用例自建 `UsagePrices`，加一条 `provider:model` → `ModelPrice`（`input` / `output` / `cacheRead` 三个价），清空即空表。
+- 落点 = `test/integration/thincoder_usage_test.dart`，标题以 `10-1` 开头；编号先在 `test/RTM.md` 定行（实施轮落）。
+
+### 30.10 边界（本批不做）与登记
+
+1. **推理 token 不做**：线上无来源。
+2. **账号限额不做**：`accountLimits` 恒空；`ReportsUsageLimit` 不实现（§1 同判）。
+3. **账单 / 账号用量不做**（F20 边界）。
+4. **不改 CLI 的 usage 计算**：桌面只消费；扩展帧只把已有计数（prompt / completion / cacheHit / cacheMiss）带上来。
+5. **不做跨会话历史统计**：累计随聊天会话存活（§23.2 口径不变）。
+6. **价格表不新增内置条目**：`UsagePrices` 是用户可编辑面；预置 thincoder 的 provider 价目 = 另立。判定：用户反馈「费用一直空」且不愿手填 ⇒ 补预置。
+7. **真机走查**：① 发两轮带工具的回合 ⇒ 面板出现缓存条与费用行；② 同一 CLI 在终端读状态行 hit% 与 ↑↓ 对照（同源）；③ 清空价目表 ⇒ 此后新开的会话费用行不出现、不显示 0（已估出的费用不重算——逐帧估价）。
+
+### 30.11 未验证项（单列，不静默）
+
+| # | 项 | 现状 | 处置 |
+|---|---|---|---|
+| U19 | `bridge.mjs:307-308` 与 `turn-loop.mjs:216-229` 的字段 | 引的是批档 §1 的读数，**本席未复读** | R1 首步复读；字段名以实读为准（与 §30.4 不同则改帧形，不改判据） |
+| U20 | `UsagePrices.of` 对 thincoder 的 `provider:model` 是否命中 | 未验证（价目表按 upstream 键） | T144② 就是这一态：缺价 ⇒ null；走查 3 看真实价目表 |
+| U21 | `limits` 为空且 `limitsState == idle` 时面板怎么渲染 | **本轮已闭合**：`_PlanUsage` 的渲染门是 `stats.costUsd != null \|\| stats.limits.isNotEmpty \|\| stats.limitsState != LimitsState.idle`（`context_usage_panel.dart:445-448` 实读），且空表时 `idle => null` 不写提示（`:677-683` 实读）⇒ 空限额 + idle + 无价 ⇒ 整块不渲染，无空壳 | 无需处置 |
+| U22 | `UsageCall` 的构造面 | **已闭合**：必填五项 = `at` / `duration` / `status` / `provider` / `model`（`lib/usage/usage_record.dart:315-320` 实读）；`input` / `output` / `cacheRead` / `cacheWrite` 都是有缺省的命名参数（缺省 0）⇒ 填法 = `input` 传未命中量、`output` 传输出量、`cacheRead` 传命中量（同档实读 `input: uncached` / `cacheRead: cacheRead`） | 无需处置 |
+
+### 30.12 三问答复（本轮实读）
+
+- `thincoder.dev/usage`（新 `_meta` 键）：`none found` —— 全仓实读只出现在本档与批档；同形的两个先例键 = `thincoder.dev/subagent`（§15.2）与 `thincoder.dev/turn`（§19.2）。⇒ 新建，名字逐字 `thincoder.dev/usage`；谁用 = R1 的 bridge 发、R2 的 `thincoder_usage.dart` 读。
+- `lib/kernel/thincoder/thincoder_usage.dart`：`none found` —— 该路径不在盘（本轮实读：该目录的 part 十档见 `thincoder_kernel.dart:29-38`，无此档）。⇒ 新建，`part of 'thincoder_events.dart'`（§30.6 ③）。
+- `ThincoderEvents.turnUsage`（新 getter）：`none found` —— 该档公开 getter 本轮实读到两个：`turnSpent`（`:48`，`used` 之和）与 `hasLiveSubagents`（`:74`，布尔），都不载拆分 / 费用。⇒ 新建，返回本回合的拆分形态 `TurnUsage?`（无扩展帧的回合为 null，内核侧走 `spentTokens`）。
