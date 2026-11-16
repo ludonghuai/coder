@@ -352,8 +352,9 @@ thincoder 侧的接口例外见 §16.1。）批 4 的改动点见 §15.4（同�
 - `thincoder_kernel.dart`：>800 行触发已执行——拆分前实测 1168 行 ⇒ 拆出 `thincoder_events.dart`（§3.6 事件翻译段，外部形态不变）；编制日实测（2026-10-19）**1121** 行（§21.3 拆分已落）仍处 >800 线上：**续拆裁定 = 不续拆**（同其他 >800 行既有档；选择面缝已兑现，不再立新缝）。
   行数口径：与 §24.3 起点 1091 差 30 行（两批各记了当时的实测）；**实施首轮 `wc -l` 复核，以复核值为准**。
 - `thincoder_events.dart`（799，2026-10-19 `wc -l` 实测）：<800 硬顶；批 11 的用量翻译面 ≤ +8 ⇒ ≤807 ⇒ **入 >800 名单**（行级新增，不动结构）；缝候选 = 子代理段（段头 `:436`）出档 `thincoder_agents.dart`（`part` 先例同 §21.3；段界由拆分批勘定——`_putSubagent` / `_card` 另有 `:682` / `:741` 调用点）；**拆分方案（分步 + 行数预算）见 §23.3**；触发 = 下一次结构级触碰或独立拆分批立项。
-- **>500 且 <800 的档**（`thincoder_mock.dart` 668 · `kernel_types.dart` 615 · `context_usage_panel.dart` 530 等）：体量立场只跟 >800 硬顶——>500 层不立缝、不登记拆分候选；新增按行级计，不触发结构级裁定。`thincoder_kernel.dart` 会话治理 A1 后 482 行（本轮 `wc -l` 实测；按末行号记作 483）——<800 硬顶，不在 >800 名单；行级新增不触档位（旧裁定「不续拆」原样成立）。
+- **>500 且 <800 的档**（`thincoder_mock.dart` 668 · `kernel_types.dart` 615 等）：体量立场只跟 >800 硬顶——>500 层不立缝、不登记拆分候选；新增按行级计，不触发结构级裁定。`thincoder_kernel.dart` 会话治理 A1 后 482 行（本轮 `wc -l` 实测；按末行号记作 483）——<800 硬顶，不在 >800 名单；行级新增不触档位（旧裁定「不续拆」原样成立）。
 - `test/kernel/thincoder_kernel_test.dart`（3395，2026-10-19 实测）：在 >800 名单；只加用例、不动结构，缝候选沿用 §15.4 的四组拆法。
+- `context_usage_panel.dart`（951 行，本轮 `wc -l` 实测）：**入 >800 名单**（原记在 >500 层，读数已过线）；§31.6 ⑤ 登记为零改动 ⇒ 本批不动结构、不立缝；缝候选与触发待独立拆分批勘定。
 
 **实施读数（`host-tool-channel` 批，2026-10-18；本批起点 → 终点）**：`lib/kernel/thincoder/thincoder_kernel.dart` 1156 → 1195（+39，上界 ≤1196）· `lib/kernel/thincoder/thincoder_events.dart` 784 → 798（+14，上界 ≤798）· `test/kernel/thincoder_kernel_test.dart` 2629 → 2840（+211，超估算 +140，估算非上界）。三档现值见 §5.2 体量行。
 
@@ -4775,7 +4776,7 @@ RTM 从 `test/RTM.md` 现有 3 行出发：
 | 整块缺席 | — | 旧 CLI：桌面零缓存 / 零费用，其余逐字今天 |
 
 - 粒度 = **per-request**（与 `used` 同粒度）；桌面自己累计。不发累计帧：累计帧的重置点（新建会话 / 重连）桌面看不见。
-- 这三段是线上唯一新增的载荷；`used` / `size` 的语义不动。
+- 线上新增的载荷 = 两块 `_meta` 扩展：`thincoder.dev/usage`（本节的缓存三段）与 `thincoder.dev/context`（§31.4 的上下文分段，同帧；两块各自独立解析，§31.4 末行）；`used` / `size` 的语义不动。
 - **不在线上**：`cacheWrite`（core 无写计数）、`cost`（core 无价目表）——两者都要改 CLI 的 usage 计算，本批不做（§30.10-4）。
 - 缺失 / 坏形 / 半块的处理只有一处口径：§30.5 表。不回推、不补 0。
 
@@ -4883,3 +4884,234 @@ RTM 从 `test/RTM.md` 现有 3 行出发：
 - `thincoder.dev/usage`（新 `_meta` 键）：`none found` —— 全仓实读只出现在本档与批档；同形的两个先例键 = `thincoder.dev/subagent`（§15.2）与 `thincoder.dev/turn`（§19.2）。⇒ 新建，名字逐字 `thincoder.dev/usage`；谁用 = R1 的 bridge 发、R2 的 `thincoder_usage.dart` 读。
 - `lib/kernel/thincoder/thincoder_usage.dart`：`none found` —— 该路径不在盘（本轮实读：该目录的 part 十档见 `thincoder_kernel.dart:29-38`，无此档）。⇒ 新建，`part of 'thincoder_events.dart'`（§30.6 ③）。
 - `ThincoderEvents.turnUsage`（新 getter）：`none found` —— 该档公开 getter 本轮实读到两个：`turnSpent`（`:48`，`used` 之和）与 `hasLiveSubagents`（`:74`，布尔），都不载拆分 / 费用。⇒ 新建，返回本回合的拆分形态 `TurnUsage?`（无扩展帧的回合为 null，内核侧走 `spentTokens`）。
+
+## 31. 上下文分段（上下文面板对齐 Claude Code；台账 #253）
+
+> 来源：用户 2026-11-15 22:48「thincoder的上下文窗口显示还是没claude code那样详细，先做一下这个」+ 同日「A」裁定（上下文分段照 Claude Code 补齐）。承接需求档 F10 / F20 的上下文面。
+> 一句结论：**桌面侧零新展示面**——`usage_update` 的第二个 `_meta` 块带上下文分段，`ThincoderEvents._usage` 把它翻成既有 `ContextUsage.segments`，面板既有的分段格、进度条与「距自动压缩」随之出现。
+> **可见结果的一半在外仓**：ACP 今天只发 `{used, size}`，分段不在线上 ⇒ 外仓扩帧（R1）先落，本仓（R2b）才有数可显示；只做 R2b = 零可见变化（R1 是外仓独立批：`thincoder/` 锚定会话另开批档，本批只做 R2b）。
+
+**最近先例（对齐 ∥ 偏离及理由）**
+
+- 对齐 ①：扩展位走 `_meta`，同一帧加第二个键，先例 = `thincoder.dev/usage`（§30.4）、`thincoder.dev/subagent`（§15.2）、`thincoder.dev/turn`（§19.2）：不新增 `sessionUpdate` 变体。
+- 对齐 ②：解析归属 = `thincoder_usage.dart`（`part of 'thincoder_events.dart'`，§30.6 ③）——同一帧、同一个消费方；第二块不另立档（D2 单点权威）。
+- 对齐 ③：坏形口径照抄 §30.5 的一半——坏形留痕 `appEvent('thincoder', …)`、不静默丢弃。**「已知值不清空」不照抄**：那是累计面（cache / 费用）的语义；本块 per-frame，没有可保留的已知值（§31.1 ③），照抄它会让实现造一个 §31.1 ③ 明禁的回填态。
+- 对齐 ④：展示载体 = 既有 `ContextUsagePanel` 的 `_parts()` / `_WindowPainter` / `_PartCell`，零新 UI。
+- 对齐 ⑤：分段名逐字复用面板既有的部件键（`system` / `tools` / `messages` / `mcp` / `skills` / `memory`），不新造词；别名解析见 §31.12。
+- 偏离 ①：**不构造 `ContextDetail`**。它是 Claude Code `get_context_usage` 的镜像（§31.2 引文），而 core 的 `contextUsage()` 给的是三个段总数 `system` / `tools` / `history`、两个窗口数 `threshold` / `window`，外加估算态 `basis`（§31.2 实读），没有逐项名目（每个工具 / 每个技能各占多少）⇒ 造个逐项空壳只会让面板的可点开态挂着空行。逐项下钻列为 open（§31.8）。
+
+**survey 证据**：本仓内无其它公开文档源（`index.publicRepos` 为空）；以代码实读为准——下表每条都带本轮读到的原文。
+
+### 31.1 决议总表
+
+| # | 项 | 决议 |
+|---|---|---|
+| ① | 数据载体 | 既有 `ContextUsage.segments`（`List<ContextSegment>`，`lib/kernel/kernel_types.dart`）——**零新事件、零新类型、零 UI 改动** |
+| ② | 分段由谁算 | **CLI 算**（core 的 `contextUsage()` 是分段单源）。桌面零估算、零切分：唯一的减法 = `size − threshold`（预留面），三段 token 数逐字照收 |
+| ③ | 分段的粒度 | per-frame：每个 `usage_update` 自带全部已归因段；不带 = 本帧没有分段（不回填上一帧） |
+| ④ | 归因口径 | 三段全部由 core 的 `contextUsage()` 直给：`system` = `extras.systemPrompt` 的估算、`tools` = `extras.tools` 的估算、`messages` = `history`（`estimateTokens(history)` 的裸估算，**未乘标定比**）。桌面**不做减法、不做钳制**：三种误差（两段估算偏差、`used` 含 completion、两把尺的差）不塞进任何一段——那是编数。段之和与 `used` 无相等关系：落在 < 侧 ⇒ 面板留未填满份额（诚实形态）；落在 > 侧 ⇒ 整块丢弃（§31.5 第三行）。真实帧落在哪一侧本轮无读数（§31.11 U26） |
+| ⑤ | 压缩线 | 线上报 `threshold`（`contextUsage().threshold`）；桌面据 `size − threshold` 造 `kind: buffer` 段 ⇒ 面板既有的「为压缩预留」格与「距自动压缩」行都活 |
+| ⑥ | 逐项面 | 不做（§31.8 open 项）：`ContextDetail` 保持 Claude 独占 |
+| ⑦ | 估算态 | 帧上随带 `basis`（`measured` ∥ `estimated`，`contextUsage().basis` 直发）。桌面不建模型字段、面板不显示（面板零改动是本批边界）；它唯一的桌面消费者 = 整块丢弃时的留痕行，把「估算偏高」写进日志（§31.5 第三行） |
+
+### 31.2 现状实读（为什么今天是一根空条）
+
+| 面 | 现状 | 坐标 |
+|---|---|---|
+| 面板靠 `segments` 出格 | `_parts()` 遍历 `usage.segments`，`kind != used` 的跳过；空表 ⇒ 退化成单条 `used` 格 | `lib/chat/panels/context_usage_panel.dart:81-101`（本轮实读） |
+| 内核不填 `segments` | `_usage` 只造三字段 | `lib/kernel/thincoder/thincoder_events.dart:482`（本轮实读） |
+| 线上一段都没有 | `onUsage` 只发 `{used, size}` | `thincoder/thincoder-cli/src/acp/bridge.mjs:307-310`（本轮实读） |
+| 分段单源已在 core | `contextUsage()` 已有 `basis` / `history` / `system` / `tools` / `threshold` / `window`——三个段总数齐 | `thincoder/thincoder-core/token-window.mjs:135-157`（本轮实读） |
+| CLI 自己就在打三段 | `context` 工具的 stats 行逐字打 `system` · `tools` · `history` + `(basis: …)` | `thincoder/thincoder-core/agent-tools/context.mjs:108`（本轮实读） |
+
+承载字段的原文（本轮实读）：
+
+依据 lib/kernel/kernel_types.dart「final List<ContextSegment> segments;」
+
+依据 lib/kernel/thincoder/thincoder_events.dart「final usage = ContextUsage(window: size, used: used, sessionSpent: _spent);」
+
+依据 thincoder/thincoder-cli/src/acp/bridge.mjs「onUsage: (usage) => update("usage_update", {」
+
+依据 thincoder/thincoder-core/token-window.mjs「export function contextUsage(agent, extras = {}) {」
+
+依据 lib/chat/panels/context_usage_panel.dart「if (segment.kind != ContextKind.used || segment.tokens <= 0) continue;」
+
+`system` / `tools` 的来源原文：
+
+依据 thincoder/thincoder-core/token-window.mjs「const system = extras.systemPrompt ? estimateText(extras.systemPrompt) : 0」
+
+依据 thincoder/thincoder-core/token-window.mjs「const tools = extras.tools ? estimateText(JSON.stringify(extras.tools)) : 0」
+
+三段与估算态的来源原文（本轮实读）：
+
+依据 thincoder/thincoder-core/token-window.mjs「@returns {{basis:"measured"|"estimated", total, history, system, tools, overhead, threshold, window}}」
+
+依据 thincoder/thincoder-core/token-window.mjs「history: historyTokens,」
+
+依据 thincoder/thincoder-core/token-window.mjs「const historyTokens = estimateTokens(history)」
+
+依据 thincoder/thincoder-core/agent-tools/context.mjs「Segments ≈: system ${usage.system} · tools ${usage.tools} · history ${usage.history} (basis: ${usage.basis})」
+
+依据 thincoder/thincoder-core/agent-tools/context.mjs「标记 `calibrated history estimate` 把它与 `Segments ≈` 行的裸估算 `history`（核 `estimateTokens`，未乘比）分名。」
+
+### 31.3 做法：一条数据流 ∥ 两半
+
+```text
+外仓（R1）CLI
+  请求结束：bridge.onUsage
+    ├─ usage_update{ used, size }                                  ← `used` / `size` 逐字今天（§30.4）
+    └─ _meta["thincoder.dev/context"]{ segments[{name,tokens}], threshold, basis }
+本仓（R2b）
+  ThincoderEvents._usage(update)
+    ├─ 交 thincoder_usage.dart 解第二块（形判 / 坏形留痕 / 段组装 / buffer 段推导 / 和判）
+    └─ ContextUsage(window, used, sessionSpent, segments: …) ⇒ UsageReported
+  ContextUsagePanel._parts()
+    └─ partOf(label) ?? label ⇒ 既有 _order 命中 ⇒ 本地化标签 + 既有配色（零改 UI）
+```
+
+### 31.4 线上契约（第二个扩展块）
+
+```json
+{ "sessionUpdate": "usage_update", "used": 22700, "size": 128000,
+  "_meta": {
+    "thincoder.dev/usage":   { "input": 900, "output": 334, "cacheRead": 700 },
+    "thincoder.dev/context": {
+      "segments": [ { "name": "system", "tokens": 3100 },
+                    { "name": "tools",  "tokens": 17400 },
+                    { "name": "messages", "tokens": 1800 } ],
+      "threshold": 95000, "basis": "estimated" } } }
+```
+
+| 字段 | 域 | 语义 |
+|---|---|---|
+| `segments` | 数组，可空 | 每项 `{name, tokens}`：`name` 非空串，`tokens` 非负整数。`name` ∈ 面板部件键（`system` / `tools` / `messages` / `mcp` / `skills` / `memory`），或任何稳定小写记号（面板按自己的名字画它，见 §31.12） |
+| `threshold` | 非负整数，可缺 | 自动压缩触发线（`contextUsage().threshold`），与 `size` 同单位 |
+| `basis` | `"measured"` ∥ `"estimated"`，可缺 | 本帧的尺：`used` 取自实测基线（`_lastPromptTokens`）还是乘比估算（同一函数的 `basis` 字段）。桌面只在整块丢弃的留痕里用它（§31.5 第三行）；不建模型字段、不上面板 |
+| 三段之和 | — | = `system` + `tools` + `history` 三项**裸估算**之和，与帧上的 `used` **无相等关系**：`used` 是实测基线或乘比估算，段是未乘比的裸估算（§31.2 两把尺的引文）。和 < `used` ⇒ 面板留未填满份额（诚实形态）；和 > `used` ⇒ 整块丢弃（§31.5 第三行）。真实帧的分布本轮无读数（§31.11 U26） |
+| 整块缺席 | — | 旧 CLI：`segments` 为空表，面板逐字今天（单条 `used` 格） |
+| `usage` 块与 `context` 块 | — | 两个键各自独立解析：一个坏不影响另一个 |
+
+- 粒度 per-frame，与 `used` 同粒度；不回填、不发累计帧（重置点桌面看不见，同 §30.4 判据）。
+- **不在线上**：逐项名目（每个工具 / 技能各占多少）——core 没有这些计数；今天不给（§31.8 open）。
+- 缺失 / 坏形的处理只有一处口径：§31.5。
+
+### 31.5 桌面翻译
+
+| 线上 `_meta["thincoder.dev/context"]` | 落点 |
+|---|---|
+| 整块缺席（旧 CLI） | `segments` 为空表；`UsageReported` 与今天逐字相同（面板单条 `used` 格） |
+| 坏形（不是映射；`segments` 不是列表；某项 `tokens` 不是非负整数或 `name` 不是非空串） | 坏的那项丢弃，其余照用，每处一行 `appEvent('thincoder', …)` 点名坏在哪（§15.2「绝不静默丢弃」）。**两个落点不同**：块本身读不通（不是映射 ∥ `segments` 不是列表）⇒ 空分段，预留段也不追加；块读得通、零件一项都没留下 ⇒ 分段只剩预留段（`threshold` 有效时，见下方 `threshold` 两行）——零件未知、压缩线已知，线是该画的那面 |
+| 段之和 > `used`（**真实场景 = 两把尺不一致**：三段是裸估算、`used` 取自实测基线或乘比估算；`estimateTokens` 是近似算法，对某类文本偏高即触达——CLI 自己的 stats 就把「裸估算 `history`」与「calibrated estimate」分名打印，§31.2 引文。） | **整块丢弃**（空分段 + 恰一行 `appEvent`，点名和、`used` 与 `basis`）：份额的分母被 `used` 钉住，和超了就是估算法本身失准；面板回单条 `used` 格。不裁不缩、不按比例归一 |
+| `threshold` 满足 `0 < threshold < size` | 追加 `ContextSegment('', size − threshold, kind: ContextKind.buffer)`——面板据此出「为压缩预留」格，并由 `total − reserved` 得压缩线 |
+| `threshold` 缺 / `≤ 0` / `≥ size` | 不追加 buffer 段（预留为 0 或读不通 ⇒ 不画）；`compactAt` 为 null ⇒ 不显「距自动压缩」行。不是缺陷，是不给比给错好 |
+| 段 `tokens == 0` | 照收，面板自己跳过（`tokens <= 0` 的既有判据），解析层不加分支 |
+
+- **段之和 < `used` 不补段**：面板各格份额 = `tokens / used`（`context_usage_panel.dart:375` 实读），余下份额留白。桌面不按比例放大（放大 = 把估算伪装成实测）、不造「其它」段（编数）、不改 `used`（总量必须与 CLI 一致）。
+
+- **和判先于 buffer 追加，且只作用在生产者的 `segments` 上**：`size − threshold` 的 buffer 段是本仓自己追加的（§31.1 ⑤）——若先追加再判，越线条件就变成「段之和 + 预留 > `used`」，一段本身没超线的正常帧也会被整块丢弃（段之和越接近 `used` 越容易）。次序钉死：先判生产者段之和 > `used`（丢弃 ∥ 保留），再追加 buffer 段。**和判的输入端 = 坏项丢弃后的保留集**：先丢坏项、再求和；反过来时一个垃圾项的量就足以把好帧整块打掉。T150 的 `used` 就是为分辨这一次序而设。
+
+- 预留面 / 压缩线 / 距离行三处原文（距离行 = `math.max(0, compactAt − used)`；`compactAt = total − reserved`，而 `reserved = size − threshold` 由 §31.1 ⑤ 造段 ⇒ 「距自动压缩」= `threshold − used`，T147 断到 72300）：
+
+依据 lib/chat/panels/context_usage_panel.dart「detail?.autoCompactAt ?? (reserved > 0 ? total - reserved : null);」
+
+依据 lib/chat/panels/context_usage_panel.dart「final left = compactAt == null ? null : math.max(0, compactAt - used);」
+
+依据 lib/chat/panels/context_usage_panel.dart「share: used <= 0 ? null : part.tokens / used,」
+
+- buffer 段的 `label` 不被读：面板的预留格恒用 `l10n.usageReservedForCompaction`，故线上不必为它造名字。
+- 分段名到部件键的落点（**面板零改动的依据**）：
+
+依据 lib/chat/panels/context_usage_panel.dart「final key = ContextUsagePanel.partOf(segment.label) ?? segment.label;」
+
+依据 lib/chat/panels/context_usage_panel.dart「label: _order.contains(key)」
+
+即：`partOf('system')` 返 null ⇒ `key = 'system'`，而它就是 `_order` 的键 ⇒ 标签走既有本地化 `UsageFormat.part`，配色走既有 `UsagePalette.part`。
+
+### 31.6 受影响文件清单
+
+| # | 坐标 | 改动 |
+|---|---|---|
+| ① | `lib/kernel/thincoder/thincoder_usage.dart`（302 行，本批 +110） | 第二块解析 `_contextOf`：形判 / 坏形 `appEvent` / 段组装（三段直收，无减法、无钳制）/ buffer 段推导 / 和判（超 `used` ⇒ 整块丢弃，留痕点名和、`used`、`basis`） |
+| ② | `lib/kernel/thincoder/thincoder_events.dart`（888 行，本批 +10） | `_usage` 一处：`ContextUsage(...)` 加 `segments:` 实参（一行 + 一次调用） |
+| ③ | `test/kernel/thincoder_kernel_test.dart` | T147–T152（§31.7） |
+| ④ | `test/RTM.md` · `test/integration/thincoder_usage_test.dart` | 10-2 行 + 用例体（§31.9） |
+| ⑤ | `lib/chat/panels/context_usage_panel.dart` | **零改动**（评估过，登记在此）：映射与配色都走既有回落路径，§31.5 末两条引文即依据 |
+| ⑥ | 外仓 `thincoder/thincoder-cli/src/acp/bridge.mjs` | R1：`onUsage` 补第二块（**外仓库、独立轮、需用户批准**，R2b 的前置） |
+
+- **分层结论（行数 = `wc -l` 实测，2026-11-16 读数）**：② 888 行（>800，§30.6 起的存量债）⇒ 新逻辑落 ①，② 只加一处实参，不续拆（不因本批把一个存量债批改成拆档批）。① 302 行（<800）不触档。③ `test/kernel/thincoder_kernel_test.dart` **5581 行**（>800，名单内）⇒ 本批只追加 T147–T152（行级），不动结构；缝候选沿用 §15.4 的四组拆法（connection / session ids / locator / the registered kernel 各成档），触发 = 独立拆分批立项。④ `test/RTM.md`（125 行，2026-11-16 `wc -l` 读数）+ `test/integration/thincoder_usage_test.dart`（新档，530 行）——行级 ∥ 新建，不触档。⑤ 零改动，951 行（>800 名单，§5.2）不动。无档位跨越，无本批内拆分计划。
+- **解析归属（一处）**：第二块的形判、段组装、buffer 推导全在 ①；② 只把结果放进 `ContextUsage`（同 §30.6 的归属判据）。
+
+### 31.7 用例表（T147–T152，`test/kernel/thincoder_kernel_test.dart`）
+
+| # | 场景 | 输入 | 期望 |
+|---|---|---|---|
+| T147 | 分段帧进面板数据 | `usage_update{used:22700, size:128000, _meta.context{segments:[{system,3100},{tools,17400},{messages,1800}], threshold:95000, basis:"estimated"}}` | `UsageReported.context.segments` 恰 4 项：`system` 3100 / `tools` 17400 / `messages` 1800（皆 `kind: used`，值逐字 = 帧上裸估算，桌面不乘比）+ buffer 33000；三段之和 22300 < `used` 22700（面板留未填满份额）；**「距自动压缩」= 72300**（95000 − 22700，面板算式见 §31.5 引据）；`used` / `window` / `sessionSpent` 逐字今天 |
+| T148 | 旧 CLI 零回归 | 同形帧、无第二个键 | `segments` 为空表；`UsageReported` 与今天逐字相同 |
+| T149 | 两键并存互不干扰 | ① 一帧同带 `usage` 与 `context`；② `context` 为字符串而 `usage` 齐 | ① `StatsReported` 的缓存值同 T140，且分段在 `UsageReported` 上；② 缓存照发、`segments` 空、恰一行 `appEvent` |
+| T150 | 坏形逐项丢弃 · 和判作用在保留集 · 零件全坏时预留段仍在 | ① `used: 15000`；`segments` = `[{system,3100}, {tools,"17k"}, {"" ,17000}, {mcp,0}]`；② `used: 15000`；`segments` = `[{"" ,17000}]`（唯一项读不出）+ 有效 `threshold` | ① 留下 `system` 3100 与 `mcp` 0（面板自己跳过 0）；丢弃的两项各被一行 `appEvent` 点名；**和判先丢坏项再求和**：保留集 3100 ≤ `used` 15000 ⇒ 整块保留（若在原表上求和、把空名项的 17000 也算进去 ⇒ 20100 > 15000 ⇒ 整块丢弃——两种次序的产出可分）；② 分段恰一项 `('', 105000, buffer)`（块读得通、零件全坏 ⇒ 预留段照追加，§31.5 二行） |
+| T151 | 段之和超 `used` | `used: 5000`，段 `system 4000` + `tools 3000` + `messages 500`（和 7500），`basis: "estimated"` | `segments` 空表 + 恰一行 `appEvent`（点名和 7500、`used` 5000、`basis estimated`）；面板回单条 `used` 格（不裁不缩、不按比例归一） |
+| T152 | `threshold` 三态 | `size: 128000`，`threshold` 分别 `0` / `128000` / `95000` | 前两态不追加 buffer 段（`compactAt` 为 null）；第三态 buffer = 33000 且 `total − reserved == 95000` |
+
+### 31.8 UI / 交互决定
+
+- **已落地**：面板零改动。分段格 = 既有 `_PartCell`（点不点得开由 `detail == null` 决定 ⇒ 本批不可点，因为没有逐项数据）；「为压缩预留」格 = 既有 `l10n.usageReservedForCompaction`；「距自动压缩」行 = 既有 `l10n.usageUntilCompaction`；标题行 `22.7k / 128.0k · 18%` 逐字今天（`used` 未变）。
+- **open ① 逐项下钻**：Claude Code 的面板点开某段能看每个工具 / 技能各占多少，那需要 core 逐项计数（R1 扩）。做不做、何时做 = 用户的决定，本批不预埋。
+- **open ② 估算态标注**：`basis` 本批**已上线**——帧上随带（§31.4），桌面在整块丢弃的留痕里用它，「估算态在数据面上不可得」这一半已闭合。**面板上的「估算」标注仍不显示**：面板零改动是本批边界（§31.10-4），标注是一条独立的 UI 决定，本批不预埋。
+
+### 31.9 验收对照（回指台账 #253 与需求档 F10 / F20）
+
+| 判据 | 本档落点 | 机检 |
+|---|---|---|
+| ① 面板出现分段，不再是一根空条（用户 2026-11-15「A」裁定的可见结果） | §31.4 / §31.5 | 机检半边 = T147 + RTM 10-2（mock 帧）；**真机半边 = §31.10-7 走查**。R1 落地前 ① 无可见结果（§31 开头「只做 R2b = 零可见变化」）——收口不得把 ① 报成 R1 前的可见结果 |
+| ② 「距自动压缩」可见（`threshold − used`） | §31.5 预留面 / 距离行原文 | T147（断 72300 = 95000 − 22700）· T152（压缩线 95000 与预留 33000 两端） |
+| ③ 旧 CLI / 缺块零回归 | §31.4 末行 / §31.5 首行 | T148 |
+| ④ 坏形不静默丢弃、不裁不缩 | §31.5 二 / 三行 | T149–T151 |
+| ⑤ 桌面零估算：分段由 CLI 报，桌面只做一处 `size − threshold` | §31.1 ② | T147（照画）+ T148（无块即无分段） |
+
+**RTM 增量（索引 = `test/RTM.md`，现行 11 / 50–100；10-2 行与用例体均已落地，状态 =「本批落地」）**
+
+- 不改写 / 不删除 10-1：它的帧不带第二个键 ⇒ 缓存条与费用行的断言逐字不变。
+- **新增 10-2**：「thincoder 会话的上下文分段：面板按段显示，距自动压缩可见」。
+- 组件间交互 = ACP `usage_update`（带 `_meta.thincoder.dev/context`）⇄ `ThincoderEvents`（+ `thincoder_usage.dart`）⇄ `UsageReported(ContextUsage.segments)` ⇄ `ContextUsagePanel`；用户入口 = 上下文环（`ContextMeter`）打开的面板。
+- 10-2 断言（业务可观察）：一段带分段的帧后打开面板 ⇒ 出现「系统提示词」「工具定义」「消息」三格与「为压缩预留」一格，各格占比 = 该段 tokens / `used`（三段之和 < `used` 时合计不足 100%，余下留白——不放大、不补段）；「距自动压缩」行出现（`X = threshold − used`）；同一会话里先来的无分段帧 ⇒ 只有单条（今天）。
+- **回溯需求** = 需求档 F10 与 F20 的上下文面 + 台账 #253；帧来源 = mock 传输推扩展帧（与 10-1 共用同一帧源）；真 CLI 需 R1 已落且 `thincoder.path` 指到该版本。
+- 落点 = `test/integration/thincoder_usage_test.dart`，标题以 `10-2` 开头；编号已在 `test/RTM.md` 定行，实施轮只落用例体。
+
+### 31.10 边界（本批不做）
+
+1. **不做宿主侧估算**（用户 2026-11-15 裁定逐字）：桌面不算占比、不猜拆分。
+2. **不构造 `ContextDetail`**：逐项面保持 Claude 独占；`ContextDetail` 的「Claude 独有数据源」语义不变。
+3. **不改 `used` / `size` 语义**，不改 `thincoder.dev/usage` 块的字段与语义（§30.4）。
+4. **不改面板**（§31.6 ⑤）：任何「为分段新加一格 UI」都在本批之外。
+5. `ReportsUsageLimit` 仍不实现（§1 同判）。
+6. **R1 的 CLI 内部不在本档**：`basis` 的取值来源（自校准比 / 实测基线）与状态行百分比是 R1 轮的事；本档只定 `basis` 上线与桌面用法（§31.4 / §31.5）。
+7. **真机走查**：`thincoder.path` 指到 R1 已落的版本；开新会话发一轮带工具的回合 ⇒ 面板三格 + 预留格 + 距离行；与终端 `context` 工具的 stats 首行（`usage.total / usage.window`）对照（同源）。**读数项**：记下该帧的段之和与 `used`——判据 ① 的可见性取决于和落在哪一侧（§31.11 U26）。
+
+### 31.11 未验证项（单列，不静默）
+
+| # | 项 | 现状 | 处置 |
+|---|---|---|---|
+| U23 | `bridge.onUsage` 能否拿到 `agent._ctxBasis.overhead` | 本轮实读 `agent-tools/context.mjs:67` 的同一写法 `contextUsage(agent, agent?._ctxBasis?.overhead ?? {})`，且 `bridge` 里 `agent` 是活引用（同档注释「agent 为活引用：切模型后 size 随动」）⇒ 可达 | R1 首步复读；拿不到则 `system` / `tools` 两段报 0、只发 `messages`（`estimateTokens(history)` 不依赖 extras，帧形不变） |
+| U24 | `thincoder_events.dart` 888 行的档位 | `wc -l` 实读 888（>800）⇒ 存量债，本批不续拆 | 拆档触发点 = 下次结构性改动，登记在 `docs/design/structure-splits.md` 的既有债里，不新增行 |
+| U25 | `ContextUsage.segments` 的既有消费方是否都吃 buffer 段 | 面板已读（`_parts` 跳过、`build` 用它算 `reserved`）；`lib/usage/` 侧本轮未逐档复读 | 实施轮实读 `usage_capture.dart` / `claude_usage_meter.dart` 对 `segments` 的读法；若某处把 buffer 当 used 用，该处单列 |
+| U26 | 真实帧里「段之和 vs `used`」的分布 | 无读数：本轮只有构造样例（T147 的 22300 < 22700），没有真实帧的分布 | R1 首步用真实帧读一次并记数（几帧落 < 侧、几帧落 > 侧）。多数落 > 侧 ⇒ 整块被逐帧丢弃、面板回单条 `used` 格 ⇒ 判据 ① 看不见分段，那要回设计改口径，实施轮不自裁 |
+
+### 31.12 三问答复（本轮实读）
+
+- `thincoder.dev/context`（新 `_meta` 键）：`none found` —— 本轮 grep（`lib` ∥ `test` ∥ `thincoder/thincoder-cli` ∥ `thincoder/thincoder-core`）零命中；同族键 `thincoder.dev/usage` 在 `thincoder_usage.dart:13`。⇒ 新建，名字逐字 `thincoder.dev/context`；谁用 = R1 的 bridge 发、R2b 的 `thincoder_usage.dart` 读。
+- 分段名（`system` / `tools` / `messages`）：`existing: lib/chat/panels/context_usage_panel.dart:71-79` · `name: "_order"` 的六项 + `UsagePalette.part(key)` · `consumers: _parts() / _PartCell / UsageFormat.part` ⇒ 逐字复用，不新造词；未在其中的名字走面板既有的「按自己的名字画」回落。
+- `basis`（帧上新字段）：`existing: thincoder/thincoder-core/token-window.mjs:145` · `name: "basis: measured ? \"measured\" : \"estimated\","` · `consumers: agent-tools/context.mjs:108`（stats 行）⇒ 逐字复用，不在桌面另造枚举类型——桌面只读它写留痕（§31.5 第三行）。
+
+依据 thincoder/thincoder-core/token-window.mjs「basis: measured ? "measured" : "estimated",」
+
+- `ContextUsage.segments` 的填充点：`existing: lib/kernel/thincoder/thincoder_events.dart:482` · `name: "ContextUsage(window: size, used: used, sessionSpent: _spent)"` · `consumers: ContextUsagePanel`（经 `UsageReported`）⇒ 加一个实参，不新建构造点。
+- buffer 段（§31.5 第五行的 `ContextSegment('', size − threshold, kind: ContextKind.buffer)`）：`existing: lib/kernel/kernel_types.dart:116` · `name: "const ContextSegment(this.label, this.tokens, {this.kind = ContextKind.used});"` · 消费方 = `context_usage_panel.dart` 的预留量计算（`.where((s) => s.kind == ContextKind.buffer)`）与 Claude 侧同一构造先例（`claude_code_kernel.dart` 的 `'buffer' => ContextKind.buffer,`）⇒ 复用既有构造形 + 既有枚举值，不新建类型、不新建字段。枚举值原文（`/// Kept back for compaction.` 的下一行 = `buffer,`）：
+
+依据 lib/kernel/kernel_types.dart「const ContextSegment(this.label, this.tokens, {this.kind = ContextKind.used});」
+
+依据 lib/kernel/kernel_types.dart「/// Kept back for compaction.」
+
+依据 lib/chat/panels/context_usage_panel.dart「.where((s) => s.kind == ContextKind.buffer)」
+
+依据 lib/kernel/claude_code/claude_code_kernel.dart「'buffer' => ContextKind.buffer,」
+

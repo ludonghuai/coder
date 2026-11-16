@@ -4934,7 +4934,7 @@ void main() {
     });
   });
 
-  group('thincoder usage frames (F20, §30)', () {
+  group('thincoder usage frames (F20, §30 · §31)', () {
     /// The price the mock's model has, so that a frame's cost is a number;
     /// the T144 case empties the table to see the other state.
     const price = ModelPrice(input: 3, output: 15, cacheRead: 0.3);
@@ -4952,15 +4952,39 @@ void main() {
     /// One `usage_update` as the CLI writes it (§30.4): what the context
     /// spent, the window, and the request's own counts under `_meta` — one
     /// frame, one request. [usage] null is an older CLI's frame; anything
-    /// but a map is a block of the wrong shape.
+    /// but a map is a block of the wrong shape. [context] is the same frame's
+    /// second block (§31.4), left off the wire where null.
     Map<String, Object?> frame(
       int used, {
       Object? usage = const {'input': 900, 'output': 334, 'cacheRead': 700},
+      Object? context,
+      int size = 200000,
     }) => {
       'sessionUpdate': 'usage_update',
       'used': used,
-      'size': 200000,
-      if (usage != null) '_meta': {'thincoder.dev/usage': usage},
+      'size': size,
+      if (usage != null || context != null)
+        '_meta': {
+          'thincoder.dev/usage': ?usage,
+          'thincoder.dev/context': ?context,
+        },
+    };
+
+    /// The context block a frame carries (§31.4): the CLI's own counts, the
+    /// auto-compaction line, and the ruler in effect. Null leaves the field
+    /// off the wire.
+    Map<String, Object?> block({
+      Object? segments = const [
+        {'name': 'system', 'tokens': 3100},
+        {'name': 'tools', 'tokens': 17400},
+        {'name': 'messages', 'tokens': 1800},
+      ],
+      Object? threshold = 95000,
+      Object? basis = 'estimated',
+    }) => {
+      'segments': segments,
+      'threshold': ?threshold,
+      'basis': ?basis,
     };
 
     /// A kernel over an agent the test scripts, ready.
@@ -5224,6 +5248,276 @@ void main() {
       expect(split.outputTokens, 334);
       expect(split.costUsd, isNull, reason: 'no cacheRead ⇒ not priced');
       expect(_saidTimes(log, 'without cacheRead'), 1);
+    });
+
+    test('T147: a frame carrying the context block is the split the panel '
+        'draws (F10, §31.7)', () async {
+      final s = await ready();
+
+      s.agent.push(_update(frame(22700, size: 128000, context: block())));
+      await settle();
+
+      final usage = s.events.whereType<UsageReported>().single.usage;
+      expect(usage.used, 22700);
+      expect(usage.window, 128000);
+      expect(usage.sessionSpent, 22700);
+      // The CLI's three counts verbatim — the desktop neither scales them nor
+      // takes anything out of them — and the room the compaction line keeps
+      // back (§31.1 ②, §31.5).
+      expect(
+        [
+          for (final segment in usage.segments)
+            (segment.label, segment.tokens, segment.kind),
+        ],
+        const [
+          ('system', 3100, ContextKind.used),
+          ('tools', 17400, ContextKind.used),
+          ('messages', 1800, ContextKind.used),
+          ('', 33000, ContextKind.buffer),
+        ],
+      );
+      // The counts are the CLI's own, not made to add up to `used`: 22300 of
+      // 22700, and every share is divided by `used` — so the bar keeps a
+      // share unfilled (§31.5 末段).
+      final counted = usage.segments
+          .where((segment) => segment.kind == ContextKind.used)
+          .fold(0, (sum, segment) => sum + segment.tokens);
+      expect(counted, 22300);
+      expect(counted, lessThan(usage.used));
+      // The panel's own arithmetic over what the frame brought (§31.5 引据):
+      // `compactAt = total − reserved` ⇒ 95000, and the row it shows is
+      // `compactAt − used` ⇒ 72300.
+      final reserved = usage.segments
+          .where((segment) => segment.kind == ContextKind.buffer)
+          .fold(0, (sum, segment) => sum + segment.tokens);
+      expect(usage.window - reserved, 95000);
+      expect(usage.window - reserved - usage.used, 72300);
+    });
+
+    test('T148: a frame without the block is exactly what it was before '
+        '(§31.5 首行)', () async {
+      final s = await ready();
+
+      s.agent.push(_update(frame(1234)));
+      await settle();
+
+      final usage = s.events.whereType<UsageReported>().single.usage;
+      expect(usage.segments, isEmpty);
+      expect(usage.used, 1234);
+      expect(usage.window, 200000);
+      expect(usage.sessionSpent, 1234);
+
+      // Per frame (§31.1 ③): the split is the frame's own — one that brings
+      // none does not have the one before put back into it.
+      s.agent.push(_update(frame(22700, size: 128000, context: block())));
+      await settle();
+      expect(
+        s.events.whereType<UsageReported>().last.usage.segments,
+        hasLength(4),
+      );
+      s.agent.push(_update(frame(22700)));
+      await settle();
+      expect(s.events.whereType<UsageReported>().last.usage.segments, isEmpty);
+    });
+
+    test('T149: the frame’s two blocks are read apart (§31.4 末行)', () async {
+      final log = _log();
+      final s = await ready();
+
+      // Both blocks on one frame: the cache reads as T140's does, and the
+      // split rides the same frame.
+      s.agent.push(
+        _update(
+          frame(
+            1234,
+            context: block(
+              segments: const [
+                {'name': 'system', 'tokens': 900},
+              ],
+              threshold: null,
+            ),
+          ),
+        ),
+      );
+      await settle();
+      final stats = s.events.whereType<StatsReported>().single.stats;
+      expect(counts(stats.cache!.last), [700, 0, 200]);
+      expect(counts(stats.cache!.conversation), [700, 0, 200]);
+      expect(
+        s.events.whereType<UsageReported>().single.usage.segments.single.label,
+        'system',
+      );
+
+      // The context block of the wrong shape: the usage block beside it is
+      // read exactly as before, the split is empty, and the frame is named.
+      final t = await ready();
+      t.agent.push(_update(frame(1234, context: 'not a map')));
+      await settle();
+      final cache = t.events.whereType<StatsReported>().single.stats.cache!;
+      expect(counts(cache.last), [700, 0, 200]);
+      expect(t.events.whereType<UsageReported>().single.usage.segments,
+          isEmpty);
+      expect(_saidTimes(log, 'no map under thincoder.dev/context'), 1);
+    });
+
+    test('T150: an item that does not read is dropped and named, and the sum '
+        'takes what is left (§31.5 二 / 三行)', () async {
+      final log = _log();
+      final s = await ready();
+
+      // Summed over the raw list this frame would be 20100 — the nameless
+      // item's 17000 is in it — and the whole block would go; summed over what
+      // was kept it stands at 3100 of 15000. The two orders are told apart
+      // right here (§31.5).
+      s.agent.push(
+        _update(
+          frame(
+            15000,
+            context: block(
+              segments: const [
+                {'name': 'system', 'tokens': 3100},
+                {'name': 'tools', 'tokens': '17k'},
+                {'name': '', 'tokens': 17000},
+                {'name': 'mcp', 'tokens': 0},
+              ],
+              threshold: null,
+            ),
+          ),
+        ),
+      );
+      await settle();
+
+      // The two that read are kept; the two that do not are named, each on a
+      // line of its own.
+      final usage = s.events.whereType<UsageReported>().single.usage;
+      expect(
+        [
+          for (final segment in usage.segments)
+            (segment.label, segment.tokens),
+        ],
+        const [('system', 3100), ('mcp', 0)],
+      );
+      expect(_saidTimes(log, 'whose tokens is not a count'), 1);
+      expect(_saidTimes(log, 'with no name'), 1);
+
+      // A `segments` that is not a list at all, and an item that is not a
+      // segment: nothing of the split reads, it is said, and the block does
+      // not take the panel down with it (§31.5 二行).
+      s.agent.push(_update(frame(15000, context: block(segments: 'nope'))));
+      await settle();
+      expect(s.events.whereType<UsageReported>().last.usage.segments, isEmpty);
+      expect(_saidTimes(log, 'segments is not a list'), 1);
+
+      s.agent.push(
+        _update(
+          frame(
+            15000,
+            context: block(
+              segments: const [
+                {'name': 'system', 'tokens': 3100},
+                7,
+              ],
+              threshold: null,
+            ),
+          ),
+        ),
+      );
+      await settle();
+      expect(
+        [
+          for (final segment
+              in s.events.whereType<UsageReported>().last.usage.segments)
+            (segment.label, segment.tokens),
+        ],
+        const [('system', 3100)],
+      );
+      expect(_saidTimes(log, 'not a map'), 1);
+
+      // Not one producer item readable, and a `threshold` the window can hold:
+      // the parts are unknown, the compaction line is not, and the reserve is
+      // read after the sum check — so the reserve stays (§31.5 五行).
+      s.agent.push(
+        _update(
+          frame(
+            15000,
+            context: block(
+              segments: const [
+                {'name': '', 'tokens': 17000},
+              ],
+            ),
+          ),
+        ),
+      );
+      await settle();
+      expect(
+        [
+          for (final segment
+              in s.events.whereType<UsageReported>().last.usage.segments)
+            (segment.label, segment.tokens, segment.kind),
+        ],
+        const [('', 105000, ContextKind.buffer)],
+      );
+    });
+
+    test('T151: counts that add up to more than `used` drop the block whole '
+        '(§31.5 三行)', () async {
+      final log = _log();
+      final s = await ready();
+
+      s.agent.push(
+        _update(
+          frame(
+            5000,
+            context: block(
+              segments: const [
+                {'name': 'system', 'tokens': 4000},
+                {'name': 'tools', 'tokens': 3000},
+                {'name': 'messages', 'tokens': 500},
+              ],
+            ),
+          ),
+        ),
+      );
+      await settle();
+
+      final usage = s.events.whereType<UsageReported>().single.usage;
+      expect(usage.segments, isEmpty, reason: 'dropped, not trimmed to fit');
+      expect(usage.used, 5000);
+      // One line, naming the sum, the `used` it went over, and the ruler.
+      expect(_saidTimes(log, 'add up to 7500'), 1);
+      expect(_saidTimes(log, 'more than its used 5000'), 1);
+      expect(_saidTimes(log, 'basis: estimated'), 1);
+    });
+
+    test('T152: the reserve comes from a compaction line the window can hold '
+        '(§31.5 四 / 五行)', () async {
+      final s = await ready();
+
+      Future<ContextUsage> pushed(Object? threshold) async {
+        s.agent.push(
+          _update(
+            frame(22700, size: 128000, context: block(threshold: threshold)),
+          ),
+        );
+        await settle();
+        return s.events.whereType<UsageReported>().last.usage;
+      }
+
+      List<ContextSegment> reserved(ContextUsage usage) => [
+        for (final segment in usage.segments)
+          if (segment.kind == ContextKind.buffer) segment,
+      ];
+
+      // A line at 0, at the window's end, or absent: nothing is kept back, and
+      // the panel has no compaction point to show (§31.5 五行).
+      expect(reserved(await pushed(0)), isEmpty);
+      expect(reserved(await pushed(128000)), isEmpty);
+      expect(reserved(await pushed(null)), isEmpty);
+      // A line the window can hold: the reserve is `size − threshold`, and the
+      // panel's `total − reserved` lands back on the line itself.
+      final usage = await pushed(95000);
+      expect(reserved(usage).single.tokens, 33000);
+      expect(usage.window - reserved(usage).single.tokens, 95000);
     });
   });
 }

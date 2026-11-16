@@ -6,7 +6,7 @@
 **集成用例的准入**：从用户入口驱动，只断言业务可观察结果；两条来路——产品真正需要的业务场景，或生产真正发生过的问题。
 机制内部的结构断言（合成层、重建计数）可作为**辅助断言**附在同一条用例里，但它不能单独成为一条集成用例。
 
-**规模窗**：50–100 条。当前 **10 / 50–100**（7-1、8-1 与 9-1 已定行，用例体分别待假远端 harness、假凭证端点 harness 与假网关 harness）。
+**规模窗**：50–100 条。当前 **11 / 50–100**（7-1、8-1 与 9-1 已定行，用例体分别待假远端 harness、假凭证端点 harness 与假网关 harness）。
 
 **真实设备读数不在本档**：帧耗时、`GPU Engine` 占用、挂起报告零新增这类读数需要真机，随设计档的验收表走，不进集成套件。
 
@@ -96,19 +96,20 @@
 |---|---|---|---|---|---|---|---|
 | 9-1 | 加一个 magpie 上游，模型列表出模型、新会话可对话 | 设置页上游表单 ⇄ magpie 客户端（本机回环端口）⇄ 模型列表 ⇄ `ChatSession` | 加完上游后模型列表出现该网关的模型；新会话的模型选择里能选到；发一条消息，该模型经本机端口收到请求并回一条答复 | 设置 → 模型 → 加上游 | 上游能力，本仓无需求条目 | `test/integration/magpie_gateway_flows_test.dart` · `test('9-1 …')` | 行已定；用例体待假网关 harness |
 
-## 10 用量：thincoder 会话的缓存与费用
+## 10 用量与上下文分段：thincoder 会话的缓存、费用与分段
 
 | 字段 | 内容 |
 |---|---|
-| 业务故事 | 用户想知道一个 thincoder 会话花了多少、请求里有多少是缓存给的：点开上下文面板，缓存条与费用行就在那儿。 |
+| 业务故事 | 用户想知道一个 thincoder 会话花了多少、请求里有多少是缓存给的、窗口里各部分又占了多少：点开上下文面板，缓存条、费用行、按段分段（系统提示词 / 工具定义 / 消息 / 为压缩预留）与「距自动压缩」就在那儿。 |
 | 用户入口 | 对话下方那一行的上下文环（`ContextMeter`）：点开面板即向内核问一次刷新 |
-| 回溯需求 | F20「批 23 扩」：缓存三段（read / written / uncached）与费用在上下文面板可见，费用由 `UsagePrices` 价格表估算，缺价 ⇒ 空（不猜、不填 0）；`ReportsUsageLimit` 不实现 |
+| 回溯需求 | F20「批 23 扩」：缓存三段（read / written / uncached）与费用在上下文面板可见，费用由 `UsagePrices` 价格表估算，缺价 ⇒ 空（不猜、不填 0）；`ReportsUsageLimit` 不实现。另：F10 / F20 的上下文面——上下文分段按段显示、距自动压缩可见（台账 #253） |
 
 | 编号 | 用例 | 组件间交互 | 断言的业务可观察结果 | 用户入口 | 回溯需求 | 用例文件 · 标题 | 状态 |
 |---|---|---|---|---|---|---|---|
 | 10-1 | thincoder 会话的用量：缓存命中与费用与终端同源 | ACP `usage_update`（带 `_meta.thincoder.dev/usage`）⇄ `ThincoderEvents`（+ `thincoder_usage.dart`）⇄ `StatsReported` ⇄ `ContextUsagePanel` | 两个带工具的回合各一次扩展帧 ⇒ 面板出现缓存条，命中率 = 从缓存读到的份额（末次 60%、会话 71%）；价目表里有该模型 ⇒ 费用行 `$0.01`；价目表清空后开的会话 ⇒ 无费用行、也不显 `$0.00`（已估出的费用不随后改的价目表重算） | 上下文环（`ContextMeter`） | F20 批 23 扩 | `test/integration/thincoder_usage_test.dart` · `test('10-1 …')` | 本批落地 |
+| 10-2 | thincoder 会话的上下文分段：面板按段显示，距自动压缩可见 | ACP `usage_update`（带 `_meta.thincoder.dev/context`）⇄ `ThincoderEvents`（+ `thincoder_usage.dart`）⇄ `UsageReported`（`ContextUsage.segments`）⇄ `ContextUsagePanel` | 一段带分段的帧后打开面板 ⇒ 「系统提示词」「工具定义」「消息」三格 + 「为压缩预留」一格，各格占比 = 该段 tokens / `used`（三段之和小于 `used` 时合计不足 100%，余下留白——不按比例放大、不补「其它」段）；「距自动压缩」行显示 `threshold − used`；同一会话里先来的无分段帧 ⇒ 仍只有单条（今天） | 上下文环（`ContextMeter`） | F10 / F20 上下文面 · 台账 #253 | `test/integration/thincoder_usage_test.dart` · `test('10-2 …')` | 本批落地 |
 
-- **帧来源** = mock 传输推扩展帧（`usage_update` + `_meta["thincoder.dev/usage"]`）；真 CLI 需外仓扩展帧那一轮落地且 `thincoder.path` 指到该版本。
+- **帧来源** = mock 传输推扩展帧（`usage_update` + `_meta["thincoder.dev/usage"]`；10-2 用同一帧再加 `_meta["thincoder.dev/context"]` 分段块）；真 CLI 需外仓扩展帧那一轮落地且 `thincoder.path` 指到该版本。
 - **价目表在用例里配**：用例自建 `UsagePrices`，加一条 `provider:model` → `ModelPrice`（input / output / cacheRead 三个价），清空即空表。
 
 ## 变更记录（本批）
@@ -119,5 +120,6 @@
 - **新增** 8-1：导入 ChatGPT 凭证的账号可用、坏输入被拒；行已定，用例体待假凭证端点 harness（条件同样挂在用例体上）。
 - **新增** 9-1：magpie 网关当模型源；行已定，用例体待假网关 harness（条件挂在用例体上）。
 - **新增** 10-1：thincoder 会话的缓存与费用在上下文面板可见，缺价即空；用例体同批落地。
+- **新增** 10-2：thincoder 会话的上下文分段按段显示、距自动压缩可见；用例体同批落地（与 10-1 同一用例文件、同一帧源）。
 - **改写**：5-1（2026-11-05，`docs/design/browser-biz-test.md` §12.3）：收尾门只拦本轮新增的 case，起始索引里没走到的只计数；断言从「拒绝点名 CASE-002」改成「拒绝里没有 CASE-002」。
 - **删除**：无。

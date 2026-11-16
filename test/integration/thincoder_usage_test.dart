@@ -24,9 +24,10 @@ import 'package:baocode/usage/usage_prices.dart';
 import 'package:baocode/workspace/preference_store.dart';
 import 'package:baocode/workspace/workspace.dart';
 
-/// The integration index this file answers to: `test/RTM.md`, row 10-1 —
-/// a thincoder chat's usage as the user reads it: the prompt cache the
-/// requests were served from, and what the session cost.
+/// The integration index this file answers to: `test/RTM.md`, rows 10-1 and
+/// 10-2 — a thincoder chat's usage as the user reads it: the prompt cache the
+/// requests were served from, what the session cost, and what the context
+/// window holds part by part, with the room left until it is compacted.
 ///
 /// The app is mounted whole and driven from its own entries (the sidebar,
 /// the composer, the context ring); what the case asserts is what a user
@@ -123,6 +124,65 @@ void main() {
       app.done();
     },
   );
+
+  testWidgets(
+    '10-2 a thincoder chat shows the context by part, and how far the '
+    'auto-compaction line is',
+    (tester) async {
+      final app = await _open(tester);
+
+      // A turn whose frame carries only what the CLI always carried: the
+      // panel is what it is today — no part of a split, no compaction line.
+      app.agent.turn.clear();
+      app.agent.turn.addAll([
+        ..._toolCall('t1', '/tmp/u/a.txt'),
+        _frame(1234, input: 900, output: 334, cacheRead: 700),
+        _reply('First.'),
+      ]);
+      app.session.send(const ComposerMessage(text: 'go'));
+      await _pumpFor(tester, const Duration(milliseconds: 300));
+
+      await _openPanel(tester);
+      expect(find.textContaining('1.2k / 200.0k tokens'), findsOneWidget);
+      expect(find.text('System prompt'), findsNothing);
+      expect(find.text('Reserved for compaction'), findsNothing);
+      expect(find.textContaining('to auto-compact'), findsNothing);
+
+      // The panel put away, then a turn whose frame carries the second block:
+      // the window's split, and the line the agent compacts at (§31.4).
+      await _togglePanel(tester);
+      app.agent.turn
+        ..clear()
+        ..addAll([
+          ..._toolCall('t2', '/tmp/u/b.txt'),
+          _segmentedFrame(22700),
+          _reply('Second.'),
+        ]);
+      app.session.send(const ComposerMessage(text: 'and on'));
+      await _pumpFor(tester, const Duration(milliseconds: 300));
+
+      await _openPanel(tester);
+      // A cell each: the CLI's three parts…
+      expect(find.text('System prompt'), findsOneWidget);
+      expect(find.text('3.1k'), findsOneWidget);
+      expect(find.text('14%'), findsOneWidget);
+      expect(find.text('Tool definitions'), findsOneWidget);
+      expect(find.text('17.4k'), findsOneWidget);
+      expect(find.text('77%'), findsOneWidget);
+      expect(find.text('Conversation'), findsOneWidget);
+      expect(find.text('1.8k'), findsOneWidget);
+      expect(find.text('8%'), findsOneWidget);
+      // …and the room the compaction line keeps back (§31.1 ⑤).
+      expect(find.text('Reserved for compaction'), findsOneWidget);
+      expect(find.text('33.0k'), findsOneWidget);
+      // Every share is the part against `used` (22 700): 14 + 77 + 8 is not
+      // 100, and nothing was scaled up or invented to make it so (§31.9).
+      expect(find.text('100%'), findsNothing);
+      // How far the auto-compaction line is: `threshold − used` = 72 300.
+      expect(find.textContaining('72.3k to auto-compact'), findsOneWidget);
+      app.done();
+    },
+  );
 }
 
 /// One `usage_update` as the CLI writes it (§30.4): the context it filled —
@@ -151,6 +211,40 @@ Map<String, Object?> _reply(String text) => {
   'content': {'type': 'text', 'text': text},
 };
 
+/// One `usage_update` as the CLI writes it once the context block is on the
+/// wire (§31.4): the request's own counts under `_meta.thincoder.dev/usage`,
+/// and what the window holds under `_meta.thincoder.dev/context` — the CLI's
+/// own three counts, the line it compacts at, and the ruler in effect.
+Map<String, Object?> _segmentedFrame(
+  int used, {
+  int size = 128000,
+  int input = 900,
+  int output = 334,
+  int cacheRead = 700,
+  List<Map<String, Object?>> segments = const [
+    {'name': 'system', 'tokens': 3100},
+    {'name': 'tools', 'tokens': 17400},
+    {'name': 'messages', 'tokens': 1800},
+  ],
+  int threshold = 95000,
+}) => {
+  'sessionUpdate': 'usage_update',
+  'used': used,
+  'size': size,
+  '_meta': {
+    'thincoder.dev/usage': {
+      'input': input,
+      'output': output,
+      'cacheRead': cacheRead,
+    },
+    'thincoder.dev/context': {
+      'segments': segments,
+      'threshold': threshold,
+      'basis': 'estimated',
+    },
+  },
+};
+
 /// A tool call the agent reports, read and done with: what a turn of work
 /// looks like to the conversation.
 List<Map<String, Object?>> _toolCall(String id, String path) => [
@@ -177,9 +271,15 @@ List<Map<String, Object?>> _toolCall(String id, String path) => [
 /// The context panel opened, unless it already is: the ring toggles it.
 Future<void> _openPanel(WidgetTester tester) async {
   if (find.byType(ContextUsagePanel).evaluate().isEmpty) {
-    await tester.tap(find.byType(ContextMeter));
-    await _pumpFor(tester, const Duration(milliseconds: 100));
+    await _togglePanel(tester);
   }
+}
+
+/// The context panel toggled from the context ring: opened where it is shut,
+/// put away where it is open.
+Future<void> _togglePanel(WidgetTester tester) async {
+  await tester.tap(find.byType(ContextMeter));
+  await _pumpFor(tester, const Duration(milliseconds: 100));
 }
 
 /// Pumps until the chat is ready to take a message (its process started and

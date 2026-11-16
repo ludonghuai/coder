@@ -105,7 +105,7 @@
 
 **F9 Customize 对接**：按 thincoder 实际定制面（skills / rules / AGENTS.md / MCP / hooks——逐类以源码核实为准）在 Customize 面板对位；无对应面的类别不显示。
 
-**F10 用量展示**：上下文用量（usage_update）接入现有展示；模型与供应商配置在**会话内只读**，编辑入口见 F24（设置 → 模型（thincoder））。
+**F10 用量展示**（批 25 扩）：上下文窗口面板的详细度对齐 Claude Code——分段（系统提示词 / 工具定义 / 对话消息 / 为压缩预留）与「距自动压缩」都要显示；数据由 CLI 报、桌面不估算。用户 2026-11-15「thincoder的上下文窗口显示还是没claude code那样详细」。
 
 **F11 子代理活动可见**（批 4；用户 2026-10-16 拍板开批）：thincoder 主代理异步调子代理时，桌面可见其活动——
 
@@ -473,7 +473,7 @@ thincoder 将来补能力 → 改能力映射表（§5）+ 适配层小改即可
 
 - 2026-11-15 · 用户 20:29–20:30：**「给我开抄，能抄过来的都抄过来」+「nonono，我们直接有模板了，直接全抄过来，后端也抄过来」**——内核能力对齐按「照 Claude Code 模板全抄」推进：应用侧照 `ClaudeCodeKernel`，后端缺的能力照 `packages/bao_agent` 补；**B1 例外 = 允许动 `thincoder/` 仓**（上述原话即授权，沿用 2026-10-17 / 2026-10-19 同形记法，out-of-repo 轮保持上游可合并）。分批：批 23 = `ReportsUsage`（用量），其余 11 项后续成批。
 
-- 2026-11-15 · 用户「A」——**上下文分段照 Claude Code 补齐**。现状：Claude 内核的六段（系统提示词 / 技能 / 工具定义 / MCP / 为压缩预留 / 距自动压缩）来自 SDK 的 `get_context_usage`；thincoder 的 ACP 只发 `usage_update {used, size}`，故面板只有一根空条。定：CLI 在 `_meta["thincoder.dev/usage"]` 里补报分段（`thincoder-cli/src/acp/bridge.mjs` 的 `onUsage`；估器与固定开销估算在 `thincoder-core/context.mjs` 已在），本仓映射成 `ContextDetail` 供面板画。**两半同批做才有可见结果**（R1 外仓 + R2b 本仓新批）。不做宿主侧估算（数字是猜的，不给比给错好）。
+- 2026-11-15 · 用户「A」——**上下文分段照 Claude Code 补齐**（定稿口径，2026-11-16 按已批准设计 `design §31` 订正）。现状：Claude 内核的分段来自 SDK 的 `get_context_usage`；thincoder 的 ACP 的 `usage_update` 只有 `used` / `size`，故面板只有一根空条。定：CLI 在**第二块** `_meta["thincoder.dev/context"]` 里补报 `segments[{system, tools, messages}]` + `threshold` + `basis`（`thincoder-cli/src/acp/bridge.mjs` 的 `onUsage`；单源 = `thincoder-core/token-window.mjs` 的 `contextUsage()`，`messages` = 其中的 `history` 直发、桌面不做减法），本仓映射进既有 `ContextUsage.segments`（不构造 `ContextDetail`），面板零改动。**两半同批做才有可见结果**（R1 外仓 + R2b 本仓）。不做宿主侧估算（数字是猜的，不给比给错好）。
 
 - 2026-11-15 · 用户「可以，B吧」——**用量口径选 B**：CLI 的 context% 从 `estimateTokens` 估算改为模型实测的 `usage_update.used`（两边同仪）。落在 **R1 外仓轮**（`thincoder/`，因其为独立 git 仓，须在该仓锚定的会话里开批）；本仓 R2 轮不动 CLU 的估算逻辑。
 

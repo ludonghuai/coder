@@ -479,7 +479,17 @@ class ThincoderEvents {
     contextWindow = size;
     _spent += used;
     _turnSpent += used;
-    final usage = ContextUsage(window: size, used: used, sessionSpent: _spent);
+    // The frame's second block (§31.4): the window's split as the CLI counts
+    // it. Per frame — what a frame does not carry is not filled in from the
+    // one before (§31.1 ③), and what it carries and does not read is named by
+    // the parse (§31.5).
+    final segments = _contextOf(update, used: used, size: size);
+    final usage = ContextUsage(
+      window: size,
+      used: used,
+      sessionSpent: _spent,
+      segments: segments,
+    );
     _sink.emit(UsageReported(_sink.nextSeq, usage));
     // What the frame carries beyond `used` (§30.4): the request's own tokens
     // and its cache, priced where the table has a price. A block that does

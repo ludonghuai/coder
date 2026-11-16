@@ -7,10 +7,22 @@ part of 'thincoder_events.dart';
 // The block's parse, the `CacheTokens` it makes, the price lookup and the log
 // line a block that does not read gets (§30.5, §15.2) live here and nowhere
 // else (§30.6): the events file only accumulates what comes back and says it.
+//
+// The same frame's second block (§31.4) is read here too: what the window
+// holds, part by part, and the room the compaction line keeps back. No count
+// of the desktop's own is added there — the one subtraction is
+// `size − threshold`, and even the sum the frame is checked against is the
+// CLI's (§31.1 ②).
 
 /// The key a request's usage comes under, beside `used` (§30.4):
 /// `{"input": 900, "output": 334, "cacheRead": 700}` — one frame, a request.
 const _usageKey = 'thincoder.dev/usage';
+
+/// The key the same frame's context split comes under (§31.4), beside the
+/// usage block:
+/// `{"segments": [{"name": "system", "tokens": 3100}], "threshold": 95000,
+/// "basis": "estimated"}`.
+const _contextKey = 'thincoder.dev/context';
 
 /// How far a `usage_update`'s extension block read (§30.5's four rows).
 enum _UsageShape {
@@ -63,6 +75,17 @@ class _UsageFrame {
   final double? cost;
 }
 
+/// A non-negative whole number as the frames carry the counts (§30.4, §31.4):
+/// null where the value is not one. One rule for both blocks of a frame — a
+/// count is a count wherever it sits, and two readings of the same rule would
+/// drift apart.
+int? _count(Object? value) => switch (value) {
+  final num value
+      when value.isFinite && value >= 0 && value == value.roundToDouble() =>
+    value.toInt(),
+  _ => null,
+};
+
 /// The block [update] carries, read and priced: absent, whole, partial or
 /// bad (§30.5). A block under the key that does not read in full is named in
 /// the log here — it is never dropped in silence (§15.2). A `_meta` that is
@@ -76,15 +99,9 @@ _UsageFrame _usageFrameOf(ThincoderEvents owner, Map<String, Object?> update) {
   if (block is! Map) {
     return _usageBad('a usage frame with no map under $_usageKey: $block');
   }
-  int? count(Object? value) => switch (value) {
-    final num value
-        when value.isFinite && value >= 0 && value == value.roundToDouble() =>
-      value.toInt(),
-    _ => null,
-  };
-  final input = count(block['input']);
-  final output = count(block['output']);
-  final cacheRead = count(block['cacheRead']);
+  final input = _count(block['input']);
+  final output = _count(block['output']);
+  final cacheRead = _count(block['cacheRead']);
   if (input == null && output == null && cacheRead == null) {
     return _usageBad(
       'a usage frame with none of input / output / cacheRead a count: $block',
@@ -190,3 +207,96 @@ double? _priced(
 /// [amount] with the float dust off (a millionth of a dollar): it is a sum
 /// of many requests, and only its dollars and cents are ever read.
 double _rounded(double amount) => (amount * 1e6).roundToDouble() / 1e6;
+
+/// The context split a frame carries (§31.4), read into the segments the
+/// panel draws (§31.5): the CLI's own counts verbatim, then the room the
+/// compaction line keeps back.
+///
+/// Nothing is subtracted here and nothing is made to fit (§31.1 ②): the
+/// desktop's one arithmetic is `size − threshold`, and even the sum below is
+/// the CLI's own. The producer's counts are estimates while `used` is what
+/// the agent measured (or an estimate scaled by a calibration the counts did
+/// not get), so the two need not agree. Counts that add up to more than
+/// `used` are not trimmed or scaled to fit: the block is dropped whole and
+/// the log names it (§31.5), because a share divided by a smaller `used`
+/// would be a number the CLI never reported.
+///
+/// A block that is there and does not read is named in the log, the failing
+/// part at a time (§15.2) — one bad item does not throw the good ones away,
+/// and the sum is taken over what survived. A block that is not there at all
+/// is an older CLI's frame, and says nothing worth a line (§31.4 末行).
+///
+/// The reserve is the frame's own field, read after that check (§31.5's
+/// order): it follows even where not one producer item survived — the parts
+/// are unknown, the compaction line is not, and one is a thing to draw.
+List<ContextSegment> _contextOf(
+  Map<String, Object?> update, {
+  required int used,
+  required int size,
+}) {
+  final meta = update['_meta'];
+  if (meta is! Map || !meta.containsKey(_contextKey)) return const [];
+  final block = meta[_contextKey];
+  if (block is! Map) {
+    appEvent(
+      'thincoder',
+      'a usage frame with no map under $_contextKey: $block',
+    );
+    return const [];
+  }
+  final listed = block['segments'];
+  if (listed is! List) {
+    appEvent(
+      'thincoder',
+      'a context frame whose segments is not a list: $block',
+    );
+    return const [];
+  }
+  final segments = <ContextSegment>[];
+  for (final item in listed) {
+    if (item is! Map) {
+      appEvent('thincoder', 'a context segment that is not a map: $item');
+      continue;
+    }
+    final name = item['name'];
+    if (name is! String || name.isEmpty) {
+      appEvent('thincoder', 'a context segment with no name: $item');
+      continue;
+    }
+    final tokens = _count(item['tokens']);
+    if (tokens == null) {
+      appEvent(
+        'thincoder',
+        'a context segment whose tokens is not a count: $item',
+      );
+      continue;
+    }
+    // The CLI's count under the CLI's name: the panel knows the parts it
+    // draws and shows any other name as it came (§31.5 末段).
+    segments.add(ContextSegment(name, tokens));
+  }
+  final sum = segments.fold(0, (sum, segment) => sum + segment.tokens);
+  if (sum > used) {
+    final basis = switch (block['basis']) {
+      final String basis when basis.isNotEmpty => basis,
+      _ => 'not told',
+    };
+    appEvent(
+      'thincoder',
+      'a context frame whose segments add up to $sum, more than its used '
+      '$used (basis: $basis)',
+    );
+    return const [];
+  }
+  // The room the auto-compaction line keeps back (§31.1 ⑤) — the panel's own
+  // reserve cell, and its compaction point: `size − threshold`. A line that
+  // is missing or outside the window keeps nothing back; not drawn is better
+  // than drawn wrong (§31.5).
+  final threshold = _count(block['threshold']);
+  if (threshold != null && threshold > 0 && threshold < size) {
+    segments.add(
+      ContextSegment('', size - threshold, kind: ContextKind.buffer),
+    );
+  }
+  return segments;
+}
