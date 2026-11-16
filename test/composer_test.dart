@@ -47,7 +47,7 @@ import 'package:baocode/chat/panels/context_usage_panel.dart';
 import 'package:baocode/keybindings/keybinding_service.dart';
 import 'package:baocode/platform/native_md_clipboard.dart';
 import 'package:baocode/theme/app_theme.dart';
-import 'package:baocode/theme/workbench_theme.dart';
+import 'package:baocode/chat/composer/pickers_row.dart';
 
 Future<ChatSession> pumpScreen(
   WidgetTester tester, {
@@ -509,11 +509,13 @@ void main() {
     expect(find.byType(ContextUsagePanel), findsNothing);
   });
 
-  testWidgets('two approvals are a switch at the end, five a menu (T61)', (
-    tester,
-  ) async {
+  testWidgets('two approvals and five are one menu (T61)', (tester) async {
+    // A thincoder session over an agent that reports what it is made with;
+    // its approval face is the left cluster's pill, as Claude Code's is.
     ThincoderMock? agent;
     late final KernelDescriptor thincoder;
+    ThincoderMock Function() makeAgent = () =>
+        ThincoderMock(autoApprove: false);
     thincoder = KernelDescriptor(
       id: 'thincoder',
       label: 'thincoder',
@@ -522,77 +524,144 @@ void main() {
       create: (context) => ThincoderKernel(
         thincoder,
         context,
-        start: (_) async => agent = ThincoderMock(autoApprove: false),
+        start: (_) async => agent = makeAgent(),
         launch: ThincoderMock.launch,
       ),
     );
-    final session = ChatSession(
-      kernel: thincoder,
-      kernels: [thincoder],
-      historyCount: 0,
-    );
-    addTearDown(session.dispose);
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: buildAppTheme(),
-        home: ChatScreen(session: session),
-      ),
-    );
-    await tester.pump();
-    await tester.pump();
+    Future<ChatSession> showThincoder() async {
+      final session = ChatSession(
+        kernel: thincoder,
+        kernels: [thincoder],
+        historyCount: 0,
+      );
+      addTearDown(session.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildAppTheme(),
+          home: ChatScreen(session: session),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      return session;
+    }
 
-    final toggle = find.byType(ComposerPermissionSwitch);
-    Finder inside(Finder matching) =>
-        find.descendant(of: toggle, matching: matching);
-    final parts = inside(find.byType(AnimatedContainer));
-    AnimatedContainer part(int i) =>
-        tester.widget<AnimatedContainer>(parts.at(i));
-    Color? colorOf(int i) => (part(i).decoration! as BoxDecoration).color;
+    // The view left: the kernel lets go a tick later, which has to run.
+    Future<void> leave() async {
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+      await tester.pump(Duration.zero);
+    }
 
-    // Off: the knob left, its track colorless; no pill as well.
-    expect(toggle, findsOneWidget);
-    expect(part(0).alignment, Alignment.centerLeft);
-    expect(colorOf(0), Colors.transparent);
-    expect(colorOf(1), AppColors.textMuted);
-    expect(inside(find.byType(Text)), findsNothing);
-    expect(inside(find.byType(Icon)), findsNothing);
+    // The approval pill: the left cluster's picker, reading [label].
+    Finder pill(String label) => find.descendant(
+      of: find.byType(PickersRow),
+      matching: find.widgetWithText(ComposerPicker, label),
+    );
+    Future<void> open(Finder of) async {
+      await tester.tap(of);
+      await settleAnimations(tester);
+    }
+
+    // Two options: a pill reading the one in effect, over both of them.
+    await showThincoder();
+    expect(pill('Ask'), findsOneWidget);
     expect(
       find.descendant(
-        of: find.byType(ComposerPicker),
-        matching: find.text('Ask'),
+        of: pill('Ask'),
+        matching: find.byIcon(Icons.front_hand_outlined),
       ),
-      findsNothing,
+      findsOneWidget,
+    );
+    await open(pill('Ask'));
+    expect(find.text('How should thincoder get approval?'), findsOneWidget);
+    expect(find.text('Ask'), findsNWidgets(2)); // the pill, and its row
+    expect(find.text('Auto'), findsOneWidget);
+    expect(find.text('Ask before each tool call'), findsOneWidget);
+    expect(
+      find.text(
+        'Tools run without asking — the same switch as /auto in the terminal',
+      ),
+      findsOneWidget,
     );
 
-    // A press writes the boolean; the switch turns once the agent says so.
-    await tester.tap(toggle);
-    await tester.pump();
+    // Picked, it writes the boolean; the pill turns once the agent says so.
+    await tester.tap(find.text('Auto'));
+    await settleAnimations(tester);
     expect(agent!.requests('session/set_config_option').single['params'], {
       'sessionId': '1',
       'configId': 'autoApprove',
       'value': true,
     });
-    await tester.pump();
-    expect(part(0).alignment, Alignment.centerRight);
-    expect(colorOf(0), AppColors.autoTrack);
-    expect(colorOf(1), themeColors['button.foreground']);
-
-    // Five (Claude Code) stay the cluster's menu.
-    await tester.pumpWidget(const SizedBox());
-    // Leaving the view asks the kernel to let go; it does so a tick later, so
-    // the tick has to run before the test ends with it pending.
-    await tester.pump();
-    await tester.pump(Duration.zero);
-    await pumpScreen(tester);
-    await tester.pump();
-    expect(find.byType(ComposerPermissionSwitch), findsNothing);
+    expect(pill('Auto'), findsOneWidget);
     expect(
       find.descendant(
-        of: find.byType(ComposerPicker),
-        matching: find.text('Ask for approval'),
+        of: pill('Auto'),
+        matching: find.byIcon(Icons.fast_forward_rounded),
       ),
       findsOneWidget,
     );
+    expect(
+      tester
+          .widget<Text>(
+            find.descendant(of: pill('Auto'), matching: find.text('Auto')),
+          )
+          .style
+          ?.color,
+      AppColors.caution,
+    );
+    // Picked: the menu is done with.
+    expect(find.text('Ask before each tool call'), findsNothing);
+
+    // And back: the same menu, the other row.
+    await open(pill('Auto'));
+    await tester.tap(find.text('Ask'));
+    await settleAnimations(tester);
+    expect(agent!.requests('session/set_config_option').last['params'], {
+      'sessionId': '1',
+      'configId': 'autoApprove',
+      'value': false,
+    });
+    expect(pill('Ask'), findsOneWidget);
+
+    // A CLI with no autoApprove: nothing to pick, so no pill at all.
+    makeAgent = () => ThincoderMock();
+    await leave();
+    final oldCli = await showThincoder();
+    expect(oldCli.permissions, isNull);
+    expect(pill('Ask'), findsNothing);
+    expect(pill('Auto'), findsNothing);
+
+    // The write refused: the pill keeps what the agent reported, no throw.
+    makeAgent = () => ThincoderMock(autoApprove: false, configError: true);
+    await leave();
+    await showThincoder();
+    await open(pill('Ask'));
+    await tester.tap(find.text('Auto'));
+    await settleAnimations(tester);
+    expect(agent!.requests('session/set_config_option').single['params'], {
+      'sessionId': '1',
+      'configId': 'autoApprove',
+      'value': true,
+    });
+    expect(pill('Ask'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    // Five (Claude Code): the same pill, its own five rows in it.
+    await leave();
+    await pumpScreen(tester);
+    await tester.pump();
+    final claude = pill('Ask for approval');
+    expect(claude, findsOneWidget);
+    await open(claude);
+    expect(find.text('Ask for approval'), findsNWidgets(2)); // pill + row
+    expect(find.text('Accept edits'), findsOneWidget);
+    expect(find.text('Approve for me'), findsOneWidget);
+    expect(find.text("Don't ask"), findsOneWidget);
+    expect(find.text('Full access'), findsOneWidget);
+    // Closed, as a pick would: nothing left open at the test's end.
+    await tester.tap(claude);
+    await settleAnimations(tester);
   });
 
   testWidgets('history stays pinned to the bottom as panels open', (

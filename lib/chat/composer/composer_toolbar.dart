@@ -55,8 +55,7 @@ Widget _buildToolbarOf(ChatComposerState state) {
                     ),
                     const SizedBox(width: 2),
                   ],
-                  if (permission != null &&
-                      permission.options.length != 2) ...[
+                  if (permission != null) ...[
                     ComposerPicker(
                       options: [
                         for (final option in permission.options)
@@ -87,17 +86,6 @@ Widget _buildToolbarOf(ChatComposerState state) {
           ),
         ),
         const SizedBox(width: 8),
-        if (permission != null && permission.options.length == 2) ...[
-          ComposerPermissionSwitch(
-            permission: KernelChoice(
-              options: [for (final o in permission.options) localized(o)],
-              selected: localized(permission.selected),
-              onSelected: permission.onSelected,
-            ),
-            title: l10n.composerApprovalTitle(session.kernel.label),
-          ),
-          const SizedBox(width: 2),
-        ],
         if (ComposerPolishSetting.current()) ...[
           _PolishButton(
             busy: state._polishing,
@@ -129,61 +117,4 @@ Widget _buildToolbarOf(ChatComposerState state) {
       ],
     ),
   );
-}
-
-/// A two-option permission as a switch: the knob's side, the track's color.
-class ComposerPermissionSwitch extends StatelessWidget {
-  const ComposerPermissionSwitch({
-    super.key,
-    required this.permission, required this.title,
-  });
-
-  /// The options, the one in effect, and how to pick the other (localized);
-  /// and the title for its tooltip, followed by the pick's description.
-  final KernelChoice permission;
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    final on = permission.selected.id == permission.options[1].id;
-    final next = permission.options[on ? 0 : 1];
-    final colors = themeColors;
-    return IdeHover(
-      message: [title, next.description].where((e) => e.isNotEmpty).join(' · '),
-      child: HoverBuilder(
-        cursor: SystemMouseCursors.click,
-        builder: (context, hovered) => Semantics(
-          toggled: on, label: title,
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () => permission.onSelected(next),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 140),
-              curve: Curves.easeOut,
-              width: 35, height: 20,
-              margin: const EdgeInsets.symmetric(vertical: 1),
-              padding: const EdgeInsets.all(2),
-              alignment: on ? Alignment.centerRight : Alignment.centerLeft,
-              decoration: BoxDecoration(
-                color: on ? AppColors.autoTrack : hovered
-                    ? colors['toolbar.hoverBackground']
-                    : Colors.transparent,
-                border: on ? null : Border.all(color: AppColors.textFaint),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 140),
-                curve: Curves.easeOut,
-                width: 16, height: 16,
-                decoration: BoxDecoration(
-                  color: on ? colors['button.foreground'] : AppColors.textMuted,
-                  shape: BoxShape.circle,
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }
