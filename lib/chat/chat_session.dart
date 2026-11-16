@@ -1229,6 +1229,7 @@ class ChatSession extends ChangeNotifier
     List<String> notes = const [],
   }) {
     if (message.isEmpty || !canSend) return;
+    if (from != null) userSent?.call();
     final takesContext = acceptsEditorContext;
     final open = takesContext && editorContext && EditorContextSetting.current()
         ? editor?.call()
@@ -1258,6 +1259,10 @@ class ChatSession extends ChangeNotifier
     );
     _kernel.send(turn);
   }
+
+  /// Told of each message the user sends (not the app): main() counts
+  /// them for [BaoBash.newUser].
+  static void Function()? userSent;
 
   static final _random = math.Random.secure();
 

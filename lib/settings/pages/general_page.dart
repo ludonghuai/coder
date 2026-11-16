@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
+import '../../bash_exe/bao_bash.dart';
+import '../../bash_exe/bao_bash_view.dart';
 import '../../ide/explorer_excludes.dart';
 import '../../ide/ide_button.dart';
 import '../../ide/ide_menu.dart';
@@ -26,6 +28,7 @@ import '../../tips/feature_tips_controller.dart';
 import '../../tips/feature_tips_view.dart';
 import '../../window/window_settings.dart';
 import '../../workspace/main_window.dart';
+import '../../workspace/session_tools.dart';
 import '../shell_command_actions.dart';
 import '../user_settings.dart';
 import 'settings_dropdown.dart';
@@ -36,11 +39,11 @@ import 'settings_widgets.dart';
 /// come back and close (`window.*`), who the commits and pull requests
 /// agents write credit (`chat.commitAttribution` in settings.json), when a
 /// message sent while the agent works is taken up (`chat.queuedMessages`),
-/// whether the app sends its usage data (`telemetry.telemetryLevel`), whether
-/// the next prompt is suggested after each turn (`chat.promptSuggestions`),
-/// whether the composer has its Polish button (`chat.composer.polish`),
-/// whether the turn under way shows its time and speed (`chat.liveTurn.*`),
-/// the Claude Code to run (`claudeCode.path`), the thincoder to run
+/// whether the next prompt is suggested after each turn
+/// (`chat.promptSuggestions`), whether the composer has its Polish button
+/// (`chat.composer.polish`), whether the turn under way shows its time,
+/// speed and tokens (`chat.liveTurnStats`), the Claude Code to run
+/// (`claudeCode.path`), BaoCode Bash on Windows, the thincoder to run
 /// (`thincoder.path`), the `code` shell command, and Open with BaoCode in
 /// Finder's or Explorer's context menu. A choice is written at once; the
 /// default is not written.
@@ -51,6 +54,7 @@ class GeneralSettingsPage extends StatelessWidget {
     this.tips,
     this.claudeStatus,
     this.thincoderStatus,
+    this.bash,
   });
 
   /// settings.json; none under test, where choices are not kept.
@@ -63,6 +67,9 @@ class GeneralSettingsPage extends StatelessWidget {
   /// The thincoder that runs now ([thincoderStatus]); none under test and
   /// on the web, where the path is not shown.
   final Future<ThincoderStatus> Function()? thincoderStatus;
+
+  /// BaoCode Bash, where it is offered (Windows); none under test.
+  final BaoBash? bash;
 
   /// The feature tips: those not on yet are listed first.
   final FeatureTipsController? tips;
@@ -396,6 +403,15 @@ class GeneralSettingsPage extends StatelessWidget {
                   ),
                 ),
                 SettingsSwitchRow(
+                  label: l10n.generalSettingsSessionTools,
+                  description: l10n.generalSettingsSessionToolsDescription,
+                  value: SessionToolsSetting.enabled(
+                    settings?[SessionToolsSetting.settingKey],
+                  ),
+                  onChanged: (on) =>
+                      _write(SessionToolsSetting.settingKey, on ? true : null),
+                ),
+                SettingsSwitchRow(
                   label: l10n.generalSettingsComposerPolish,
                   description: l10n.generalSettingsComposerPolishDescription,
                   value: ComposerPolishSetting.enabled(
@@ -466,6 +482,13 @@ class GeneralSettingsPage extends StatelessWidget {
                       path.isEmpty ? null : path,
                     ),
                   ),
+                ],
+              ),
+            if (bash case final bash?)
+              SettingsGroup(
+                title: l10n.generalSettingsCommandLine,
+                children: [
+                  SettingsCard(children: [BaoBashSetting(bash: bash)]),
                 ],
               ),
             SettingsGroup(

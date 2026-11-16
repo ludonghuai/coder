@@ -158,6 +158,7 @@ void _acceptOf(ChatComposerState state, int index) {
 }
 
 KeyEventResult _handleKeyOf(ChatComposerState state, KeyEvent event) {
+  if (event is! KeyUpEvent) state._lag.begin('key');
   if (event is KeyUpEvent || state._isComposing) return KeyEventResult.ignored;
   // Run by the window's keybindings (it sees keys first).
   if (ChatKeys.isHandled(event)) return KeyEventResult.handled;

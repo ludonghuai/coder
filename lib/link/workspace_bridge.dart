@@ -14,6 +14,8 @@ import '../bots/bots.dart';
 import '../chat/chat_models.dart';
 import '../chat/chat_session.dart';
 import '../chat/composer/composer_files.dart' show fileReferenceText;
+import '../chat/composer/paste_store.dart';
+import '../chat/composer/remote_drops.dart';
 import '../chat/panels/context_usage_panel.dart' show ContextUsagePanel;
 import '../chat/rewind_files_setting.dart';
 import '../customize/customization_store.dart';
@@ -34,6 +36,21 @@ typedef ProjectFiles = ({IdeFileService files, p.Context paths});
 ProjectFiles hostFilesOf(Project project) {
   final host = ProjectHost.of(project.path);
   return (files: host.files(host.pathOf(project.path)), paths: host.paths);
+}
+
+/// Where the files the phone sends for [project]'s agent go
+/// ([LinkMethods.upload]), on its host through [files]: a remote one's
+/// drops folder, as files let go on its composer; here, by the long
+/// pastes. Its agent reads both without asking (see
+/// [ClaudeLaunch.readable]). Null where there is none (the web).
+String? phoneUploadsOf(Project project, IdeFileService files) {
+  if (ProjectHost.of(project.path) is SshHost) {
+    return RemoteDrops.folderOf(files);
+  }
+  return switch (PasteStore.directory) {
+    final pastes? => p.join(pastes, 'phone'),
+    null => null,
+  };
 }
 
 /// [project]'s host connected, if it is one over SSH: as a window opened on
@@ -62,6 +79,7 @@ class WorkspaceBridge {
     this.branchOf,
     this.filesOf = hostFilesOf,
     this.reachHost = reachProjectHost,
+    this.uploadsOf = phoneUploadsOf,
     this.customizations,
     this.bots,
     this.throttle = const Duration(milliseconds: 150),
@@ -82,6 +100,9 @@ class WorkspaceBridge {
 
   /// A project's host connected before its files are asked of it.
   final Future<void> Function(Project project) reachHost;
+
+  /// Where a project's agent finds the phone's files ([phoneUploadsOf]).
+  final String? Function(Project project, IdeFileService files) uploadsOf;
 
   /// [project]'s host reached ([reachHost]); one that cannot be, said to
   /// the phone as such ([LinkErrors.unreachable]), not as files missing.
@@ -299,6 +320,11 @@ class WorkspaceBridge {
       unread: groups.unread(group.id),
       last: last,
       updatedAt: last?.at ?? group.created,
+      holder: groups.relay(group.id).holder,
+      passesLeft: groups.relay(group.id).left,
+      passes: group.passes,
+      rules: group.rules,
+      gap: group.gap,
     );
   }
 
@@ -369,11 +395,13 @@ class WorkspaceBridge {
       model: bots.modelOf(bot),
       assistant: bot.assistant,
       chatOnly: bot.chatOnly,
+      writesFirst: bot.writesFirst,
       session: session,
       status: bots.typing(bot) ? BotStatus.typing : BotStatus.idle,
       unread: bots.unread(bot),
       last: bots.lastLine(bot),
-      updatedAt: thread?.updatedAt,
+      // Its chat's, not its groups'.
+      updatedAt: bots.chattedAt(bot),
       notices: bots.notices(bot),
     );
   }
@@ -493,7 +521,12 @@ class WorkspaceBridge {
           window: params['window'] as int?,
           pathOf: (full) => _phonePath(thread.project, full),
         );
-        return follow.start();
+        return follow.start(
+          have: [
+            for (final digest in (params['have'] as List?) ?? const [])
+              if (digest is String) digest,
+          ],
+        );
       case LinkMethods.earlier:
         final follow = _follows[params['session']];
         if (follow == null) {
@@ -707,6 +740,8 @@ class WorkspaceBridge {
           _filesProject(params),
           params['path'] as String? ?? '',
         );
+      case LinkMethods.upload:
+        return _upload(_filesProject(params), params);
       case LinkMethods.extensions:
         return {
           'items': [for (final item in await _extensions()) item.toJson()],
@@ -736,6 +771,7 @@ class WorkspaceBridge {
           avatarImage: _avatarImage(params['avatarImage']),
           // Not said (a phone from before): as it was.
           chatOnly: params['chatOnly'] as bool?,
+          writesFirst: params['writesFirst'] as bool?,
         );
         return {'bot': _linkBot(bots, saved).toJson()};
       case LinkMethods.botAvatar:
@@ -778,6 +814,9 @@ class WorkspaceBridge {
             for (final member in (params['members'] as List?) ?? const [])
               if (member is String) member,
           ],
+          passes: (params['passes'] as num?)?.toInt(),
+          rules: params['rules'] as String?,
+          gap: (params['gap'] as num?)?.toInt(),
         );
         return {'group': _linkGroup(_groups(), group).toJson()};
       case LinkMethods.deleteGroup:
@@ -812,7 +851,12 @@ class WorkspaceBridge {
           if (_taken[key] case final taken?) return taken;
         }
         final answer = Future<Object?>.value({
-          'seq': _groups().send(group.id, text: text, images: images),
+          'seq': _groups().send(
+            group.id,
+            text: text,
+            images: images,
+            ref: (params['ref'] as num?)?.toInt(),
+          ),
         });
         if (key != null) {
           _taken[key] = answer;
@@ -956,6 +1000,54 @@ class WorkspaceBridge {
     throw LinkRemoteException(LinkErrors.notFound, 'No file $path');
   }
 
+  /// The phone's file in [params] ([LinkMethods.upload]) put where
+  /// [project]'s agent reads it ([uploadsOf]): in a folder of its own, so
+  /// that it keeps its name.
+  Future<Map<String, Object?>> _upload(
+    Project project,
+    Map<String, Object?> params,
+  ) async {
+    final Uint8List bytes;
+    try {
+      bytes = base64Decode(params['data'] as String? ?? '');
+    } on FormatException {
+      throw const LinkRemoteException('bad', 'Not base64');
+    }
+    if (bytes.length > LinkLimits.upload) {
+      return {'tooLarge': true, 'size': bytes.length};
+    }
+    await _reach(project);
+    final (:files, :paths) = _filesOf(project);
+    final folder = uploadsOf(project, files);
+    if (folder == null) {
+      throw const LinkRemoteException(LinkErrors.unsupported, 'No files');
+    }
+    final into = paths.join(
+      folder,
+      DateTime.now().microsecondsSinceEpoch.toRadixString(36),
+    );
+    for (final directory in [paths.dirname(folder), folder, into]) {
+      try {
+        await files.create(directory, directory: true);
+      } on IdeFileExistsException {
+        // Made before.
+      }
+    }
+    final path = paths.join(into, uploadName(params['name']));
+    await files.writeBytes(path, bytes);
+    return {'path': path};
+  }
+
+  /// [name], the phone's for a file it sends, as one to keep it by on any
+  /// host: no folders, nothing Windows refuses.
+  @visibleForTesting
+  static String uploadName(Object? name) {
+    final last = '${name ?? ''}'.split(RegExp(r'[/\\]')).last;
+    final kept = last.replaceAll(RegExp(r'[\x00-\x1f<>:"|?*]'), '_').trim();
+    if (kept.isEmpty || kept == '.' || kept == '..') return 'file';
+    return kept;
+  }
+
   static const _imageTypes = {
     'image/png',
     'image/jpeg',
@@ -1036,11 +1128,12 @@ class WorkspaceBridge {
   }
 
   /// The folders [project]'s files are in, each with the name the phone
-  /// gives it: a folder's project, its own, unnamed; a workspace's, each of
-  /// its folders under its name, as VS Code's Explorer has them (not the
-  /// workspace's own folder, which holds only its settings).
+  /// gives it: a folder's project, its own, unnamed; a workspace's (or a
+  /// project's with folders added to it), each of its folders under its
+  /// name, as VS Code's Explorer has them (not the workspace's own folder,
+  /// which holds only its settings).
   List<(String, String)> _rootsOf(Project project) {
-    final folders = workspace.workspaceOf(project)?.folders ?? const [];
+    final folders = workspace.multiRootAt(project.path)?.folders ?? const [];
     if (folders.isEmpty) return [('', project.root)];
     final paths = _filesOf(project).paths;
     final taken = <String>{};
@@ -1362,7 +1455,11 @@ class _Follow {
   /// [_update] when it was sent.
   Object? _before;
 
-  Map<String, Object?> start() {
+  /// Follows [session]: all of it at first, or the last of it with a
+  /// [window]. What the phone [have]s of it from before ([linkDigest]s of
+  /// its items, its first to its last), where it is found: from there,
+  /// those that are still as it has them left out.
+  Map<String, Object?> start({List<String> have = const []}) {
     _prependedSeen = session.prependedCount;
     if (window case final window?) {
       _from = math.max(0, session.itemCount - window);
@@ -1370,7 +1467,45 @@ class _Follow {
     session
       ..attach()
       ..addListener(_changed);
+    if (_had(have) case (:final from, :final same)) {
+      _from = from;
+      _sent = [for (var i = from; i < from + same; i++) session.itemAt(i)];
+      _sentJson = [
+        for (final item in _sent) jsonEncode(ChatCodec.encode(item)),
+      ];
+      _restSent = null;
+      if (_update() case final update?) {
+        return _slimmer.encode(update, full: true);
+      }
+    }
     return _slimmer.encode(_update(full: true)!, full: true);
+  }
+
+  /// Where the phone's first item ([have]'s) is in the session, and how
+  /// many from there are as it has them: the most; null where none is
+  /// (or the phone has nothing).
+  ({int from, int same})? _had(List<String> have) {
+    if (have.isEmpty) return null;
+    final total = session.itemCount;
+    // Looked for among the last items: as many as the phone has and as
+    // came since, and a window more.
+    final lowest = math.max(0, total - have.length - (window ?? 0) - 200);
+    final digests = <int, String>{};
+    String digestAt(int i) =>
+        digests[i] ??= linkDigest(ChatCodec.encode(session.itemAt(i)));
+    ({int from, int same})? best;
+    for (var from = total - 1; from >= lowest; from--) {
+      if (digestAt(from) != have.first) continue;
+      var same = 1;
+      while (same < have.length &&
+          from + same < total &&
+          digestAt(from + same) == have[same]) {
+        same++;
+      }
+      if (best == null || same > best.same) best = (from: from, same: same);
+      if (same == have.length) break;
+    }
+    return best;
   }
 
   void _changed() {

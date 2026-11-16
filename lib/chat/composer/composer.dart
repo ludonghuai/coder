@@ -25,6 +25,7 @@ import '../stop_confirmation.dart';
 import '../floating/floating_layer.dart';
 import '../floating/floating_placement.dart';
 import '../floating/floating_registry.dart';
+import '../../diagnostics/input_lag.dart';
 import '../../workspace/window_controls.dart';
 import '../widgets/context_meter.dart';
 import '../widgets/hover_builder.dart';
@@ -46,8 +47,10 @@ import 'suggestion_menu.dart';
 import '../../ide/ide_hover.dart';
 import '../../ide/ide_spinning.dart';
 import '../../theme/codicons.dart';
-import '../../ide/file_service.dart' show IdeFileService;
+import '../../ide/file_service.dart'
+    show IdeFileService, TransferCancelledException;
 import '../../ide/ide_notifications.dart';
+import '../../ide/transfer_progress.dart';
 import 'remote_drops.dart';
 
 part 'composer_toolbar.dart';
@@ -166,6 +169,18 @@ class ChatComposerState extends State<ChatComposer>
   final FocusNode _focusNode = FocusNode(debugLabel: 'Composer');
   final ScrollController _scrollController = ScrollController();
   final GlobalKey<MarkdownEditorState> _editorKey = GlobalKey();
+
+  /// Keys and edits, timed to the frame that shows them: typing fast
+  /// stuck for seconds on an Intel Mac with no frame or hang written
+  /// (E0A7T8YQ).
+  late final InputLag _lag = InputLag(
+    'chat input',
+    describe: () => [
+      'text ${_controller.length} chars, '
+          '${_controller.lines.lineCount} lines',
+      if (_pool.isNotEmpty) '${_pool.length} images',
+    ].join('; '),
+  );
   final GlobalKey _boxKey = GlobalKey();
   final GlobalKey<ComposerPickerState> _modePickerKey = GlobalKey();
   final GlobalKey<ComposerPickerState> _modelPickerKey = GlobalKey();
@@ -255,8 +270,10 @@ class ChatComposerState extends State<ChatComposer>
 
   // --- Images --------------------------------------------------------------
 
-  /// At most this many per message.
-  static const _maxImages = 20;
+  /// At most this many per message: the API takes 100 a request on its
+  /// 200K-context models (600 on the others), each made small enough
+  /// ([prepareImage]) for its limit on requests of over 20.
+  static const _maxImages = 100;
 
   Iterable<({int number, int offset})> _references() => _referencesOf(this);
 
@@ -349,7 +366,7 @@ class ChatComposerState extends State<ChatComposer>
   int? _wordsVersion;
   bool _words = false;
 
-  void _handleEditorChanged() => _handleEditorChangedOf(this);
+  void _handleEditorChanged() => _lag.time('edit', () => _handleEditorChangedOf(this));
 
   int _lookups = 0;
 

@@ -254,46 +254,27 @@ Future<void> insertFilesOf(
 Future<List<ComposerFile>?> _copyToHostOf(ChatComposerState state, List<ComposerFile> files) async {
   final notifications = IdeNotificationsScope.maybeOf(state.context);
   final l10n = state.context.l10n;
-  var done = 0;
-  var total = files.length;
-  IdeNotification? shown;
-  IdeNotificationProgress progress() =>
-      IdeNotificationProgress(done.toDouble(), total: total.toDouble());
-  final timer = notifications == null
-      ? null
-      : Timer(const Duration(milliseconds: 300), () {
-          shown = notifications.notify(
-            IdeSeverity.info,
-            l10n.explorerUploading(done, total),
-            progress: progress(),
-            sticky: true,
-          );
-        });
   try {
-    return await RemoteDrops.copy(
-      state.widget.hostFiles!,
-      files,
-      onProgress: (worked, of) {
-        done = worked;
-        total = of;
-        if (shown case final shown?) {
-          notifications!.update(
-            shown,
-            message: l10n.explorerUploading(done, total),
-            progress: progress(),
-          );
-        }
-      },
+    return await withTransferProgress(
+      state.context,
+      l10n.explorerUploading,
+      (transfer) => RemoteDrops.copy(
+        state.widget.hostFiles!,
+        files,
+        onProgress: transfer.onProgress,
+        onFile: transfer.onFile,
+        cancel: transfer.cancel,
+      ),
+      cancellable: true,
     );
+  } on TransferCancelledException {
+    return null;
   } on Object catch (error) {
     notifications?.notify(
       IdeSeverity.error,
       l10n.composerCopyToHostFailed('$error'),
     );
     return null;
-  } finally {
-    timer?.cancel();
-    if (shown case final shown?) notifications!.close(shown);
   }
 }
 
@@ -413,7 +394,7 @@ void _handleEditorChangedOf(ChatComposerState state) {
   if (state._ghosting) return;
   if (state._padTrailingTokens()) return; // Re-entered with the fixed text.
   state._images = state._referredImages();
-  state._saveDraft();
+  state._lag.time('draft', state._saveDraft);
   final text = state._controller.text;
   // Edited, a message recalled from the history is the one typed.
   if (state._historyAt != null && !state._recalling && text != state._historyShown) {

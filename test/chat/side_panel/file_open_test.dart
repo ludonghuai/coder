@@ -11,6 +11,8 @@ import 'package:path/path.dart' as p;
 /// run on Windows too).
 final _root = p.normalize('/Users/me/Desktop');
 final _read = p.normalize('/Users/me/Documents/app/lib/chat/step_folds.dart');
+/// [_read] as a link spells it: a `/`-spelled path, as an agent's own.
+const _readHref = '/Users/me/Documents/app/lib/chat/step_folds.dart';
 
 void main() {
   /// The scope of a conversation in [_root] whose agent read [_read].
@@ -105,10 +107,12 @@ void main() {
     test('`local:` in a local project, `ssh://` to the project\'s host: '
         'as the path alone', () async {
       final opened = <FileOpenRequest>[];
-      click(scope(opened), 'local:$_read');
+      click(scope(opened), 'local:$_readHref');
       click(remote(opened), 'ssh://devbox$onHost#L2');
       await pumpEventQueue();
-      expect([for (final request in opened) request.path], [_read, onHost]);
+      expect([
+        for (final request in opened) request.path,
+      ], [_read, p.normalize(onHost)]);
       expect(opened.every((request) => !request.local), isTrue);
       expect(opened.last.range, FileLineRange(2));
     });
@@ -151,11 +155,66 @@ void main() {
         [for (final request in opened) (request.path, request.local)],
         unorderedEquals([
           (here, true),
-          (onHost, false),
+          (p.normalize(onHost), false),
           // Nowhere: where the agent works, which says it is not there.
-          ('/nowhere/c.md', false),
+          (p.normalize('/nowhere/c.md'), false),
         ]),
       );
+    });
+  });
+
+  group('a folder', () {
+    // The test file's own root is not a constant (it spells as the host
+    // does, see [_root]), so neither are these.
+    final folder = p.join(_root, 'lib', 'chat');
+    final makefile = p.join(_root, 'Makefile');
+
+    FileOpenScope withFolders(
+      List<FileOpenRequest> opened,
+      List<String> folders,
+    ) => FileOpenScope(
+      root: _root,
+      onOpen: opened.add,
+      existence: FileExistence((path) async => path == makefile),
+      folders: FileExistence((path) async => path == folder),
+      onOpenFolder: folders.add,
+      child: const SizedBox(),
+    );
+
+    void click(GestureRecognizer? recognizer) =>
+        (recognizer! as TapGestureRecognizer).onTap!();
+
+    test('a link to one in the project shows it in the tree', () async {
+      final opened = <FileOpenRequest>[];
+      final folders = <String>[];
+      final files = withFolders(opened, folders);
+      click(files.linkRecognizer('lib/chat'));
+      click(files.linkRecognizer('lib/chat/'));
+      await pumpEventQueue();
+      expect(folders, [folder, folder]);
+      expect(opened, isEmpty);
+    });
+
+    test('a file with no extension still opens as a file', () async {
+      final opened = <FileOpenRequest>[];
+      final folders = <String>[];
+      click(withFolders(opened, folders).linkRecognizer('Makefile'));
+      await pumpEventQueue();
+      expect(opened.single.path, makefile);
+      expect(folders, isEmpty);
+    });
+
+    test('inline code naming one with its folders is a link once known, '
+        'a word alone never', () async {
+      final folders = <String>[];
+      final files = withFolders([], folders);
+      expect(files.codeRecognizer('lib/chat'), isNull);
+      await pumpEventQueue();
+      expect(files.codeRecognizer('lib/chat'), isNull);
+      await pumpEventQueue();
+      click(files.codeRecognizer('lib/chat'));
+      expect(folders, [folder]);
+      expect(files.codeRecognizer('lib'), isNull);
     });
   });
 }
