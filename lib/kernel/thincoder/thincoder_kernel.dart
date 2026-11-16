@@ -58,6 +58,7 @@ class ThincoderKernel
         SelectsEffort,
         SelectsPermission,
         ReportsContext,
+        ReportsUsage,
         LoadsHistory,
         AcceptsImageFiles,
         AcceptsEditorContext,
@@ -227,6 +228,19 @@ class ThincoderKernel
 
   @override
   int get contextWindow => _events.contextWindow;
+
+  // --- Usage ------------------------------------------------------------------
+
+  /// The account's limits: there are none to know. thincoder keeps no
+  /// account window (F20's boundary), and an empty list says exactly that —
+  /// a window made up here would be one nobody could read (§30.1 ②).
+  @override
+  List<RateLimitWindow> get accountLimits => const [];
+
+  /// Nothing to ask for: what the agent reports is what there is, and it
+  /// has no window to report. No request goes out (§30.6 ①).
+  @override
+  Future<void> refreshUsage() => Future<void>.value();
 
   void _setHealth(KernelHealth health) {
     _health = health;

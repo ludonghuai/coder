@@ -5,9 +5,13 @@ import 'package:flutter/material.dart';
 import '../../chat/chat_models.dart';
 import '../../host_tools/host_tools.dart';
 import '../../platform/event_log.dart';
+import '../../usage/usage_prices.dart';
+import '../../usage/usage_record.dart';
 import '../kernel_event.dart';
 import '../kernel_types.dart';
 import 'thincoder_options.dart';
+
+part 'thincoder_usage.dart';
 
 /// Where the translation puts what it makes: the kernel, which holds the
 /// item space and the sequence numbers.
@@ -46,6 +50,39 @@ class ThincoderEvents {
   int _turnSpent = 0;
 
   int get turnSpent => _turnSpent;
+
+  /// The prompt cache as the extension frames told it (§30.4), all of them
+  /// since this session began. The third of the `CacheTokens` an agent
+  /// writes is never known here — it counts no writes — so `written` stays
+  /// 0 (§30.1 ④).
+  CacheTokens _cacheAll = const CacheTokens();
+
+  /// What the panel reads: the last request's cache and the conversation's,
+  /// null until a frame tells of one.
+  PromptCache? _cacheKnown;
+
+  /// What the session cost, by the desktop's price table (§30.1 ⑤); null
+  /// until a priced request is reported.
+  double? _costUsd;
+
+  /// The turn under way's own, as its requests reported themselves (§30.5):
+  /// null while every frame it sent was of the old two-field kind.
+  int? _turnInput;
+  int? _turnOutput;
+  double? _turnCost;
+
+  /// What this turn's requests said of themselves: the tokens the model read
+  /// and wrote, and what they cost; null when the turn reported no extension
+  /// frame at all — the kernel then says what it spent as the sum it always
+  /// had (`spentTokens`), never both (§30.5 末两行).
+  TurnUsage? get turnUsage =>
+      _turnInput == null && _turnOutput == null
+          ? null
+          : TurnUsage(
+              inputTokens: _turnInput,
+              outputTokens: _turnOutput,
+              costUsd: _turnCost,
+            );
 
   /// Which run of items this is (a turn, or a replay): item ids are
   /// `t<run>.<block>` (what the agent said) and `u<run>.<block>` (what was
@@ -110,6 +147,11 @@ class ThincoderEvents {
     _run++;
     _blocks = 0;
     _turnSpent = 0;
+    // The turn's split goes with its sum; the session's cache and cost stay
+    // as long as it does (`_spent`'s own life).
+    _turnInput = null;
+    _turnOutput = null;
+    _turnCost = null;
   }
 
   /// One `session/update`: what the agent says happened.
@@ -439,6 +481,35 @@ class ThincoderEvents {
     _turnSpent += used;
     final usage = ContextUsage(window: size, used: used, sessionSpent: _spent);
     _sink.emit(UsageReported(_sink.nextSeq, usage));
+    // What the frame carries beyond `used` (§30.4): the request's own tokens
+    // and its cache, priced where the table has a price. A block that does
+    // not read in full is named in the log by the parse itself.
+    final frame = _usageFrameOf(this, update);
+    if (frame.shape != _UsageShape.whole &&
+        frame.shape != _UsageShape.partial) {
+      return;
+    }
+    if (frame.cache case final cache?) {
+      _cacheAll += cache;
+      _cacheKnown = PromptCache(last: cache, conversation: _cacheAll);
+    }
+    if (frame.input case final input?) _turnInput = (_turnInput ?? 0) + input;
+    if (frame.output case final output?) {
+      _turnOutput = (_turnOutput ?? 0) + output;
+    }
+    if (frame.cost case final cost?) {
+      _costUsd = (_costUsd ?? 0) + cost;
+      _turnCost = (_turnCost ?? 0) + cost;
+    }
+    // A frame that told of nothing new (half a block, and neither count it
+    // could price) is still one the log has named: no stats of its own.
+    if (frame.cache == null && frame.cost == null) return;
+    _sink.emit(
+      StatsReported(
+        _sink.nextSeq,
+        UsageStats(cache: _cacheKnown, costUsd: _costUsd),
+      ),
+    );
   }
 
   // --- Subagents --------------------------------------------------------------

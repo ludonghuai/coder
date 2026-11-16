@@ -198,6 +198,11 @@ void _endTurnOf(ThincoderKernel owner, {required bool interrupted}) {
   owner._turnStarted = null;
   owner._firstFrame = null; // The turn's first frame is its own (§25.6).
   final spent = owner._events.turnSpent;
+  // A turn whose requests told of themselves says it as the split they make
+  // (its footer then reads the sum of the two, its hover the parts); one
+  // whose requests were of the old kind says the sum it always did. Only one
+  // of the two shapes, never both (§30.1 ⑥, §30.5).
+  final split = owner._events.turnUsage;
   owner.emit(
     TurnEnded(
       owner.nextSeq,
@@ -206,7 +211,7 @@ void _endTurnOf(ThincoderKernel owner, {required bool interrupted}) {
       worked: started == null
           ? null
           : DateTime.now().difference(started),
-      usage: spent == 0 ? null : TurnUsage(spentTokens: spent),
+      usage: split ?? (spent == 0 ? null : TurnUsage(spentTokens: spent)),
     ),
   );
   // The model picked while this turn ran goes before the next prompt

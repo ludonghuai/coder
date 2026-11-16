@@ -37,6 +37,8 @@ import 'package:baocode/kernel/transcript.dart';
 import 'package:baocode/l10n/l10n.dart';
 import 'package:baocode/platform/data_dir.dart';
 import 'package:baocode/platform/event_log.dart';
+import 'package:baocode/usage/usage_prices.dart';
+import 'package:baocode/usage/usage_record.dart';
 import 'package:baocode/workspace/preference_store.dart';
 import 'package:baocode/workspace/workspace.dart';
 import 'package:bao_remote/local.dart' show ClaudeEnvironment;
@@ -4929,6 +4931,299 @@ void main() {
       await settle();
       expect(agents.single.requests('session/set_title'), hasLength(1));
       expect(events.whereType<SessionRenamed>(), hasLength(1));
+    });
+  });
+
+  group('thincoder usage frames (F20, §30)', () {
+    /// The price the mock's model has, so that a frame's cost is a number;
+    /// the T144 case empties the table to see the other state.
+    const price = ModelPrice(input: 3, output: 15, cacheRead: 0.3);
+    late UsagePrices previous;
+
+    setUp(() {
+      previous = UsagePrices.current;
+      UsagePrices.current = UsagePrices({
+        UsagePrices.key('anthropic', 'claude-sonnet-5'): price,
+      });
+    });
+
+    tearDown(() => UsagePrices.current = previous);
+
+    /// One `usage_update` as the CLI writes it (§30.4): what the context
+    /// spent, the window, and the request's own counts under `_meta` — one
+    /// frame, one request. [usage] null is an older CLI's frame; anything
+    /// but a map is a block of the wrong shape.
+    Map<String, Object?> frame(
+      int used, {
+      Object? usage = const {'input': 900, 'output': 334, 'cacheRead': 700},
+    }) => {
+      'sessionUpdate': 'usage_update',
+      'used': used,
+      'size': 200000,
+      if (usage != null) '_meta': {'thincoder.dev/usage': usage},
+    };
+
+    /// A kernel over an agent the test scripts, ready.
+    Future<_Session> ready([List<Map<String, Object?>>? script]) async {
+      final s = _Session(make: () => ThincoderMock(turn: script));
+      addTearDown(s.dispose);
+      s.kernel.prepare();
+      await settle();
+      return s;
+    }
+
+    /// The request a whole frame tells of, as the table prices it: the input
+    /// it read from the cache, the rest of the prompt, and what it wrote.
+    UsageCall callOf({
+      int input = 900,
+      int output = 334,
+      int cacheRead = 700,
+    }) => UsageCall(
+      at: DateTime.now(),
+      duration: Duration.zero,
+      status: 200,
+      provider: 'anthropic',
+      model: 'claude-sonnet-5',
+      input: input - cacheRead,
+      output: output,
+      cacheRead: cacheRead,
+      stream: false,
+    );
+
+    /// A cache's three counts, as the panel reads them (`CacheTokens`
+    /// compares by value nowhere).
+    List<int> counts(CacheTokens tokens) =>
+        [tokens.read, tokens.written, tokens.uncached];
+
+    test('T140: a frame with the extension block is what the panel reads '
+        '(§30.8)', () async {
+      final s = await ready();
+
+      s.agent.push(_update(frame(1234)));
+      await settle();
+
+      final stats = s.events.whereType<StatsReported>().single.stats;
+      expect(counts(stats.cache!.last), [700, 0, 200]);
+      expect(counts(stats.cache!.conversation), [700, 0, 200]);
+      expect(stats.costUsd, closeTo(price.cost(callOf()), 1e-9));
+      // What the panel already showed is what it showed before (F10).
+      expect(s.events.whereType<UsageReported>(), hasLength(1));
+      expect(s.transcript.usage?.used, 1234);
+    });
+
+    test('T141: a CLI with no block is exactly what it was (§30.4 末行)',
+        () async {
+      final s = await ready();
+
+      s.agent.push(_update(frame(200, usage: null)));
+      await settle();
+
+      // Nothing of the extension: no stats, and the context as it always was.
+      expect(s.events.whereType<StatsReported>(), isEmpty);
+      expect(s.transcript.stats, isNull);
+      expect(s.transcript.usage?.used, 200);
+      expect(s.transcript.usage?.sessionSpent, 200);
+      expect(s.transcript.usage?.window, 200000);
+    });
+
+    test('T142: two requests add up, the last one the cache’s last (§30.5)',
+        () async {
+      final s = await ready();
+
+      s.agent.push(_update(frame(1000)));
+      await settle();
+      s.agent.push(
+        _update(
+          frame(
+            400,
+            usage: const {'input': 500, 'output': 100, 'cacheRead': 300},
+          ),
+        ),
+      );
+      await settle();
+
+      final stats = s.events.whereType<StatsReported>().last.stats;
+      expect(counts(stats.cache!.last), [300, 0, 200]);
+      expect(counts(stats.cache!.conversation), [1000, 0, 400]);
+    });
+
+    test('T143: the capability is reported, its limits are honestly empty, and '
+        'asking for them sends nothing (§30.1 ②)', () async {
+      final events = <KernelEvent>[];
+      final agents = <ThincoderMock>[];
+      late final KernelDescriptor descriptor;
+      late final ThincoderKernel kernel;
+      descriptor = KernelDescriptor(
+        id: 'thincoder-usage',
+        label: 'thincoder',
+        icon: Icons.smart_toy_outlined,
+        description: 'the test’s',
+        create: (context) {
+          kernel = ThincoderKernel(
+            descriptor,
+            context,
+            start: (_) async {
+              final agent = ThincoderMock(serialInbound: true);
+              agents.add(agent);
+              return agent;
+            },
+            launch: (cwd) async =>
+                ThincoderLaunch(cwd: cwd, executable: '/mock/thincoder'),
+          );
+          kernel.events.listen(events.add);
+          return kernel;
+        },
+      );
+      final session = ChatSession(
+        kernel: descriptor,
+        kernels: [descriptor],
+        historyCount: 0,
+      );
+      addTearDown(session.dispose);
+      session.attach();
+      await settle();
+
+      expect(kernel, isA<ReportsUsage>());
+      expect(kernel.accountLimits, isEmpty);
+      // The gate the panel reads is open — and says nothing is known yet,
+      // which is what an empty cache, no cost and no window read as (U21).
+      expect(session.stats, isNotNull);
+      expect(session.stats!.cache, isNull);
+      expect(session.stats!.costUsd, isNull);
+      expect(session.stats!.limits, isEmpty);
+
+      final wrote = agents.single.written.length;
+      session.refreshUsage();
+      await settle();
+      expect(agents.single.written, hasLength(wrote), reason: 'no request');
+      expect(kernel.health.status, KernelHealthStatus.ready);
+    });
+
+    test('T144: a priced model gives a cost, an unpriced one gives none — not '
+        'zero (§30.1 ⑤)', () async {
+      final priced = await ready();
+      priced.agent.push(_update(frame(1234)));
+      await settle();
+      expect(
+        priced.events.whereType<StatsReported>().single.stats.costUsd,
+        closeTo(price.cost(callOf()), 1e-9),
+      );
+
+      // The table emptied, then a session opened: the model has no price
+      // there, and a frame costs nothing known — not a made-up zero. (Priced
+      // per frame: what the first session already priced stays.)
+      UsagePrices.current = UsagePrices();
+      final unpriced = await ready();
+      unpriced.agent.push(_update(frame(1234)));
+      await settle();
+      final stats = unpriced.events.whereType<StatsReported>().single.stats;
+      expect(stats.costUsd, isNull);
+      expect(stats.cache, isNotNull, reason: 'the cache is known regardless');
+    });
+
+    test('T145: a turn’s requests are told as a split, an old CLI’s as the sum '
+        '(§30.1 ⑥)', () async {
+      final script = <Map<String, Object?>>[];
+      final s = await ready(script);
+
+      script.addAll([
+        frame(1000),
+        frame(
+          400,
+          usage: const {'input': 500, 'output': 100, 'cacheRead': 300},
+        ),
+      ]);
+      s.send('one', id: 'turn-1');
+      await s.agent.finished.future;
+      await settle();
+
+      final split = s.events.whereType<TurnEnded>().single.usage!;
+      expect(split.spentTokens, isNull, reason: 'the split, or the sum');
+      expect(split.inputTokens, 1400);
+      expect(split.outputTokens, 434);
+      expect(split.totalTokens, 1834);
+      expect(
+        split.costUsd,
+        closeTo(
+          price.cost(callOf()) +
+              price.cost(
+                callOf(input: 500, output: 100, cacheRead: 300),
+              ),
+          1e-9,
+        ),
+      );
+
+      // A turn whose agent reports only the two fields it always had: the
+      // sum, exactly as before.
+      script
+        ..clear()
+        ..add({'sessionUpdate': 'usage_update', 'used': 70, 'size': 200000});
+      s.send('two', id: 'turn-2');
+      await s.agent.finished.future;
+      await settle();
+
+      final summed = s.events.whereType<TurnEnded>().last.usage!;
+      expect(summed.spentTokens, 70);
+      expect(summed.inputTokens, isNull);
+      expect(summed.outputTokens, isNull);
+      expect(summed.costUsd, isNull);
+      expect(summed.totalTokens, 70);
+    });
+
+    test('T146: a block of the wrong shape, and half a block, are named and '
+        'what is known is kept (§30.5, §15.2)', () async {
+      final log = _log();
+      final script = <Map<String, Object?>>[];
+      final s = await ready(script);
+
+      // A whole frame first: what the desktop knows from it.
+      s.agent.push(_update(frame(500)));
+      await settle();
+      final known = s.events.whereType<StatsReported>().single.stats;
+
+      // A block that is not a map at all: nothing of it reads, and nothing
+      // known is lost to it.
+      s.agent.push(_update(frame(500, usage: 'not a map')));
+      await settle();
+      expect(
+        s.events.whereType<StatsReported>(),
+        hasLength(1),
+        reason: 'a block that told nothing adds no stats',
+      );
+      expect(s.transcript.stats?.cache, same(known.cache));
+      expect(s.transcript.stats?.costUsd, known.costUsd);
+      expect(_saidTimes(log, 'a usage frame with no map'), 1);
+
+      // Nothing known before it: nothing known after it either.
+      final cold = await ready();
+      cold.agent.push(_update(frame(500, usage: 'not a map')));
+      await settle();
+      expect(cold.events.whereType<StatsReported>(), isEmpty);
+      expect(cold.transcript.stats, isNull);
+
+      // Half a block: the counts it has are used, the missing one is named,
+      // and the cache already known is not cleared by it. No price is made up
+      // for it either: without `cacheRead` its whole prompt would count as a
+      // miss, a systematic overestimate (§30.5 half a block, §30.1 ⑤).
+      script.add(
+        frame(500, usage: const {'input': 900, 'output': 334}),
+      );
+      s.send('go', id: 'turn-half');
+      await s.agent.finished.future;
+      await settle();
+
+      expect(
+        s.events.whereType<StatsReported>(),
+        hasLength(1),
+        reason: 'nothing it carries is a cache or a price ⇒ no stats',
+      );
+      expect(s.transcript.stats?.cache, same(known.cache));
+      expect(s.transcript.stats?.costUsd, known.costUsd);
+      final split = s.events.whereType<TurnEnded>().single.usage!;
+      expect(split.inputTokens, 900);
+      expect(split.outputTokens, 334);
+      expect(split.costUsd, isNull, reason: 'no cacheRead ⇒ not priced');
+      expect(_saidTimes(log, 'without cacheRead'), 1);
     });
   });
 }
