@@ -4,7 +4,7 @@
 > 编制：主 agent · 2026-11-15 · 来源 = 用户 2026-11-15「拉代码更新」。
 > 台账 = #242（— · 归批）。前情 = docs/batches/2026-11-10-upstream-sync-5.md §6（已收口 2026-11-11）。
 ## §1 讨论（主 agent）
-**状态行**：🔄 进行中（…）
+**状态行**：已收口 2026-11-15
 <§1 模板占位：本批条目 / 关键判据 / 授权口径>
 
 ### 本批：合上游 111 个提交（1.9.5 → 1.9.6）+ 出新构建
@@ -65,8 +65,32 @@
 
 **本修轮不做**：不改产品代码、不动冲突态工作树、不跑测试、不写 §4 / §5 / §6、不改其它设计档。
 
+### eng-coder 上抛裁决：⑦ 按「无新增失败」判
+
+**事实**（eng-coder 实跑）：基线 `8d80c089` 上同一批用例 189 passed / 6 failed / 8 skipped；解冲突后 374 passed / 6 failed / 8 skipped，失败集逐条相同——`test/kernel_test.dart` 5 条（Windows 路径拼写 / 仅 POSIX 夹具），`test/composer_test.dart` 1 条（semantics-tree 检查抛错，非断言失败）。
+
+**裁决**：⑦ 的「全绿」按「**与合前基线同一失败集、无新增失败**」判。这是本仓既有口径（上一批 §2.7 第 10 条同形）。**不授权**改上游 `test/kernel_test.dart` / `test/composer_test.dart`：为过判据给上游测试加 Windows skip，会新增常驻 fork 差异，代价高于收益。§5 写明基线读数与失败清单。
+
+**附带**：eng-coder 另修的两处（`test/chat/side_panel/file_open_test.dart` 的 `const` 复用我方 `final` 导致 analyze 2 error、以及该档 2 条 Windows 拼写期望）不在 §2 受影响文件表内，但该档在 `docs/design/fork-deltas.md` §3 有登记行（接缝 = 按宿主拼写改断言），修法合规 ⇒ §6 记账，并记一条设计面遗漏（§2 受影响文件表未收该档）。
+
+### 实施后的登记面补记（派设计席）
+
+合后 numstat 对账（验收 ④）查出 5 条表外非零行 + 1 处登记行不完整，均按 `docs/design/fork-deltas.md` §5 第 2 步补登记：
+
+| # | 档 | 合后 numstat | 自有块 |
+|---|---|---|---|
+| 1 | `lib/kernel/claude_code/claude_code_translator.dart` | +2 / −1 | `HostTools.called` + `HostTool` 换符（上游写 `ClaudeSdkTools.called` / `ClaudeSdkTool`） |
+| 2 | `lib/window/app_windows.dart` | +28 / −10 | `requestClose` / `_remove` 的一次性守卫（`_closing` 前置、`_removing`） |
+| 3 | `test/forge/forge_test.dart` | +2 / −2 | `issue.number` → `issue.key` 两条断言 |
+| 4 | `test/window/app_windows_test.dart` | +20 / −0 | 上述守卫的用例 |
+| 5 | `test/workspace_test.dart` | +93 / −9 | `_DirectoryCatalog` 与按目录列会话的用例组 |
+
+另两处更正：`lib/ide/ide_workspace.dart` 行只覆盖 6 行（`openWorkspaces` 三处 + 构造期 `_detectIn` 一行），其余 7 行是 `IdeWorkspace.documentOf`（消费方 `lib/ide/ide_kernel_files.dart` 三处 + 两个用例档）⇒ 补齐；`test/chat/side_panel/file_open_test.dart` 行的措辞仍是合前形态（`p.normalize` 3 / `p.join` 1，合后 6 / 3）⇒ 按合后改写。
+
+**另记一条**：`ide_workspace.dart` 构造体的 `_detectIn(root)` 一行经核为空转（`_setRoots` 同一守卫已调用过，`_gitOf == null` 时 `isMultiRoot` 恒假）。§2 块 11 明写保留，本批照设计保留；删除归下一次清理，记 §6 已知状态。
+
 ## §2 批次任务与设计（eng-designer）
-**状态行**：设计完成（评审轮 1 的 12 条已按编号落地；块 7 计时器在壳、`userSent` 落点在空消息早退之后，均与 fork-deltas §3 同锚）
+**状态行**：设计完成（评审轮 1 的 12 条已按编号落地；实施后补记五条表外补登记与两处更正已落 docs/design/fork-deltas.md §3）
 
 
 ### 本批条目（覆盖）
@@ -74,7 +98,7 @@
 | # | 条目 | 判据去向 |
 |---|---|---|
 | 1 | 6 档 12 个冲突块逐块处置，每块按 `docs/design/fork-deltas.md` 登记面判（自有块保留 / 上游新形跟进 / 不整档回退） | 本文「逐档处置表」；验收 ①③ |
-| 2 | 表外自有块补登记（`lib/ide/ide_workspace.dart`）+ 5 行形态更新（`chat_session` / `composer` / `general_page` / `app_settings` / `workbench`） | `docs/design/fork-deltas.md` §3；验收 ④ |
+| 2 | 表外自有块补登记六行（`lib/ide/ide_workspace.dart` + 五条表外档，见「实施后补记」）+ 5 行形态更新（`chat_session` / `composer` / `general_page` / `app_settings` / `workbench`） | `docs/design/fork-deltas.md` §3；验收 ④ |
 | 3 | l10n 两档 arb 键级并集 + `flutter gen-l10n` 重产三档生成物 | 验收 ⑤ |
 | 4 | 版本两档同值 `1.9.6+32` | 验收 ⑥ |
 | 5 | 合后按 `origin/main` 的 numstat 对账，判据域内每条非零行命中 §3 登记行 | 验收 ④ |
@@ -169,7 +193,7 @@
 | ① | `git status --short` 的冲突条数 = 0；全仓 `git grep -c "^<<<<<<<"` 与 `git grep -c "^>>>>>>>"` 均无输出（不带路径参数；判据不绑本批形态） |
 | ② | `flutter analyze --no-pub` 的 error 数 = 0 |
 | ③ | 逐块静态读数（符号锚：每条只数它证明的那一处，不数注释与邻近标识符）。`chat_session.dart`：`_overlay.beforeSend(` = 1 · `if (from != null) userSent?.call();` = 1 且位于 `if (message.isEmpty || !canSend) return;` 之后 · `final takesContext = acceptsEditorContext;` = 1 · `if (!takesContext && editor != null)` = 1。`composer.dart`：`=> _copyToHostOf(this, files)` = 1 · `=> _handleEditorChangedOf(this)` = 1（同一行含 `_lag.time('edit'`）· `=> _handleKeyOf(this, event)` = 1。`composer_editing.dart`：`_lag.time('edit'` = 0（计时器在壳上）· `withTransferProgress` ≥ 1 · `state._lag.time('draft'` ≥ 1 · `void _handleEditorChangedOf(` = 1。`composer_menu.dart`：`state._lag.begin('key')` = 1。`general_page.dart`：`this.thincoderStatus,` = 1 · `final Future<ThincoderStatus> Function()? thincoderStatus;` = 1 · `this.bash,` = 1 · `final BaoBash? bash;` = 1 · `BaoBashSetting(bash: bash)` = 1 · `EditorContextSetting.enabled(` = 1 · `SessionToolsSetting.enabled(` = 1。`app_settings.dart`：`thincoderStatus: thincoderStatus,` = 1 · `bash: bash,` = 1。`workbench.dart`：`_sidePanelRetryTimer?.cancel()` = 2（`dispose` 与扫描失败路径各一）· `_reloadedElsewhere` ≥ 2（构造期 `addListener` 与 `dispose` 的 `removeListener`）。`ide_workspace.dart`：`static final Set<IdeWorkspace> openWorkspaces` = 1 · `openWorkspaces.add(this)` = 1 · `openWorkspaces.remove(` = 1 |
-| ④ | 判据域 = 本批上游触碰且为共享上游档的档：合后 `git diff --numstat origin/main` 的每条非零行逐条命中 `docs/design/fork-deltas.md` §3 的登记行；`lib/l10n/app_localizations*.dart` 由 arb 行承载。`ide_workspace.dart` 合后重读 `git diff --numstat origin/main -- lib/ide/ide_workspace.dart`，读数写进 §5；§3 该行记的 `+21 / −25` 来源是 `git diff --numstat origin/main 8d80c089`（合前本地树对上游 tip，本席实测），合后读数与它不等属口径差（上游本批在该档删掉了该处）。块是否存活不按此数判，按 ③ 的 `openWorkspaces.add(this)` = 1 判 |
+| ④ | 判据域 = 本批上游触碰且为共享上游档的档：合后 `git diff --numstat origin/main` 的每条非零行逐条命中 `docs/design/fork-deltas.md` §3 的登记行；`lib/l10n/app_localizations*.dart` 由 arb 行承载。`ide_workspace.dart` 的块是否存活按 ③ 的符号锚判（`openWorkspaces.add(this)` = 1 · `static final Set<IdeWorkspace> openWorkspaces` = 1），不按 numstat；§3 各补登记行的「行数预算」列一律取合后 `git diff --numstat origin/main HEAD` 的读数（该档 +13 / 0） |
 | ⑤ | `flutter gen-l10n` 后三档生成物与 arb 一致，且 `generalSettingsEditorContext`（自有）与 `generalSettingsSessionTools` / `generalSettingsCommandLine`（上游新）三类键都在生成物里 |
 | ⑥ | `flutter test test/update/version_test.dart` 绿；`lib/update/version.dart` 与 `pubspec.yaml` 均 `1.9.6+32` |
 | ⑦ | 定向用例绿：`flutter test test/chat/composer_files_test.dart test/chat/remote_drops_test.dart test/chat/composer_input_lag_test.dart test/chat/composer_draft_sync_test.dart test/chat/chat_keys_test.dart test/composer_test.dart test/chat/session_overlay_test.dart test/bots/bots_test.dart test/chat/side_panel/file_open_test.dart test/kernel_test.dart test/models/models_test.dart` |
@@ -216,6 +240,29 @@
 ### 上抛项
 
 无。`ide_workspace.dart` 此前表外，属本设计写域内的一致性处置（补登记行），已按 §3.1 落地。
+
+### 实施后补记（登记面 · 2026-11-15）
+
+合后 numstat 对账（验收 ④）报出一条：判据域内五档非零、无登记行；另两处既有行需更正。全部落在 `docs/design/fork-deltas.md` §3，读数一律取合后 `git diff --numstat origin/main HEAD`。
+
+| # | 档 | 合后读数 | 落地形态（§3 该行） |
+|---|---|---|---|
+| 1 | `lib/kernel/claude_code/claude_code_translator.dart` | +2 / −1 | `HostTools.called` / `HostTool` 换符 + 自有 import；首次登记（此前表外） |
+| 2 | `lib/window/app_windows.dart` | +28 / −10 | `requestClose` / `_remove` 的一次性守卫；首次登记 |
+| 3 | `test/forge/forge_test.dart` | +2 / −2 | 两条断言按 `ForgeRef.key` 写（上游写 `number`）；首次登记 |
+| 4 | `test/window/app_windows_test.dart` | +20 / 0 | 上述守卫的用例；首次登记 |
+| 5 | `test/workspace_test.dart` | +93 / −9 | `_DirectoryCatalog` 与按目录列会话的用例组（机制归 `docs/design/thincoder-adapter.md` §14-11）；首次登记 |
+
+另两处更正：
+
+- `lib/ide/ide_workspace.dart` 行补全——原行只覆盖 6 行（`openWorkspaces` 三处 + 构造期 `_detectIn` 一行），其余 7 行是 `IdeWorkspace.documentOf`（消费方 `lib/ide/ide_kernel_files.dart` 三处，用例 `test/ide/ide_kernel_files_test.dart`、`test/kernel/thincoder_kernel_test.dart`）。同一行记下构造体 `_detectIn(root)` 一行为空转：本批照块 11 保留，删行归下一次清理。
+- `test/chat/side_panel/file_open_test.dart` 行按合后形态改写——`p.normalize` 6 处 / `p.join` 3 处，读数 +22 / −19（原行记的 `p.normalize` 3 / `p.join` 1 与 +10 / −13 是合前形态）。
+
+§3.1 的先例清单补一行，使表外补登记的清点与本批的六行一致（读数只在 §3 各行，不复制）。
+
+实施面另改一档 `test/chat/side_panel/file_open_test.dart`，不在本文「受影响文件与测试覆盖」表内（设计面遗漏，见 §1 末段与 §5.2）：本批不动该表，该档的登记行已按合后形态落。
+
+本修轮范围：只写 `docs/design/fork-deltas.md` 与本节；不改产品代码、不动工作树、不跑测试。
 
 ## §3 设计评审（评审子代理）
 **状态行**：评审通过
@@ -300,4 +347,117 @@ VERDICT: pass
 - 实施面 = 6 档 12 块 + l10n 键级并集与重产；派 eng-coder 按 §2 处置表执行。
 
 ## §5 实施记录（eng-coder）
+**状态行**：实施完成
+
+
+
+### 5.1 交付面与提交
+
+- 合并提交 `137724e8`（父 = `8d80c089` 本地 + `1987ad78` 上游 tip），`lib/` 与 `test/` 的 12 块按 §2「逐档处置表」解完；6 档冲突清零。
+- 该提交另带三样非冲突内容：`docs/mobile-link.md` / `docs/ssh-remote.md`（上游本批自带的文档改动，随合并）、`docs/design/fork-deltas.md`（设计席的登记面更新）、批档 §1–§4（当时状态）。后两者被带进来是因为 `git commit` 未带路径参数时按 `git add -A` 收全部改动；内容本身是批准过的形态，只记在这里，不另回退。
+- l10n：两个 arb 自动合并后 `flutter gen-l10n` 连跑两遍，三档生成物 md5 三遍同值（`app_localizations.dart` / `_en.dart` / `_zh.dart` 各 OK）⇒ 生成物与 arb 一致，未手改。
+- 版本：`pubspec.yaml` 与 `lib/update/version.dart` 均 `1.9.6+32`（自动合并结果，未手改）。
+
+### 5.2 表外改动一档：`test/chat/side_panel/file_open_test.dart`
+
+两处修改：一处是本批引入的红，一处是合前既有红。
+
+- 本批引入：上游 1.9.6 新加 `group('a folder')`，用 `const folder = '$_root/lib/chat'` 复用我方 `final _root`（该档是我方「按宿主拼写改断言」的已登记档）⇒ `flutter analyze` 2 error（`const_initialized_with_non_constant_value`）。
+- 合前既有：`another machine's file` 两条在合前基线上就是红的（`8d80c089` 的 worktree 跑该档 = 9 passed / 2 failed），按该档已登记的「按宿主拼写改断言」口径收口。
+
+两处都在该档已登记的接缝内：
+
+| # | 位置 | 改法 |
+|---|---|---|
+| 1 | `group('a folder')` 的 `folder` / `makefile` | `const` 改 `final`，值改宿主拼写：`p.join(_root, 'lib', 'chat')` / `p.join(_root, 'Makefile')` |
+| 2 | `group('another machine's file')` 的两条用例 | 期望值按宿主拼写：`p.normalize(onHost)` / `p.normalize('/nowhere/c.md')`；`local:` 链接的 href 用 `/` 拼写的 `_readHref`（`parseHref` 只认 `/` 起的绝对路径） |
+
+断言条数与强度不变（无 `skip`、无放宽成 `contains`）。该档合后 `git diff --numstat origin/main HEAD` = **+22 / −19**；§3 该行记的合前实测是 +10 / −13，差额即上游新分组（+12 / −6）。
+
+### 5.3 逐块处置与读回（12 块）
+
+| # | 档 · 块 | 处置 | 读回 |
+|---|---|---|---|
+| 1 | `general_page.dart` · 类注释 | 取上游新措辞（`chat.liveTurnStats`、BaoCode Bash），句末补 `thincoder.path`，`telemetry` 句删 | 无悬空文档标记；`flutter analyze` 该档 0 issue |
+| 2 | `general_page.dart` · 构造参数 | 两个都留 | `this.thincoderStatus,` = 1 · `this.bash,` = 1 |
+| 3 | `general_page.dart` · 字段 | 两个字段带各自文档注释 | `final Future<ThincoderStatus> Function()? thincoderStatus;` = 1 · `final BaoBash? bash;` = 1 |
+| 4 | `general_page.dart` · 开关行 | 两行都留 | `EditorContextSetting.enabled(` = 1 · `SessionToolsSetting.enabled(` = 1 |
+| 5 | `general_page.dart` · 设置组 | 两组都留 | `BaoBashSetting(bash: bash)` = 1 |
+| 6 | `composer.dart` · `_copyToHost` | 留薄壳，上游体进助手 | `=> _copyToHostOf(this, files)` = 1 · 助手内 `withTransferProgress` = 1 |
+| 7 | `composer.dart` · `_handleEditorChanged` | 壳带计时器，体进助手 | `=> _handleEditorChangedOf(this)` = 1（同行含 `_lag.time('edit'`）· `composer_editing.dart` 内 `_lag.time('edit'` = 0 · `state._lag.time('draft'` = 1 |
+| 8 | `composer.dart` · `_handleKey` | 留薄壳，上游体进助手 | `=> _handleKeyOf(this, event)` = 1 · `composer_menu.dart` 内 `state._lag.begin('key')` = 1 |
+| 9 | `app_settings.dart` · 页面构造 | 两个都传 | `thincoderStatus: thincoderStatus,` = 1 · `bash: bash,` = 1 |
+| 10 | `workbench.dart` · `dispose` | 两行都留 | `_sidePanelRetryTimer?.cancel()` = 2（dispose + 扫描失败路径）· `_reloadedElsewhere` = 7 |
+| 11 | `ide_workspace.dart` · 构造体 | 我方两行保留 | `static final Set<IdeWorkspace> openWorkspaces` = 1 · `openWorkspaces.add(this)` = 1 · `openWorkspaces.remove(` = 1 |
+| 12 | `chat_session.dart` · `send()` | 我方结构 + 上游 `userSent` | `_overlay.beforeSend(` = 1 · `if (from != null) userSent?.call();` = 1，位于 `if (message.isEmpty || !canSend) return;` 之后 · `final takesContext = acceptsEditorContext;` = 1 · `if (!takesContext && editor != null)` = 1 |
+
+### 5.4 测试读数：合前基线 vs 合后
+
+- 合前基线（`8d80c089` 的临时 worktree，`flutter test --no-pub test/kernel_test.dart test/composer_test.dart`）= **189 passed / 6 failed / 8 skipped**。
+- 合后（本机，§2 验收 ⑦ 的 11 档一条命令）= **374 passed / 6 failed / 8 skipped**，失败集与基线逐条相同。
+
+| 失败用例 | 归因 |
+|---|---|
+| `kernel_test` · `claude locator BAOCODE_CLAUDE_PATH…` | 用例只造 `/bin/claude` 与 `/` 拼写，无 `.exe`；Windows 上定位器找不到 ⇒ `Claude Code is not installed`。上游原有的 POSIX-only 用例 |
+| `kernel_test` · `Volta's shim…` | 期望值 `'${root.path}/Volta'` 用 `/` 拼，实际 `\`。Windows 拼写族 |
+| `kernel_test` · `Claude Code storage` · `a session file is read again only once it changes, and the cache keeps only the files still there` | 同上，`config/projects/-p/x.jsonl` 与 `config\projects\-p/x.jsonl` 口径差 |
+| `kernel_test` · `Claude Code storage` · `a fork copies the conversation up to a message, apart` | 同上 |
+| `kernel_test` · `Claude Code storage` · `a folder's sessions move to another's, with what is kept beside them and its memory; a folder dashed alike keeps its own` | 同上 |
+| `composer_test` · `an edit stays open while another conversation is visited from the sidebar` | Flutter semantics-tree 检查抛 4 次（`Node N is not in the tree…`），非断言失败；框架版本相关 |
+
+- `test/chat/side_panel/file_open_test.dart`：合前基线（同一 worktree、同一口径）**9 passed / 2 failed**，合后 **11/11 绿**（本批比合前少 2 条既有红）。两次读数同一 `flutter test` 口径，⑦ 取「同一失败集、无新增失败」（父代理 2026-11-15 裁决，见 §1）。
+- 两侧命令的文件集不同（合前 2 档、合后 11 档），可比的是失败集与 skipped 数；pass 数不可相减——多出的 9 档合后 0 失败。
+
+### 5.5 numstat 对账（验收 ④）
+
+- 判据域 = `git diff --name-only 5f4a1d50 origin/main` = **189 档**。
+- `git diff --numstat origin/main HEAD` 域内非零 **30 行**：**22** 行命中 §2 / §3 登记行；**3** 行为 l10n 生成物，按 `docs/design/fork-deltas.md` §3.1 由 arb 行承载；**5** 行无登记行（表外，见 5.6）。
+- `lib/ide/ide_workspace.dart` 合后 `git diff --numstat origin/main HEAD` = **+13 / −0**；§3 该行记的 +21 / −25 是合前本地树对上游 tip 的口径（`git diff --numstat origin/main 8d80c089`），两者不等属口径差。块存活按符号判：`openWorkspaces.add(this)` = 1（见 5.3 第 11 块）。
+
+### 5.6 偏差与上抛面
+
+- **验收 ⑦ 的字面「全绿」本机不可达**：6 条失败为合前既有，见 5.4。按父代理裁决以「无新增失败」判；未改上游 `test/kernel_test.dart` / `test/composer_test.dart`（加 Windows skip 会新增常驻 fork 差异）。
+- **5 条表外非零行，需设计席补 §3 登记行**（我不动设计档）：
+  - `lib/kernel/claude_code/claude_code_translator.dart` +2 / −1：`HostTools.called` + `HostTool` 换符。
+  - `lib/window/app_windows.dart` +28 / −10：`requestClose` / `_remove` 的一次性守卫。
+  - `test/forge/forge_test.dart` +2 / −2：`issue.number` → `issue.key` 两条断言。
+  - `test/window/app_windows_test.dart` +20 / −0：上述守卫的用例。
+  - `test/workspace_test.dart` +93 / −9：`_DirectoryCatalog` 与按目录列会话的用例组。
+- **`lib/ide/ide_workspace.dart` 登记行不完整**：合后 13 行里，§3 该行只覆盖 `openWorkspaces` 三处 + 构造期 `_detectIn` 一行（6 行）；其余 7 行为 `IdeWorkspace.documentOf`（消费方 `lib/ide/ide_kernel_files.dart` 三处，用例 `test/ide/ide_kernel_files_test.dart`、`test/kernel/thincoder_kernel_test.dart`），需补进该行。
+
+依据 `docs/design/fork-deltas.md`「非零行 = 必须有本节的登记行」，以及 `docs/design/fork-deltas.md`「表外不许改上游档」——5.6 的 6 项即按这两条报出，不自行补表。
+
+### 5.7 单测与集成测试面
+
+- 本批无新增单测档；改动面的读数即 5.4 的 ⑥ / ⑦ 两条命令。
+- 集成面按 §2 的 RTM delta 报 **none**：12 块不改任何 RTM 行断言的行为，上游能力不是本仓新长出的业务故事，也无生产报告。
+
+### 5.8 审计轮、代码评审轮与终态
+
+- 内部审计（explore，只读，对 §2 逐条）：12 块逐块判为与 §2 一致；计 1🔴 + 2🟡 + 2🔵。🔴 = 5 条表外登记行（同 5.6，设计席补表）；🟡 = `ide_workspace.dart` 行不完整（同 5.6）+ `file_open_test.dart` 行措辞仍是合前形态（见下条）；🔵 = 块 8 守卫疑点（核为上游原文，非偏离）+ 临时诊断件（已删，见末条）。
+- `test/chat/side_panel/file_open_test.dart` 的 §3 行与合后形态不符：该行写「`p.normalize`（档内 3 处）」「`p.join`（1 处）」，合后实测 `p.normalize(` 6 处、`p.join(` 3 处；差的三处正是 5.2 第 2 项。需设计席把该行更新成合后形态。
+- 块 8 的守卫不是简化：`git show origin/main:lib/chat/composer/composer.dart` 的 `KeyEventResult _handleKey` 首行即 `if (event is! KeyUpEvent) _lag.begin('key');`，与合入形态逐字同。
+- 内部代码评审（advisor，type=code，对象 = 9 档 + 本批档与登记表）：0🔴；🟡 1 条 = 登记面协调项（同 5.6）；🔵 2 条（见下两条）。代码面终态 clean，登记面待设计席。
+- 🔵 之一（已核，不改）：`lib/ide/ide_workspace.dart` 构造体的 `if (_gitOf == null && _git != null && hasFolder) _detectIn(root);` 是空转。`_setRoots(roots);` 就在它上一行，而 `origin/main` 的 `_setRoots` 在 `!isMultiRoot` 分支已有 `if (_git != null && hasFolder) _detectIn(root);`；`_gitOf == null` 时 `isMultiRoot` 恒假，故该行对任何输入都不改行为，`_detectIn` 自身也按 `_found.containsKey(folder)` 早退。§2 块 11 明写保留这一行，本批照设计保留；删行与改 §3 措辞归设计席。
+- 🔵 之二（已修）：5.4 原把 3 条 storage 失败压成一行、且两侧命令的文件集不同未注明；现已逐条列名并补注。
+- 临时件：`test/chat/side_panel/_tmp_probe_test.dart`（诊断 `p.join` 的拼写）创建后删除，`git status` 无残留，不进交付。
+
 ## §6 验证与收口（父代理）
+
+**状态行**：已收口 2026-11-15
+
+- **合并形态**：`137724e8`，第一父 `8d80c089`、第二父 `1987ad78`；上游 111 个提交（1.9.5 → 1.9.6）、189 档；未解冲突 0；全仓 `^<<<<<<<` / `^>>>>>>>` 扫描无输出。
+- **冲突处置**：6 档 12 块按 §2 逐块解开——自有块保留、上游新体折进 `…Of` 助手（`composer_editing.dart` / `composer_menu.dart`）、块外取上游。
+- **l10n**：两档 arb 键级并集后 `flutter gen-l10n` 重产三档生成物，连跑两遍 md5 同值；`generalSettingsEditorContext`（自有）与 `generalSettingsSessionTools` / `generalSettingsCommandLine`（上游新）都在生成物里。
+- **登记面**：`docs/design/fork-deltas.md` §3 新增 5 行首次登记（`claude_code_translator` +2/−1 · `app_windows` +28/−10 · `forge_test` +2/−2 · `app_windows_test` +20/0 · `workspace_test` +93/−9），补全 `ide_workspace.dart` 行的 `documentOf` 段，按合后改写 `file_open_test.dart` 行；§3.1 先例清单补 2026-11-15 一条。
+- **静态检查**：`flutter analyze --no-pub` = error 0；11 issues（2 warning + 9 info）与合前基线同组。
+- **实跑（⑦ 按「与合前基线同一失败集」判，裁决见 §1）**：解冲突后 374 passed / 6 failed / 8 skipped；基线 `8d80c089` 同批用例 189 passed / 6 failed / 8 skipped，失败集逐条相同（`kernel_test` 5 条为 Windows 路径拼写 / 仅 POSIX 夹具，`composer_test` 1 条为 semantics-tree 检查抛错）。**新增失败 = 0**。
+- **集成门（父侧收口门）**：`test/integration/chat_flows_test.dart` + `btest_flows_test.dart` = **6 过 / 0 挂**。
+- **构建**：`dart run tool/build_windows.dart --patched-engine --remote-built`，303.2 s。`data/app.so` = 2026-11-15 20:35；安装器 `BaoCode-1.9.6-setup.exe`（46.8 MB）；远程 server `1.8.1.26-336401b2e048` 双产物；`pubspec.yaml` = `1.9.6+32`。
+- **实例替换**：旧 Debug 实例（PID 16824）连树杀掉，遗孤 browser-host 已清；新实例 **PID 23708**（20:38:52 启动，窗口 `BaoCode`，跑 Release 1.9.6）。
+- **已知状态（三条）**：① §5.5 仍写「§3 该行记的 `+21 / −25` 是合前本地树对上游 tip 的口径」，该数已被 §3 行的合后口径 `+13 / 0` 取代——以 §3 行为准，§5 是实施席的段，本席不改。② `ide_workspace.dart` 构造体的 `_detectIn(root)` 一行经核为空转，本批照设计保留，删行归下一次清理。③ `test/chat/side_panel/file_open_test.dart` 的逻辑属主仓面、在 §3 有登记行；§2 受影响文件表漏收该档，属设计面遗漏，已在登记行内写明改法。
+- **集成索引**：`test/RTM.md` 9 个业务故事 / 13 行用例；本批 delta = none（上游能力不是本仓新长出的业务故事，无生产报告）。
+- **用户面同步**：并入的上游界面（会话工具、项目加文件夹、每条消息 100 图、BaoCode Bash、设置转移、终端 `code`）都是上游实现，本仓零改写。
+- **暂缓批复核**：无。
+- **doc-check gate**：PASS（本批档 + `docs/design/fork-deltas.md`）。
+- **台账**：`#242`（本批）随收口核销。
