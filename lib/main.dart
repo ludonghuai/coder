@@ -38,6 +38,7 @@ import 'diagnostics/crash_reports.dart';
 import 'diagnostics/exit_watch.dart';
 import 'diagnostics/frame_watch.dart';
 import 'diagnostics/hang_reports.dart';
+import 'diagnostics/key_watch.dart';
 import 'diagnostics/stall_watch.dart';
 import 'diagnostics/viewport_watch.dart';
 import 'diagnostics/diagnostics_upload.dart';
@@ -189,6 +190,7 @@ Future<void> main(List<String> arguments) async {
   if (!kIsWeb) {
     AppEventWatch.start();
     FrameWatch.start();
+    KeyWatch.start();
     // N3 / N4 / N5: a ratio change, a thread held, reports nobody saw.
     ViewportWatch.start();
     StallWatch().start();

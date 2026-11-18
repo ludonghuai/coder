@@ -4,7 +4,7 @@
 > 编制：主 agent · 2026-11-18 · 来源 = 用户 2026-11-18 02:52「拉代码更新」。
 > 台账 = #257（core · 归批）。前情 = 无（独立批）。
 ## §1 讨论（主 agent）
-**状态行**：🔄 进行中（…）
+**状态行**：已收口 2026-11-18
 <§1 模板占位：本批条目 / 关键判据 / 授权口径>
 
 ### 上游合并（81 提交）· 冲突清单与解析规则
@@ -385,3 +385,34 @@ VERDICT: pass
 - 该路径没有本档的发送动作，编辑器上下文 chip 的「已划掉」状态不该被清。
 
 ## §6 验证与收口（父代理）
+
+### 验证与收口（上游合并）
+
+**父侧实跑与落盘**
+
+- 合并提交：**`c1042ad6`**（17 处冲突解析 + 2 档移植 + 登记面复核 + RTM 11-1）。
+- 冲突标记全库清零（`grep "^<<<<<<<" lib/ test/ packages/` 零命中）；未合并档 0。
+- 与上游关系：领先 **249**、落后 **0**（上游 81 提交全部并入；`git rev-list --left-right --count origin/main...HEAD` 实测）。
+
+**实施席交回的读数（本席复核过冲突清零与提交面）**
+
+| 项 | 读数 |
+|---|---|
+| `flutter analyze --no-pub` | **error 0**（2 warning + 9 info，其中 4 条是 §3 明令禁删的上游 import） |
+| 变更面单测 | `model_picker_test` + `image_tools_test` **+33 通过** |
+| history 结构面 | `chat_history_rebuild_test` **+5 通过** |
+| **RTM 2-1 实跑**（§4 硬要求） | **+1 通过**——行映射重写未破 2-1 的「冷却期 0 次重建 / 文本不变 / 恢复恰 1 次 / 偏移不变」 |
+| `packages/bao_markdown` 自带用例 | +64 通过（~3 跳过） |
+| l10n 四键 | en arb 各 2 · zh arb 各 1 · 生成物各 1 |
+| 静态判据 | `void clear()`=1 · `userSent`=0 · `promptSuggestion`=0 · `fallbackModel`=3 · `endModelFallback`=1 |
+
+**两条失败（如实记，均非本批引入）**
+
+1. `test/composer_test.dart` 的 caret 用例：期望 10.125 / 实际 9.875（0.25 逻辑像素）。来路 = 上游本批新增行盒 strut；复现 = 合前 HEAD 通过、把合并树两档 `bao_markdown` 拷进 HEAD worktree 即复现。**台账 #258**。
+2. `an edit stays open while another conversation is visited from the sidebar`：HEAD 上同样失败（semantics-tree 抛 4 次），与前两批 §5 同形，既有失败。
+
+**集成面**：`test/RTM.md` 新增第 11 节 + `11-1`「模型回退」行，规模窗 **12 / 50–100**；用例体按设计不落地（待假内核 harness）。
+
+**登记面复核**：判据域 195 档 · 域内非零 41 档 · **表外 0 档**（38 已有行 + 3 生成物）。
+
+**暂缓批复核**：无。

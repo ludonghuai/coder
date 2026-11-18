@@ -6,11 +6,13 @@ import 'package:flutter/services.dart';
 import '../../diagnostics/diagnostics_bundle.dart';
 import '../../diagnostics/diagnostics_upload.dart';
 import '../../diagnostics/hang_reports.dart';
+import '../../diagnostics/key_watch.dart';
 import '../../ide/ide_button.dart';
 import '../../ide/ide_editor_placeholder.dart' show ideFormatSize;
 import '../../ide/ide_input.dart';
 import '../../l10n/l10n.dart';
 import '../../platform/data_dir.dart';
+import '../../platform/event_log.dart';
 import '../../theme/workbench_theme.dart' show themeColors;
 import '../../workspace/window_controls.dart';
 import 'model_dialogs.dart';
@@ -81,6 +83,8 @@ class _DiagnosticsDialogState extends State<DiagnosticsDialog> {
       _result = null;
       _error = null;
     });
+    // A key the app has as held, never let go (N2S9TV9F), goes with them.
+    appEvent('keys', 'at the upload: ${KeyWatch.describe()}');
     DiagnosticsResult? result;
     Object? error;
     try {
