@@ -299,10 +299,10 @@ class ChatComposerState extends State<ChatComposer>
 
   bool get _canSend => _canSendOf(this);
 
-  // --- Suggested prompt ----------------------------------------------------
+  // --- Suggested reply -----------------------------------------------------
 
-  /// What the agent suggests sending next, shown as the placeholder of an
-  /// empty dock composer; Tab takes it.
+  /// The first of what the agent suggests sending next, shown over an empty
+  /// dock composer (see ReplySuggestionBar); Tab takes it.
   String? _suggestion;
 
   /// The key that takes it, as the keybindings have it now: shown after
@@ -547,6 +547,10 @@ class ChatComposerState extends State<ChatComposer>
   void _dismissEditorContext() => _dismissEditorContextOf(this);
 
   bool get _showsStop => _showsStopOf(this);
+
+  /// Emptied: what was in it sent from elsewhere (a suggested reply put
+  /// in at a click, sent at a second).
+  void clear() => _clearOf(this);
 
   void _submit() => _submitOf(this);
 

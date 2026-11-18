@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 
 import '../platform/data_dir.dart';
 import '../platform/process_host.dart';
+import '../platform/shell_command_io.dart' show windowsPowerShell;
 import 'secret_store.dart';
 
 /// The system's keychain: the login keychain on macOS, the user's DPAPI
@@ -194,7 +195,7 @@ class DpapiSecretStore implements SecretStore {
   File _file(String id) => File(p.join(directory, '${_safe(id)}.dpapi'));
 
   Future<ProcessResult> _powershell(String script, String input) => _command(
-    'powershell.exe',
+    windowsPowerShell,
     ['-NoProfile', '-NonInteractive', '-Command', _prelude + script],
     input: input,
   );

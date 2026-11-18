@@ -182,6 +182,14 @@ void _submitOf(ChatComposerState state) {
   state._dismissedTrigger = null;
 }
 
+void _clearOf(ChatComposerState state) {
+  state._pool = {};
+  state._controller.clear();
+  state._leaveHistory();
+  state._saveDraft();
+  state._dismissedTrigger = null;
+}
+
 /// The files put in the draft from outside (see
 /// [ComposerDraft.insertFiles]), as if pasted.
 void _takeDraftFilesOf(ChatComposerState state) {

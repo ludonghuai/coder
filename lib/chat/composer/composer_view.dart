@@ -81,7 +81,7 @@ Widget buildOf(ChatComposerState state, BuildContext context) {
   state._shownBuilt = state._shownOfText();
   final focused = state._focusNode.hasFocus;
   final suggestion = state.widget.onSubmit == null
-      ? state.widget.session.promptSuggestion
+      ? state.widget.session.replySuggestions.firstOrNull
       : null;
   // Its key follows the keybindings (the window builds again when they
   // change).
@@ -201,6 +201,7 @@ List<Object?> _buildInputsOf(ChatComposerState state) {
       session.permissions,
       model,
     ]) ...[choice?.options, choice?.selected],
+    session.fallbackModel,
     // What the model's label says of its settings (see
     // SessionModelPicker): their lists are made anew each time.
     if (model != null)

@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'editor_context.dart';
+import 'reply_suggestions.dart';
 
 export 'editor_context.dart';
 
@@ -22,6 +23,7 @@ class UserMessageItem extends ChatItem {
     this.stopped = false,
     this.sentAt,
     this.fromAgent,
+    this.fromSession,
   });
 
   final String text;
@@ -29,6 +31,10 @@ class UserMessageItem extends ChatItem {
   /// Sent by a subagent (SendMessage), not typed: what it was given to do,
   /// else its id. Shown as its, and not to be edited.
   final String? fromAgent;
+
+  /// Sent by another conversation of the user's (session_send, a report
+  /// back): its session's id, to open it by; with [fromAgent] its title.
+  final String? fromSession;
 
   /// Pictures sent with it (screenshots, mockups…).
   final List<ImageAttachment> images;
@@ -68,6 +74,7 @@ class UserMessageItem extends ChatItem {
     stopped: stopped ?? this.stopped,
     sentAt: sentAt,
     fromAgent: fromAgent,
+    fromSession: fromSession,
   );
 }
 
@@ -165,9 +172,17 @@ final imageReferencePattern = RegExp(r'\[Image #(\d+)\]');
 
 /// Plain assistant prose. Supports `inline code` and `- ` bullet lines.
 class AssistantTextItem extends ChatItem {
-  const AssistantTextItem(this.text);
+  const AssistantTextItem(this.raw);
 
-  final String text;
+  /// All of it, as the agent wrote it.
+  final String raw;
+
+  /// What it said: without what it suggests the user send next, at its end
+  /// ([suggestions]).
+  String get text => ReplySuggestions.strip(raw);
+
+  /// What it suggests the user send next (see [ReplySuggestions]).
+  List<String> get suggestions => ReplySuggestions.of(raw);
 }
 
 /// [text] (what an agent said, or asks) on one line, its markup's marks

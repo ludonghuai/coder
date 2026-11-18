@@ -120,14 +120,12 @@ void main() {
         preserveThinking: true,
         promptCacheKey: false,
         env: {'A': '1'},
-        clientVersion: '0.170.0',
         icon: BrandIcon('deepseek'),
       );
       final back = ModelProvider.fromJson(provider.toJson())!;
       expect(back.toJson(), provider.toJson());
       expect(back.models.single, provider.models.single);
       expect(back.roles, provider.roles);
-      expect(back.clientVersion, '0.170.0');
       expect(back.icon, const BrandIcon('deepseek'));
       // A logo this version does not have is none.
       expect(
@@ -211,19 +209,6 @@ void main() {
       expect(
         substituteVariables('{{REQUEST_ID}}', const {'REQUEST_ID': 'r-9'}),
         'r-9',
-      );
-    });
-
-    test('a Codex version that is not one is read as none', () {
-      ModelProvider read(Object? version) =>
-          ModelProvider.fromJson({'id': 'p', 'clientVersion': version})!;
-      expect(read(' 0.170.0 ').clientVersion, '0.170.0');
-      expect(read('').clientVersion, isNull);
-      expect(read('0.1\r\nx: y').clientVersion, isNull);
-      expect(read(170).clientVersion, isNull);
-      expect(
-        const ModelProvider(id: 'p', name: 'P').toJson(),
-        isNot(contains('clientVersion')),
       );
     });
 
@@ -1767,6 +1752,30 @@ void main() {
         ),
       );
       expect(asked, ['/anthropic/v1/models', '/v1/models']);
+    });
+  });
+
+  group('ClaudeEntrypoint', () {
+    test('names BaoCode on the user\'s own Claude sign-in', () {
+      expect(ClaudeEntrypoint.of(null), {'CLAUDE_CODE_ENTRYPOINT': 'baocode'});
+      expect(
+        ClaudeEntrypoint.of(null, {'PATH': '/bin', 'ANTHROPIC_API_KEY': ''}),
+        {'CLAUDE_CODE_ENTRYPOINT': 'baocode'},
+      );
+    });
+
+    test('not on a provider, a key, another server or a cloud', () {
+      expect(ClaudeEntrypoint.of({'ANTHROPIC_BASE_URL': 'http://x'}), isEmpty);
+      for (final name in [
+        'ANTHROPIC_BASE_URL',
+        'ANTHROPIC_AUTH_TOKEN',
+        'ANTHROPIC_API_KEY',
+        'CLAUDE_CODE_USE_BEDROCK',
+        'CLAUDE_CODE_USE_VERTEX',
+        'CLAUDE_CODE_USE_FOUNDRY',
+      ]) {
+        expect(ClaudeEntrypoint.of(null, {name: '1'}), isEmpty, reason: name);
+      }
     });
   });
 }

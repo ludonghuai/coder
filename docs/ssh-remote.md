@@ -307,7 +307,7 @@ Windows 上，WSL 发行版也当成一台主机，主机名 `wsl+<发行版>`�
 
 | 内核 | 行为 |
 |---|---|
-| 自动（默认；`~/.ssh/config` 里的和手输的主机也是它） | 先按 CLI 启动；远端没装（`ClaudeNotInstalled`）就改用内置内核。用的是 Claude Code 自己的模型（没有上游）时内置内核跑不了，照旧自动安装 CLI |
+| 自动（默认；`~/.ssh/config` 里的和手输的主机也是它） | 先按 CLI 启动；远端没装（`ClaudeNotInstalled`）就改用内置内核。**从不安装 CLI**：用的是 Claude Code 自己的模型（没有上游）而远端又没装时，报 `ClaudeNoModel` 让用户去配模型；要用 Claude 订阅就把这台服务器的内核改成 CLI |
 | 内置 | 服务端跑内置内核（`core: builtin`）；没有上游时报 `ClaudeNoModel`，让用户去配模型 |
 | Claude Code CLI | 只用 CLI，远端没装就自动安装（6.2） |
 
@@ -326,7 +326,7 @@ Haiku（起标题、提交信息）走同一套，只是不触发安装。改了
 
 ### 6.2 自动安装（像 VS Code 扩展那样）
 
-开始对话时，如果远端上面三处都没有，服务端会抛出 `ClaudeNotInstalled`，应用随即自动安装（`installRemoteClaude`），装完重新启动对话。用户什么都不用做。
+内核选的是 CLI 时，开始对话时如果远端上面三处都没有，服务端会抛出 `ClaudeNotInstalled`，应用随即自动安装（`installRemoteClaude`），装完重新启动对话。用户什么都不用做。
 
 1. **远端自己下载**（`claude/install`，进度以流返回）：
    - 读 `https://downloads.claude.ai/claude-code-releases/stable` 得到版本号；
@@ -607,11 +607,11 @@ flutter analyze
 2. **服务端只支持 glibc**：`dart compile exe` 编出的 Linux 二进制在 Alpine 这类 musl 系统上跑不了。Claude Code 本身有 musl 版本，已经能正确选择。
 3. **旧版本服务端不会自动清理**：`~/.baocode-server/<旧VERSION>/` 会一直留着，每个约几十 MB。可以在连接成功后删掉其他版本的目录。
 4. **Haiku 不会触发 Claude 自动安装**：远端没有 claude 时，标题和提交信息会失败，等到第一次对话装好后才正常。
-5. **自动安装没有开关**：远端没有 claude 时总是自动装。如果有用户不希望自动下载，需要加一个设置项。
+5. **自动安装只在内核选 CLI 时发生**：选“自动”或“内置”都不会往远端装 claude。
 6. **Windows 客户端的密码登录还没在 Windows 上实测**：`askpass.cmd` 经 PowerShell 回传密码，依赖 Win32-OpenSSH 8.4 及以上按 `SSH_ASKPASS_REQUIRE=force` 调用它；系统的低于 8.4 时用安装包自带的 OpenSSH。要确认的有：能否运行 `.cmd`、用户名带空格的临时目录、运行时是否闪出控制台窗口、自带 ssh 的跳板机 `ProxyCommand`（带引号的路径）能否运行。
 7. **启动时会连接所有远程项目的主机**（因为要读会话列表）。主机很多或很慢时，可以改成在展开项目时再连接。
 8. **macOS 打包这一步还没实际跑过**，签名和公证也还没做（见 `tool/build_macos.dart` 里的 TODO）。
 9. **会话守护进程会被 `KillUserProcesses=yes` 杀掉**：少数发行版的 systemd-logind 在用户最后一个登录会话结束时杀掉他的所有进程，断线就等于会话失效（退回到旧的“重建会话”行为）。需要的话在主机上 `loginctl enable-linger <用户>`。
 10. **应用崩溃或被强退时**，远端会话等满 3 小时才结束，期间终端和 Claude 继续跑。应用重启后用的是新会话，不会接回旧的。
 11. **单条很大的消息**（几十 MB 的文件）在频繁断线的网络上可能总传不完：断线后整条重发。
-12. **Windows 主机上没有 BaoCode Bash**：本机装的 BaoCode Bash 只给本机的内置内核用；Windows 主机上的智能体执行命令时用主机的 Git Bash，没有就是 cmd.exe。可以像服务端那样连接时把 bash.exe 传过去（或让主机从 dl.baocode.dev 下载），再交给主机上的内置内核。
+12. **Windows 主机上没有 BaoCode Bash**：本机装的 BaoCode Bash 只给本机的内核用（内置内核和 Claude Code 内核）；Windows 主机上的智能体执行命令时用主机的 Git Bash，没有就是 cmd.exe。可以像服务端那样连接时把 bash.exe 传过去（或让主机从 dl.baocode.dev 下载），再交给主机上的内置内核。

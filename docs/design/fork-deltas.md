@@ -35,14 +35,15 @@
 
 | 文件 | 我们的块 | 类型 | 接缝 | 行数预算 |
 |---|---|---|---|---|
-| `lib/chat/chat_session.dart` | overlay 装配、host 投影、生命周期钩、缺失能力投影；`send()` 的 `editorContext` / `beforeSend` 与上游 `UserPlace? from` / `notes` 参数并存（`notes: [...notes, ..._placeNotes(from), ...自有 editor 注]`，自有注仍按 `acceptsEditorContext` 收）；上游 1.9.6 的 `if (from != null) userSent?.call();`（`BaoBash.newUser` 的计数钩）落在空消息早退 `if (message.isEmpty || !canSend) return;` 之后、`_overlay.beforeSend(` 之前（空消息不计数，与上游同） | 内核适配 | `docs/design/thincoder-adapter.md` §29.2；`ChatSession.userSent` | 净增 ≤180 行 |
+| `lib/chat/chat_session.dart` | overlay 装配、host 投影、生命周期钩、缺失能力投影；`send()` 的 `editorContext` / `beforeSend` 与上游 `UserPlace? from` / `notes` 参数并存；上游本批删去 `userSent` 计数钩（`static void Function()? userSent` 一并删除），`send()` 的 `notes` = `[...notes, ..._placeNotes(from), if (!takesContext && editor != null) ..._editorNotes(editor()), if (from != null) ..._suggestionNotes()]`（自有 editor 注仍按 `acceptsEditorContext` 收）；`fallbackModel` / `endModelFallback` 随上游并入，`modes` 仍由 overlay 包裹 | 内核适配 | `docs/design/thincoder-adapter.md` §29.2；`ChatSession.fallbackModel` | 净增 ≤180 行 |
 | `lib/chat/chat_feed.dart` | `MarksTurns` 只读接口 | 内核适配 | `ChatSession.turns` 与 folds | 净增 ≤16 行 |
-| `lib/chat/chat_models.dart` | `TurnMark`（含 `stopped`：2026-11-05 随上游 `b79433ef`，停下的回合也计时、整段折叠）、`NoticeItem` 与 `editor_context.dart` re-export；`UserMessageItem` 的 `contexts` 与上游 `stopped` 并存（`copyWith` 两者都带） | 内核适配 | overlay / `KernelTurn.contexts` | 每类 ≤30 行 |
+| `lib/chat/chat_models.dart` | `TurnMark`（含 `stopped`：2026-11-05 随上游 `b79433ef`，停下的回合也计时、整段折叠）、`NoticeItem`、`editor_context.dart` 的 import / re-export 与上游 `reply_suggestions.dart` 的 import 并存；`UserMessageItem` 的 `contexts` / `fromSession` 与上游 `stopped` 并存（`copyWith` 全带） | 内核适配 | overlay / `KernelTurn.contexts` | 每类 ≤30 行 |
 | `lib/chat/step_folds.dart` | 增量折叠（`count` / `rowOf` / `extend` / `refreshTail`，原地改、尾部重扫，`docs/design/chat-streaming.md` §3.4）与回合账的窗（`of` / `extend` 的 `turns` 参数；`_rescan` 的窗来自自有 part `step_folds_boundaries.dart` 的 `_boundariesOf`，§14）。上游在旧 `of` 体里改的窗内规则（答案、plan 卡、停下的回合）逐条跟进到 `_rescan`：合并时取我方结构，再把上游规则改写进去，不取上游的 `of` 体 | 功能 | `StepFolds.of` / `extend` 的 `turns`；`TurnMark`；`MarksTurns` | 对 `origin/main` 实测 +181 / −74；2026-11-05 合并时首次登记（此前表外） |
 | `test/chat/step_folds_test.dart`、`test/chat/fold_view_test.dart` | 自有用例组：`step_folds_test` 的 `turns` 组（R1…、停下回合的 mark）与 `extend` 对拍（B2），`fold_view_test` 的回合账用例与 `_Feed implements MarksTurns`；`_mark` 助手带 `stopped`。`fold_view_test`「a turn the kernel leaves streaming still folds when the next starts」在本机合前合后都挂（`Worked for 3m 0s` 找不到，`c651f6c2` 起），未修 | 功能 | `TurnMark` / `MarksTurns` | 对 `origin/main` 实测 +273 / −2、+162 / −1；2026-11-05 首次登记 |
 | `lib/chat/composer/composer_editing.dart` | `hasCommandSource` 命令源门；另承载上游方法体（`_caretAtEndOf` / `_takeDraftCodeOf` / `_handleEditorChangedOf` 等，拆分落点见 `docs/design/structure-splits.md` §4.3 第 5 步；`_buildBoxOf` 与 `_buildMarkdownEditorOf` 两个上游盒体在 `lib/chat/composer/composer_view.dart`:215 / :312） | 内核适配 | `ChatSession.hasCommandSource`；`composer.dart` 的委托 | 自有语义 ≤12 行；上游搬入体不构成 fork 净增 |
-| `lib/chat/composer/composer.dart` | 委托形态：`_initStateOf` / `_takeDraftCodeOf` / `_takeDraftMessageOf` / `_handleDraftChangedOf` / `_submitOf` 等，实现体在同目录的 `…Of` 助手（上游新增体含 `_takeDraftCode` 与 `_submit` 的 intercept / Send Now 分支；`_submit` 的新体落在 `composer_message.dart` 的 `_submitOf`，本档只留 `void _submit() => _submitOf(this);`；上游 1.9.6 三个新体同样按委托形态落位 —— `_copyToHost` 的 `withTransferProgress` / 取消 / 失败通知进 `composer_editing.dart` 的 `_copyToHostOf`；`_handleEditorChanged` 的计时器留壳（`void _handleEditorChanged() => _lag.time('edit', () => _handleEditorChangedOf(this));`，`_lag.time('edit'` 只在 `composer.dart`），重写后的编辑体进 `_handleEditorChangedOf`（体内 `state._lag.time('draft', …)` 随带入）；`_handleKey` 的 `_lag.begin('key')` 进 `composer_menu.dart` 的 `_handleKeyOf`）；拆分机制归 `docs/design/structure-splits.md` §4.3。`btestModeId` 一条 import：拆档 `composer_menu.dart`（`origin/main` 无此路径）的 `_nextModeOf` 让 Shift+Tab 只轮换内核自己的模式，跳过 btest，从 btest 回到第一个（2026-11-05） | 内核适配 | 顶层 helper（`…Of(this, …)`）；`lib/chat/session/mode_state.dart` 的 `btestModeId` | 上游内联体不构成 fork 净增；委托行按助手数计；自有 import 1 行 |
-| `lib/chat/composer/composer_view.dart` | btest 缓存键与状态行挂点（自有语义）；档本体是 `composer.dart` 的拆档前端 | 功能 | `ChatSession` 的 btest 七成员 | 自有语义 ≤24 行，按 btest 接缝符号计；`origin/main` 无此路径，档内上游搬入体不构成 fork 净增，不按 `numstat` 判 |
+| `lib/chat/composer/composer_message.dart` | 无自有语义：`composer.dart` 拆档前端的上游方法体落点（`_acceptSuggestionOf` / `_buildMessageOf` / `_submitOf` 等，体随上游；本批新增的 `_clearOf` 落此）；拆分机制归 `docs/design/structure-splits.md` §4.3 | 内核适配 | `composer.dart` 的委托（`void _submit() => _submitOf(this);` / `void clear() => _clearOf(this);`） | `origin/main` 无此路径；档内上游搬入体不构成 fork 净增，不按 `numstat` 判 |
+| `lib/chat/composer/composer.dart` | 委托形态：`_initStateOf` / `_takeDraftCodeOf` / `_takeDraftMessageOf` / `_handleDraftChangedOf` / `_submitOf` 等，实现体在同目录的 `…Of` 助手（上游新增体含 `_takeDraftCode` 与 `_submit` 的 intercept / Send Now 分支；`_submit` 的新体落在 `composer_message.dart` 的 `_submitOf`，本档只留 `void _submit() => _submitOf(this);`；上游本批新增的 `clear()` 同样按委托形态落位（`void clear() => _clearOf(this);`，体进 `composer_message.dart` 的 `_clearOf`）；`_acceptSuggestion` 的自有委托保留，`_acceptSuggestionOf` 体已与上游同形（`MdAtoms.strip`）且自有 `_suggestionKey` / `_suggestionKeyContext` 在档；上游 1.9.6 三个新体同样按委托形态落位 —— `_copyToHost` 的 `withTransferProgress` / 取消 / 失败通知进 `composer_editing.dart` 的 `_copyToHostOf`；`_handleEditorChanged` 的计时器留壳（`void _handleEditorChanged() => _lag.time('edit', () => _handleEditorChangedOf(this));`，`_lag.time('edit'` 只在 `composer.dart`），重写后的编辑体进 `_handleEditorChangedOf`（体内 `state._lag.time('draft', …)` 随带入）；`_handleKey` 的 `_lag.begin('key')` 进 `composer_menu.dart` 的 `_handleKeyOf`）；拆分机制归 `docs/design/structure-splits.md` §4.3。`btestModeId` 一条 import：拆档 `composer_menu.dart`（`origin/main` 无此路径）的 `_nextModeOf` 让 Shift+Tab 只轮换内核自己的模式，跳过 btest，从 btest 回到第一个（2026-11-05） | 内核适配 | 顶层 helper（`…Of(this, …)`）；`lib/chat/session/mode_state.dart` 的 `btestModeId` | 上游内联体不构成 fork 净增；委托行按助手数计；自有 import 1 行 |
+| `lib/chat/composer/composer_view.dart` | btest 缓存键与状态行挂点（自有语义）；档本体是 `composer.dart` 的拆档前端；`buildOf` 的建议源读 `session.replySuggestions.firstOrNull`（上游本批删 `promptSuggestion`），自有 `_suggestionKey` 键标签保留；`_buildInputsOf` / `_buildMarkdownEditorOf` 承载上游本批同名体 | 功能 | `ChatSession` 的 btest 七成员 | 自有语义 ≤24 行，按 btest 接缝符号计；`origin/main` 无此路径，档内上游搬入体不构成 fork 净增，不按 `numstat` 判 |
 | `lib/chat/chat_screen.dart` | `canStopTasks` 单行接线（接线点 ⑬）· 改名初值 `thread.pendingTitle` 三行 · 回退界面 15 行（`revert_dialog` import、撤销与计划接线） | 修 bug · 功能 | `ChatSession.canStopTasks`；`AgentThread.pendingTitle`；`PlansReverts` | 净增 ≤19 行（实测 +19 / −3） |
 | `lib/chat/side_panel/file_preview.dart` | 动作区按宽度收口：`tight`（`:505`，<420）与 `compactActions`（`:509`，<720）两个门，外加 `Flexible(FittedBox(scaleDown))`（`:538-539`）；文案按门槛收（`:545` / `:552`），`compact:` 传参 `:564` | 修 bug | 动作区装配点；上游新分支 `sidePanelChanges` 折入同一动作区 | 净增 ≤40 行 |
 | `lib/browser/browser_tools.dart` | `HostTools` 注册包装、数字归一、description schema、btest gate（`browser_navigate` 的 `detour` 参数 = btest 入口的可选备注：2026-11-05 起只随入口列出，不再是第二次入口的放行条件）、tab watch/blocked/acting；`_loading` 对同文档导航（hash 路由：`Page.navigate` 回包无 `loaderId`）不等 load 事件（2026-11-05，此前每次干等满 20 秒超时） | 功能 · 修 bug | `ClaudeSdkTool` / `HostTools` / `ClaudeSdkCall`；btest 经独立模块；`_loading` 的 `go` 回调改为 `Future<Object?> Function()` | 净增 ≤150 行（实测 +92 / −20） |
@@ -60,7 +61,7 @@
 | `lib/settings/pages/general_page.dart` | thincoder 设置组（`:442-457`，接线点 ⑦）+ 设置 → 通用的 `chat.editorContext` 一行开关（接线点 ⑪）；上游 1.9.6 的 BaoCode Bash 组（`BaoBashSetting`，构造参数 `bash`）与 `chat.sessionTools` 开关随上游并存，块内不碰它们 | 功能 | 设置页 `SettingsGroup` / `ThincoderPathSetting`；`EditorContextSetting`；`BaoBashSetting` / `SessionToolsSetting`（上游侧） | 净增 ≤93 行（≤81 + ≤12） |
 | `lib/settings/app_settings.dart`、`settings/settings_dialog.dart` | thincoder 设置入口；与上游 `SettingsSection.usage` 并存（enum / 分区列表 / 图标 / 文案四处）；通用页的构造参数 `thincoderStatus` 与上游 1.9.6 的 `bash` 并存，两个都传 | 功能 | `SettingsSection.thincoderModels` / `SettingsSection.usage`；`GeneralSettingsPage.bash` | 合计净增 ≤50 行 |
 | `lib/chat/composer/composer_picker.dart` | `startCollapsed` 参数与 `_collapseNewGroups`（新到的分组也收起，选中那组除外） | 功能 | `ComposerPicker.startCollapsed`；收起集合仍留在 picker 内 | 净增 ≤25 行 |
-| `lib/chat/composer/session_model_picker.dart` | thincoder 会话默认收起 + 底部管理入口指向 thincoder 模型页；回合在飞时的等待态后缀（`pendingModel` → label / tooltip 的 `modelsSwitchPending`；机制见 `thincoder-adapter.md` §24） | 内核适配 | `ComposerPicker.startCollapsed`；`SettingsSection.thincoderModels`；`ChatSession.pendingModel` | 净增 ≤20 行 + 等待态块 17 行（`:45-48` · `:129-138` · `:155-157`） |
+| `lib/chat/composer/session_model_picker.dart` | thincoder 会话默认收起 + 底部管理入口指向 thincoder 模型页；回合在飞时的等待态后缀（`pendingModel` → label / tooltip 的 `modelsSwitchPending`；机制见 `thincoder-adapter.md` §24）；上游本批的回退面与等待态并存：`fallbackModel` → label 的 `_label(..., fallback:)` 与 `modelsFallbackHint`、前景 `AppColors.caution`、菜单尾「切回」项 `endModelFallback`；label 两段、tooltip 按非空句以 ` · ` 拼接 | 内核适配 | `ComposerPicker.startCollapsed`；`SettingsSection.thincoderModels`；`ChatSession.pendingModel` | 净增 ≤20 行 + 等待态块 17 行（`:45-48` · `:129-138` · `:155-157`） |
 | `lib/kernel/claude_code/claude_sdk_tools.dart` | `ClaudeSdkTool` 的 `group` / `picturesOnly` 两字段；`ClaudeSdkTools` 保留上游类名，类体换成转发到自有 `HostTools` 的薄类（`server` / `register` / `unregister` / `instruct` / `instructFor` / `called` / `serversFor` / `handle` 八个成员，`:140-171`），档内不持有自己的工具表；类外的 `ClaudeSdkGate` 接口（`offersTool` / `asksUser` / `tellsFeature` 三个成员）与 `claudeSdkImage` / `claudeSdkText` 随上游保留 | 内核适配 | `HostTools` 注册表；ACP 的 MCP 面按 group 分服与 `picturesOnly` 门；`ClaudeSdkGate` 由自有 `HostTools.gate` 承接 | 净增 ≤38 行（两字段声明与构造参数 4 + 文档注释 2 + 转发类 32）；上游新增的 `ClaudeSdkAsk` / `ClaudeSdkCall.ask` / `ClaudeSdkTool.offeredIn` / `asksItself` 随上游保留；自有 `HostTools.handle` 按其新形跟进。上游以后给 `ClaudeSdkTools` 加静态成员会编译失败，按故意的信号处置。形态见 §7.2 |
 | `lib/bots/bots.dart` | 按 cwd 的工具门落在自有注册表：两处 `gate`（`:153` 赋值 / `:174` 清空）与 `called` / `server`（`:460` / `:461` / `:497`）换 `HostTools.`，`claude_sdk_tools.dart` 的 import 换自有 `host_tools.dart`（`ClaudeSdkGate` 接口经自有档 re-export） | 功能 | `HostTools.gate` / `HostTools.called` / `HostTools.server`；`ClaudeSdkGate` 接口 | 净增 ≤6 行（5 行换符 + 至多 1 行自有 import） |
 | `test/bots/bots_test.dart` | 删掉注册表类后的符号改名：档内 11 处 `HostTools.`（`handle` 5 · `register` 1 · `unregister` 1 · `server` 1 · `serversFor` 1 · `asksUser` 2）；断言内容随上游（工具集：`launch.tools` = `BotPermissions.agentTools`、带 `--tools`、无 `--strict-mcp-config`；符号仍 `HostTools.`），路径表达式按平台拼（26 处 `p.join`：上游写死 `/`，自有档在 Windows 上拼出 `\`） | 内核适配 | `HostTools` 的 handle / register / unregister / server / serversFor / asksUser | 净增 0 行（+39/−39：11 处换符 + 1 行 import 换行 + 断言路径改写） |
@@ -78,7 +79,7 @@
 | `lib/ide/services/keybindings.dart` | chord 第二键的窗口门（`KeybindingDispatchService._holdsKeys` `:149-163`：本窗口持有主焦点且本路由当前才吃键；`onLateKey` `:140`、`onChordKey` 守卫 `:176-179` 与 500 ms 检查器 `:198` 共用）。上游 2026-11 把工作台拆成服务与部件，块随按键服务迁来；`lib/ide/ide_workbench.dart` 自 `50649b2e` 起与上游同档、不带自有块 | 修 bug | 上游按键服务的 `onChordKey` / `onLateKey` 钩 | 净增 ≤26 行（实测 +26 / −8） |
 | `lib/ide/ide_editor.dart` | 控制器为空时的空渲染（三处 `SizedBox.expand`：`_surface` `:2638-2641` · diff 原侧 `:2757-2758` · build 的 native 分支 `:2890`） | 修 bug | `_nativeController` / `IdeOriginalDiff.controller` | 净增 ≤7 行 |
 | `lib/ide/ide_tab_bar.dart` | `renameInitial`：调用方给定的初值，优先于标签文本（改名框从该值起） | 功能 | `InlineRenameField.initial` | 净增 ≤6 行（`renameInitial` 三处：`_Tab` 字段 / 形参 / 透传；同段布局改写随上游 `96e61f6b`，前几批累积的 +89 / −57 随之失效） |
-| `lib/chat/chat_history_view.dart` | 窗口可见性门：自有 `window_visible.dart` 的 import 与档内 9 处 `WindowVisible` 用法；重建的两个入口 `_showNow` / `_showWords` 各带一个门（窗口不可见时不重建，切回时一次追平） | 修 bug | `WindowVisible.changed` 订阅；集成面见 `test/RTM.md` 2-1 行 | 窗口门 1 行 import + 9 处用法；档整体相对上游 +337 / −26（`split('\n')` 口径实测 4262 / 3951） |
+| `lib/chat/chat_history_view.dart` | 窗口可见性门：自有 `window_visible.dart` 的 import 与档内 9 处 `WindowVisible` 用法；重建的两个入口 `_showNow` / `_showWords` 各带一个门（窗口不可见时不重建，切回时一次追平） | 修 bug | `WindowVisible.changed` 订阅；集成面见 `test/RTM.md` 2-1 行 | 窗口门 1 行 import + 9 处用法；行映射随上游（`itemBuilder(context, row)`：`row` = 行号 ⇒ `final index = _rows[row]`：`index` = 项号 ⇒ `KeyedSubtree(key: ValueKey(index))`：键 = 项号），自有 `_LiveItem(revision: _liveTick, live: index == _liveRow, build: () => _buildItem(index))` 贴回 `_row` 的 child（`live:` 两侧都取项号：`index` = 项号；`_liveRow` = `_folds.rowOf(_contentCount - 1)`，`StepFolds.rowOf` 返回合并到的首项号，不是行号）；档整体相对上游 +337 / −26（`split('\n')` 口径实测 4262 / 3951） |
 | `lib/chat/panels/activity_strip.dart` | 「Undo all」在飞时灰态 + 原因 tooltip：自有 `undoTooltip` 字段与构造参数（含文档注释）、`_FilesHeader(undoTooltip: widget.undoTooltip)` 透传、`_FilesHeader.undoTooltip` 字段、显示门 `onUndo != null \|\| undoTooltip != null`、`PanelButton(tooltip: undoTooltip)`；档内其余是上游实现（`Stack` + 可拖高的 sash：`_tree` / `_treeHeight` / `_sash()`，`ValueKey('activity-strip-sash')`） | 功能 | `ChatSession` 的 Undo 可用性 → `_FilesHeader` 显示门（回合在飞时 `onUndo` 为 null，靠 tooltip 让按钮出现并灰显）；失败用例 = `test/chat/revert_flow_test.dart` 的 `undo all is shown greyed, saying why, while a turn runs (G12)` | 净增 ≤ +5（对上游 615 ⇒ ≤620） |
 | `lib/chat/widgets/inline_rename_field.dart` | `checksTitle` 标题判定（空或超 80 不收，带错文案 `_error`），与上游的 `suggestions` / `onSummarize` 并存；`onChanged` 一处同时清错与过滤列表 | 功能 | 改名框的提交路径（§9 判定）；`InlineRenameField.checksTitle` / `initial` | 净增 ≤31 行（实测 +31 / −4） |
 | `lib/kernel/claude_code/claude_code_kernel.dart` | 宿主工具通道：自有 `host_tools.dart` 的 import 与档内 5 行类型使用（`HostTools` 3 · `HostToolCall` 2） | 内核适配 | `HostTools` 注册表；`HostTool` / `HostToolCall` 别名 | 净增 ≤1 行（import） |
@@ -108,6 +109,15 @@
 | `test/forge/forge_test.dart` | 两条断言按 `ForgeRef.key`（字符串键 `code ?? '$number'`）写：`expect(issue.key, '92')` / `expect(issues.single.ref.key, '3')`；上游同处（合基与 `origin/main` 一致）写 `issue.number` / `ref.number` | 功能 | `ForgeRef.key`（`lib/forge/forge_ref.dart`，`String get key => code ?? '$number';`） | 对 `origin/main` 实测 +2 / −2（合后 `git diff --numstat origin/main HEAD`）；2026-11-15 合并时首次登记（此前表外） |
 | `test/window/app_windows_test.dart` | 上述守卫的用例 `a close asked for again while one is under way runs it once`：`_Harness.host.holdLeaveFullScreen` 挂住离开全屏，第二次 `requestClose` 返 false，`hide <viewId>` 恰一次；外加 `dart:async` 一条 import | 修 bug | `AppWindows.requestClose`（本表 `lib/window/app_windows.dart` 行）；`WindowHost.leaveFullScreen` 的挂起面 | 对 `origin/main` 实测 +20 / 0（合后 `git diff --numstat origin/main HEAD`）；2026-11-15 合并时首次登记（此前表外） |
 | `test/workspace_test.dart` | 按目录列会话的用例面：`_DirectoryCatalog`（只实现 `sessionsIn`、`projects()` 恒空的 catalog 假件，形状取「没有跨项目列出的内核」，机制归 `docs/design/thincoder-adapter.md` §14-11）· `pumpLoaded` 的 `kernels` 参数 · `marks stay while sessions are still to be listed, and with a catalog that could not be read` 的四条期望按「未列 ≠ 已消失」写 · 用例 `a folder one kernel listed is still listed for another` | 内核适配 | `SessionCatalog.projects` / `sessionsIn`；§14-11 的按目录列出与清理推迟 | 对 `origin/main` 实测 +93 / −9（合后 `git diff --numstat origin/main HEAD`）；2026-11-15 合并时首次登记（此前表外） |
+| `.gitignore` | 自有忽略块：`/thincoder/`（工作区旁的自有 CLI 检出）与 `/.thincoder/`（本机运行态），各带注释；上游同档的 `.wrangler/` / `.dev.vars*` / `.env` 一并保留 | 修 bug | 无代码接缝；消费面 = 本仓提交面 | 对 `origin/main` 实测 +8 / −0（2026-11-18 合后 `git diff --numstat origin/main`；首次登记时按 fork 侧 base..HEAD 记 +9 / −0，合后 `.env.*` 归上游面 ⇒ 自有块 8 行）；复核状态：已复核 |
+| `lib/chat/widgets/chat_item_view.dart` | `UserMessageItem` 的渲染分派：自有 `contexts` / `onContextMenu` 透传 `UserMessageBubble`（编辑与右键菜单挂点），与上游 `fromSession` 透传 `AgentMessageCard.session` 并存 | 功能 | `UserMessageBubble.contexts` / `.onContextMenu`；`AgentMessageCard.session` | 对 `origin/main` 实测 +12 / −5（2026-11-18 合后 `git diff --numstat origin/main`；首次登记时按 fork 侧记 +12 / −5，两条读数相同）；复核状态：已复核 |
+| `lib/settings/pages/browser_page.dart` | btest 设置块：`BtestSettings` 的 hosts / readonly / qaRoot 三个读写 helper 与界面行；上游同档的偏好浏览器 `_use`（`BrowserBridge.preferredKey`）并存 | 功能 | `BtestSettings` 的键；`BrowserBridge.preferred` | 对 `origin/main` 实测 +98 / −1（2026-11-18 合后 `git diff --numstat origin/main`；首次登记时按 fork 侧记 +98 / −1，两条读数相同）；复核状态：已复核 |
+| `test/images/image_tools_test.dart` | 自有注册面：`HostTools.register(ImageTools.tool(...))` / `HostTools.unregister` 与 `HostToolCall` 类型用法；上游本批新增用例随上游 | 内核适配 | `HostTools` 注册表；`HostToolCall` | 对 `origin/main` 实测 +4 / −4（2026-11-18 合后 `git diff --numstat origin/main`；首次登记时按 fork 侧记 +4 / −4，两条读数相同）；复核状态：已复核 |
+| `lib/chat/widgets/turn_footer.dart` | 只知总量时的用量统计：`spentOnly`（`inputTokens` 与 `outputTokens` 皆空）时 token 统计的 tooltip 读 `turnTokensSpentHint`，否则仍读 `turnTokensHint` | 功能 | `AgentStep` 的用量字段（`totalTokens` / `inputTokens` / `outputTokens`）；消费面 = 回合页脚的 token 统计与 tooltip | 对 `origin/main` 实测 +9 / −4（2026-11-18 合后 `git diff --numstat origin/main`；此前表外）；复核状态：已复核 |
+| `lib/kernel/claude_code/process_transport_io.dart` | 会话启动不下载 CLI：`LocalClaude.locate(install: false)`——本仓默认内核是 thincoder，静默下载是没人请求的网络与磁盘动作；安装仍走 设置 → 通用 的按钮 | 修 bug | `LocalClaude.locate` 的 `install` 参数；消费面 = Claude 传输的启动路径 | 对 `origin/main` 实测 +5 / −1（2026-11-18 合后 `git diff --numstat origin/main`；此前表外）；复核状态：已复核 |
+| `test/chat/chat_history_rebuild_test.dart` | 重建计数的用例面：`_Feed` 的 `reads` / `touched` 计数与 `streaming` 开关、`_rebuiltTypes` 重建仪表块，三条用例（逐词流式重建一行、思考流式重建其回合所在行、稳定后的思考只重建外壳一次）；F1 的「恰 1」在此计 | 功能 | `ChatHistoryView` 的重建入口（`_showNow` / `_showWords`）；`ChatFeed.itemAt` 的读取面 | 对 `origin/main` 实测 +375 / −2（2026-11-18 合后 `git diff --numstat origin/main`；此前表外）；复核状态：已复核 |
+| `test/ide/lsp/install/mason_server_provider_test.dart` | Windows 上不跑：`@TestOn('!windows')` 与一段理由注释——fixtures 装 POSIX 包（`chmod` 真跑、注册表项以 `/` 分隔），该档验的是安装器，不是 Windows 的行为 | 修 bug | 用例文件自己的运行面 | 对 `origin/main` 实测 +6 / −0（2026-11-18 合后 `git diff --numstat origin/main`；此前表外）；复核状态：已复核 |
+| `test/kernel_ui_test.dart` | 一条自有用例：thincoder 会话的页脚管理入口指向自有模型页，Claude 指向应用的模型设置（`SettingsOpener` 收到的 `SettingsSection`） | 功能 | `SettingsSection.thincoderModels` / `SettingsSection.models`；`SettingsOpener` | 对 `origin/main` 实测 +46 / −0（2026-11-18 合后 `git diff --numstat origin/main`；此前表外）；复核状态：已复核 |
 
 **恢复的上游 import 与自有 re-export 档重复**：`lib/browser/browser_tools.dart:13`、`lib/images/image_tools.dart:13` 与 `lib/bots/bot_tools.dart:13` 各带一条 `unnecessary_import` info（自有 `host_tools.dart` 的 re-export 覆盖同样四个符号）。这三行是上游行，删掉即重建常驻 fork 差异，**禁随 lint 清扫删除**。
 
@@ -119,7 +129,13 @@
 
 第十一档 `lib/ide/git/ide_git_commit_panel.dart`（`wc -l` 实测 3146，2026-11-09）：上游共享档，本仓在该档零自有块 ⇒ 第 3 节无接缝行；合后对 `origin/main` 的 `git diff --numstat` 为空。
 
-十一档都是上游共享档：拆分会让两半都成常驻 fork 差异（体量立场见第 8.5 节），认账不排期。本名单的口径是主仓（`lib/**` / `test/**`）的共享档；`packages/**` 子包不在其内，扩面另议。`lib/chat/composer/composer.dart` 现 744 行（<800），不在本名单。`workbench.dart` 的读数与体量立场归第 8.5 节，此处不复述。接手批次未排期，涨幅在下一次合并时按本行核对。
+第十二档 `lib/chat/chat_history_view.dart`（`wc -l` 实测 4384 合前 HEAD · 4885 合并工作树 · 上游 `origin/main` 4560，2026-11-18）：上游共享档，本仓在该档带窗口可见性门与行映射（第 3 节该行），本批按规则二改其行映射；认账不排期。
+
+十二档都是上游共享档：拆分会让两半都成常驻 fork 差异（体量立场见第 8.5 节），认账不排期。
+
+本名单的口径是主仓（`lib/**` / `test/**`）的共享档；`packages/**` 子包不在其内，扩面另议。`lib/chat/composer/composer.dart` 现 762 行（2026-11-18 合前 `wc -l` 实测，<800），不在本名单；合后按委托形态（本批只加 `void clear() => _clearOf(this);` 一行委托，体进 `composer_message.dart`）。
+
+`workbench.dart` 的读数与体量立场归第 8.5 节，此处不复述。接手批次未排期，涨幅在下一次合并时按本行核对。
 
 ### 3.1 登记面的对账口径
 
@@ -179,7 +195,7 @@
 
 **UI / 交互**：无 —— 登记的接缝都不进运行时界面。
 
-**集成测试设计（RTM delta）**：无 —— `README.md` 的发售面文案与 `lib/kernel/claude_code/claude_code_transport.dart` 的 1 行注释都不改业务可观察结果，不产生新场景；`test/RTM.md` 的 9 行断言面都不落在文案与注释上。收口报 `none`。
+**集成测试设计（RTM delta）**：无 —— `README.md` 的发售面文案与 `lib/kernel/claude_code/claude_code_transport.dart` 的 1 行注释都不改业务可观察结果，不产生新场景；`test/RTM.md` 的断言面（2026-11-18 实测 11 条用例、125 行）都不落在文案与注释上。收口报 `none`。
 
 ## 4 保持上游实现的共享文件
 
@@ -202,6 +218,30 @@
 4. 运行 `flutter analyze --no-pub`，把错误按登记模块归因；不得以整档回退消除冲突。
 5. 重跑各模块定向测试；l10n 由源档重产；SCM 只跑对应独立断言。
 6. 新出现的共享文件改动若没有行，停止实施并先登记。
+
+### 5.1 冲突解析规则（现态）
+
+四类冲突各有一条规则，按「这段结构谁拥有」判，不按处数判。
+
+| 规则 | 形态 | 解法 |
+|---|---|---|
+| 一 · 双方各自新增 | 两边各加互不替代的块（import、条目、方法） | 都留 |
+| 二 · 上游重构、本仓等价改造 | 本仓把一段结构换成自己的包裹，上游同一段改了形状 | 取上游结构，把本仓特性贴回上游结构内 |
+| 三 · 本仓抽离、上游原件内联新增 | 本仓把体抽成 `…Of(this)`，上游在同一方法里长出新行为 | 留本仓委托形态，把上游新体移植进抽离档；新方法同样按委托形态落位 |
+| 四 · 两套功能并存 | 两边在同一处界面各实现了不同功能 | 合并语义：两个功能同处显示，互不覆盖 |
+
+判据：共享上游档的可辨认接缝按第 3 节登记；冲突解法不得整档取上游（自有语义在册的档），也不得把上游实现回退成旧 fork 版本（第 1 节）。
+
+**最近先例**：四条规则各有一条已登记的对照行（第 3 节）。
+
+- 规则一：`lib/kernel/kernel_types.dart` 的 `ContextUsage.sessionSpent` 与上游 `detail` 两字段并存。
+- 规则二：`lib/chat/step_folds.dart`（2026-11-05 合并：取我方结构，把上游窗内规则改写进 `_rescan`）。
+- 规则三：`lib/chat/composer/composer.dart` 的委托形态（上游同名体进 `…Of` 助手）。
+- 规则四：`lib/settings/pages/general_page.dart`（自有 thincoder 设置组与上游 `BaoBash` 组 / `SessionToolsSetting` 开关同页并存）；`SettingsSection.thincoderModels` 与 `SettingsSection.usage` 并存。
+
+**调查证据**：`manifest.index.publicRepos` 为空，无独立文档仓；上游源码经本仓 `origin` 远端读取（`git rev-parse origin/main` = `0b9e30a7`），属仓内读。查过，无外部相关来源。
+
+**集成测试设计（RTM delta）**：四规则是合并手法，不改业务可观察结果 ⇒ 本节不破行、不增行；本批（合 `0b9e30a7`）的 delta 归批档 §2。
 
 ## 6 本批断点覆盖对照
 
