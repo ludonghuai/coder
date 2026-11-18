@@ -5115,3 +5115,188 @@ RTM 从 `test/RTM.md` 现有 3 行出发：
 
 依据 lib/kernel/claude_code/claude_code_kernel.dart「'buffer' => ContextKind.buffer,」
 
+## 32 三项能力声明（台账 #255）
+
+> 来源：用户 2026-11-15「能抄过来的都抄过来」→ 逐项判定 13 项差距后取其中三项；用户 2026-11-16 00:53「提交，开批」。
+> 一句结论：`ThincoderKernel` 补 `RevertsChanges` 与 `ConfirmsModelSwitch` 两项声明，各配一个类体成员（一行转调）+ 一个 part 档顶层帮手；第三项 `AcceptsImages` **本批不落**（批档 §1 ① 已裁）——宿主自己把该标记读作「随协议发图」，与握手能力位决定的传输路冲突（§32.9）。
+
+**最近先例（对齐 ∥ 偏离及理由）**
+
+- 对齐 ①：能力声明 = implements 列表加一项 + 该面的 part 里加成员，形同 §30.6 ①（`ReportsUsage`：implements 一项 + 两成员，零新事件、零 UI）。
+- 对齐 ②：落点按「面」分档——回退面 = `thincoder_revert.dart`（该档首行自述「The reverting face of the kernel」），选择面 = `thincoder_choices.dart`；两个 part 档都以 `part of 'thincoder_kernel.dart';` 开头（part 声明在 `thincoder_kernel.dart` 的 part 表里），类体只留一行转调。
+- 对齐 ③：宿主判据一处不动——宿主已按接口探测（§32.2 两处引文），本批不改宿主任何一行。
+- 偏离 ①：`AcceptsImages` 不落（§32.9）。需求档 §5 那一行的判定原文是「✅ 原生 image 块（§22）；旧 CLI / 缺位 ⇒ F6 替代」——它说的是行为，不是 Dart 接口声明；本批不落接口不改变那一行。
+
+**survey 证据**
+
+- 本仓内无其它公开文档源（`index.publicRepos` 为空，manifest 实读）；以代码实读为准。
+- 相关既有设计：同档 §22（图片两路与握手能力位）· §24（模型切换后置）· §30（能力声明形）· `docs/design/session-governance.md`（`PlansReverts` 的接口与在飞门在该档 §3.3）。
+
+**数据事实**：本批不对数据作任何断言（无行数、字段填充、枚举取值的主张）⇒ 无需读数据。
+
+### 32.1 决议总表
+
+| # | 项 | 决议 |
+|---|---|---|
+| ① | `RevertsChanges` | 声明；`revertChanges({required String sinceTurn})` 转调既有的 `applyRevertOf`（同一条 `session/revert`、`dryRun` 为假），文件回来了就发既有的 `ChangesReverted`。`void` 面不把异常抛进虚空：连接不在时既有 `_revertFailed` 已发可见 error notice，外层只在无会话路补一行 `appEvent` |
+| ② | `ConfirmsModelSwitch` | 声明；`switchRestarts(String model) => false`——事实是切 provider 不重启（同档 §24 的「只对 thincoder 内核的 `model`」一句）。宿主对非实现者今天已回落 `false`，故**零行为变化**（§32.2 引文） |
+| ③ | `AcceptsImages` | **不落**（批档 §1 ① 已裁；判据 = §32.9） |
+
+### 32.2 现状实读（三条判据各自的今天）
+
+| 面 | 现状 | 坐标 |
+|---|---|---|
+| 回退的宿主门 | `undoAllChanges` 先有评审支（`_activeReview` 在 ⇒ 评审面板的撤销），其后才是内核支，且要 `(_kernel, _pendingEdits.firstOrNull?.turnId)` 这一对匹配上（`RevertsChanges` + 非空 `since`）；thincoder 两项都没有 ⇒ 该面为 null | `lib/chat/chat_session.dart`（本轮实读） |
+| 计划路径优先 | `onUndo: canPlan ? 计划路 : plans ? null : undo`——`PlansReverts` 内核在对话页永不走 `undo` | `lib/chat/chat_screen.dart`（本轮实读） |
+| 另两处调用方 | 手机链路 `session.undoAllChanges?.call()`；窄标签栏 `final undoAll = session.undoAllChanges` | `lib/link/workspace_bridge.dart` · `lib/ide/ide_agent_edits.dart`（本轮实读到取用行） |
+| 切模型确认的门 | 非 `ConfirmsModelSwitch` 内核 ⇒ `switchRestarts` 回落 `false` ⇒ picker 直接切 | `lib/chat/chat_session.dart` · `lib/chat/composer/session_model_picker.dart`（本轮实读） |
+| 收图判据 | `AcceptsImages \|\| AcceptsImageFiles`；注释逐字把前者读作「by the protocol」 | `lib/chat/session/kernel_proxy.dart`（本轮实读） |
+
+承载字段的原文（本轮实读）：
+
+依据 lib/chat/chat_session.dart「  bool switchRestarts(String model) => switch (_kernel) {」
+
+依据 lib/chat/chat_session.dart「    final ConfirmsModelSwitch kernel => kernel.switchRestarts(model),」
+
+依据 lib/chat/chat_session.dart「  VoidCallback? get undoAllChanges {」
+
+依据 lib/chat/chat_screen.dart「onUndo: canPlan」
+
+依据 lib/chat/composer/session_model_picker.dart「    if (!session.switchRestarts(option.id)) return pick();」
+
+依据 lib/chat/session/kernel_proxy.dart「    host.agentKernel is AcceptsImages ||」
+
+依据 lib/chat/session/kernel_proxy.dart「/// Whether pictures sent with a message are taken: by the protocol」
+
+依据 lib/kernel/thincoder/thincoder_revert.dart「Future<RevertOutcome> applyRevertOf(」
+
+依据 lib/chat/chat_session.dart「if (_activeReview case final review?) {」
+
+依据 lib/chat/chat_session.dart「if ((_kernel, _pendingEdits.firstOrNull?.turnId) case (」
+
+### 32.3 做法：两条声明，一条数据流
+
+```text
+ThincoderKernel implements RevertsChanges, ConfirmsModelSwitch
+  revertChanges(sinceTurn) ── unawaited(revertChangesOf(this, sinceTurn))
+        └─ applyRevertOf  ── session/revert {sessionId, sinceTurn, dryRun:false}
+              ├─ 成功且 files 非空 ⇒ emit ChangesReverted（既有形，清宿主 pending 单）
+              └─ 失败 ⇒ 既有 _revertFailed 的 error notice；外层 catch 只在无会话路补一行 appEvent
+  switchRestarts(model) => false        ← 事实：切 provider 不重启
+宿主（零改动）
+  chat_session.undoAllChanges ── 对话页被计划路遮蔽（plans ⇒ null）；手机链路 / 窄标签栏在有 pending 编辑且不在评审态时可用
+  chat_session.switchRestarts ── 返回值与今天相同（false）
+```
+
+### 32.4 接口契约
+
+| 面 | 契约 | 与今天的关系 |
+|---|---|---|
+| `revertChanges({required String sinceTurn})` | `void`；一条 `session/revert`（`dryRun` 假）；自动轮映射到它所属的提示回合（`_autoTurnOf`，`thincoder_revert.dart` 既有逻辑） | 新增成员；等价于去掉返回值的 `applyRevert`，另加一层兜底（见下） |
+| `switchRestarts(String model)` | 恒 `false` | 与宿主回落值相同 ⇒ 无变化 |
+| 不变面 | `PlansReverts` 三成员 · `AcceptsImageFiles` · 宿主两处判据 · 图片两路（握手位决定，§22.1） | 逐字不动 |
+
+`revertChangesOf`（part 档的顶层帮手；类体成员一行转调它）：
+
+```dart
+Future<void> revertChangesOf(ThincoderKernel owner, {required String sinceTurn}) async {
+  try {
+    await applyRevertOf(owner, sinceTurn: sinceTurn);
+  } on Object catch (error) {
+    // On screen already: a failed request says so, and so does no session.
+    // The request path logged its own line in `_revertOf`; no-session has
+    // none, so this line is added for that path alone.
+    if (error is StateError) {
+      appEvent('thincoder', 'session/revert($sinceTurn) skipped: $error');
+    }
+  }
+}
+```
+
+- **留痕两路，不重复**：请求失败路 = `thincoder_revert.dart` 的 `appEvent('thincoder', 'session/revert($turn) failed: $error');`（既有行）；无会话路 = `owner._revertFailed(...)` 之后 `throw StateError('no session to revert in')`，此前没有日志行 ⇒ 只在无会话路补一行。`void` 面的调用方是 `unawaited`，故外层 catch 一律不外抛。
+
+### 32.5 受影响文件清单（无行数、无预估）
+
+| # | 坐标 | 改动 |
+|---|---|---|
+| ① | `lib/kernel/thincoder/thincoder_kernel.dart` | implements 列表加 `RevertsChanges` / `ConfirmsModelSwitch` 两项；类体加两条一行转调成员（`revertChanges` → `revertChangesOf(this, sinceTurn: …)`、`switchRestarts` → `switchRestartsOf(this, model)`） |
+| ② | `lib/kernel/thincoder/thincoder_revert.dart` | 顶层帮手 `revertChangesOf(ThincoderKernel owner, {required String sinceTurn})`：转调 `applyRevertOf`，只兜底不外包异常（§32.4） |
+| ③ | `lib/kernel/thincoder/thincoder_choices.dart` | 顶层帮手 `switchRestartsOf(ThincoderKernel owner, String model)`：恒 `false` |
+| ④ | `test/kernel/thincoder_kernel_test.dart` | T153–T155（§32.7） |
+
+**为何分两层写**：两档首行都是 `part of 'thincoder_kernel.dart';`，part 档只承载顶层声明，**不能给类加成员**；类体只留一行转调（既有形 = `Future<RevertOutcome> applyRevert({required String sinceTurn}) => applyRevertOf(this, sinceTurn: sinceTurn);`），逻辑在 part 档的顶层帮手——`thincoder_revert.dart` 的档头注明「keeps the delegation」。
+
+- **零改动**：`lib/chat/chat_session.dart` · `lib/chat/chat_screen.dart` · `lib/chat/session/kernel_proxy.dart` · `lib/chat/composer/session_model_picker.dart` · `lib/link/workspace_bridge.dart` · `lib/ide/ide_agent_edits.dart` · Claude / Codex 内核 · 外仓。
+- **分层结论**：四档均无档位跨越——新增全是成员与用例，不新建档、不搬代码、不拆档。点名一条：`test/kernel/thincoder_kernel_test.dart` 在 >800 硬顶之上（既有名单内），本批只追加 T153–T155（行级新增、不动结构）；体量立场记在 §5.2 末段的既有名单，不另立裁定。
+
+### 32.6 关键决策记录（含被否）
+
+| 决策 | 理由 / 被否方案 |
+|---|---|
+| `RevertsChanges` 与 `PlansReverts` 并存 | 两者不是替代：`PlansReverts` = 先出计划再执行的入口（对话页那条），`RevertsChanges` = 一把撤（手机链路、窄标签栏）。被否：让 `revertChanges` 内部先 plan 再 apply——`void` 面上无处显示计划，等于把预览丢掉还多一次往返 |
+| `void` 面不吞错也不外抛 | 连接不在已被既有 error notice 说出来；外抛会变成无人接的异步错误（调用方是 `unawaited`）。故只在无会话路补一行 `appEvent` 留痕（请求失败路在 `_revertOf` 已有自己的日志行，不重复） |
+| `switchRestarts` 恒 `false`，不按模型分档 | 切 provider 不重启是事实；今天无任何分支需求。被否：按 provider 归属分档（没有事实依据，还造一条无人走的支路） |
+| 不落 `AcceptsImages` | 见 §32.9 |
+
+### 32.7 用例表（T153–T155，`test/kernel/thincoder_kernel_test.dart`）
+
+| # | 场景 | 输入 | 期望 |
+|---|---|---|---|
+| T153 | 一把撤走同一条协议路 | 就绪会话，`kernel.revertChanges(sinceTurn: 'turn-1')` | 恰一条 `session/revert`，参数 `{sessionId, sinceTurn: 'turn-1', dryRun: false}`；agent 回 `files` 非空 ⇒ 恰一条 `ChangesReverted` |
+| T154 | 没有会话可撤时不外抛 | 未开始会话（无连接）直接 `revertChanges` | 不发协议请求；一条 `NoticeItem(error)`（文案含 `Could not revert`）；测试内无未捕获异步错误 |
+| T155 | 切模型不重启｜能力面 | 就绪会话；`switchRestarts('@other/m')`、`switchRestarts('@gw/plain')` | 皆 `false`；`kernel is ConfirmsModelSwitch`；经 `ChatSession.switchRestarts` 读到 `false`（宿主读法不变） |
+
+### 32.8 验收对照（回指 `docs/requirements/thincoder-adapter.md` §5 与台账 #255）
+
+| 判据 | 本档落点 | 机检 |
+|---|---|---|
+| ① 回合级回退可经 `RevertsChanges` 一把走通（需求档 §5 的「文件 / 回合级回退」行） | §32.1 ① / §32.4 | T153 |
+| ② 无会话可撤时失败可见、不静默、不外抛 | §32.6 第二行 | T154 |
+| ③ 切模型不重启这一事实被声明出来，宿主读法零变化（同档 §24 的切模型语义） | §32.1 ② | T155 |
+| ④ 宿主与其它内核零回归 | §32.5 零改动行 | 同一测试档既有用例（含 `test/kernel_test.dart` 的 Codex 面）不改而绿 |
+
+- 本批的变更面单元验收 = `flutter test --no-pub test/kernel/thincoder_kernel_test.dart`；全量套件与集成套件属父侧收口门，不在本批跑。
+
+**RTM 增量（索引 = `test/RTM.md`，现行 11 / 50–100）**
+
+- 改写 0 条、删除 0 条、新增 0 条。判据（准入两条来路，`test/RTM.md` 第 6 行）：① 不改既有用例已断言的业务可观察结果——对话页的回退仍走计划路（§32.2 第二行），切模型确认今天已不发生（同表第四行）；② 新增的那一面（手机链路 / 窄标签栏的「全部撤销」从空值变为可用，§32.10-5）没有业务故事、也没有生产问题记录 ⇒ 按准入不给行。
+- 判定条件（收则怎么落）：用户把「手机上一把撤」当业务场景要 ⇒ 该行号须先在 `test/RTM.md` 定行，再写用例标题（标题开头的编号 = 定好的行号原文），本批不预占号。
+
+### 32.9 `AcceptsImages` 为什么不落（已裁：不落）
+
+两边的原文（本轮实读）：
+
+- 任务书（§1）要的是「只补能力名，UI 零变化」。
+- 宿主自己的契约行把该标记读作**传输路**：`kernel_proxy.dart` 的注释是「Whether pictures sent with a message are taken: by the protocol ([AcceptsImages]), or as files it is told of ([AcceptsImageFiles]).」，判据是两者的或。
+- 本内核的传输路由握手位决定：新 CLI 发原生 image 块，旧 CLI 落盘 + 路径行（§22.1 / D82）。编译期标记不能随握手变 ⇒ 在旧 CLI 上声明它，等于对宿主说「图随协议发」，而实际发的是文件路径。
+- 既有用例把这一判断写死了：`test/kernel/thincoder_kernel_test.dart` 的 `expect(s.kernel, isNot(isA<AcceptsImages>()));`。
+
+结论：**不落**（批档 §1 ① 已裁，采纳本席判断）——它给不出任何新判据（宿主判据已是或，`AcceptsImageFiles` 已声明），代价是让一条契约在旧 CLI 上说假话。要改判则须同轮改 `kernel_proxy.dart` 的读法与 D82 的口径，属另一轮的口径变更，不在本批。
+
+### 32.10 边界（本批不做）
+
+1. 不改宿主判据、不改 UI、不新建组件、不动面板与写入路径。
+2. 不改 Claude / Codex 内核（两者已各自声明所需能力）。
+3. 外仓零改动（本批只动本仓的能力面）。
+4. **不重编、不重启、不结束任何正在运行的实例**（用户 2026-11-16 00:53 原话「不要关闭我现在的baocode，因为我在使用」）；验证只跑测试进程。
+5. `RevertsChanges` 带来的可见差（登记，不隐瞒）：`workspace_bridge` 的手机「全部撤销」与窄标签栏的 `undoAll` 从空值变为可用——前提是**有 pending 编辑（`_pendingEdits.firstOrNull?.turnId` 非空）且不在评审态**（§32.2 首行的两个门）；对话页仍被计划路遮蔽。
+
+### 32.11 未验证项（单列，不静默）
+
+| # | 项 | 现状 | 处置 |
+|---|---|---|---|
+| U1 | `ide_agent_edits.dart` 取用 `undoAll` 之后的使用条件 | 本轮只读到取用行与 `canPlanRevert` 分支首行，未读完 | 实施轮首步读该档；若它在 `canPlanRevert` 为假（在飞）时也接受 `undoAll`，则「在飞不回退」的门被打开 ⇒ 停手回设计，不在实施轮自裁 |
+
+### 32.12 三问答复（本轮实读）
+
+- `revertChangesOf`（新顶层帮手）：`none found` —— `lib/kernel/thincoder/` 全目录 grep 零命中（本轮实读）；接口成员在 `lib/kernel/agent_kernel.dart` 的 `abstract interface class RevertsChanges`，形为 `void revertChanges({required String sinceTurn});`。⇒ 新建，名字逐字 `revertChangesOf`（同族既有帮手全为 `XxxOf(ThincoderKernel owner, …)`：`revertPlanOf` / `applyRevertOf` / `rewindOf`）；谁用 = 类体成员 `revertChanges` 一行转调。
+- `switchRestarts`（接口成员）：`existing: lib/kernel/agent_kernel.dart` · `name: "bool switchRestarts(String model);"` · `consumers: lib/chat/chat_session.dart:414-415`（`switch (_kernel)` 的 `ConfirmsModelSwitch` 臂）与 `lib/chat/composer/session_model_picker.dart:77`（拿到 `false` 即直接切）⇒ 逐字复用，不另造名；实现先例 = `lib/kernel/claude_code/claude_code_kernel.dart` 的 `@override bool switchRestarts(String model) =>`。part 档内零同名成员（`thincoder_choices.dart` 本轮 grep 零命中）⇒ 帮手名取同族形 `switchRestartsOf`，与其余选择面帮手同形。
+
+依据 lib/kernel/agent_kernel.dart「bool switchRestarts(String model);」
+
+依据 lib/kernel/agent_kernel.dart「void revertChanges({required String sinceTurn});」
+
+依据 lib/chat/chat_session.dart「    final ConfirmsModelSwitch kernel => kernel.switchRestarts(model),」
+
+依据 lib/kernel/thincoder/thincoder_revert.dart「keeps the delegation.」
+
