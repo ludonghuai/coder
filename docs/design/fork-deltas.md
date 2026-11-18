@@ -124,7 +124,7 @@
 
 **存量债（过 800 行的上游共享档，`wc -l` 实测）**：`lib/kernel/claude_code/claude_code_kernel.dart` 3881 · `test/bots/bots_test.dart` 1690 · `lib/bots/bots.dart` 1367 · `lib/bots/bot_tools.dart` 963（2026-11-04 实测）；`test/models/models_test.dart` 1769（2026-11-08 实测）。
 
-另四档（同口径）：`lib/chat/side_panel/side_panel_view.dart` 2303 · `lib/main.dart` 1112 · `lib/settings/settings_dialog.dart` 864 · `lib/ide/ide_tab_bar.dart` 946。
+另四档（同口径）：`lib/chat/side_panel/side_panel_view.dart` 2303 · `lib/main.dart` 1182（2026-11-18 `wc -l` 实测；`split('\n')` 口径 1183） · `lib/settings/settings_dialog.dart` 864 · `lib/ide/ide_tab_bar.dart` 946。
 
 第十档 `lib/workspace/workspace.dart`（`wc -l` 实测 4050；第 3 节该行同档按 `split('\n')` 口径读 4051，两口径只差末尾换行 1 行）：按第 3 节该行维护四块自有语义（预算 ≤40 行）；档整体相对上游 `+125 / −31`，见该行读数。
 
